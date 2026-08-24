@@ -1,0 +1,1540 @@
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react'
+
+import {
+  LngLatBounds,
+  Map,
+  Marker,
+  Popup,
+  setWorkerUrl,
+} from 'maplibre-gl'
+
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
+
+import 'maplibre-gl/dist/maplibre-gl.css'
+
+import {
+  CITIES,
+} from '../cities/index.js'
+
+import {
+  addHistoricalLayers,
+  showHistoricalLayer,
+} from './historicalLayers.js'
+
+import {
+  addStreetLabels,
+  setStreetLabelsVisible,
+} from './streetLabels.js'
+
+import MapControls from './MapControls.jsx'
+import MapPins from './MapPins.jsx'
+import DirectionsPanel from './DirectionsPanel.jsx'
+
+import {
+  getDirectRoute,
+  getLongWayRoute,
+} from './routeService.js'
+
+
+setWorkerUrl(
+  workerUrl
+)
+
+
+const ROUTE_SOURCE_ID =
+  'geographic-route'
+
+const ROUTE_LAYER_ID =
+  'geographic-route-line'
+
+
+function getEnhancedTileUrl({
+  cityKey,
+  layerType,
+  year,
+}) {
+  return (
+    `/api/enhance/` +
+    `${cityKey}/` +
+    `${layerType}/` +
+    `${year}/` +
+    '{z}/{x}/{y}.png'
+  )
+}
+
+
+const GeographicMap =
+  forwardRef(
+    function GeographicMap(
+      {
+        cityKey =
+          'toronto',
+
+        selectedLayer,
+
+        opacity =
+          1,
+
+        enhanced =
+          false,
+
+        activePinFilter =
+          'historic',
+
+        onChangePinFilter,
+
+        newSubtypeFilter =
+          'all',
+
+        onChangeNewSubtypeFilter,
+      },
+
+      ref
+    ) {
+      const mapContainerRef =
+        useRef(null)
+
+      const mapRef =
+        useRef(null)
+
+      const userMarkerRef =
+        useRef(null)
+
+      const searchMarkerRef =
+        useRef(null)
+
+      const searchPopupRef =
+        useRef(null)
+
+      const routeStepMarkerRef =
+        useRef(null)
+
+      const userPositionRef =
+        useRef(null)
+
+      const enhancedSourceRef =
+        useRef(null)
+
+
+      const [
+        layersReady,
+        setLayersReady,
+      ] =
+        useState(false)
+
+
+      const [
+        mapReady,
+        setMapReady,
+      ] =
+        useState(false)
+
+
+      const [
+        selectedPinId,
+        setSelectedPinId,
+      ] =
+        useState(null)
+
+
+      const [
+        route,
+        setRoute,
+      ] =
+        useState(null)
+
+
+      const [
+        routeDestination,
+        setRouteDestination,
+      ] =
+        useState(null)
+
+
+      const [
+        routeLoading,
+        setRouteLoading,
+      ] =
+        useState(false)
+
+
+      const [
+        routeError,
+        setRouteError,
+      ] =
+        useState('')
+
+
+      const city =
+        CITIES[
+          cityKey
+        ]
+
+
+      useImperativeHandle(
+        ref,
+        () => ({
+          getMap() {
+            return mapRef.current
+          },
+
+
+          getUserPosition() {
+            return userPositionRef.current
+          },
+        }),
+        []
+      )
+
+
+      // ========================================================
+      // CONTENT FILTER
+      // ========================================================
+
+      function changePinFilter(
+        nextFilter
+      ) {
+        onChangePinFilter?.(
+          nextFilter
+        )
+
+
+        setSelectedPinId(
+          null
+        )
+      }
+
+
+      function changeNewSubtypeFilter(
+        nextSubtype
+      ) {
+        onChangeNewSubtypeFilter?.(
+          nextSubtype
+        )
+
+
+        setSelectedPinId(
+          null
+        )
+      }
+
+
+      // ========================================================
+      // CREATE MAP
+      // ========================================================
+
+      useEffect(() => {
+        if (
+          !mapContainerRef.current ||
+          mapRef.current ||
+          !city
+        ) {
+          return
+        }
+
+
+        const map =
+          new Map({
+            container:
+              mapContainerRef.current,
+
+            attributionControl:
+              false,
+
+            style: {
+              version:
+                8,
+
+              glyphs:
+                'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+
+              sources: {
+                osm: {
+                  type:
+                    'raster',
+
+                  tiles: [
+                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  ],
+
+                  tileSize:
+                    256,
+
+                  attribution:
+                    '© OpenStreetMap contributors',
+                },
+              },
+
+              layers: [
+                {
+                  id:
+                    'osm',
+
+                  type:
+                    'raster',
+
+                  source:
+                    'osm',
+                },
+              ],
+            },
+
+            center:
+              city.center,
+
+            zoom:
+              city.zoom,
+          })
+
+
+        mapRef.current =
+          map
+
+
+        map.on(
+          'load',
+          () => {
+            addHistoricalLayers({
+              map,
+              city,
+            })
+
+
+            addStreetLabels({
+              map,
+            })
+
+
+            setLayersReady(
+              true
+            )
+
+
+            setMapReady(
+              true
+            )
+          }
+        )
+
+
+        map.on(
+          'error',
+          (event) => {
+            console.error(
+              'GEOGRAPHIC MAP ERROR:',
+              event.error
+            )
+          }
+        )
+
+
+        return () => {
+          setLayersReady(
+            false
+          )
+
+
+          setMapReady(
+            false
+          )
+
+
+          userMarkerRef.current?.remove()
+
+          searchMarkerRef.current?.remove()
+
+          searchPopupRef.current?.remove()
+
+          routeStepMarkerRef.current?.remove()
+
+
+          map.remove()
+
+
+          mapRef.current =
+            null
+        }
+      }, [
+        city,
+      ])
+
+
+      // ========================================================
+      // HISTORICAL LAYER
+      // ========================================================
+
+      useEffect(() => {
+        const map =
+          mapRef.current
+
+
+        if (
+          !map ||
+          !city ||
+          !layersReady ||
+          !selectedLayer
+        ) {
+          return
+        }
+
+
+        showHistoricalLayer({
+          map,
+          city,
+
+          layerType:
+            selectedLayer.layerType,
+
+          year:
+            selectedLayer.year,
+
+          opacity,
+        })
+
+
+        setStreetLabelsVisible({
+          map,
+
+          visible:
+            selectedLayer.layerType ===
+            'aerial',
+        })
+      }, [
+        city,
+        layersReady,
+        selectedLayer,
+        opacity,
+      ])
+
+
+      // ========================================================
+      // ENHANCE
+      // ========================================================
+
+      useEffect(() => {
+        const map =
+          mapRef.current
+
+
+        if (
+          !map ||
+          !city ||
+          !layersReady ||
+          !selectedLayer
+        ) {
+          return
+        }
+
+
+        const restorePreviousEnhancedSource =
+          () => {
+            const previous =
+              enhancedSourceRef.current
+
+
+            if (
+              !previous
+            ) {
+              return
+            }
+
+
+            const previousSource =
+              map.getSource(
+                previous.sourceId
+              )
+
+
+            if (
+              previousSource &&
+              typeof previousSource.setTiles ===
+                'function'
+            ) {
+              previousSource.setTiles([
+                previous.originalUrl,
+              ])
+            }
+
+
+            enhancedSourceRef.current =
+              null
+          }
+
+
+        const sourceId =
+          `${city.key}-${selectedLayer.layerType}-${selectedLayer.year}`
+
+
+        // Normal historical browsing should NOT call setTiles().
+        // The source already has selectedLayer.url from addHistoricalLayers().
+        // Calling setTiles() again invalidates MapLibre's raster tile cache
+        // every time a year is selected, forcing previously loaded imagery
+        // to download again.
+        if (
+          !enhanced
+        ) {
+          restorePreviousEnhancedSource()
+
+          return
+        }
+
+
+        const previous =
+          enhancedSourceRef.current
+
+
+        if (
+          previous &&
+          previous.sourceId !==
+            sourceId
+        ) {
+          restorePreviousEnhancedSource()
+        }
+
+
+        const source =
+          map.getSource(
+            sourceId
+          )
+
+
+        if (
+          !source ||
+          typeof source.setTiles !==
+            'function'
+        ) {
+          return
+        }
+
+
+        source.setTiles([
+          getEnhancedTileUrl({
+            cityKey:
+              city.key,
+
+            layerType:
+              selectedLayer.layerType,
+
+            year:
+              selectedLayer.year,
+          }),
+        ])
+
+
+        enhancedSourceRef.current = {
+          sourceId,
+
+          originalUrl:
+            selectedLayer.url,
+        }
+
+
+        map.triggerRepaint()
+      }, [
+        city,
+        layersReady,
+        selectedLayer,
+        enhanced,
+      ])
+
+
+      // ========================================================
+      // GPS
+      // ========================================================
+
+      const getUserLocation =
+        useCallback(
+          (
+            recenter =
+              false
+          ) => {
+            return new Promise(
+              (
+                resolve,
+                reject
+              ) => {
+                const map =
+                  mapRef.current
+
+
+                if (
+                  !map ||
+                  !navigator.geolocation
+                ) {
+                  reject(
+                    new Error(
+                      'Location unavailable'
+                    )
+                  )
+
+                  return
+                }
+
+
+                navigator.geolocation.getCurrentPosition(
+                  (
+                    position
+                  ) => {
+                    const longitude =
+                      position.coords.longitude
+
+                    const latitude =
+                      position.coords.latitude
+
+
+                    const location = {
+                      longitude,
+                      latitude,
+                    }
+
+
+                    userPositionRef.current =
+                      location
+
+
+                    if (
+                      !userMarkerRef.current
+                    ) {
+                      const element =
+                        document.createElement(
+                          'div'
+                        )
+
+
+                      element.className =
+                        'user-location-dot'
+
+
+                      userMarkerRef.current =
+                        new Marker({
+                          element,
+
+                          anchor:
+                            'center',
+                        })
+                          .setLngLat([
+                            longitude,
+                            latitude,
+                          ])
+                          .addTo(
+                            map
+                          )
+                    } else {
+                      userMarkerRef.current
+                        .setLngLat([
+                          longitude,
+                          latitude,
+                        ])
+                    }
+
+
+                    if (
+                      recenter
+                    ) {
+                      map.flyTo({
+                        center: [
+                          longitude,
+                          latitude,
+                        ],
+
+                        zoom:
+                          Math.max(
+                            map.getZoom(),
+                            16
+                          ),
+
+                        duration:
+                          900,
+                      })
+                    }
+
+
+                    resolve(
+                      location
+                    )
+                  },
+
+                  reject,
+
+                  {
+                    enableHighAccuracy:
+                      true,
+
+                    timeout:
+                      10000,
+
+                    maximumAge:
+                      15000,
+                  }
+                )
+              }
+            )
+          },
+          []
+        )
+
+
+      function locateUser() {
+        return getUserLocation(
+          true
+        )
+      }
+
+
+      // ========================================================
+      // DRAW ROUTE
+      // ========================================================
+
+      function drawRoute(
+        nextRoute
+      ) {
+        const map =
+          mapRef.current
+
+
+        if (
+          !map ||
+          !Array.isArray(
+            nextRoute?.coordinates
+          ) ||
+          nextRoute.coordinates.length ===
+            0
+        ) {
+          return
+        }
+
+
+        const geojson = {
+          type:
+            'Feature',
+
+          properties:
+            {},
+
+          geometry: {
+            type:
+              'LineString',
+
+            coordinates:
+              nextRoute.coordinates,
+          },
+        }
+
+
+        const existingSource =
+          map.getSource(
+            ROUTE_SOURCE_ID
+          )
+
+
+        if (
+          existingSource
+        ) {
+          existingSource.setData(
+            geojson
+          )
+        } else {
+          map.addSource(
+            ROUTE_SOURCE_ID,
+            {
+              type:
+                'geojson',
+
+              data:
+                geojson,
+            }
+          )
+
+
+          map.addLayer({
+            id:
+              ROUTE_LAYER_ID,
+
+            type:
+              'line',
+
+            source:
+              ROUTE_SOURCE_ID,
+
+            paint: {
+              'line-color':
+                '#2f80ed',
+
+              'line-width':
+                5,
+
+              'line-opacity':
+                0.9,
+            },
+
+            layout: {
+              'line-cap':
+                'round',
+
+              'line-join':
+                'round',
+            },
+          })
+        }
+
+
+        const bounds =
+          new LngLatBounds()
+
+
+        nextRoute.coordinates.forEach(
+          (coordinate) => {
+            bounds.extend(
+              coordinate
+            )
+          }
+        )
+
+
+        map.fitBounds(
+          bounds,
+          {
+            padding:
+              70,
+
+            duration:
+              900,
+
+            maxZoom:
+              17,
+          }
+        )
+      }
+
+
+      // ========================================================
+      // CURRENT MANEUVER
+      // ========================================================
+
+      const handleStepChange =
+        useCallback(
+          (
+            step
+          ) => {
+            const map =
+              mapRef.current
+
+
+            if (
+              !map
+            ) {
+              return
+            }
+
+
+            if (
+              !step ||
+              !Array.isArray(
+                step.coordinate
+              )
+            ) {
+              routeStepMarkerRef.current?.remove()
+
+
+              routeStepMarkerRef.current =
+                null
+
+
+              return
+            }
+
+
+            const [
+              longitude,
+              latitude,
+            ] =
+              step.coordinate
+
+
+            if (
+              !Number.isFinite(
+                Number(
+                  longitude
+                )
+              ) ||
+              !Number.isFinite(
+                Number(
+                  latitude
+                )
+              )
+            ) {
+              return
+            }
+
+
+            if (
+              !routeStepMarkerRef.current
+            ) {
+              const element =
+                document.createElement(
+                  'div'
+                )
+
+
+              element.className =
+                'route-step-marker'
+
+
+              routeStepMarkerRef.current =
+                new Marker({
+                  element,
+
+                  anchor:
+                    'center',
+                })
+                  .setLngLat([
+                    longitude,
+                    latitude,
+                  ])
+                  .addTo(
+                    map
+                  )
+            } else {
+              routeStepMarkerRef.current
+                .setLngLat([
+                  longitude,
+                  latitude,
+                ])
+            }
+
+
+            map.easeTo({
+              center: [
+                longitude,
+                latitude,
+              ],
+
+              zoom:
+                Math.max(
+                  map.getZoom(),
+                  17
+                ),
+
+              duration:
+                550,
+            })
+          },
+          []
+        )
+
+
+      // ========================================================
+      // ROUTING
+      // ========================================================
+
+      const startRoute =
+        useCallback(
+          async (
+            destination,
+            longWay =
+              false
+          ) => {
+            try {
+              routeStepMarkerRef.current?.remove()
+
+
+              routeStepMarkerRef.current =
+                null
+
+
+              setRouteLoading(
+                true
+              )
+
+
+              setRouteError(
+                ''
+              )
+
+
+              setRouteDestination(
+                destination
+              )
+
+
+              const start =
+                await getUserLocation(
+                  false
+                )
+
+
+              const nextRoute =
+                longWay
+                  ? await getLongWayRoute({
+                      start,
+                      destination,
+                      cityKey,
+                    })
+                  : await getDirectRoute({
+                      start,
+                      destination,
+                    })
+
+
+              setRoute(
+                nextRoute
+              )
+
+
+              drawRoute(
+                nextRoute
+              )
+            } catch (
+              error
+            ) {
+              console.error(
+                'ROUTE ERROR:',
+                error
+              )
+
+
+              setRouteError(
+                'ROUTE UNAVAILABLE'
+              )
+
+
+              setRoute(
+                null
+              )
+            } finally {
+              setRouteLoading(
+                false
+              )
+            }
+          },
+          [
+            getUserLocation,
+            cityKey,
+          ]
+        )
+
+
+      const handleDirections =
+        useCallback(
+          (
+            destination
+          ) => {
+            startRoute(
+              destination,
+              false
+            )
+          },
+          [
+            startRoute,
+          ]
+        )
+
+
+      const handleLongWay =
+        useCallback(
+          (
+            destination
+          ) => {
+            startRoute(
+              destination,
+              true
+            )
+          },
+          [
+            startRoute,
+          ]
+        )
+
+
+      function clearRoute() {
+        const map =
+          mapRef.current
+
+
+        routeStepMarkerRef.current?.remove()
+
+
+        routeStepMarkerRef.current =
+          null
+
+
+        if (
+          map?.getLayer(
+            ROUTE_LAYER_ID
+          )
+        ) {
+          map.removeLayer(
+            ROUTE_LAYER_ID
+          )
+        }
+
+
+        if (
+          map?.getSource(
+            ROUTE_SOURCE_ID
+          )
+        ) {
+          map.removeSource(
+            ROUTE_SOURCE_ID
+          )
+        }
+
+
+        setRoute(
+          null
+        )
+
+
+        setRouteDestination(
+          null
+        )
+
+
+        setRouteError(
+          ''
+        )
+      }
+
+
+      // ========================================================
+      // SEARCH RESULT
+      // ========================================================
+
+      function handleSearchResult(
+        result
+      ) {
+        const map =
+          mapRef.current
+
+
+        if (
+          !map ||
+          !result
+        ) {
+          return
+        }
+
+
+        const longitude =
+          Number(
+            result.longitude
+          )
+
+
+        const latitude =
+          Number(
+            result.latitude
+          )
+
+
+        if (
+          !Number.isFinite(
+            longitude
+          ) ||
+          !Number.isFinite(
+            latitude
+          )
+        ) {
+          return
+        }
+
+
+        if (
+          result.type ===
+          'geographic'
+        ) {
+          searchMarkerRef.current?.remove()
+
+          searchPopupRef.current?.remove()
+
+
+          searchMarkerRef.current =
+            null
+
+
+          searchPopupRef.current =
+            null
+
+
+          setSelectedPinId(
+            result.id
+          )
+
+
+          map.flyTo({
+            center: [
+              longitude,
+              latitude,
+            ],
+
+            zoom:
+              Math.max(
+                map.getZoom(),
+                16
+              ),
+
+            duration:
+              900,
+          })
+
+
+          return
+        }
+
+
+        setSelectedPinId(
+          null
+        )
+
+
+        searchMarkerRef.current?.remove()
+
+        searchPopupRef.current?.remove()
+
+
+        searchMarkerRef.current =
+          null
+
+
+        searchPopupRef.current =
+          null
+
+
+        const markerElement =
+          document.createElement(
+            'div'
+          )
+
+
+        markerElement.className =
+          'search-location-marker'
+
+
+        const popupContent =
+          document.createElement(
+            'div'
+          )
+
+
+        popupContent.className =
+          'geographic-pin-card'
+
+
+        const title =
+          document.createElement(
+            'div'
+          )
+
+
+        title.className =
+          'geographic-pin-title'
+
+
+        title.textContent =
+          result.name
+
+
+        popupContent.appendChild(
+          title
+        )
+
+
+        if (
+          result.subtitle
+        ) {
+          const subtitle =
+            document.createElement(
+              'div'
+            )
+
+
+          subtitle.className =
+            'geographic-pin-description'
+
+
+          subtitle.textContent =
+            result.subtitle
+
+
+          popupContent.appendChild(
+            subtitle
+          )
+        }
+
+
+        const actions =
+          document.createElement(
+            'div'
+          )
+
+
+        actions.className =
+          'geographic-route-actions'
+
+
+        const directionsButton =
+          document.createElement(
+            'button'
+          )
+
+
+        directionsButton.type =
+          'button'
+
+
+        directionsButton.className =
+          'geographic-route-action'
+
+
+        directionsButton.textContent =
+          'DIRECTIONS'
+
+
+        directionsButton.addEventListener(
+          'click',
+          () => {
+            handleDirections({
+              ...result,
+
+              longitude,
+
+              latitude,
+            })
+          }
+        )
+
+
+        const longWayButton =
+          document.createElement(
+            'button'
+          )
+
+
+        longWayButton.type =
+          'button'
+
+
+        longWayButton.className =
+          (
+            'geographic-route-action ' +
+            'geographic-route-action-long'
+          )
+
+
+        longWayButton.textContent =
+          'TAKE THE LONG WAY'
+
+
+        longWayButton.addEventListener(
+          'click',
+          () => {
+            handleLongWay({
+              ...result,
+
+              longitude,
+
+              latitude,
+            })
+          }
+        )
+
+
+        actions.appendChild(
+          directionsButton
+        )
+
+
+        actions.appendChild(
+          longWayButton
+        )
+
+
+        popupContent.appendChild(
+          actions
+        )
+
+
+        const popup =
+          new Popup({
+            closeButton:
+              true,
+
+            offset:
+              14,
+
+            maxWidth:
+              '280px',
+          })
+            .setDOMContent(
+              popupContent
+            )
+
+
+        searchPopupRef.current =
+          popup
+
+
+        searchMarkerRef.current =
+          new Marker({
+            element:
+              markerElement,
+
+            anchor:
+              'center',
+          })
+            .setLngLat([
+              longitude,
+              latitude,
+            ])
+            .setPopup(
+              popup
+            )
+            .addTo(
+              map
+            )
+
+
+        popup.addTo(
+          map
+        )
+
+
+        map.flyTo({
+          center: [
+            longitude,
+            latitude,
+          ],
+
+          zoom:
+            Math.max(
+              map.getZoom(),
+              16
+            ),
+
+          duration:
+            900,
+        })
+      }
+
+
+      return (
+        <>
+          <div
+            ref={
+              mapContainerRef
+            }
+            className="map"
+          />
+
+
+          {mapReady && (
+            <MapPins
+              map={
+                mapRef.current
+              }
+
+              cityKey={
+                cityKey
+              }
+
+              selectedLayer={
+                selectedLayer
+              }
+
+              selectedPinId={
+                selectedPinId
+              }
+
+              activePinFilter={
+                activePinFilter
+              }
+
+              newSubtypeFilter={
+                newSubtypeFilter
+              }
+
+              onDirections={
+                handleDirections
+              }
+
+              onLongWay={
+                handleLongWay
+              }
+            />
+          )}
+
+
+          <MapControls
+            onLocate={
+              locateUser
+            }
+
+            onSearchResult={
+              handleSearchResult
+            }
+
+            activePinFilter={
+              activePinFilter
+            }
+
+            onChangePinFilter={
+              changePinFilter
+            }
+
+            newSubtypeFilter={
+              newSubtypeFilter
+            }
+
+            onChangeNewSubtypeFilter={
+              changeNewSubtypeFilter
+            }
+          />
+
+
+          <DirectionsPanel
+            route={
+              route
+            }
+
+            destination={
+              routeDestination
+            }
+
+            loading={
+              routeLoading
+            }
+
+            error={
+              routeError
+            }
+
+            onClear={
+              clearRoute
+            }
+
+            onStepChange={
+              handleStepChange
+            }
+
+            onDirect={
+              handleDirections
+            }
+
+            onLongWay={
+              handleLongWay
+            }
+          />
+        </>
+      )
+    }
+  )
+
+
+export default GeographicMap

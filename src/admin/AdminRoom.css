@@ -1,0 +1,1829 @@
+* {
+  box-sizing:
+    border-box;
+}
+
+
+.admin-room {
+  min-height:
+    100vh;
+
+  background:
+    #f3f1eb;
+
+  color:
+    #111;
+
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif;
+
+  padding:
+    28px;
+}
+
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+
+.admin-header {
+  display:
+    flex;
+
+  align-items:
+    flex-start;
+
+  justify-content:
+    space-between;
+
+  gap:
+    20px;
+
+  max-width:
+    1250px;
+
+  margin:
+    0 auto 28px;
+}
+
+
+.admin-eyebrow {
+  margin-bottom:
+    5px;
+
+  font-size:
+    9px;
+
+  font-weight:
+    700;
+
+  letter-spacing:
+    0.18em;
+
+  opacity:
+    0.5;
+}
+
+
+.admin-title {
+  margin:
+    0;
+
+  font-size:
+    27px;
+
+  line-height:
+    1;
+
+  letter-spacing:
+    -0.03em;
+}
+
+
+.admin-map-link {
+  color:
+    #111;
+
+  text-decoration:
+    none;
+
+  font-size:
+    9px;
+
+  font-weight:
+    700;
+
+  letter-spacing:
+    0.1em;
+
+  padding:
+    8px 0;
+}
+
+
+/* ============================================================
+   CITY CONTROL
+   ============================================================ */
+
+.admin-city-shell {
+  display:
+    grid;
+
+  grid-template-columns:
+    minmax(220px, 0.35fr)
+    1fr;
+
+  gap:
+    12px;
+
+  max-width:
+    1250px;
+
+  margin:
+    0 auto 14px;
+}
+
+
+.admin-city-current,
+.admin-attention {
+  border:
+    1px solid rgba(0, 0, 0, 0.16);
+
+  background:
+    #fff;
+
+  padding:
+    14px;
+}
+
+
+.admin-city-label {
+  margin-bottom:
+    8px;
+
+  font-size:
+    8px;
+
+  font-weight:
+    700;
+
+  letter-spacing:
+    0.12em;
+
+  opacity:
+    0.45;
+}
+
+
+.admin-city-select {
+  width:
+    100%;
+
+  border:
+    0;
+
+  border-bottom:
+    2px solid #111;
+
+  border-radius:
+    0;
+
+  background:
+    transparent;
+
+  color:
+    #111;
+
+  padding:
+    7px 0;
+
+  font-family:
+    inherit;
+
+  font-size:
+    20px;
+
+  font-weight:
+    700;
+
+  outline:
+    none;
+
+  cursor:
+    pointer;
+}
+
+
+.admin-attention-cities {
+  display:
+    flex;
+
+  flex-wrap:
+    wrap;
+
+  gap:
+    6px;
+}
+
+
+.admin-attention-city {
+  display:
+    grid;
+
+  grid-template-columns:
+    1fr
+    auto;
+
+  grid-template-areas:
+    "name total"
+    "breakdown total";
+
+  column-gap:
+    18px;
+
+  min-width:
+    180px;
+
+  border:
+    1px solid rgba(0, 0, 0, 0.15);
+
+  background:
+    #fff;
+
+  color:
+    #111;
+
+  padding:
+    9px 10px;
+
+  text-align:
+    left;
+
+  cursor:
+    pointer;
+}
+
+
+.admin-attention-city-active {
+  border-color:
+    #111;
+}
+
+
+.admin-attention-name {
+  grid-area:
+    name;
+
+  font-size:
+    9px;
+
+  font-weight:
+    700;
+
+  letter-spacing:
+    0.08em;
+}
+
+
+.admin-attention-breakdown {
+  grid-area:
+    breakdown;
+
+  margin-top:
+    3px;
+
+  font-size:
+    7px;
+
+  opacity:
+    0.42;
+}
+
+
+.admin-attention-city strong {
+  grid-area:
+    total;
+
+  align-self:
+    center;
+
+  font-size:
+    20px;
+}
+
+
+/* ============================================================
+   TABS
+   ============================================================ */
+
+.admin-tabs {
+  display:
+    flex;
+
+  gap:
+    5px;
+
+  max-width:
+    1250px;
+
+  margin:
+    0 auto 12px;
+}
+
+
+.admin-tab {
+  display:
+    flex;
+
+  align-items:
+    center;
+
+  gap:
+    10px;
+
+  border:
+    1px solid #111;
+
+  background:
+    transparent;
+
+  color:
+    #111;
+
+  padding:
+    9px 13px;
+
+  font-family:
+    inherit;
+
+  font-size:
+    9px;
+
+  font-weight:
+    700;
+
+  letter-spacing:
+    0.08em;
+
+  cursor:
+    pointer;
+}
+
+
+.admin-tab span {
+  opacity:
+    0.45;
+}
+
+
+.admin-tab-active {
+  background:
+    #111;
+
+  color:
+    #fff;
+}
+
+
+/* ============================================================
+   LAYOUT
+   ============================================================ */
+
+.admin-layout {
+  display:
+    grid;
+
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(350px, 0.8fr);
+
+  gap:
+    12px;
+
+  max-width:
+    1250px;
+
+  margin:
+    0 auto;
+}
+
+
+.admin-editor,
+.admin-records {
+  border:
+    1px solid rgba(0, 0, 0, 0.16);
+
+  background:
+    #fff;
+
+  padding:
+    18px;
+}
+
+
+.admin-section-heading {
+  margin-bottom:
+    18px;
+
+  font-size:
+    9px;
+
+  font-weight:
+    700;
+
+  letter-spacing:
+    0.12em;
+
+  opacity:
+    0.48;
+}
+
+
+/* ============================================================
+   FORM
+   ============================================================ */
+
+.admin-form {
+  display:
+    grid;
+
+  grid-template-columns:
+    1fr
+    1fr;
+
+  gap:
+    14px;
+}
+
+
+.admin-field {
+  display:
+    grid;
+
+  gap:
+    6px;
+}
+
+
+.admin-field-wide {
+  grid-column:
+    1 / -1;
+}
+
+
+.admin-field span,
+.admin-check-field span {
+  font-size:
+    8px;
+
+  font-weight:
+    700;
+
+  letter-spacing:
+    0.09em;
+
+  opacity:
+    0.52;
+}
+
+
+.admin-field input,
+.admin-field textarea,
+.admin-field select {
+  width:
+    100%;
+
+  border:
+    1px solid rgba(0, 0, 0, 0.18);
+
+  border-radius:
+    0;
+
+  background:
+    #fff;
+
+  color:
+    #111;
+
+  padding:
+    10px;
+
+  font:
+    inherit;
+
+  font-size:
+    12px;
+
+  outline:
+    none;
+}
+
+
+.admin-field input:focus,
+.admin-field textarea:focus,
+.admin-field select:focus {
+  border-color:
+    #111;
+}
+
+
+.admin-field textarea {
+  resize:
+    vertical;
+}
+
+
+.admin-check-field {
+  display:
+    flex;
+
+  align-items:
+    center;
+
+  gap:
+    7px;
+
+  min-height:
+    40px;
+}
+
+
+.admin-check-field input {
+  margin:
+    0;
+}
+
+
+.admin-form-actions {
+  display:
+    flex;
+
+  gap:
+    6px;
+
+  grid-column:
+    1 / -1;
+
+  margin-top:
+    5px;
+}
+
+
+.admin-save,
+.admin-cancel {
+  border:
+    1px solid #111;
+
+  padding:
+    11px 15px;
+
+  font-family:
+    inherit;
+
+  font-size:
+    9px;
+
+  font-weight:
+    700;
+
+  letter-spacing:
+    0.08em;
+
+  cursor:
+    pointer;
+}
+
+
+.admin-save {
+  background:
+    #111;
+
+  color:
+    #fff;
+}
+
+
+.admin-cancel {
+  background:
+    #fff;
+
+  color:
+    #111;
+}
+
+
+/* ============================================================
+   LOCATION SEARCH
+   ============================================================ */
+
+.admin-location {
+  position:
+    relative;
+}
+
+
+.admin-location-search {
+  display:
+    grid;
+
+  grid-template-columns:
+    1fr
+    auto;
+
+  gap:
+    5px;
+}
+
+
+.admin-location-search input {
+  min-width:
+    0;
+}
+
+
+.admin-location-search button {
+  border:
+    1px solid #111;
+
+  background:
+    #111;
+
+  color:
+    #fff;
+
+  min-width:
+    66px;
+
+  padding:
+    8px 11px;
+
+  font-family:
+    inherit;
+
+  font-size:
+    8px;
+
+  font-weight:
+    700;
+
+  letter-spacing:
+    0.08em;
+
+  cursor:
+    pointer;
+}
+
+
+.admin-location-selected {
+  margin-top:
+    7px;
+
+  padding:
+    9px 10px;
+
+  border:
+    1px solid rgba(0, 0, 0, 0.12);
+
+  background:
+    #f3f1eb;
+
+  font-size:
+    11px;
+
+  line-height:
+    1.4;
+}
+
+
+.admin-location-selected-label {
+  margin-bottom:
+    3px;
+
+  font-size:
+    7px;
+
+  font-weight:
+    700;
+
+  letter-spacing:
+    0.1em;
+
+  opacity:
+    0.45;
+}
+
+
+.admin-location-selected-intersection {
+  margin-top:
+    4px;
+
+  font-size:
+    8px;
+
+  opacity:
+    0.5;
+}
+
+
+.admin-location-results {
+  margin-top:
+    5px;
+
+  border:
+    1px solid rgba(0, 0, 0, 0.15);
+}
+
+
+.admin-location-result {
+  display:
+    grid;
+
+  width:
+    100%;
+
+  gap:
+    3px;
+
+  border:
+    0;
+
+  border-bottom:
+    1px solid rgba(0, 0, 0, 0.08);
+
+  background:
+    #fff;
+
+  color:
+    #111;
+
+  padding:
+    10px;
+
+  text-align:
+    left;
+
+  cursor:
+    pointer;
+}
+
+
+.admin-location-result:last-child {
+  border-bottom:
+    0;
+}
+
+
+.admin-location-result:hover {
+  background:
+    #f3f1eb;
+}
+
+
+.admin-location-result strong {
+  font-size:
+    11px;
+
+  line-height:
+    1.3;
+}
+
+
+.admin-location-result span {
+  font-size:
+    8px;
+
+  line-height:
+    1.35;
+
+  opacity:
+    0.48;
+}
+
+
+.admin-location-message {
+  margin-top:
+    7px;
+
+  font-size:
+    8px;
+
+  font-weight:
+    700;
+
+  letter-spacing:
+    0.06em;
+
+  opacity:
+    0.5;
+}
+
+
+.admin-location-intersection {
+  margin-top:
+    6px;
+
+  font-size:
+    7px;
+
+  font-weight:
+    700;
+
+  letter-spacing:
+    0.08em;
+
+  opacity:
+    0.45;
+}
+
+
+/* ============================================================
+   ADMIN PIN POSITION
+   ============================================================ */
+
+.admin-pin-position-controls {
+  display:
+    flex;
+
+  gap:
+    5px;
+
+  margin-bottom:
+    7px;
+}
+
+
+.admin-pin-position-button {
+  border:
+    1px solid rgba(0, 0, 0, 0.18);
+
+  background:
+    #fff;
+
+  color:
+    #111;
+
+  padding:
+    7px 10px;
+
+  font-family:
+    inherit;
+
+  font-size:
+    8px;
+
+  font-weight:
+    700;
+
+  letter-spacing:
+    0.08em;
+
+  cursor:
+    pointer;
+}
+
+
+.admin-pin-position-button-active {
+  background:
+    #111;
+
+  color:
+    #fff;
+
+  border-color:
+    #111;
+}
+
+
+.admin-pin-map {
+  width:
+    100%;
+
+  height:
+    260px;
+
+  border:
+    1px solid rgba(0, 0, 0, 0.15);
+}
+
+
+.admin-pin-marker {
+  width:
+    20px;
+
+  height:
+    20px;
+
+  border:
+    4px solid #fff;
+
+  border-radius:
+    50%;
+
+  background:
+    #d72d24;
+
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.35);
+
+  cursor:
+    grab;
+}
+
+
+.admin-pin-marker:active {
+  cursor:
+    grabbing;
+}
+
+
+.admin-pin-position-note {
+  margin-top:
+    6px;
+
+  font-size:
+    7px;
+
+  font-weight:
+    700;
+
+  letter-spacing:
+    0.08em;
+
+  opacity:
+    0.45;
+}
+
+
+/* ============================================================
+   HISTORIC TIME
+   ============================================================ */
+
+.historic-time-options {
+  display:
+    grid;
+
+  grid-template-columns:
+    repeat(3, 1fr);
+
+  gap:
+    5px;
+}
+
+
+.historic-time-button {
+  border:
+    1px solid rgba(0, 0, 0, 0.18);
+
+  background:
+    #fff;
+
+  color:
+    #111;
+
+  padding:
+    9px 8px;
+
+  font-family:
+    inherit;
+
+  font-size:
+    8px;
+
+  font-weight:
+    700;
+
+  letter-spacing:
+    0.07em;
+
+  cursor:
+    pointer;
+}
+
+
+.historic-time-button-active {
+  border-color:
+    #111;
+
+  background:
+    #111;
+
+  color:
+    #fff;
+}
+
+
+/* ============================================================
+   HISTORIC LAYER PLACEMENT
+   ============================================================ */
+
+.historic-placement {
+  border:
+    1px solid rgba(0, 0, 0, 0.14);
+
+  padding:
+    10px;
+}
+
+
+.historic-placement-modes {
+  display:
+    flex;
+
+  gap:
+    5px;
+
+  margin-bottom:
+    10px;
+}
+
+
+.historic-placement-mode {
+  border:
+    1px solid rgba(0, 0, 0, 0.18);
+
+  background:
+    #fff;
+
+  color:
+    #111;
+
+  padding:
+    7px 10px;
+
+  font-family:
+    inherit;
+
+  font-size:
+    8px;
+
+  font-weight:
+    700;
+
+  letter-spacing:
+    0.08em;
+
+  cursor:
+    pointer;
+}
+
+
+.historic-placement-mode-active {
+  border-color:
+    #111;
+
+  background:
+    #111;
+
+  color:
+    #fff;
+}
+
+
+.historic-placement-preview {
+  display:
+    grid;
+
+  gap:
+    4px;
+
+  padding:
+    10px;
+
+  background:
+    #f3f1eb;
+}
+
+
+.historic-placement-preview strong {
+  font-size:
+    11px;
+
+  line-height:
+    1.2;
+}
+
+
+.historic-placement-preview span {
+  font-size:
+    8px;
+
+  line-height:
+    1.4;
+
+  opacity:
+    0.5;
+}
+
+
+.historic-layer-select {
+  width:
+    100%;
+
+  margin-bottom:
+    7px;
+
+  border:
+    1px solid rgba(0, 0, 0, 0.18);
+
+  border-radius:
+    0;
+
+  background:
+    #fff;
+
+  color:
+    #111;
+
+  padding:
+    9px;
+
+  font-family:
+    inherit;
+
+  font-size:
+    10px;
+
+  outline:
+    none;
+}
+
+
+.admin-record-placement {
+  display:
+    inline-block;
+
+  margin-top:
+    7px;
+
+  padding:
+    4px 6px;
+
+  border:
+    1px solid rgba(0, 0, 0, 0.12);
+
+  font-size:
+    7px;
+
+  font-weight:
+    700;
+
+  letter-spacing:
+    0.07em;
+
+  opacity:
+    0.55;
+}
+
+
+/* ============================================================
+   REVIEW
+   ============================================================ */
+
+.admin-review-section {
+  margin-bottom:
+    28px;
+
+  padding-bottom:
+    22px;
+
+  border-bottom:
+    2px solid rgba(0, 0, 0, 0.12);
+}
+
+
+.admin-review-record {
+  padding:
+    15px 0;
+
+  border-top:
+    1px solid rgba(0, 0, 0, 0.1);
+}
+
+
+.admin-review-record h2 {
+  margin:
+    0;
+
+  font-size:
+    14px;
+
+  line-height:
+    1.25;
+}
+
+
+.admin-review-record p {
+  margin:
+    7px 0 0;
+
+  font-size:
+    11px;
+
+  line-height:
+    1.45;
+
+  opacity:
+    0.66;
+}
+
+
+.admin-review-badge {
+  font-size:
+    7px;
+
+  font-weight:
+    700;
+
+  letter-spacing:
+    0.1em;
+
+  color:
+    #9a6200;
+}
+
+
+.admin-review-approve {
+  background:
+    #111 !important;
+
+  color:
+    #fff !important;
+
+  border-color:
+    #111 !important;
+}
+
+
+/* ============================================================
+   RECORDS
+   ============================================================ */
+
+.admin-records {
+  align-self:
+    start;
+}
+
+
+.admin-published-section {
+  margin-top:
+    4px;
+}
+
+
+.admin-empty {
+  padding:
+    30px 0;
+
+  font-size:
+    9px;
+
+  letter-spacing:
+    0.1em;
+
+  opacity:
+    0.4;
+}
+
+
+.admin-record {
+  padding:
+    15px 0;
+
+  border-top:
+    1px solid rgba(0, 0, 0, 0.1);
+}
+
+
+.admin-record:first-of-type {
+  border-top:
+    0;
+}
+
+
+.admin-record-inactive {
+  opacity:
+    0.48;
+}
+
+
+.admin-record-top {
+  display:
+    flex;
+
+  justify-content:
+    space-between;
+
+  gap:
+    10px;
+
+  margin-bottom:
+    7px;
+}
+
+
+.admin-record-type,
+.admin-record-status {
+  font-size:
+    7px;
+
+  font-weight:
+    700;
+
+  letter-spacing:
+    0.1em;
+
+  text-transform:
+    uppercase;
+
+  opacity:
+    0.48;
+}
+
+
+.admin-record h2 {
+  margin:
+    0;
+
+  font-size:
+    14px;
+
+  line-height:
+    1.25;
+}
+
+
+.admin-record-location {
+  margin-top:
+    5px;
+
+  font-size:
+    9px;
+
+  font-weight:
+    700;
+
+  line-height:
+    1.3;
+
+  opacity:
+    0.46;
+}
+
+
+.admin-record p {
+  margin:
+    7px 0 0;
+
+  font-size:
+    11px;
+
+  line-height:
+    1.45;
+
+  opacity:
+    0.66;
+}
+
+
+.admin-record-meta {
+  margin-top:
+    8px;
+
+  font-size:
+    8px;
+
+  text-transform:
+    uppercase;
+
+  opacity:
+    0.38;
+}
+
+
+.admin-record-actions {
+  display:
+    flex;
+
+  gap:
+    5px;
+
+  margin-top:
+    11px;
+}
+
+
+.admin-record-actions button {
+  border:
+    1px solid rgba(0, 0, 0, 0.2);
+
+  background:
+    #fff;
+
+  color:
+    #111;
+
+  padding:
+    6px 8px;
+
+  font-family:
+    inherit;
+
+  font-size:
+    7px;
+
+  font-weight:
+    700;
+
+  letter-spacing:
+    0.07em;
+
+  cursor:
+    pointer;
+}
+
+
+/* ============================================================
+   REVIEW CONTROLS
+   ============================================================ */
+
+.admin-review-type-filters,
+.admin-review-date-filters {
+  display:
+    flex;
+
+  flex-wrap:
+    wrap;
+
+  gap:
+    6px;
+
+  margin-bottom:
+    10px;
+}
+
+
+.admin-review-type-filter,
+.admin-review-date-filter {
+  display:
+    inline-flex;
+
+  align-items:
+    center;
+
+  justify-content:
+    space-between;
+
+  gap:
+    9px;
+
+  min-height:
+    30px;
+
+  border:
+    1px solid rgba(0, 0, 0, 0.2);
+
+  border-radius:
+    0;
+
+  background:
+    #fff;
+
+  color:
+    #111;
+
+  padding:
+    7px 10px;
+
+  font-family:
+    inherit;
+
+  font-size:
+    8px;
+
+  font-weight:
+    700;
+
+  line-height:
+    1;
+
+  letter-spacing:
+    0.08em;
+
+  text-transform:
+    uppercase;
+
+  cursor:
+    pointer;
+}
+
+
+.admin-review-type-filter:hover,
+.admin-review-date-filter:hover {
+  border-color:
+    #111;
+}
+
+
+.admin-review-type-filter span,
+.admin-review-date-filter span {
+  display:
+    inline-flex;
+
+  align-items:
+    center;
+
+  justify-content:
+    center;
+
+  min-width:
+    18px;
+
+  height:
+    18px;
+
+  padding:
+    0 4px;
+
+  background:
+    #f3f1eb;
+
+  font-size:
+    7px;
+
+  letter-spacing:
+    0;
+}
+
+
+.admin-review-type-filter-active,
+.admin-review-date-filter-active {
+  border-color:
+    #111;
+
+  background:
+    #111;
+
+  color:
+    #fff;
+}
+
+
+.admin-review-type-filter-active span,
+.admin-review-date-filter-active span {
+  background:
+    rgba(255, 255, 255, 0.16);
+
+  color:
+    #fff;
+}
+
+
+.admin-review-date-heading {
+  margin:
+    18px 0 2px;
+
+  padding-bottom:
+    8px;
+
+  border-bottom:
+    1px solid rgba(0, 0, 0, 0.12);
+
+  font-size:
+    9px;
+
+  font-weight:
+    700;
+
+  letter-spacing:
+    0.1em;
+
+  text-transform:
+    uppercase;
+}
+
+
+/* ============================================================
+   MOBILE
+   ============================================================ */
+
+@media (
+  max-width: 800px
+) {
+  .admin-room {
+    padding:
+      15px;
+  }
+
+
+  .admin-city-shell {
+    grid-template-columns:
+      1fr;
+  }
+
+
+  .admin-layout {
+    grid-template-columns:
+      1fr;
+  }
+
+
+  .admin-form {
+    grid-template-columns:
+      1fr;
+  }
+
+
+  .admin-field-wide,
+  .admin-form-actions {
+    grid-column:
+      auto;
+  }
+
+
+  .admin-tabs {
+    overflow-x:
+      auto;
+  }
+
+
+  .admin-attention-city {
+    flex:
+      1;
+
+    min-width:
+      140px;
+  }
+
+
+  .historic-time-options {
+    grid-template-columns:
+      1fr;
+  }
+}
+
+
+/* ============================================================
+   ADMIN FULL-PAGE SCROLL + PUBLISHED FIRST
+   ============================================================ */
+
+html,
+body,
+#root {
+  min-height:
+    100%;
+
+  height:
+    auto;
+
+  max-height:
+    none;
+}
+
+
+body {
+  overflow-x:
+    auto;
+
+  overflow-y:
+    auto;
+}
+
+
+#root {
+  overflow:
+    visible;
+}
+
+
+.admin-room {
+  min-height:
+    100vh;
+
+  height:
+    auto;
+
+  max-height:
+    none;
+
+  overflow:
+    visible;
+}
+
+
+.admin-layout {
+  align-items:
+    start;
+
+  height:
+    auto;
+
+  min-height:
+    0;
+
+  max-height:
+    none;
+
+  overflow:
+    visible;
+}
+
+
+.admin-editor,
+.admin-records {
+  height:
+    auto;
+
+  min-height:
+    0;
+
+  max-height:
+    none;
+
+  overflow:
+    visible;
+}
+
+
+.admin-records {
+  display:
+    flex;
+
+  flex-direction:
+    column;
+}
+
+
+.admin-published-section {
+  order:
+    -1;
+
+  margin:
+    0 0 28px;
+
+  padding:
+    0 0 22px;
+
+  border-bottom:
+    2px solid rgba(0, 0, 0, 0.12);
+}
+
+
+.admin-review-section {
+  order:
+    1;
+
+  margin:
+    0;
+
+  padding:
+    0;
+
+  border-bottom:
+    0;
+}
+
+
+.admin-review-section,
+.admin-published-section,
+.admin-review-date-group {
+  height:
+    auto;
+
+  max-height:
+    none;
+
+  overflow:
+    visible;
+}
+
+
+.admin-record-actions {
+  flex-wrap:
+    wrap;
+}
+
+
+@media (
+  max-width: 1000px
+) {
+  .admin-room {
+    min-width:
+      900px;
+  }
+
+
+  .admin-layout {
+    grid-template-columns:
+      minmax(500px, 1fr)
+      minmax(360px, 0.8fr);
+  }
+}
+
+
+@media (
+  max-width: 800px
+) {
+  html,
+  body,
+  #root {
+    overflow-x:
+      auto;
+  }
+
+
+  .admin-room {
+    min-width:
+      0;
+
+    width:
+      100%;
+  }
+
+
+  .admin-layout {
+    grid-template-columns:
+      1fr;
+  }
+}

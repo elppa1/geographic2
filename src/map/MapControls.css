@@ -1,0 +1,922 @@
+/* ============================================================
+   MAP UTILITIES
+   ============================================================ */
+
+.map-utilities {
+  position: absolute;
+  top: 78px;
+  right: 14px;
+
+  z-index: 30;
+
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+
+/* ============================================================
+   MAP UTILITY BUTTONS
+   ============================================================ */
+
+.map-utility-button {
+  width: 38px;
+  height: 38px;
+
+  display: grid;
+  place-items: center;
+
+  padding: 0;
+
+  border: 1px solid rgba(0, 0, 0, 0.18);
+
+  background: rgba(255, 255, 255, 0.96);
+  color: #111;
+
+  font-family: inherit;
+  font-size: 21px;
+  line-height: 1;
+
+  cursor: pointer;
+
+  box-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+
+.map-utility-button:hover {
+  background: #fff;
+}
+
+
+.map-utility-button:active {
+  transform: translateY(1px);
+}
+
+
+/* ============================================================
+   CONTENT CONTROL
+   ============================================================ */
+
+.content-control {
+  position: relative;
+}
+
+
+.content-control-button {
+  font-size: 18px;
+}
+
+
+.content-control-button-active {
+  border-color: rgba(0, 0, 0, 0.42);
+}
+
+
+/* ============================================================
+   CONTENT PANEL
+   ============================================================ */
+
+.content-panel {
+  position: absolute;
+
+  top: 0;
+  right: 48px;
+
+  width: 172px;
+
+  border: 1px solid rgba(0, 0, 0, 0.16);
+
+  background: rgba(255, 255, 255, 0.98);
+  color: #111;
+
+  box-shadow:
+    0 4px 18px rgba(0, 0, 0, 0.12);
+}
+
+
+.content-panel-heading {
+  padding:
+    9px
+    11px
+    8px;
+
+  border-bottom:
+    1px solid rgba(0, 0, 0, 0.08);
+
+  color:
+    rgba(0, 0, 0, 0.42);
+
+  font-size: 7px;
+  font-weight: 700;
+
+  letter-spacing: 0.14em;
+}
+
+
+/* ============================================================
+   MAIN CONTENT FILTERS
+   ============================================================ */
+
+.content-filter {
+  width: 100%;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  min-height: 34px;
+
+  border: 0;
+  border-bottom:
+    1px solid rgba(0, 0, 0, 0.06);
+
+  background: transparent;
+  color: #111;
+
+  padding:
+    0
+    11px;
+
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 600;
+
+  letter-spacing: 0.08em;
+
+  text-align: left;
+
+  cursor: pointer;
+}
+
+
+.content-filter:hover {
+  background:
+    rgba(0, 0, 0, 0.035);
+}
+
+
+.content-filter-active {
+  font-weight: 700;
+}
+
+
+.content-filter-state {
+  width: 12px;
+
+  text-align: right;
+
+  font-size: 8px;
+}
+
+
+/* ============================================================
+   NEW SUBFILTERS
+   ============================================================ */
+
+.content-subfilters {
+  display: grid;
+
+  gap: 1px;
+
+  padding:
+    7px;
+
+  border-bottom:
+    1px solid rgba(0, 0, 0, 0.08);
+
+  background:
+    rgba(0, 0, 0, 0.025);
+}
+
+
+.content-subfilter {
+  width: 100%;
+
+  border: 0;
+
+  background:
+    transparent;
+
+  color:
+    rgba(0, 0, 0, 0.48);
+
+  padding:
+    7px
+    8px;
+
+  font-family: inherit;
+  font-size: 7px;
+  font-weight: 700;
+
+  letter-spacing:
+    0.1em;
+
+  text-align: left;
+
+  cursor: pointer;
+}
+
+
+.content-subfilter:hover {
+  background:
+    rgba(0, 0, 0, 0.045);
+
+  color:
+    #111;
+}
+
+
+.content-subfilter-active {
+  background:
+    #111;
+
+  color:
+    #fff;
+}
+
+
+.content-subfilter-active:hover {
+  background:
+    #111;
+
+  color:
+    #fff;
+}
+
+
+/* ============================================================
+   CLEAR
+   ============================================================ */
+
+.content-clear {
+  width: 100%;
+
+  border: 0;
+
+  background:
+    rgba(0, 0, 0, 0.025);
+
+  color:
+    rgba(0, 0, 0, 0.45);
+
+  padding:
+    8px
+    11px;
+
+  font-family: inherit;
+  font-size: 7px;
+  font-weight: 700;
+
+  letter-spacing: 0.12em;
+
+  text-align: left;
+
+  cursor: pointer;
+}
+
+
+.content-clear:hover {
+  color: #111;
+
+  background:
+    rgba(0, 0, 0, 0.05);
+}
+
+
+/* ============================================================
+   GPS
+   ============================================================ */
+
+.user-location-dot {
+  width: 14px;
+  height: 14px;
+
+  border: 3px solid #fff;
+  border-radius: 50%;
+
+  background: #2f80ed;
+
+  box-shadow:
+    0 0 0 2px rgba(47, 128, 237, 0.28),
+    0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
+
+/* ============================================================
+   SEARCH CONTROL
+   ============================================================ */
+
+.search-control {
+  position: relative;
+}
+
+
+/* ============================================================
+   SEARCH PANEL
+   ============================================================ */
+
+.search-panel {
+  position: absolute;
+
+  top: 0;
+  right: 48px;
+
+  width: min(
+    320px,
+    calc(100vw - 80px)
+  );
+
+  overflow: hidden;
+
+  border: 1px solid rgba(0, 0, 0, 0.16);
+
+  background: rgba(255, 255, 255, 0.98);
+  color: #111;
+
+  box-shadow:
+    0 4px 18px rgba(0, 0, 0, 0.12);
+}
+
+
+/* ============================================================
+   SEARCH FORM
+   ============================================================ */
+
+.search-form {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr)
+    auto
+    auto;
+
+  min-height: 40px;
+}
+
+
+.search-input {
+  width: 100%;
+  min-width: 0;
+
+  border: 0;
+  outline: 0;
+
+  padding:
+    0
+    12px;
+
+  background: transparent;
+  color: #111;
+
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+
+.search-input::placeholder {
+  color: rgba(0, 0, 0, 0.42);
+}
+
+
+.search-submit {
+  min-width: 42px;
+
+  border: 0;
+  border-left:
+    1px solid rgba(0, 0, 0, 0.1);
+
+  background: transparent;
+  color: #111;
+
+  padding:
+    0
+    11px;
+
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+
+  cursor: pointer;
+}
+
+
+.search-submit:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+
+.search-submit:disabled {
+  cursor: default;
+
+  opacity: 0.4;
+}
+
+
+/* ============================================================
+   SEARCH CLOSE
+   ============================================================ */
+
+.search-close {
+  width: 38px;
+
+  display: grid;
+  place-items: center;
+
+  border: 0;
+  border-left:
+    1px solid rgba(0, 0, 0, 0.1);
+
+  background: transparent;
+  color: #111;
+
+  padding: 0;
+
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 300;
+  line-height: 1;
+
+  cursor: pointer;
+}
+
+
+.search-close:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+
+/* ============================================================
+   SEARCH RESULTS
+   ============================================================ */
+
+.search-results {
+  border-top:
+    1px solid rgba(0, 0, 0, 0.1);
+}
+
+
+.search-section-title {
+  padding:
+    8px
+    12px
+    6px;
+
+  background:
+    rgba(0, 0, 0, 0.018);
+
+  color:
+    rgba(0, 0, 0, 0.46);
+
+  font-family: inherit;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.12em;
+}
+
+
+.search-result {
+  width: 100%;
+
+  display: block;
+
+  border: 0;
+  border-top:
+    1px solid rgba(0, 0, 0, 0.055);
+
+  background: transparent;
+  color: #111;
+
+  padding:
+    10px
+    12px;
+
+  text-align: left;
+
+  cursor: pointer;
+
+  transition:
+    background 100ms ease;
+}
+
+
+.search-section-title +
+.search-result {
+  border-top: 0;
+}
+
+
+.search-result:hover {
+  background:
+    rgba(0, 0, 0, 0.045);
+}
+
+
+.search-result:focus-visible {
+  outline:
+    1px solid #111;
+
+  outline-offset:
+    -1px;
+}
+
+
+.search-result-name {
+  display: block;
+
+  overflow: hidden;
+
+  color: #111;
+
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+.search-result-subtitle {
+  display: block;
+
+  margin-top: 3px;
+
+  overflow: hidden;
+
+  color:
+    rgba(0, 0, 0, 0.48);
+
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 400;
+  line-height: 1.3;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+.search-result-description {
+  display: -webkit-box;
+
+  margin-top: 5px;
+
+  overflow: hidden;
+
+  color:
+    rgba(0, 0, 0, 0.62);
+
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 400;
+  line-height: 1.4;
+
+  -webkit-box-orient:
+    vertical;
+
+  -webkit-line-clamp:
+    2;
+}
+
+
+.search-result-type {
+  display: block;
+
+  margin-bottom: 3px;
+
+  color:
+    rgba(0, 0, 0, 0.45);
+
+  font-family: inherit;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+
+.search-message {
+  border-top:
+    1px solid rgba(0, 0, 0, 0.1);
+
+  padding:
+    12px;
+
+  color:
+    rgba(0, 0, 0, 0.5);
+
+  font-family: inherit;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+
+.search-attribution {
+  border-top:
+    1px solid rgba(0, 0, 0, 0.055);
+
+  padding:
+    6px
+    12px;
+
+  color:
+    rgba(0, 0, 0, 0.35);
+
+  font-family: inherit;
+  font-size: 7px;
+  line-height: 1.3;
+}
+
+
+/* ============================================================
+   SEARCH MARKER
+   ============================================================ */
+
+.search-location-marker {
+  width: 16px;
+  height: 16px;
+
+  border: 3px solid #fff;
+  border-radius: 50%;
+
+  background: #e24a3b;
+
+  box-shadow:
+    0 1px 5px rgba(0, 0, 0, 0.35);
+}
+
+
+/* ============================================================
+   GEOGRAPHIC PINS
+   ============================================================ */
+
+.geographic-pin {
+  width: 14px;
+  height: 14px;
+
+  padding: 0;
+
+  border: 2px solid #fff;
+  border-radius: 50%;
+
+  background: #e24a3b;
+
+  box-shadow:
+    0 1px 5px rgba(0, 0, 0, 0.35);
+
+  cursor: pointer;
+
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+
+.geographic-pin:hover {
+  transform:
+    scale(1.2);
+
+  box-shadow:
+    0 2px 7px rgba(0, 0, 0, 0.38);
+}
+
+
+.geographic-pin:focus-visible {
+  outline:
+    2px solid #111;
+
+  outline-offset:
+    2px;
+}
+
+
+/* ============================================================
+   POPUP
+   ============================================================ */
+
+.geographic-pin-card {
+  min-width: 170px;
+  max-width: 240px;
+
+  padding:
+    3px
+    2px;
+
+  color: #111;
+
+  font-family: inherit;
+}
+
+
+.geographic-pin-type {
+  margin-bottom: 4px;
+
+  color:
+    rgba(0, 0, 0, 0.36);
+
+  font-size: 7px;
+  font-weight: 700;
+
+  letter-spacing: 0.12em;
+}
+
+
+.geographic-pin-year {
+  margin-bottom: 4px;
+
+  color:
+    rgba(0, 0, 0, 0.48);
+
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+
+  letter-spacing: 0.1em;
+}
+
+
+.geographic-pin-title {
+  margin-bottom: 6px;
+
+  color: #111;
+
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+
+  letter-spacing: 0.02em;
+}
+
+
+.geographic-pin-location {
+  margin-bottom: 6px;
+
+  color:
+    rgba(0, 0, 0, 0.48);
+
+  font-size: 8px;
+  font-weight: 600;
+
+  line-height: 1.3;
+}
+
+
+.geographic-pin-description {
+  color:
+    rgba(0, 0, 0, 0.72);
+
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+
+.geographic-pin-category {
+  margin-top: 7px;
+
+  font-size: 7px;
+  font-weight: 700;
+
+  letter-spacing: 0.08em;
+
+  opacity: 0.4;
+}
+
+
+.geographic-pin-source {
+  margin-top: 8px;
+
+  padding-top: 6px;
+
+  border-top:
+    1px solid rgba(0, 0, 0, 0.08);
+
+  color:
+    rgba(0, 0, 0, 0.48);
+
+  font-size: 8px;
+  line-height: 1.3;
+  letter-spacing: 0.06em;
+}
+
+
+/* ============================================================
+   MAPLIBRE POPUP
+   ============================================================ */
+
+.maplibregl-popup-content {
+  padding:
+    10px
+    12px;
+
+  border-radius: 0;
+
+  background: #fff;
+  color: #111;
+
+  box-shadow:
+    0 2px 12px rgba(0, 0, 0, 0.18);
+}
+
+
+.maplibregl-popup-close-button {
+  top: 3px;
+  right: 5px;
+
+  padding:
+    2px
+    5px;
+
+  border: 0;
+
+  background: transparent;
+  color: #111;
+
+  font-size: 16px;
+  line-height: 1;
+
+  cursor: pointer;
+}
+
+
+.maplibregl-popup-close-button:hover {
+  background: transparent;
+
+  opacity: 0.5;
+}
+
+
+/* ============================================================
+   MOBILE
+   ============================================================ */
+
+@media (
+  max-width: 700px
+) {
+  .map-utilities {
+    top: 64px;
+    right: 10px;
+  }
+
+
+  .map-utility-button {
+    width: 40px;
+    height: 40px;
+
+    font-size: 22px;
+  }
+
+
+  .content-panel {
+    right: 50px;
+
+    width: 174px;
+  }
+
+
+  .search-panel {
+    position: fixed;
+
+    top: 60px;
+    left: 10px;
+    right: 10px;
+
+    width: auto;
+  }
+
+
+  .search-form {
+    min-height: 44px;
+  }
+
+
+  .search-input {
+    font-size: 16px;
+  }
+
+
+  .search-result {
+    padding:
+      12px
+      13px;
+  }
+
+
+  .search-result-name {
+    font-size: 12px;
+  }
+
+
+  .search-result-subtitle {
+    font-size: 10px;
+  }
+
+
+  .search-result-description {
+    font-size: 10px;
+  }
+}
