@@ -193,6 +193,32 @@ function cleanText(
     ''
   )
     .replace(
+      /&#x([0-9a-f]+);/gi,
+      (
+        _match,
+        hex
+      ) =>
+        String.fromCodePoint(
+          parseInt(
+            hex,
+            16
+          )
+        )
+    )
+    .replace(
+      /&#(\d+);/g,
+      (
+        _match,
+        decimal
+      ) =>
+        String.fromCodePoint(
+          parseInt(
+            decimal,
+            10
+          )
+        )
+    )
+    .replace(
       /\u00a0/g,
       ' '
     )
@@ -2294,17 +2320,124 @@ function parseTorontoFireTime(
 }
 
 
+function normalizeFireLocationPiece(
+  value
+) {
+  return cleanText(
+    value
+  )
+    .replace(
+      /^\/+|\/+$/g,
+      ''
+    )
+    .replace(
+      /\s*\/\s*/g,
+      ' / '
+    )
+    .trim()
+}
+
+
+function fireIncidentShouldBeReviewed({
+  incidentType,
+  alarmLevel,
+}) {
+  const type =
+    cleanText(
+      incidentType
+    )
+      .toLowerCase()
+
+
+  const alarm =
+    Number(
+      cleanText(
+        alarmLevel
+      )
+    )
+
+
+  if (
+    Number.isFinite(
+      alarm
+    ) &&
+    alarm >=
+      1
+  ) {
+    return true
+  }
+
+
+  const blockedPatterns = [
+    /^medical\b/i,
+    /^alarm single source\b/i,
+    /^check call\b/i,
+    /^rescue - elevator\b/i,
+    /^water problem\b/i,
+    /^public assist\b/i,
+    /^assist - /i,
+    /^alarm - /i,
+  ]
+
+
+  if (
+    blockedPatterns.some(
+      (
+        pattern
+      ) =>
+        pattern.test(
+          type
+        )
+    )
+  ) {
+    return false
+  }
+
+
+  const reviewPatterns = [
+    /\bfire\b/i,
+    /\bsmoke\b/i,
+    /\bexplosion\b/i,
+    /\bhazmat\b/i,
+    /\bhazardous\b/i,
+    /\bvehicle accident\b/i,
+    /\btrapped\b/i,
+    /\bextrication\b/i,
+    /\bwater rescue\b/i,
+    /\bmarine rescue\b/i,
+    /\btechnical rescue\b/i,
+    /\bconfined space\b/i,
+    /\btrench\b/i,
+    /\bhigh angle\b/i,
+    /\bstructural collapse\b/i,
+    /\bgas leak\b/i,
+    /\bcarbon monoxide\b/i,
+    /\bchemical\b/i,
+  ]
+
+
+  return reviewPatterns.some(
+    (
+      pattern
+    ) =>
+      pattern.test(
+        type
+      )
+  )
+}
+
+
 function normalizeFireRow(
   cells
 ) {
   const primeStreet =
-    cleanText(
+    normalizeFireLocationPiece(
       cells[0]
     )
 
 
   const crossStreet =
-    cleanText(
+    normalizeFireLocationPiece(
       cells[1]
     )
 
@@ -2346,6 +2479,16 @@ function normalizeFireRow(
 
 
   if (
+    !fireIncidentShouldBeReviewed({
+      incidentType,
+      alarmLevel,
+    })
+  ) {
+    return null
+  }
+
+
+  if (
     !primeStreet &&
     !crossStreet
   ) {
@@ -2353,18 +2496,51 @@ function normalizeFireRow(
   }
 
 
-  const location =
+  let location =
+    ''
+
+
+  if (
     primeStreet &&
     crossStreet
-      ? (
-          primeStreet +
-          ' & ' +
-          crossStreet
+  ) {
+    location =
+      (
+        primeStreet +
+        ' & ' +
+        crossStreet
+      )
+  }
+  else if (
+    primeStreet
+  ) {
+    location =
+      primeStreet
+  }
+  else {
+    const crossPieces =
+      crossStreet
+        .split(
+          /\s*\/\s*/
         )
-      : (
-          primeStreet ||
-          crossStreet
+        .map(
+          normalizeFireLocationPiece
         )
+        .filter(
+          Boolean
+        )
+
+
+    location =
+      crossPieces.length >=
+        2
+        ? (
+            crossPieces[0] +
+            ' & ' +
+            crossPieces[1]
+          )
+        : crossStreet
+  }
 
 
   const descriptionParts =
@@ -2519,6 +2695,7 @@ function normalizeFireRow(
     incidentNumber,
   }
 }
+
 
 
 // ============================================================
