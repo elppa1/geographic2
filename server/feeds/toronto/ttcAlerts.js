@@ -10,7 +10,7 @@ const TTC_ALERTS_ENDPOINT =
 
 
 const FETCH_TIMEOUT_MS =
-  10 * 1000
+  30 * 1000
 
 
 // ============================================================
@@ -409,6 +409,25 @@ export async function fetchTtcAlertsFeed() {
             true,
         }
       )
+  }
+  catch (
+    error
+  ) {
+    if (
+      error?.name ===
+        'AbortError'
+    ) {
+      throw new Error(
+        (
+          'TTC ALERTS REQUEST TIMED OUT AFTER ' +
+          FETCH_TIMEOUT_MS +
+          'MS'
+        )
+      )
+    }
+
+
+    throw error
   }
   finally {
     clearTimeout(
