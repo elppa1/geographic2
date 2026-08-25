@@ -15,6 +15,209 @@ const FETCH_TIMEOUT_MS =
   30 * 1000
 
 
+const TTC_CONNECTIVITY_TEST_URLS = [
+  'https://www.ttc.ca/',
+  'https://cdn.ttc.ca/service-alerts',
+]
+
+
+function probeTtcUrl(
+  url
+) {
+  return new Promise(
+    (
+      resolve
+    ) => {
+      let settled =
+        false
+
+
+      const finish =
+        (
+          result
+        ) => {
+          if (
+            settled
+          ) {
+            return
+          }
+
+
+          settled =
+            true
+
+
+          resolve(
+            result
+          )
+        }
+
+
+      const request =
+        https.get(
+          url,
+          {
+            autoSelectFamily:
+              true,
+
+            autoSelectFamilyAttemptTimeout:
+              1000,
+
+            headers: {
+              Accept:
+                'text/html,application/json,*/*',
+
+              'User-Agent':
+                'ELPPA-Geographic/1.0',
+            },
+          },
+          (
+            response
+          ) => {
+            let bytes =
+              0
+
+
+            response.on(
+              'data',
+              (
+                chunk
+              ) => {
+                bytes +=
+                  chunk.length
+              }
+            )
+
+
+            response.on(
+              'end',
+              () => {
+                finish({
+                  url,
+
+                  ok:
+                    true,
+
+                  status:
+                    response.statusCode ||
+                    0,
+
+                  location:
+                    response.headers.location ||
+                    '',
+
+                  contentType:
+                    response.headers[
+                      'content-type'
+                    ] ||
+                    '',
+
+                  bytes,
+                })
+              }
+            )
+
+
+            response.on(
+              'error',
+              (
+                error
+              ) => {
+                finish({
+                  url,
+
+                  ok:
+                    false,
+
+                  error:
+                    error?.message ||
+                    String(
+                      error
+                    ),
+
+                  code:
+                    error?.code ||
+                    '',
+                })
+              }
+            )
+          }
+        )
+
+
+      const timeoutId =
+        setTimeout(
+          () => {
+            request.destroy(
+              new Error(
+                'TTC CONNECTIVITY TEST TIMED OUT'
+              )
+            )
+          },
+          15 * 1000
+        )
+
+
+      request.on(
+        'error',
+        (
+          error
+        ) => {
+          clearTimeout(
+            timeoutId
+          )
+
+
+          finish({
+            url,
+
+            ok:
+              false,
+
+            error:
+              error?.message ||
+              String(
+                error
+              ),
+
+            code:
+              error?.code ||
+              '',
+          })
+        }
+      )
+
+
+      request.on(
+        'close',
+        () => {
+          clearTimeout(
+            timeoutId
+          )
+        }
+      )
+    }
+  )
+}
+
+
+async function logTtcConnectivityTest() {
+  const results =
+    await Promise.all(
+      TTC_CONNECTIVITY_TEST_URLS
+        .map(
+          probeTtcUrl
+        )
+    )
+
+
+  console.log(
+    'TTC CONNECTIVITY TEST:',
+    results
+  )
+}
+
+
 // ============================================================
 // TEXT
 // ============================================================
@@ -382,11 +585,8 @@ function fetchTtcAlertsBuffer() {
         https.get(
           TTC_ALERTS_UPSTREAM,
           {
-            autoSelectFamily:
-              true,
-
-            autoSelectFamilyAttemptTimeout:
-              1000,
+            family:
+              4,
 
             headers: {
               Accept:
@@ -668,6 +868,24 @@ export function ttcAlertsFeed() {
     configureServer(
       server
     ) {
+      setTimeout(
+        () => {
+          logTtcConnectivityTest()
+            .catch(
+              (
+                error
+              ) => {
+                console.error(
+                  'TTC CONNECTIVITY TEST ERROR:',
+                  error
+                )
+              }
+            )
+        },
+        2000
+      )
+
+
       server.middlewares.use(
         TTC_ALERTS_ENDPOINT,
         async (
