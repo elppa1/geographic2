@@ -110,7 +110,7 @@ const FIRE_PUBLIC_URL =
 
 
 const FIRE_UPSTREAM =
-  'https://www.toronto.ca/wp-content/uploads/2017/11/9775-actiefireincidents.html'
+  'https://www.toronto.ca/data/fire/livecad.xml'
 
 
 const POLL_MS =
@@ -2077,124 +2077,145 @@ function normalizeTtcRecord(
 // FIRE NORMALIZATION
 // ============================================================
 
+function decodeXmlText(
+  value
+) {
+  return cleanText(
+    String(
+      value ??
+      ''
+    )
+      .replace(
+        /<!\[CDATA\[([\s\S]*?)\]\]>/gi,
+        '$1'
+      )
+      .replace(
+        /&nbsp;/gi,
+        ' '
+      )
+      .replace(
+        /&amp;/gi,
+        '&'
+      )
+      .replace(
+        /&quot;/gi,
+        '"'
+      )
+      .replace(
+        /&#39;/gi,
+        "'"
+      )
+      .replace(
+        /&apos;/gi,
+        "'"
+      )
+      .replace(
+        /&lt;/gi,
+        '<'
+      )
+      .replace(
+        /&gt;/gi,
+        '>'
+      )
+  )
+}
+
+
+function fireXmlTag(
+  block,
+  tag
+) {
+  const match =
+    String(
+      block ??
+      ''
+    )
+      .match(
+        new RegExp(
+          `<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`,
+          'i'
+        )
+      )
+
+
+  return decodeXmlText(
+    match?.[1] ||
+    ''
+  )
+}
+
+
 function parseFireRows(
-  html
+  xml
 ) {
   const rows =
     []
 
 
-  const source =
-    String(
-      html ??
-      ''
-    )
+  const eventPattern =
+    /<event\b[^>]*>([\s\S]*?)<\/event>/gi
 
 
-  const rowParts =
-    source.split(
-      /<tr\b[^>]*>/gi
-    )
+  let eventMatch
 
 
-  rowParts
-    .slice(
-      1
-    )
-    .forEach(
-      (
-        rowPart
-      ) => {
-        const rowHtml =
-          rowPart
-            .split(
-              /<\/tr\s*>/i
-            )[0]
-
-
-        const cellPattern =
-          /<td\b[^>]*>/gi
-
-
-        const cellStarts =
-          []
-
-
-        let cellMatch
-
-
-        while (
-          (
-            cellMatch =
-              cellPattern.exec(
-                rowHtml
-              )
-          )
-        ) {
-          cellStarts.push({
-            start:
-              cellMatch.index,
-
-            contentStart:
-              cellPattern.lastIndex,
-          })
-        }
-
-
-        if (
-          cellStarts.length <
-            8
-        ) {
-          return
-        }
-
-
-        const cells =
-          cellStarts
-            .map(
-              (
-                cell,
-                index
-              ) => {
-                const nextCell =
-                  cellStarts[
-                    index + 1
-                  ]
-
-
-                const contentEnd =
-                  nextCell
-                    ? nextCell.start
-                    : rowHtml.length
-
-
-                const rawCell =
-                  rowHtml
-                    .slice(
-                      cell.contentStart,
-                      contentEnd
-                    )
-                    .replace(
-                      /<\/td\s*>/gi,
-                      ''
-                    )
-
-
-                return decodeHtml(
-                  rawCell
-                )
-              }
-            )
-
-
-        rows.push(
-          cells.slice(
-            0,
-            8
+  while (
+    (
+      eventMatch =
+        eventPattern.exec(
+          String(
+            xml ??
+            ''
           )
         )
-      }
     )
+  ) {
+    const block =
+      eventMatch[1]
+
+
+    rows.push([
+      fireXmlTag(
+        block,
+        'prime_street'
+      ),
+
+      fireXmlTag(
+        block,
+        'cross_streets'
+      ),
+
+      fireXmlTag(
+        block,
+        'dispatch_time'
+      ),
+
+      fireXmlTag(
+        block,
+        'event_num'
+      ),
+
+      fireXmlTag(
+        block,
+        'event_type'
+      ),
+
+      fireXmlTag(
+        block,
+        'alarm_lev'
+      ),
+
+      fireXmlTag(
+        block,
+        'beat'
+      ),
+
+      fireXmlTag(
+        block,
+        'units_disp'
+      ),
+    ])
+  }
 
 
   return rows
@@ -2821,7 +2842,7 @@ async function fetchFireSnapshot() {
       {
         headers: {
           Accept:
-            'text/html,application/xhtml+xml',
+            'application/xml,text/xml,*/*',
 
           'User-Agent':
             'ELPPA-Geographic/1.0',
@@ -2845,79 +2866,13 @@ async function fetchFireSnapshot() {
   }
 
 
-  const html =
+  const xml =
     await response.text()
-
-
-  const fireIncidentIds =
-    Array.from(
-      new Set(
-        (
-          html.match(
-            /\bF\d{8}\b/g
-          ) ||
-          []
-        )
-      )
-    )
-      .slice(
-        0,
-        20
-      )
-
-
-  const fireDiagnostics = {
-    status:
-      response.status,
-
-    bytes:
-      Buffer.byteLength(
-        html,
-        'utf8'
-      ),
-
-    trCount:
-      (
-        html.match(
-          /<tr\b/gi
-        ) ||
-        []
-      )
-        .length,
-
-    tdCount:
-      (
-        html.match(
-          /<td\b/gi
-        ) ||
-        []
-      )
-        .length,
-
-    hasPrimeStreetHeading:
-      /prime\s*street/i.test(
-        html
-      ),
-
-    hasIncidentNumberHeading:
-      /incident\s*number/i.test(
-        html
-      ),
-
-    incidentIds:
-      fireIncidentIds,
-  }
-
-
-  console.log(
-    'TORONTO FIRE · RAW RESPONSE:',
-    fireDiagnostics
-  )
 
 
   const records =
     parseFireRows(
-      html
+      xml
     )
       .map(
         normalizeFireRow
@@ -2928,8 +2883,20 @@ async function fetchFireSnapshot() {
 
 
   console.log(
-    'TORONTO FIRE · PARSED RECORDS:',
-    records.length
+    'TORONTO FIRE · LIVE CAD:',
+    {
+      status:
+        response.status,
+
+      bytes:
+        Buffer.byteLength(
+          xml,
+          'utf8'
+        ),
+
+      events:
+        records.length,
+    }
   )
 
 
