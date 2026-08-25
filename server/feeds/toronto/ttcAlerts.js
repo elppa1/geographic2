@@ -1,3 +1,5 @@
+import https from 'node:https'
+
 import GtfsRealtimeBindings from 'gtfs-realtime-bindings'
 
 
@@ -324,116 +326,227 @@ function normalizeAlertEntity(
 // FETCH + DECODE
 // ============================================================
 
-export async function fetchTtcAlertsFeed() {
-  const controller =
-    new AbortController()
+function fetchTtcAlertsBuffer() {
+  return new Promise(
+    (
+      resolve,
+      reject
+    ) => {
+      let settled =
+        false
 
 
-  const timeoutId =
-    setTimeout(
-      () => {
-        controller.abort()
-      },
-      FETCH_TIMEOUT_MS
-    )
+      const finishReject =
+        (
+          error
+        ) => {
+          if (
+            settled
+          ) {
+            return
+          }
 
 
-  try {
-    const response =
-      await fetch(
-        TTC_ALERTS_UPSTREAM,
-        {
-          headers: {
-            Accept:
-              'application/x-protobuf, application/octet-stream, */*',
+          settled =
+            true
 
-            'User-Agent':
-              'ELPPA-Geographic/1.0',
+
+          reject(
+            error
+          )
+        }
+
+
+      const finishResolve =
+        (
+          buffer
+        ) => {
+          if (
+            settled
+          ) {
+            return
+          }
+
+
+          settled =
+            true
+
+
+          resolve(
+            buffer
+          )
+        }
+
+
+      const request =
+        https.get(
+          TTC_ALERTS_UPSTREAM,
+          {
+            family:
+              4,
+
+            headers: {
+              Accept:
+                'application/x-protobuf, application/octet-stream, */*',
+
+              'User-Agent':
+                'ELPPA-Geographic/1.0',
+            },
           },
+          (
+            response
+          ) => {
+            const statusCode =
+              Number(
+                response.statusCode ||
+                0
+              )
 
-          cache:
-            'no-store',
 
-          signal:
-            controller.signal,
+            if (
+              statusCode <
+                200 ||
+              statusCode >=
+                300
+            ) {
+              response.resume()
+
+
+              finishReject(
+                new Error(
+                  (
+                    'TTC ALERTS REQUEST FAILED · ' +
+                    statusCode
+                  )
+                )
+              )
+
+
+              return
+            }
+
+
+            const chunks =
+              []
+
+
+            response.on(
+              'data',
+              (
+                chunk
+              ) => {
+                chunks.push(
+                  chunk
+                )
+              }
+            )
+
+
+            response.on(
+              'end',
+              () => {
+                finishResolve(
+                  Buffer.concat(
+                    chunks
+                  )
+                )
+              }
+            )
+
+
+            response.on(
+              'error',
+              finishReject
+            )
+          }
+        )
+
+
+      const timeoutId =
+        setTimeout(
+          () => {
+            request.destroy(
+              new Error(
+                (
+                  'TTC ALERTS REQUEST TIMED OUT AFTER ' +
+                  FETCH_TIMEOUT_MS +
+                  'MS'
+                )
+              )
+            )
+          },
+          FETCH_TIMEOUT_MS
+        )
+
+
+      request.on(
+        'error',
+        (
+          error
+        ) => {
+          clearTimeout(
+            timeoutId
+          )
+
+
+          finishReject(
+            error
+          )
         }
       )
 
 
-    if (
-      !response.ok
-    ) {
-      throw new Error(
-        (
-          'TTC ALERTS REQUEST FAILED · ' +
-          response.status
-        )
+      request.on(
+        'close',
+        () => {
+          clearTimeout(
+            timeoutId
+          )
+        }
       )
     }
+  )
+}
 
 
-    const buffer =
-      new Uint8Array(
-        await response.arrayBuffer()
-      )
+export async function fetchTtcAlertsFeed() {
+  const buffer =
+    new Uint8Array(
+      await fetchTtcAlertsBuffer()
+    )
 
 
-    const decoded =
-      GtfsRealtimeBindings
-        .transit_realtime
-        .FeedMessage
-        .decode(
-          buffer
-        )
-
-
-    return GtfsRealtimeBindings
+  const decoded =
+    GtfsRealtimeBindings
       .transit_realtime
       .FeedMessage
-      .toObject(
-        decoded,
-        {
-          longs:
-            String,
-
-          enums:
-            String,
-
-          bytes:
-            String,
-
-          arrays:
-            true,
-
-          objects:
-            true,
-        }
+      .decode(
+        buffer
       )
-  }
-  catch (
-    error
-  ) {
-    if (
-      error?.name ===
-        'AbortError'
-    ) {
-      throw new Error(
-        (
-          'TTC ALERTS REQUEST TIMED OUT AFTER ' +
-          FETCH_TIMEOUT_MS +
-          'MS'
-        )
-      )
-    }
 
 
-    throw error
-  }
-  finally {
-    clearTimeout(
-      timeoutId
+  return GtfsRealtimeBindings
+    .transit_realtime
+    .FeedMessage
+    .toObject(
+      decoded,
+      {
+        longs:
+          String,
+
+        enums:
+          String,
+
+        bytes:
+          String,
+
+        arrays:
+          true,
+
+        objects:
+          true,
+      }
     )
-  }
 }
 
 
