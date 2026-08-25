@@ -2966,6 +2966,26 @@ export async function syncTorontoLiveNewsroom() {
                   ttc.reason?.message ||
                   ttc.reason
                 ),
+
+              name:
+                String(
+                  ttc.reason?.name ||
+                  ''
+                ),
+
+              code:
+                String(
+                  ttc.reason?.code ||
+                  ttc.reason?.cause?.code ||
+                  ''
+                ),
+
+              cause:
+                String(
+                  ttc.reason?.cause?.message ||
+                  ttc.reason?.cause ||
+                  ''
+                ),
             },
 
       fire:
@@ -2977,6 +2997,26 @@ export async function syncTorontoLiveNewsroom() {
                 String(
                   fire.reason?.message ||
                   fire.reason
+                ),
+
+              name:
+                String(
+                  fire.reason?.name ||
+                  ''
+                ),
+
+              code:
+                String(
+                  fire.reason?.code ||
+                  fire.reason?.cause?.code ||
+                  ''
+                ),
+
+              cause:
+                String(
+                  fire.reason?.cause?.message ||
+                  fire.reason?.cause ||
+                  ''
                 ),
             },
     }
