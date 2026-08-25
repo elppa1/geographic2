@@ -1,10 +1,8 @@
 import https from 'node:https'
 
-import GtfsRealtimeBindings from 'gtfs-realtime-bindings'
-
 
 const TTC_ALERTS_UPSTREAM =
-  'https://bustime.ttc.ca/gtfsrt/alerts'
+  'https://alerts.ttc.ca/api/alerts/live-alerts'
 
 
 const TTC_ALERTS_ENDPOINT =
@@ -12,210 +10,7 @@ const TTC_ALERTS_ENDPOINT =
 
 
 const FETCH_TIMEOUT_MS =
-  30 * 1000
-
-
-const TTC_CONNECTIVITY_TEST_URLS = [
-  'https://www.ttc.ca/',
-  'https://cdn.ttc.ca/service-alerts',
-]
-
-
-function probeTtcUrl(
-  url
-) {
-  return new Promise(
-    (
-      resolve
-    ) => {
-      let settled =
-        false
-
-
-      const finish =
-        (
-          result
-        ) => {
-          if (
-            settled
-          ) {
-            return
-          }
-
-
-          settled =
-            true
-
-
-          resolve(
-            result
-          )
-        }
-
-
-      const request =
-        https.get(
-          url,
-          {
-            autoSelectFamily:
-              true,
-
-            autoSelectFamilyAttemptTimeout:
-              1000,
-
-            headers: {
-              Accept:
-                'text/html,application/json,*/*',
-
-              'User-Agent':
-                'ELPPA-Geographic/1.0',
-            },
-          },
-          (
-            response
-          ) => {
-            let bytes =
-              0
-
-
-            response.on(
-              'data',
-              (
-                chunk
-              ) => {
-                bytes +=
-                  chunk.length
-              }
-            )
-
-
-            response.on(
-              'end',
-              () => {
-                finish({
-                  url,
-
-                  ok:
-                    true,
-
-                  status:
-                    response.statusCode ||
-                    0,
-
-                  location:
-                    response.headers.location ||
-                    '',
-
-                  contentType:
-                    response.headers[
-                      'content-type'
-                    ] ||
-                    '',
-
-                  bytes,
-                })
-              }
-            )
-
-
-            response.on(
-              'error',
-              (
-                error
-              ) => {
-                finish({
-                  url,
-
-                  ok:
-                    false,
-
-                  error:
-                    error?.message ||
-                    String(
-                      error
-                    ),
-
-                  code:
-                    error?.code ||
-                    '',
-                })
-              }
-            )
-          }
-        )
-
-
-      const timeoutId =
-        setTimeout(
-          () => {
-            request.destroy(
-              new Error(
-                'TTC CONNECTIVITY TEST TIMED OUT'
-              )
-            )
-          },
-          15 * 1000
-        )
-
-
-      request.on(
-        'error',
-        (
-          error
-        ) => {
-          clearTimeout(
-            timeoutId
-          )
-
-
-          finish({
-            url,
-
-            ok:
-              false,
-
-            error:
-              error?.message ||
-              String(
-                error
-              ),
-
-            code:
-              error?.code ||
-              '',
-          })
-        }
-      )
-
-
-      request.on(
-        'close',
-        () => {
-          clearTimeout(
-            timeoutId
-          )
-        }
-      )
-    }
-  )
-}
-
-
-async function logTtcConnectivityTest() {
-  const results =
-    await Promise.all(
-      TTC_CONNECTIVITY_TEST_URLS
-        .map(
-          probeTtcUrl
-        )
-    )
-
-
-  console.log(
-    'TTC CONNECTIVITY TEST:',
-    results
-  )
-}
+  20 * 1000
 
 
 // ============================================================
@@ -242,61 +37,7 @@ function cleanText(
 
 
 // ============================================================
-// TRANSLATED STRING
-// ============================================================
-
-function translatedText(
-  translatedString
-) {
-  const translations =
-    Array.isArray(
-      translatedString?.translation
-    )
-      ? translatedString.translation
-      : []
-
-
-  if (
-    translations.length ===
-      0
-  ) {
-    return ''
-  }
-
-
-  const english =
-    translations.find(
-      (
-        item
-      ) => {
-        const language =
-          cleanText(
-            item?.language
-          )
-            .toLowerCase()
-
-
-        return (
-          language ===
-            'en' ||
-          language.startsWith(
-            'en-'
-          )
-        )
-      }
-    )
-
-
-  return cleanText(
-    english?.text ||
-    translations[0]?.text ||
-    ''
-  )
-}
-
-
-// ============================================================
-// ACTIVE PERIOD
+// NUMBERS / TIME
 // ============================================================
 
 function numberOrNull(
@@ -328,208 +69,338 @@ function numberOrNull(
 }
 
 
-function alertIsActiveNow(
-  alert,
-  nowSeconds
+function dateToUnixSeconds(
+  value
 ) {
-  const periods =
-    Array.isArray(
-      alert?.activePeriod
+  const clean =
+    cleanText(
+      value
     )
-      ? alert.activePeriod
-      : []
 
 
   if (
-    periods.length ===
-      0
-  ) {
-    return true
-  }
-
-
-  return periods.some(
-    (
-      period
-    ) => {
-      const start =
-        numberOrNull(
-          period?.start
-        )
-
-
-      const end =
-        numberOrNull(
-          period?.end
-        )
-
-
-      if (
-        start !==
-          null &&
-        nowSeconds <
-          start
-      ) {
-        return false
-      }
-
-
-      if (
-        end !==
-          null &&
-        nowSeconds >
-          end
-      ) {
-        return false
-      }
-
-
-      return true
-    }
-  )
-}
-
-
-// ============================================================
-// ALERT NORMALIZATION
-// ============================================================
-
-function normalizeInformedEntity(
-  entity
-) {
-  return {
-    agencyId:
-      cleanText(
-        entity?.agencyId
-      ),
-
-    routeId:
-      cleanText(
-        entity?.routeId
-      ),
-
-    routeType:
-      entity?.routeType ??
-      null,
-
-    stopId:
-      cleanText(
-        entity?.stopId
-      ),
-
-    trip: {
-      tripId:
-        cleanText(
-          entity?.trip?.tripId
-        ),
-
-      routeId:
-        cleanText(
-          entity?.trip?.routeId
-        ),
-
-      directionId:
-        entity?.trip?.directionId ??
-        null,
-    },
-  }
-}
-
-
-function normalizeActivePeriod(
-  period
-) {
-  return {
-    start:
-      numberOrNull(
-        period?.start
-      ),
-
-    end:
-      numberOrNull(
-        period?.end
-      ),
-  }
-}
-
-
-function normalizeAlertEntity(
-  entity
-) {
-  const alert =
-    entity?.alert
-
-
-  if (
-    !alert
+    !clean ||
+    clean.startsWith(
+      '0001-'
+    )
   ) {
     return null
   }
 
 
-  return {
-    id:
-      cleanText(
-        entity?.id
-      ),
+  const parsed =
+    new Date(
+      clean
+    )
 
-    headerText:
-      translatedText(
-        alert.headerText
-      ),
 
-    descriptionText:
-      translatedText(
-        alert.descriptionText
-      ),
-
-    url:
-      translatedText(
-        alert.url
-      ),
-
-    cause:
-      cleanText(
-        alert.cause
-      ),
-
-    effect:
-      cleanText(
-        alert.effect
-      ),
-
-    activePeriods:
-      (
-        Array.isArray(
-          alert.activePeriod
-        )
-          ? alert.activePeriod
-          : []
-      )
-        .map(
-          normalizeActivePeriod
-        ),
-
-    informedEntities:
-      (
-        Array.isArray(
-          alert.informedEntity
-        )
-          ? alert.informedEntity
-          : []
-      )
-        .map(
-          normalizeInformedEntity
-        ),
+  if (
+    Number.isNaN(
+      parsed.getTime()
+    )
+  ) {
+    return null
   }
+
+
+  return Math.floor(
+    parsed.getTime() /
+    1000
+  )
 }
 
 
 // ============================================================
-// FETCH + DECODE
+// TTC API NORMALIZATION
 // ============================================================
 
-function fetchTtcAlertsBuffer() {
+function routeIds(
+  record
+) {
+  const raw =
+    cleanText(
+      record?.route
+    )
+
+
+  if (
+    !raw
+  ) {
+    return []
+  }
+
+
+  return raw
+    .split(
+      ','
+    )
+    .map(
+      cleanText
+    )
+    .filter(
+      Boolean
+    )
+}
+
+
+function normalizeActivePeriod(
+  record
+) {
+  const start =
+    dateToUnixSeconds(
+      record?.activePeriod?.start
+    )
+
+
+  const end =
+    dateToUnixSeconds(
+      record?.activePeriod?.end
+    )
+
+
+  if (
+    start ===
+      null &&
+    end ===
+      null
+  ) {
+    return []
+  }
+
+
+  return [
+    {
+      start,
+      end,
+    },
+  ]
+}
+
+
+function normalizeTtcApiAlert(
+  record
+) {
+  if (
+    !record ||
+    typeof record !==
+      'object'
+  ) {
+    return null
+  }
+
+
+  const id =
+    cleanText(
+      record?.id
+    )
+
+
+  if (
+    !id
+  ) {
+    return null
+  }
+
+
+  const routes =
+    routeIds(
+      record
+    )
+
+
+  const headerText =
+    cleanText(
+      record?.headerText ||
+      record?.customHeaderText ||
+      record?.title
+    )
+
+
+  const descriptionText =
+    cleanText(
+      record?.description ||
+      record?.title ||
+      record?.headerText
+    )
+
+
+  const effect =
+    cleanText(
+      record?.effect ||
+      record?.effectDesc
+    )
+
+
+  const cause =
+    cleanText(
+      record?.cause ||
+      record?.causeDescription
+    )
+
+
+  return {
+    id,
+
+    headerText,
+
+    descriptionText,
+
+    url:
+      cleanText(
+        record?.url
+      ),
+
+    cause,
+
+    effect,
+
+    activePeriods:
+      normalizeActivePeriod(
+        record
+      ),
+
+    informedEntities:
+      routes.map(
+        (
+          routeId
+        ) => ({
+          agencyId:
+            'TTC',
+
+          routeId,
+
+          routeType:
+            cleanText(
+              record?.routeType
+            ) ||
+            null,
+
+          stopId:
+            cleanText(
+              record?.stopStartId
+            ),
+
+          trip: {
+            tripId:
+              '',
+
+            routeId,
+
+            directionId:
+              record?.direction ??
+              null,
+          },
+        })
+      ),
+
+    lastUpdated:
+      cleanText(
+        record?.lastUpdated
+      ),
+
+    alertType:
+      cleanText(
+        record?.alertType
+      ),
+
+    routeType:
+      cleanText(
+        record?.routeType
+      ),
+  }
+}
+
+
+function extractAlertList(
+  payload
+) {
+  if (
+    Array.isArray(
+      payload
+    )
+  ) {
+    return payload
+  }
+
+
+  if (
+    !payload ||
+    typeof payload !==
+      'object'
+  ) {
+    return []
+  }
+
+
+  const preferredKeys = [
+    'alerts',
+    'liveAlerts',
+    'data',
+    'results',
+  ]
+
+
+  for (
+    const key
+    of preferredKeys
+  ) {
+    if (
+      Array.isArray(
+        payload[
+          key
+        ]
+      )
+    ) {
+      return payload[
+        key
+      ]
+    }
+  }
+
+
+  for (
+    const value
+    of Object.values(
+      payload
+    )
+  ) {
+    if (
+      Array.isArray(
+        value
+      ) &&
+      value.some(
+        (
+          item
+        ) =>
+          item &&
+          typeof item ===
+            'object' &&
+          (
+            item.id !==
+              undefined ||
+            item.effect !==
+              undefined ||
+            item.headerText !==
+              undefined
+          )
+      )
+    ) {
+      return value
+    }
+  }
+
+
+  return []
+}
+
+
+// ============================================================
+// FETCH JSON
+// ============================================================
+
+function fetchJson(
+  url
+) {
   return new Promise(
     (
       resolve,
@@ -562,7 +433,7 @@ function fetchTtcAlertsBuffer() {
 
       const finishResolve =
         (
-          buffer
+          value
         ) => {
           if (
             settled
@@ -576,21 +447,24 @@ function fetchTtcAlertsBuffer() {
 
 
           resolve(
-            buffer
+            value
           )
         }
 
 
       const request =
         https.get(
-          TTC_ALERTS_UPSTREAM,
+          url,
           {
-            family:
-              4,
+            autoSelectFamily:
+              true,
+
+            autoSelectFamilyAttemptTimeout:
+              1000,
 
             headers: {
               Accept:
-                'application/x-protobuf, application/octet-stream, */*',
+                'application/json',
 
               'User-Agent':
                 'ELPPA-Geographic/1.0',
@@ -648,11 +522,37 @@ function fetchTtcAlertsBuffer() {
             response.on(
               'end',
               () => {
-                finishResolve(
-                  Buffer.concat(
-                    chunks
+                try {
+                  const raw =
+                    Buffer.concat(
+                      chunks
+                    )
+                      .toString(
+                        'utf8'
+                      )
+
+
+                  finishResolve(
+                    JSON.parse(
+                      raw
+                    )
                   )
-                )
+                }
+                catch (
+                  error
+                ) {
+                  finishReject(
+                    new Error(
+                      (
+                        'TTC ALERTS JSON PARSE FAILED · ' +
+                        (
+                          error?.message ||
+                          error
+                        )
+                      )
+                    )
+                  )
+                }
               }
             )
 
@@ -712,83 +612,32 @@ function fetchTtcAlertsBuffer() {
 }
 
 
-export async function fetchTtcAlertsFeed() {
-  const buffer =
-    new Uint8Array(
-      await fetchTtcAlertsBuffer()
-    )
-
-
-  const decoded =
-    GtfsRealtimeBindings
-      .transit_realtime
-      .FeedMessage
-      .decode(
-        buffer
-      )
-
-
-  return GtfsRealtimeBindings
-    .transit_realtime
-    .FeedMessage
-    .toObject(
-      decoded,
-      {
-        longs:
-          String,
-
-        enums:
-          String,
-
-        bytes:
-          String,
-
-        arrays:
-          true,
-
-        objects:
-          true,
-      }
-    )
-}
-
-
 // ============================================================
 // REUSABLE SNAPSHOT
 // ============================================================
 
+export async function fetchTtcAlertsFeed() {
+  return fetchJson(
+    TTC_ALERTS_UPSTREAM
+  )
+}
+
+
 export async function getTtcAlertsSnapshot() {
-  const feed =
+  const payload =
     await fetchTtcAlertsFeed()
 
 
-  const nowSeconds =
-    Math.floor(
-      Date.now() /
-      1000
+  const rawRecords =
+    extractAlertList(
+      payload
     )
 
 
   const records =
-    (
-      Array.isArray(
-        feed?.entity
-      )
-        ? feed.entity
-        : []
-    )
-      .filter(
-        (
-          entity
-        ) =>
-          entity?.alert &&
-          alertIsActiveNow(
-            entity.alert,
-            nowSeconds
-          )
-      )
+    rawRecords
       .map(
-        normalizeAlertEntity
+        normalizeTtcApiAlert
       )
       .filter(
         Boolean
@@ -800,7 +649,7 @@ export async function getTtcAlertsSnapshot() {
       true,
 
     source:
-      'Toronto Transit Commission GTFS-Realtime Service Alerts',
+      'Toronto Transit Commission Live Service Alerts',
 
     upstream:
       TTC_ALERTS_UPSTREAM,
@@ -810,9 +659,7 @@ export async function getTtcAlertsSnapshot() {
         .toISOString(),
 
     feedTimestamp:
-      numberOrNull(
-        feed?.header?.timestamp
-      ),
+      null,
 
     count:
       records.length,
@@ -868,24 +715,6 @@ export function ttcAlertsFeed() {
     configureServer(
       server
     ) {
-      setTimeout(
-        () => {
-          logTtcConnectivityTest()
-            .catch(
-              (
-                error
-              ) => {
-                console.error(
-                  'TTC CONNECTIVITY TEST ERROR:',
-                  error
-                )
-              }
-            )
-        },
-        2000
-      )
-
-
       server.middlewares.use(
         TTC_ALERTS_ENDPOINT,
         async (
