@@ -2084,57 +2084,117 @@ function parseFireRows(
     []
 
 
-  const rowPattern =
-    /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi
-
-
-  let rowMatch
-
-
-  while (
-    (
-      rowMatch =
-        rowPattern.exec(
-          html
-        )
+  const source =
+    String(
+      html ??
+      ''
     )
-  ) {
-    const cells =
-      []
 
 
-    const cellPattern =
-      /<td\b[^>]*>([\s\S]*?)<\/td>/gi
+  const rowParts =
+    source.split(
+      /<tr\b[^>]*>/gi
+    )
 
 
-    let cellMatch
-
-
-    while (
+  rowParts
+    .slice(
+      1
+    )
+    .forEach(
       (
-        cellMatch =
-          cellPattern.exec(
-            rowMatch[1]
+        rowPart
+      ) => {
+        const rowHtml =
+          rowPart
+            .split(
+              /<\/tr\s*>/i
+            )[0]
+
+
+        const cellPattern =
+          /<td\b[^>]*>/gi
+
+
+        const cellStarts =
+          []
+
+
+        let cellMatch
+
+
+        while (
+          (
+            cellMatch =
+              cellPattern.exec(
+                rowHtml
+              )
           )
-      )
-    ) {
-      cells.push(
-        decodeHtml(
-          cellMatch[1]
+        ) {
+          cellStarts.push({
+            start:
+              cellMatch.index,
+
+            contentStart:
+              cellPattern.lastIndex,
+          })
+        }
+
+
+        if (
+          cellStarts.length <
+            8
+        ) {
+          return
+        }
+
+
+        const cells =
+          cellStarts
+            .map(
+              (
+                cell,
+                index
+              ) => {
+                const nextCell =
+                  cellStarts[
+                    index + 1
+                  ]
+
+
+                const contentEnd =
+                  nextCell
+                    ? nextCell.start
+                    : rowHtml.length
+
+
+                const rawCell =
+                  rowHtml
+                    .slice(
+                      cell.contentStart,
+                      contentEnd
+                    )
+                    .replace(
+                      /<\/td\s*>/gi,
+                      ''
+                    )
+
+
+                return decodeHtml(
+                  rawCell
+                )
+              }
+            )
+
+
+        rows.push(
+          cells.slice(
+            0,
+            8
+          )
         )
-      )
-    }
-
-
-    if (
-      cells.length >=
-        8
-    ) {
-      rows.push(
-        cells
-      )
-    }
-  }
+      }
+    )
 
 
   return rows
@@ -2789,15 +2849,91 @@ async function fetchFireSnapshot() {
     await response.text()
 
 
-  return parseFireRows(
-    html
+  const fireIncidentIds =
+    Array.from(
+      new Set(
+        (
+          html.match(
+            /\bF\d{8}\b/g
+          ) ||
+          []
+        )
+      )
+    )
+      .slice(
+        0,
+        20
+      )
+
+
+  const fireDiagnostics = {
+    status:
+      response.status,
+
+    bytes:
+      Buffer.byteLength(
+        html,
+        'utf8'
+      ),
+
+    trCount:
+      (
+        html.match(
+          /<tr\b/gi
+        ) ||
+        []
+      )
+        .length,
+
+    tdCount:
+      (
+        html.match(
+          /<td\b/gi
+        ) ||
+        []
+      )
+        .length,
+
+    hasPrimeStreetHeading:
+      /prime\s*street/i.test(
+        html
+      ),
+
+    hasIncidentNumberHeading:
+      /incident\s*number/i.test(
+        html
+      ),
+
+    incidentIds:
+      fireIncidentIds,
+  }
+
+
+  console.log(
+    'TORONTO FIRE · RAW RESPONSE:',
+    fireDiagnostics
   )
-    .map(
-      normalizeFireRow
+
+
+  const records =
+    parseFireRows(
+      html
     )
-    .filter(
-      Boolean
-    )
+      .map(
+        normalizeFireRow
+      )
+      .filter(
+        Boolean
+      )
+
+
+  console.log(
+    'TORONTO FIRE · PARSED RECORDS:',
+    records.length
+  )
+
+
+  return records
 }
 
 
