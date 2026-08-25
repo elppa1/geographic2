@@ -382,8 +382,11 @@ function fetchTtcAlertsBuffer() {
         https.get(
           TTC_ALERTS_UPSTREAM,
           {
-            family:
-              4,
+            autoSelectFamily:
+              true,
+
+            autoSelectFamilyAttemptTimeout:
+              1000,
 
             headers: {
               Accept:
