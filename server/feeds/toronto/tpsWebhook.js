@@ -1455,7 +1455,7 @@ function extractTpsReleaseUrl(
   const matches =
     [
       ...text.matchAll(
-        /https?:\/\/(?:www\.)?tps\.ca\/media-centre\/news-releases\/(\d+)\/?/gi
+        /https?:\/\/(?:www\.)?tps\.ca\/media-centre\/news-releases\/(\d{5,7})\/?/gi
       ),
     ]
 
@@ -1464,21 +1464,23 @@ function extractTpsReleaseUrl(
     matches.length >
       0
   ) {
-    return matches[
-      matches.length -
-      1
-    ][0]
+    const releaseId =
+      matches[
+        matches.length -
+        1
+      ][1]
+
+
+    return (
+      TPS_NEWS_RELEASES_URL +
+      releaseId +
+      '/'
+    )
   }
 
 
-  // TPS email/plaintext copies can lose the page href while
-  // preserving the standalone numeric release id from the page.
-  // Example breadcrumb text:
-  //
-  //   News Releases
-  //   66741
-  //
-  // Rebuild the canonical TPS release URL from that id.
+  // Some forwarded TPS emails lose the href but retain a standalone
+  // numeric release id. Prefer the last plausible id in the message.
   const standaloneIds =
     [
       ...text.matchAll(
@@ -1492,7 +1494,10 @@ function extractTpsReleaseUrl(
       0
   ) {
     const releaseId =
-      standaloneIds[0][1]
+      standaloneIds[
+        standaloneIds.length -
+        1
+      ][1]
 
 
     return (
@@ -1503,8 +1508,491 @@ function extractTpsReleaseUrl(
   }
 
 
+  return ''
+}
+
+
+function normalizeReleaseTitleForMatch(
+  value
+) {
+  return cleanText(
+    htmlToText(
+      value
+    )
+  )
+    .toLowerCase()
+    .replace(
+      /[^a-z0-9]+/g,
+      ' '
+    )
+    .replace(
+      /\s+/g,
+      ' '
+    )
+    .trim()
+}
+
+
+function releaseTitleScore({
+  candidateTitle,
+  subject,
+}) {
+  const candidate =
+    normalizeReleaseTitleForMatch(
+      candidateTitle
+    )
+
+
+  const target =
+    normalizeReleaseTitleForMatch(
+      subject
+    )
+
+
+  if (
+    !candidate ||
+    !target
+  ) {
+    return 0
+  }
+
+
+  if (
+    candidate ===
+      target
+  ) {
+    return 1000
+  }
+
+
+  let score =
+    0
+
+
+  if (
+    candidate.includes(
+      target
+    ) ||
+    target.includes(
+      candidate
+    )
+  ) {
+    score +=
+      500
+  }
+
+
+  const targetWords =
+    new Set(
+      target
+        .split(
+          ' '
+        )
+        .filter(
+          (
+            word
+          ) =>
+            word.length >=
+              4
+        )
+    )
+
+
+  const candidateWords =
+    new Set(
+      candidate
+        .split(
+          ' '
+        )
+        .filter(
+          (
+            word
+          ) =>
+            word.length >=
+              4
+        )
+    )
+
+
+  let shared =
+    0
+
+
+  targetWords.forEach(
+    (
+      word
+    ) => {
+      if (
+        candidateWords.has(
+          word
+        )
+      ) {
+        shared++
+      }
+    }
+  )
+
+
+  if (
+    targetWords.size >
+      0
+  ) {
+    score +=
+      Math.round(
+        (
+          shared /
+          targetWords.size
+        ) *
+        300
+      )
+  }
+
+
+  return score
+}
+
+
+function parseTpsSearchCandidates(
+  html
+) {
+  const source =
+    String(
+      html ??
+      ''
+    )
+
+
+  const anchorPattern =
+    /<a\b[^>]*href=["']([^"']*\/media-centre\/news-releases\/(\d{5,7})\/?[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi
+
+
+  const matches =
+    []
+
+
+  let match
+
+
+  while (
+    (
+      match =
+        anchorPattern.exec(
+          source
+        )
+    )
+  ) {
+    matches.push({
+      index:
+        match.index,
+
+      releaseId:
+        match[2],
+
+      title:
+        htmlToText(
+          match[3]
+        ),
+    })
+  }
+
+
+  const unique =
+    []
+
+
+  const seenIds =
+    new Set()
+
+
+  matches.forEach(
+    (
+      candidate,
+      index
+    ) => {
+      if (
+        seenIds.has(
+          candidate.releaseId
+        )
+      ) {
+        return
+      }
+
+
+      seenIds.add(
+        candidate.releaseId
+      )
+
+
+      const nextIndex =
+        matches[
+          index +
+          1
+        ]?.index ??
+        Math.min(
+          source.length,
+          candidate.index +
+            3000
+        )
+
+
+      const context =
+        htmlToText(
+          source.slice(
+            candidate.index,
+            nextIndex
+          )
+        )
+
+
+      unique.push({
+        ...candidate,
+
+        context,
+
+        url:
+          (
+            TPS_NEWS_RELEASES_URL +
+            candidate.releaseId +
+            '/'
+          ),
+      })
+    }
+  )
+
+
+  return unique
+}
+
+
+async function searchTpsRelease({
+  query,
+  incidentNumber,
+  subject,
+}) {
+  const cleanQuery =
+    cleanText(
+      query
+    )
+
+
+  if (
+    !cleanQuery
+  ) {
+    return ''
+  }
+
+
+  const url =
+    new URL(
+      TPS_NEWS_RELEASES_URL
+    )
+
+
+  url.searchParams.set(
+    'category',
+    'news-release'
+  )
+
+
+  url.searchParams.set(
+    'q',
+    cleanQuery
+  )
+
+
+  const response =
+    await fetch(
+      url,
+      {
+        headers: {
+          Accept:
+            'text/html,application/xhtml+xml',
+
+          'User-Agent':
+            'ELPPA-Geographic/1.0',
+        },
+
+        signal:
+          AbortSignal.timeout(
+            10000
+          ),
+      }
+    )
+
+
+  if (
+    !response.ok
+  ) {
+    throw new Error(
+      (
+        'TPS RELEASE SEARCH FAILED · ' +
+        response.status
+      )
+    )
+  }
+
+
+  const html =
+    await response.text()
+
+
+  const candidates =
+    parseTpsSearchCandidates(
+      html
+    )
+
+
+  if (
+    candidates.length ===
+      0
+  ) {
+    return ''
+  }
+
+
+  const incident =
+    cleanText(
+      incidentNumber
+    )
+
+
+  const ranked =
+    candidates
+      .map(
+        (
+          candidate,
+          index
+        ) => {
+          let score =
+            releaseTitleScore({
+              candidateTitle:
+                candidate.title,
+
+              subject,
+            })
+
+
+          if (
+            incident &&
+            cleanText(
+              candidate.context
+            )
+              .includes(
+                incident
+              )
+          ) {
+            score +=
+              1000
+          }
+
+
+          // Search results are newest-first. Use page order only as
+          // the final tie-breaker after case/title matching.
+          score -=
+            index
+
+
+          return {
+            ...candidate,
+            score,
+          }
+        }
+      )
+      .sort(
+        (
+          a,
+          b
+        ) =>
+          b.score -
+          a.score
+      )
+
+
+  return (
+    ranked[0]?.url ||
+    ''
+  )
+}
+
+
+async function resolveTpsReleaseUrl({
+  emailBody,
+  incidentNumber,
+  subject,
+}) {
+  const direct =
+    extractTpsReleaseUrl(
+      emailBody
+    )
+
+
+  if (
+    direct
+  ) {
+    return direct
+  }
+
+
+  try {
+    if (
+      incidentNumber
+    ) {
+      const byCase =
+        await searchTpsRelease({
+          query:
+            incidentNumber,
+
+          incidentNumber,
+
+          subject,
+        })
+
+
+      if (
+        byCase
+      ) {
+        return byCase
+      }
+    }
+
+
+    if (
+      subject
+    ) {
+      const byTitle =
+        await searchTpsRelease({
+          query:
+            subject,
+
+          incidentNumber,
+
+          subject,
+        })
+
+
+      if (
+        byTitle
+      ) {
+        return byTitle
+      }
+    }
+  }
+  catch (
+    error
+  ) {
+    console.warn(
+      'TPS RELEASE LOOKUP FAILED:',
+      String(
+        error?.message ||
+        error
+      )
+    )
+  }
+
+
   return TPS_NEWS_RELEASES_URL
 }
+
 
 // ============================================================
 // GEOGRAPHIC HEADLINE
@@ -1719,7 +2207,7 @@ function getGeographicCategoryLabel({
     category ===
       'located'
   ) {
-    return 'Missing person located'
+    return 'Person located'
   }
 
 
@@ -2774,8 +3262,8 @@ function classifyIncidentText(
 
 
   if (
-    text.includes(
-      'fire'
+    /\bfire\b/i.test(
+      text
     )
   ) {
     return 'fire'
@@ -3304,11 +3792,89 @@ function extractShortIntersection(
 // GEOGRAPHY
 // ============================================================
 
+function cleanTpsLocationInput(
+  value
+) {
+  let text =
+    cleanText(
+      value
+    )
+
+
+  const prefixes = [
+    /^(?:located\s*:\s*)?missing\s+person(?:s)?\s*[,:\-]?\s*/i,
+    /^(?:located\s*:\s*)?missing\s+youth\s*[,:\-]?\s*/i,
+    /^(?:located\s*:\s*)?missing\s+people\s*[,:\-]?\s*/i,
+    /^elopee\s*[,:\-]?\s*/i,
+    /^wanted\s+(?:person|male|female)\s*[,:\-]?\s*/i,
+  ]
+
+
+  let changed =
+    true
+
+
+  while (
+    changed
+  ) {
+    changed =
+      false
+
+
+    for (
+      const pattern of
+      prefixes
+    ) {
+      const next =
+        text.replace(
+          pattern,
+          ''
+        )
+
+
+      if (
+        next !==
+          text
+      ) {
+        text =
+          cleanText(
+            next
+          )
+
+        changed =
+          true
+      }
+    }
+  }
+
+
+  return text
+}
+
+
+function cleanExtractedTpsLocation(
+  value
+) {
+  return cleanTpsLocationInput(
+    value
+  )
+    .replace(
+      /\s+area\s*$/i,
+      ''
+    )
+    .replace(
+      /^[,;:\-–—\s]+|[,;:\-–—\s]+$/g,
+      ''
+    )
+    .trim()
+}
+
+
 function extractLocation(
   value
 ) {
   const text =
-    cleanText(
+    cleanTpsLocationInput(
       value
     )
 
@@ -3324,7 +3890,7 @@ function extractLocation(
   ) {
     return {
       location:
-        cleanText(
+        cleanExtractedTpsLocation(
           address[0]
         ),
 
@@ -3345,7 +3911,7 @@ function extractLocation(
   ) {
     return {
       location:
-        cleanText(
+        cleanExtractedTpsLocation(
           fullIntersection[0]
         ),
 
@@ -3366,7 +3932,9 @@ function extractLocation(
   ) {
     return {
       location:
-        shortIntersection,
+        cleanExtractedTpsLocation(
+          shortIntersection
+        ),
 
       precision:
         'intersection',
@@ -3451,7 +4019,7 @@ function buildExternalId({
 // BUILD POLICE RECORD
 // ============================================================
 
-function buildPoliceRecord(
+async function buildPoliceRecord(
   email
 ) {
   const cleanedSubject =
@@ -3525,9 +4093,15 @@ function buildPoliceRecord(
 
 
   const releaseSourceUrl =
-    extractTpsReleaseUrl(
-      email.body
-    )
+    await resolveTpsReleaseUrl({
+      emailBody:
+        email.body,
+
+      incidentNumber,
+
+      subject:
+        cleanedSubject,
+    })
 
 
   const effectiveSender =
@@ -3586,20 +4160,34 @@ function buildPoliceRecord(
       : 'review'
 
 
-  // Use TPS's own release headline as the public NEWS title.
-  // We only remove forwarding prefixes such as FWD:/RE: earlier
-  // in cleanForwardedSubject(). Do not rewrite or shorten it here.
+  // Ordinary records keep TPS's current release headline.
+  // LOCATED is different: once resolved, the public-facing title
+  // must describe the current state instead of saying the person
+  // is still missing.
   const publicTitle =
-    cleanedSubject ||
-    buildGeographicTitle({
-      category,
+    category ===
+      'located'
+      ? buildGeographicTitle({
+          category,
 
-      subject:
-        cleanedSubject,
+          subject:
+            cleanedSubject,
 
-      location:
-        geographic.location,
-    })
+          location:
+            geographic.location,
+        })
+      : (
+          cleanedSubject ||
+          buildGeographicTitle({
+            category,
+
+            subject:
+              cleanedSubject,
+
+            location:
+              geographic.location,
+          })
+        )
 
 
   const publicDescription =
@@ -3688,6 +4276,9 @@ function buildPoliceRecord(
       'Toronto Police Service',
 
     sourceUrl:
+      releaseSourceUrl,
+
+    tpsReleaseUrl:
       releaseSourceUrl,
 
     attribution:
@@ -3987,7 +4578,7 @@ async function handlePost({
 
 
   const record =
-    buildPoliceRecord(
+    await buildPoliceRecord(
       email
     )
 
