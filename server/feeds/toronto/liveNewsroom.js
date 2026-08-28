@@ -2327,6 +2327,10 @@ function normalizeFireLocationPiece(
     value
   )
     .replace(
+      /\s*,\s*(?:NY|EY|SC|ET|YK|TO)\b/gi,
+      ''
+    )
+    .replace(
       /^\/+|\/+$/g,
       ''
     )
