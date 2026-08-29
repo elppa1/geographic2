@@ -20,6 +20,14 @@ import {
 } from '../admin/adminStore.js'
 
 
+const PUBLISHED_NEWS_ENDPOINT =
+  '/api/geographic/toronto/news/published'
+
+
+const PUBLISHED_NEWS_REFRESH_MS =
+  15 * 1000
+
+
 // ============================================================
 // NEW CATEGORIES
 // ============================================================
@@ -1651,6 +1659,142 @@ function createMarker({
 
 
 // ============================================================
+// NEWS MERGE
+// ============================================================
+//
+// Keep the existing browser-published NEWS as the base so no
+// existing pins disappear during the Railway migration.
+//
+// Railway records overwrite matching browser records and can
+// add new server-only records. Once Railway contains the full
+// historical live set, the browser fallback can be removed.
+//
+function getNewsIdentity(
+  pin
+) {
+  const externalId =
+    String(
+      pin?.externalId ||
+      ''
+    )
+      .trim()
+
+
+  if (
+    externalId
+  ) {
+    return (
+      'external:' +
+      externalId
+    )
+  }
+
+
+  const id =
+    String(
+      pin?.id ||
+      ''
+    )
+      .trim()
+
+
+  if (
+    id
+  ) {
+    return (
+      'id:' +
+      id
+    )
+  }
+
+
+  return ''
+}
+
+
+function mergeNewsRecords(
+  localRecords,
+  serverRecords
+) {
+  const merged =
+    new Map()
+
+
+  for (
+    const pin
+    of (
+      Array.isArray(
+        localRecords
+      )
+        ? localRecords
+        : []
+    )
+  ) {
+    const key =
+      getNewsIdentity(
+        pin
+      )
+
+
+    if (
+      key
+    ) {
+      merged.set(
+        key,
+        pin
+      )
+    }
+  }
+
+
+  for (
+    const pin
+    of (
+      Array.isArray(
+        serverRecords
+      )
+        ? serverRecords
+        : []
+    )
+  ) {
+    const key =
+      getNewsIdentity(
+        pin
+      )
+
+
+    if (
+      !key
+    ) {
+      continue
+    }
+
+
+    const existing =
+      merged.get(
+        key
+      )
+
+
+    merged.set(
+      key,
+      existing
+        ? {
+            ...existing,
+            ...pin,
+          }
+        : pin
+    )
+  }
+
+
+  return Array.from(
+    merged.values()
+  )
+}
+
+
+// ============================================================
 // COMPONENT
 // ============================================================
 
@@ -1679,6 +1823,125 @@ function MapPins({
     useState(
       0
     )
+
+
+  const [
+    serverNewsItems,
+    setServerNewsItems,
+  ] =
+    useState(
+      []
+    )
+
+
+  useEffect(
+    () => {
+      if (
+        cityKey !==
+          'toronto'
+      ) {
+        setServerNewsItems(
+          []
+        )
+
+
+        return
+      }
+
+
+      let cancelled =
+        false
+
+
+      async function loadPublishedNews() {
+        try {
+          const response =
+            await fetch(
+              PUBLISHED_NEWS_ENDPOINT,
+              {
+                headers: {
+                  Accept:
+                    'application/json',
+                },
+
+                cache:
+                  'no-store',
+              }
+            )
+
+
+          if (
+            !response.ok
+          ) {
+            throw new Error(
+              'Published NEWS request failed with HTTP ' +
+              response.status
+            )
+          }
+
+
+          const payload =
+            await response.json()
+
+
+          if (
+            cancelled
+          ) {
+            return
+          }
+
+
+          setServerNewsItems(
+            Array.isArray(
+              payload?.records
+            )
+              ? payload.records
+              : []
+          )
+        }
+        catch (
+          error
+        ) {
+          if (
+            cancelled
+          ) {
+            return
+          }
+
+
+          console.warn(
+            'PUBLIC MAP · RAILWAY NEWS LOAD FAILED:',
+            error
+          )
+        }
+      }
+
+
+      loadPublishedNews()
+
+
+      const interval =
+        window.setInterval(
+          loadPublishedNews,
+          PUBLISHED_NEWS_REFRESH_MS
+        )
+
+
+      return () => {
+        cancelled =
+          true
+
+
+        window.clearInterval(
+          interval
+        )
+      }
+    },
+    [
+      cityKey,
+    ]
+  )
+
 
   useEffect(
     () => {
@@ -1796,8 +2059,18 @@ function MapPins({
         selectedLayer,
       })
     ) {
+      const mergedNewsItems =
+        cityKey ===
+          'toronto'
+          ? mergeNewsRecords(
+              getNewsItems(),
+              serverNewsItems
+            )
+          : getNewsItems()
+
+
       visiblePins =
-        getNewsItems()
+        mergedNewsItems
           .filter(
             (pin) =>
               belongsToCity(
@@ -1909,6 +2182,7 @@ function MapPins({
     activePinFilter,
     newSubtypeFilter,
     contentRevision,
+    serverNewsItems,
     onDirections,
     onLongWay,
   ])
