@@ -559,16 +559,8 @@ function isUsableCoordinate(
     value ===
       null ||
     value ===
-      undefined
-  ) {
-    return false
-  }
-
-
-  if (
-    typeof value ===
-      'string' &&
-    value.trim() ===
+      undefined ||
+    value ===
       ''
   ) {
     return false
@@ -583,64 +575,17 @@ function isUsableCoordinate(
 }
 
 
-function hasZeroCoordinatePair(
-  record
-) {
-  if (
-    !isUsableCoordinate(
-      record?.longitude
-    ) ||
-    !isUsableCoordinate(
-      record?.latitude
-    )
-  ) {
-    return false
-  }
-
-
-  return (
-    Number(
-      record.longitude
-    ) ===
-      0 &&
-    Number(
-      record.latitude
-    ) ===
-      0
-  )
-}
-
-
 function hasRecordCoordinates(
   record
 ) {
-  if (
-    !isUsableCoordinate(
+  return (
+    isUsableCoordinate(
       record?.longitude
-    ) ||
-    !isUsableCoordinate(
+    ) &&
+    isUsableCoordinate(
       record?.latitude
     )
-  ) {
-    return false
-  }
-
-
-  // 0,0 is the Gulf of Guinea, never a valid Toronto pin.
-  //
-  // Older Admin saves could accidentally create 0,0 because
-  // Number(null) === 0. Treat that pair as unplaced so the
-  // normal newsroom auto-geocoder gets a chance to fix it.
-  if (
-    hasZeroCoordinatePair(
-      record
-    )
-  ) {
-    return false
-  }
-
-
-  return true
+  )
 }
 
 
@@ -5271,146 +5216,6 @@ function AdminRoom() {
   }
 
 
-  async function repairZeroCoordinatePublishedNews(
-    records,
-    {
-      persist =
-        true,
-    } = {}
-  ) {
-    const next =
-      []
-
-
-    for (
-      const record
-      of (
-        Array.isArray(
-          records
-        )
-          ? records
-          : []
-      )
-    ) {
-      if (
-        record?.active ===
-          false ||
-        !hasZeroCoordinatePair(
-          record
-        )
-      ) {
-        next.push(
-          record
-        )
-
-
-        continue
-      }
-
-
-      const searchValue =
-        record.intersection ||
-        record.location ||
-        ''
-
-
-      if (
-        !searchValue
-      ) {
-        next.push(
-          record
-        )
-
-
-        continue
-      }
-
-
-      try {
-        const placed =
-          await placeNewsroomPin(
-            {
-              ...record,
-
-              longitude:
-                null,
-
-              latitude:
-                null,
-
-              searchedLongitude:
-                null,
-
-              searchedLatitude:
-                null,
-            }
-          )
-
-
-        if (
-          !hasRecordCoordinates(
-            placed
-          )
-        ) {
-          next.push(
-            record
-          )
-
-
-          continue
-        }
-
-
-        if (
-          !persist
-        ) {
-          next.push(
-            placed
-          )
-
-
-          continue
-        }
-
-
-        const saved =
-          await publishNewsRecordOnServer(
-            placed,
-            {
-              silent:
-                true,
-            }
-          )
-
-
-        next.push(
-          saved ||
-          placed
-        )
-      }
-      catch (
-        error
-      ) {
-        console.warn(
-          'PUBLISHED NEWS ZERO-COORDINATE REPAIR FAILED:',
-          record?.id ||
-          record?.externalId ||
-          searchValue,
-          error
-        )
-
-
-        next.push(
-          record
-        )
-      }
-    }
-
-
-    return next
-  }
-
-
   async function refreshPublishedNewsFromServer({
     allowBootstrap =
       true,
@@ -5506,28 +5311,9 @@ function AdminRoom() {
         localToronto.length >
           0
       ) {
-        const repairedLocalToronto =
-          await repairZeroCoordinatePublishedNews(
-            localToronto,
-            {
-              persist:
-                false,
-            }
-          )
-
-
         serverRecords =
           await postPublishedNewsRecords(
-            repairedLocalToronto
-          )
-      }
-      else if (
-        serverRecords.length >
-          0
-      ) {
-        serverRecords =
-          await repairZeroCoordinatePublishedNews(
-            serverRecords
+            localToronto
           )
       }
 
@@ -7000,8 +6786,10 @@ function AdminRoom() {
         ),
 
       longitude:
-        isUsableCoordinate(
-          draft.longitude
+        Number.isFinite(
+          Number(
+            draft.longitude
+          )
         )
           ? Number(
               draft.longitude
@@ -7009,8 +6797,10 @@ function AdminRoom() {
           : null,
 
       latitude:
-        isUsableCoordinate(
-          draft.latitude
+        Number.isFinite(
+          Number(
+            draft.latitude
+          )
         )
           ? Number(
               draft.latitude
@@ -7018,8 +6808,10 @@ function AdminRoom() {
           : null,
 
       searchedLongitude:
-        isUsableCoordinate(
-          draft.searchedLongitude
+        Number.isFinite(
+          Number(
+            draft.searchedLongitude
+          )
         )
           ? Number(
               draft.searchedLongitude
@@ -7027,8 +6819,10 @@ function AdminRoom() {
           : null,
 
       searchedLatitude:
-        isUsableCoordinate(
-          draft.searchedLatitude
+        Number.isFinite(
+          Number(
+            draft.searchedLatitude
+          )
         )
           ? Number(
               draft.searchedLatitude
