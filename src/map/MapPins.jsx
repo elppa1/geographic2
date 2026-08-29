@@ -918,6 +918,107 @@ function appendText({
 
 
 // ============================================================
+// IMAGE
+// ============================================================
+
+function appendNewsImage({
+  parent,
+  pin,
+}) {
+  const imageUrl =
+    normalizeUrl(
+      pin?.imageUrl
+    )
+
+
+  if (
+    !imageUrl
+  ) {
+    return
+  }
+
+
+  const imageLink =
+    document.createElement(
+      'a'
+    )
+
+
+  imageLink.href =
+    imageUrl
+
+  imageLink.target =
+    '_blank'
+
+  imageLink.rel =
+    'noopener noreferrer'
+
+  imageLink.addEventListener(
+    'click',
+    (
+      event
+    ) => {
+      event.stopPropagation()
+    }
+  )
+
+
+  const image =
+    document.createElement(
+      'img'
+    )
+
+
+  image.src =
+    imageUrl
+
+  image.alt =
+    pin?.title ||
+    'News image'
+
+  image.loading =
+    'lazy'
+
+  image.style.display =
+    'block'
+
+  image.style.width =
+    '100%'
+
+  image.style.maxHeight =
+    '220px'
+
+  image.style.objectFit =
+    'cover'
+
+  image.style.margin =
+    '10px 0'
+
+  image.style.borderRadius =
+    '4px'
+
+
+  image.addEventListener(
+    'error',
+    () => {
+      imageLink.style.display =
+        'none'
+    }
+  )
+
+
+  imageLink.appendChild(
+    image
+  )
+
+
+  parent.appendChild(
+    imageLink
+  )
+}
+
+
+// ============================================================
 // SOURCE / WEBSITE
 // ============================================================
 
@@ -1568,6 +1669,19 @@ function createMarker({
         pin.location
       ),
   })
+
+  if (
+    pinType ===
+      'news'
+  ) {
+    appendNewsImage({
+      parent:
+        popupContent,
+
+      pin,
+    })
+  }
+
 
   appendText({
     parent:
