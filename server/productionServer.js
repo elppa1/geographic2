@@ -51,6 +51,10 @@ import {
 } from './feeds/toronto/liveNewsroom.js'
 
 import {
+  locationSearchApi,
+} from './locationSearch.js'
+
+import {
   TORONTO_PROXIES,
 } from './proxy/cities/index.js'
 
@@ -1310,6 +1314,7 @@ const httpServer =
 
 
 const plugins = [
+  locationSearchApi(),
   cleanToronto1995Tiles(),
   enhanceHistoricalTiles(),
   tpsWebhookFeed(),
