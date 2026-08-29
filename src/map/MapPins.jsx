@@ -20,14 +20,6 @@ import {
 } from '../admin/adminStore.js'
 
 
-const PUBLISHED_NEWS_ENDPOINT =
-  '/api/geographic/toronto/news/published'
-
-
-const PUBLISHED_NEWS_REFRESH_MS =
-  15 * 1000
-
-
 // ============================================================
 // NEW CATEGORIES
 // ============================================================
@@ -918,80 +910,6 @@ function appendText({
 
 
 // ============================================================
-// IMAGE
-// ============================================================
-
-function appendImage({
-  parent,
-  pin,
-}) {
-  const imageUrl =
-    normalizeUrl(
-      pin?.imageUrl
-    )
-
-
-  if (
-    !imageUrl
-  ) {
-    return
-  }
-
-
-  const image =
-    document.createElement(
-      'img'
-    )
-
-
-  image.src =
-    imageUrl
-
-  image.alt =
-    pin?.title ||
-    'News image'
-
-  image.loading =
-    'lazy'
-
-  image.className =
-    'geographic-pin-image'
-
-  image.style.display =
-    'block'
-
-  image.style.width =
-    '100%'
-
-  image.style.maxHeight =
-    '220px'
-
-  image.style.objectFit =
-    'cover'
-
-  image.style.margin =
-    '10px 0'
-
-  image.style.borderRadius =
-    '4px'
-
-
-  image.addEventListener(
-    'error',
-    () => {
-      image.style.display =
-        'none'
-    }
-  )
-
-
-  parent.appendChild(
-    image
-  )
-}
-
-
-// ============================================================
 // SOURCE / WEBSITE
 // ============================================================
 
@@ -1643,19 +1561,6 @@ function createMarker({
       ),
   })
 
-  if (
-    pinType ===
-      'news'
-  ) {
-    appendImage({
-      parent:
-        popupContent,
-
-      pin,
-    })
-  }
-
-
   appendText({
     parent:
       popupContent,
@@ -1775,129 +1680,6 @@ function MapPins({
       0
     )
 
-
-  const [
-    serverNewsItems,
-    setServerNewsItems,
-  ] =
-    useState(
-      []
-    )
-
-
-  useEffect(
-    () => {
-      if (
-        cityKey !==
-          'toronto'
-      ) {
-        setServerNewsItems(
-          []
-        )
-
-
-        return
-      }
-
-
-      let cancelled =
-        false
-
-
-      async function loadPublishedNews() {
-        try {
-          const response =
-            await fetch(
-              PUBLISHED_NEWS_ENDPOINT,
-              {
-                headers: {
-                  Accept:
-                    'application/json',
-                },
-
-                cache:
-                  'no-store',
-              }
-            )
-
-
-          if (
-            !response.ok
-          ) {
-            throw new Error(
-              'Published NEWS request failed with HTTP ' +
-              response.status
-            )
-          }
-
-
-          const payload =
-            await response.json()
-
-
-          if (
-            cancelled
-          ) {
-            return
-          }
-
-
-          const records =
-            Array.isArray(
-              payload?.records
-            )
-              ? payload.records
-              : []
-
-
-          setServerNewsItems(
-            records
-          )
-        }
-        catch (
-          error
-        ) {
-          if (
-            cancelled
-          ) {
-            return
-          }
-
-
-          console.warn(
-            'PUBLIC MAP · PUBLISHED NEWS LOAD FAILED:',
-            error
-          )
-        }
-      }
-
-
-      loadPublishedNews()
-
-
-      const interval =
-        window.setInterval(
-          loadPublishedNews,
-          PUBLISHED_NEWS_REFRESH_MS
-        )
-
-
-      return () => {
-        cancelled =
-          true
-
-
-        window.clearInterval(
-          interval
-        )
-      }
-    },
-    [
-      cityKey,
-    ]
-  )
-
-
   useEffect(
     () => {
       const handleStorageChange =
@@ -2014,15 +1796,8 @@ function MapPins({
         selectedLayer,
       })
     ) {
-      const publishedNews =
-        cityKey ===
-          'toronto'
-          ? serverNewsItems
-          : getNewsItems()
-
-
       visiblePins =
-        publishedNews
+        getNewsItems()
           .filter(
             (pin) =>
               belongsToCity(
@@ -2134,7 +1909,6 @@ function MapPins({
     activePinFilter,
     newSubtypeFilter,
     contentRevision,
-    serverNewsItems,
     onDirections,
     onLongWay,
   ])
