@@ -378,16 +378,6 @@ export async function searchIntersection({
     config
 
 
-  const bbox =
-    [
-      bounds.south,
-      bounds.west,
-      bounds.north,
-      bounds.east,
-    ]
-      .join(',')
-
-
   const streetA =
     makeStreetRegex(
       intersection.streetA
@@ -400,52 +390,36 @@ export async function searchIntersection({
     )
 
 
-  const query =
-    `
-[out:json][timeout:15];
+  const params =
+    new URLSearchParams({
+      streetA,
+      streetB,
 
-way
-  ["highway"]
-  ["name"~"${streetA}",i]
-  (${bbox})
-  ->.streetA;
+      west:
+        String(
+          bounds.west
+        ),
 
-way
-  ["highway"]
-  ["name"~"${streetB}",i]
-  (${bbox})
-  ->.streetB;
+      north:
+        String(
+          bounds.north
+        ),
 
-node(w.streetA)
-  ->.nodesA;
+      east:
+        String(
+          bounds.east
+        ),
 
-node(w.streetB)
-  ->.nodesB;
-
-node.nodesA.nodesB;
-
-out body;
-    `.trim()
+      south:
+        String(
+          bounds.south
+        ),
+    })
 
 
   const response =
     await fetch(
-      'https://overpass-api.de/api/interpreter',
-      {
-        method:
-          'POST',
-
-        headers: {
-          'Content-Type':
-            'application/x-www-form-urlencoded;charset=UTF-8',
-        },
-
-        body:
-          new URLSearchParams({
-            data:
-              query,
-          }),
-      }
+      `/api/geographic/location-search/intersection?${params.toString()}`
     )
 
 
@@ -535,10 +509,6 @@ out body;
 }
 
 
-// ============================================================
-// PLACE / ADDRESS SEARCH
-// ============================================================
-
 export async function searchPlaces({
   query,
   city,
@@ -566,52 +536,46 @@ export async function searchPlaces({
     config
 
 
-  const values = {
-    q:
-      `${query}, ${querySuffix}`,
-
-    format:
-      'jsonv2',
-
-    addressdetails:
-      '1',
-
-    namedetails:
-      '1',
-
-    limit:
-      '6',
-
-    viewbox:
-      (
-        `${bounds.west},` +
-        `${bounds.north},` +
-        `${bounds.east},` +
-        `${bounds.south}`
-      ),
-
-    bounded:
-      '1',
-  }
-
-
-  if (
-    countryCode
-  ) {
-    values.countrycodes =
-      countryCode
-  }
-
-
   const params =
-    new URLSearchParams(
-      values
-    )
+    new URLSearchParams({
+      q:
+        query,
+
+      querySuffix,
+
+      countryCode,
+
+      west:
+        String(
+          bounds.west
+        ),
+
+      north:
+        String(
+          bounds.north
+        ),
+
+      east:
+        String(
+          bounds.east
+        ),
+
+      south:
+        String(
+          bounds.south
+        ),
+
+      bounded:
+        '1',
+
+      limit:
+        '6',
+    })
 
 
   const response =
     await fetch(
-      `https://nominatim.openstreetmap.org/search?${params.toString()}`
+      `/api/geographic/location-search/place?${params.toString()}`
     )
 
 
@@ -624,8 +588,16 @@ export async function searchPlaces({
   }
 
 
-  const data =
+  const payload =
     await response.json()
+
+
+  const data =
+    Array.isArray(
+      payload?.results
+    )
+      ? payload.results
+      : []
 
 
   return data
