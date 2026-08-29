@@ -17,7 +17,6 @@ import {
   getNewItems,
   getNewReviewItems,
   markScraperRecordProcessed,
-  resolveNewsItemByExternalId,
   saveHistoricItems,
   saveNewsItems,
   saveNewsReviewItems,
@@ -78,6 +77,18 @@ const PERSISTENT_NEWSROOM_ACK_ENDPOINT =
 
 const PERSISTENT_NEWSROOM_LOG_ENDPOINT =
   '/api/geographic/toronto/newsroom/log'
+
+
+const PUBLISHED_NEWS_ENDPOINT =
+  '/api/geographic/toronto/news/published'
+
+
+const PUBLISHED_NEWS_UPSERT_ENDPOINT =
+  '/api/geographic/toronto/newsroom/published/upsert'
+
+
+const PUBLISHED_NEWS_ARCHIVE_ENDPOINT =
+  '/api/geographic/toronto/newsroom/published/archive'
 
 
 const PERSISTENT_NEWSROOM_PULL_MS =
@@ -4966,6 +4977,379 @@ function AdminRoom() {
   }
 
 
+  // ==========================================================
+  // SERVER-OWNED PUBLISHED NEWS
+  // ==========================================================
+  //
+  // Toronto NEWS is now canonical on the server.
+  //
+  // Browser storage remains as a local cache so the existing Admin Room
+  // and map code can keep working while the public map is migrated.
+  //
+  // ==========================================================
+
+  async function postPublishedNewsRecords(
+    records
+  ) {
+    const normalizedRecords =
+      (
+        Array.isArray(
+          records
+        )
+          ? records
+          : [
+              records,
+            ]
+      )
+        .filter(
+          Boolean
+        )
+        .map(
+          normalizePinRecord
+        )
+
+
+    if (
+      normalizedRecords.length ===
+        0
+    ) {
+      return []
+    }
+
+
+    const response =
+      await fetch(
+        PUBLISHED_NEWS_UPSERT_ENDPOINT,
+        {
+          method:
+            'POST',
+
+          headers: {
+            'Content-Type':
+              'application/json',
+
+            Accept:
+              'application/json',
+          },
+
+          body:
+            JSON.stringify({
+              records:
+                normalizedRecords,
+            }),
+        }
+      )
+
+
+    const payload =
+      await response.json()
+
+
+    if (
+      !response.ok ||
+      payload?.ok !==
+        true
+    ) {
+      throw new Error(
+        payload?.error ||
+        (
+          'Published NEWS save failed · ' +
+          response.status
+        )
+      )
+    }
+
+
+    return (
+      Array.isArray(
+        payload.records
+      )
+        ? payload.records
+            .map(
+              normalizePinRecord
+            )
+        : normalizedRecords
+    )
+  }
+
+
+  async function publishNewsRecordOnServer(
+    record,
+    {
+      silent =
+        false,
+    } = {}
+  ) {
+    try {
+      const records =
+        await postPublishedNewsRecords(
+          [
+            record,
+          ]
+        )
+
+
+      return (
+        records[0] ||
+        normalizePinRecord(
+          record
+        )
+      )
+    }
+    catch (
+      error
+    ) {
+      console.error(
+        'PUBLISHED NEWS SERVER SAVE FAILED:',
+        error
+      )
+
+
+      if (
+        !silent
+      ) {
+        window.alert(
+          'Could not save this NEWS pin to the server. Nothing was published. Please try again.'
+        )
+      }
+
+
+      return null
+    }
+  }
+
+
+  async function archiveNewsRecordOnServer(
+    record,
+    reason =
+      'removed-from-live-map',
+    {
+      silent =
+        false,
+    } = {}
+  ) {
+    if (
+      !record
+    ) {
+      return null
+    }
+
+
+    try {
+      const response =
+        await fetch(
+          PUBLISHED_NEWS_ARCHIVE_ENDPOINT,
+          {
+            method:
+              'POST',
+
+            headers: {
+              'Content-Type':
+                'application/json',
+
+              Accept:
+                'application/json',
+            },
+
+            body:
+              JSON.stringify({
+                id:
+                  record.id ||
+                  '',
+
+                externalId:
+                  record.externalId ||
+                  '',
+
+                record,
+
+                reason,
+              }),
+          }
+        )
+
+
+      const payload =
+        await response.json()
+
+
+      if (
+        !response.ok ||
+        payload?.ok !==
+          true ||
+        !payload?.record
+      ) {
+        throw new Error(
+          payload?.error ||
+          (
+            'Published NEWS archive failed · ' +
+            response.status
+          )
+        )
+      }
+
+
+      return normalizePinRecord(
+        payload.record
+      )
+    }
+    catch (
+      error
+    ) {
+      console.error(
+        'PUBLISHED NEWS SERVER ARCHIVE FAILED:',
+        error
+      )
+
+
+      if (
+        !silent
+      ) {
+        window.alert(
+          'Could not update this NEWS pin on the server. The live map was not changed. Please try again.'
+        )
+      }
+
+
+      return null
+    }
+  }
+
+
+  async function refreshPublishedNewsFromServer({
+    allowBootstrap =
+      true,
+  } = {}) {
+    try {
+      const response =
+        await fetch(
+          (
+            PUBLISHED_NEWS_ENDPOINT +
+            '?status=all'
+          ),
+          {
+            method:
+              'GET',
+
+            headers: {
+              Accept:
+                'application/json',
+            },
+          }
+        )
+
+
+      const payload =
+        await response.json()
+
+
+      if (
+        !response.ok ||
+        payload?.ok !==
+          true
+      ) {
+        throw new Error(
+          payload?.error ||
+          (
+            'Published NEWS request failed · ' +
+            response.status
+          )
+        )
+      }
+
+
+      let serverRecords =
+        Array.isArray(
+          payload.records
+        )
+          ? payload.records
+              .map(
+                normalizePinRecord
+              )
+          : []
+
+
+      const latestLocal =
+        getNewsItems()
+          .map(
+            normalizePinRecord
+          )
+
+
+      const localToronto =
+        latestLocal.filter(
+          (
+            record
+          ) =>
+            belongsToCity(
+              record,
+              'toronto'
+            )
+        )
+
+
+      const otherCities =
+        latestLocal.filter(
+          (
+            record
+          ) =>
+            !belongsToCity(
+              record,
+              'toronto'
+            )
+        )
+
+
+      // One-time migration:
+      //
+      // If the new server store is still empty, preserve the Toronto NEWS
+      // already published in this browser by seeding the server with it.
+      if (
+        allowBootstrap &&
+        serverRecords.length ===
+          0 &&
+        localToronto.length >
+          0
+      ) {
+        serverRecords =
+          await postPublishedNewsRecords(
+            localToronto
+          )
+      }
+
+
+      const nextAll = [
+        ...serverRecords,
+        ...otherCities,
+      ]
+
+
+      saveNewsItems(
+        nextAll
+      )
+
+
+      setAllNewsItems(
+        nextAll
+      )
+
+
+      return serverRecords
+    }
+    catch (
+      error
+    ) {
+      console.warn(
+        'PUBLISHED NEWS SERVER REFRESH FAILED:',
+        error
+      )
+
+
+      return null
+    }
+  }
+
+
   async function pullPersistentNewsroom({
     silent =
       false,
@@ -5389,6 +5773,19 @@ function AdminRoom() {
         }
 
 
+        await refreshPublishedNewsFromServer({
+          allowBootstrap:
+            true,
+        })
+
+
+        if (
+          disposed
+        ) {
+          return
+        }
+
+
         await pullPersistentNewsroom({
           silent:
             true,
@@ -5486,6 +5883,12 @@ function AdminRoom() {
 
 
       await response.json()
+
+
+      await refreshPublishedNewsFromServer({
+        allowBootstrap:
+          true,
+      })
 
 
       await pullPersistentNewsroom()
@@ -6579,7 +6982,7 @@ function AdminRoom() {
       }
 
 
-      const publishedRecord = {
+      let publishedRecord = {
         ...record,
 
         id:
@@ -6599,6 +7002,30 @@ function AdminRoom() {
         createdAt:
           new Date()
             .toISOString(),
+      }
+
+
+      if (
+        tab ===
+          'news' &&
+        cityKey ===
+          'toronto'
+      ) {
+        const serverRecord =
+          await publishNewsRecordOnServer(
+            publishedRecord
+          )
+
+
+        if (
+          !serverRecord
+        ) {
+          return
+        }
+
+
+        publishedRecord =
+          serverRecord
       }
 
 
@@ -6646,17 +7073,44 @@ function AdminRoom() {
     if (
       editingId
     ) {
+      let updatedRecord = {
+        ...record,
+
+        id:
+          editingId,
+      }
+
+
+      if (
+        tab ===
+          'news' &&
+        cityKey ===
+          'toronto'
+      ) {
+        const serverRecord =
+          await publishNewsRecordOnServer(
+            updatedRecord
+          )
+
+
+        if (
+          !serverRecord
+        ) {
+          return
+        }
+
+
+        updatedRecord =
+          serverRecord
+      }
+
+
       persistRecords(
         records.map(
           (item) =>
             item.id ===
             editingId
-              ? {
-                  ...record,
-
-                  id:
-                    editingId,
-                }
+              ? updatedRecord
               : item
         )
       )
@@ -6669,7 +7123,7 @@ function AdminRoom() {
     }
 
 
-    const nextRecord = {
+    let nextRecord = {
       ...record,
 
       id:
@@ -6686,6 +7140,30 @@ function AdminRoom() {
 
       origin:
         'manual',
+    }
+
+
+    if (
+      tab ===
+        'news' &&
+      cityKey ===
+        'toronto'
+    ) {
+      const serverRecord =
+        await publishNewsRecordOnServer(
+          nextRecord
+        )
+
+
+      if (
+        !serverRecord
+      ) {
+        return
+      }
+
+
+      nextRecord =
+        serverRecord
     }
 
 
@@ -6906,19 +7384,47 @@ function AdminRoom() {
       newsroomAction ===
         'resolve'
     ) {
+      let archivedRecord =
+        null
+
+
+      if (
+        existingPublished
+      ) {
+        archivedRecord =
+          await archiveNewsRecordOnServer(
+            existingPublished,
+            'official-source-resolution'
+          )
+
+
+        if (
+          !archivedRecord
+        ) {
+          return
+        }
+      }
+
+
       const nextCityRecords =
-        latestCityRecords.filter(
-          (publishedRecord) =>
-            !(
-              isTpsNewsroomRecord(
+        archivedRecord
+          ? latestCityRecords.map(
+              (
                 publishedRecord
-              ) &&
-              sameTpsIncident(
-                publishedRecord,
-                candidate
-              )
+              ) =>
+                (
+                  isTpsNewsroomRecord(
+                    publishedRecord
+                  ) &&
+                  sameTpsIncident(
+                    publishedRecord,
+                    candidate
+                  )
+                )
+                  ? archivedRecord
+                  : publishedRecord
             )
-        )
+          : latestCityRecords
 
 
       persistRecords(
@@ -7162,7 +7668,7 @@ function AdminRoom() {
       candidate
 
 
-    const publishedRecord = {
+    let publishedRecord = {
       ...existingPublished,
       ...candidate,
 
@@ -7254,6 +7760,23 @@ function AdminRoom() {
     delete publishedRecord.targetExternalId
     delete publishedRecord.resolutionReason
     delete publishedRecord.missingPolls
+
+
+    const serverPublishedRecord =
+      await publishNewsRecordOnServer(
+        publishedRecord
+      )
+
+
+    if (
+      !serverPublishedRecord
+    ) {
+      return
+    }
+
+
+    publishedRecord =
+      serverPublishedRecord
 
 
     const nextCityRecords =
@@ -7988,24 +8511,48 @@ function AdminRoom() {
       action ===
         'resolve'
     ) {
-      const resolvedAt =
-        new Date()
-          .toISOString()
-
-
       if (
         existingPublished
       ) {
-        resolveNewsItemByExternalId(
-          targetExternalId
-        )
+        const archivedRecord =
+          await archiveNewsRecordOnServer(
+            existingPublished,
+            'official-source-resolution'
+          )
 
 
-        setAllNewsItems(
-          getNewsItems()
-            .map(
-              normalizePinRecord
-            )
+        if (
+          !archivedRecord
+        ) {
+          return true
+        }
+
+
+        const latestCityRecords =
+          latestPublishedItems.filter(
+            (
+              item
+            ) =>
+              belongsToCity(
+                item,
+                cityKey
+              )
+          )
+
+
+        persistRecords(
+          latestCityRecords.map(
+            (
+              item
+            ) =>
+              String(
+                item?.externalId ||
+                ''
+              ) ===
+                targetExternalId
+                ? archivedRecord
+                : item
+          )
         )
       }
 
@@ -8317,11 +8864,79 @@ function AdminRoom() {
     })
 
 
-    setAllNewsItems(
+    const updatedPublishedItems =
       getNewsItems()
         .map(
           normalizePinRecord
         )
+
+
+    const updatedPublished =
+      updatedPublishedItems.find(
+        (
+          item
+        ) =>
+          String(
+            item?.externalId ||
+            ''
+          ) ===
+          targetExternalId
+      ) ||
+      null
+
+
+    if (
+      !updatedPublished
+    ) {
+      window.alert(
+        'The updated pin could not be reloaded after approval. The NEWSROOM item was left in place.'
+      )
+
+
+      return true
+    }
+
+
+    const serverUpdatedRecord =
+      await publishNewsRecordOnServer(
+        updatedPublished
+      )
+
+
+    if (
+      !serverUpdatedRecord
+    ) {
+      return true
+    }
+
+
+    const updatedCityRecords =
+      updatedPublishedItems
+        .filter(
+          (
+            item
+          ) =>
+            belongsToCity(
+              item,
+              cityKey
+            )
+        )
+        .map(
+          (
+            item
+          ) =>
+            String(
+              item?.externalId ||
+              ''
+            ) ===
+              targetExternalId
+              ? serverUpdatedRecord
+              : item
+        )
+
+
+    persistRecords(
+      updatedCityRecords
     )
 
 
@@ -8531,7 +9146,7 @@ function AdminRoom() {
         : null
 
 
-    const publishedRecord = {
+    let publishedRecord = {
       ...makeDraft(
         tab,
         cityKey
@@ -8614,6 +9229,35 @@ function AdminRoom() {
     delete publishedRecord.targetExternalId
     delete publishedRecord.resolutionReason
     delete publishedRecord.missingPolls
+
+
+    if (
+      tab ===
+        'news' &&
+      cityKey ===
+        'toronto'
+    ) {
+      const serverRecord =
+        await publishNewsRecordOnServer(
+          publishedRecord
+        )
+
+
+      if (
+        !serverRecord
+      ) {
+        setApprovingReviewId(
+          null
+        )
+
+
+        return
+      }
+
+
+      publishedRecord =
+        serverRecord
+    }
 
 
     persistRecords([
@@ -8776,15 +9420,6 @@ function AdminRoom() {
   async function deleteRecord(
     id
   ) {
-    if (
-      !window.confirm(
-        'Delete this item?'
-      )
-    ) {
-      return
-    }
-
-
     const target =
       records.find(
         (
@@ -8794,6 +9429,76 @@ function AdminRoom() {
           id
       ) ||
       null
+
+
+    const isNews =
+      tab ===
+        'news'
+
+
+    if (
+      !window.confirm(
+        isNews
+          ? 'Remove this NEWS pin from the live map? It will remain in the archive.'
+          : 'Delete this item?'
+      )
+    ) {
+      return
+    }
+
+
+    if (
+      isNews &&
+      cityKey ===
+        'toronto' &&
+      target
+    ) {
+      const archivedRecord =
+        await archiveNewsRecordOnServer(
+          target,
+          'manual-remove'
+        )
+
+
+      if (
+        !archivedRecord
+      ) {
+        return
+      }
+
+
+      persistRecords(
+        records.map(
+          (
+            item
+          ) =>
+            item.id ===
+              id
+              ? archivedRecord
+              : item
+        )
+      )
+
+
+      await logPersistentNewsAction({
+        action:
+          'manual-archive',
+
+        record:
+          archivedRecord,
+      })
+
+
+      if (
+        editingId ===
+          id
+      ) {
+        resetDraft()
+      }
+
+
+      return
+    }
 
 
     persistRecords(
@@ -8826,7 +9531,6 @@ function AdminRoom() {
     }
   }
 
-
   // ==========================================================
   // PUBLISH / UNPUBLISH
   // ==========================================================
@@ -8857,7 +9561,7 @@ function AdminRoom() {
         false
 
 
-    const updatedRecord = {
+    let updatedRecord = {
       ...target,
 
       active:
@@ -8877,6 +9581,35 @@ function AdminRoom() {
               target.manuallyRepublishedAt ||
               ''
             ),
+    }
+
+
+    if (
+      tab ===
+        'news' &&
+      cityKey ===
+        'toronto'
+    ) {
+      const serverRecord =
+        nextActive
+          ? await publishNewsRecordOnServer(
+              updatedRecord
+            )
+          : await archiveNewsRecordOnServer(
+              updatedRecord,
+              'manual-unpublish'
+            )
+
+
+      if (
+        !serverRecord
+      ) {
+        return
+      }
+
+
+      updatedRecord =
+        serverRecord
     }
 
 

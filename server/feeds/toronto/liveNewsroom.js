@@ -148,7 +148,7 @@ let storeLoaded =
 
 let store = {
   version:
-    1,
+    2,
 
   events:
     [],
@@ -163,6 +163,18 @@ let store = {
     police:
       {},
   },
+
+  // Every NEWS pin ever published lives here.
+  //
+  // Live pins:
+  //   active === true
+  //
+  // Archive:
+  //   active === false
+  //
+  // Records are never deleted from this server store.
+  publishedNews:
+    {},
 
   updatedAt:
     '',
@@ -649,6 +661,16 @@ async function ensureLoaded() {
             parsed.sources?.police ||
             {},
         },
+
+        publishedNews:
+          parsed.publishedNews &&
+          typeof parsed.publishedNews ===
+            'object' &&
+          !Array.isArray(
+            parsed.publishedNews
+          )
+            ? parsed.publishedNews
+            : {},
       }
     }
   }
@@ -3322,6 +3344,633 @@ export async function syncTorontoLiveNewsroom() {
 
 
 // ============================================================
+// PUBLISHED NEWS + ARCHIVE
+// ============================================================
+//
+// This is the canonical server-owned public NEWS dataset.
+//
+// A published pin is never physically deleted:
+//
+//   active: true   → live public NEWS layer
+//   active: false  → archive
+//
+// The full record, including imageUrl, coordinates, source data,
+// timestamps, and editorial metadata, remains in /data.
+//
+// ============================================================
+
+function publishedNewsIdentity(
+  record
+) {
+  const externalId =
+    cleanText(
+      record?.externalId
+    )
+
+
+  if (
+    externalId
+  ) {
+    return (
+      'external:' +
+      externalId
+    )
+  }
+
+
+  const id =
+    cleanText(
+      record?.id
+    )
+
+
+  if (
+    id
+  ) {
+    return (
+      'id:' +
+      id
+    )
+  }
+
+
+  const fallback =
+    [
+      record?.city ||
+        'toronto',
+      record?.title ||
+        '',
+      record?.intersection ||
+        record?.location ||
+        '',
+      record?.publishedAt ||
+        record?.createdAt ||
+        '',
+    ]
+      .map(
+        cleanText
+      )
+      .join(
+        '|'
+      )
+
+
+  if (
+    !fallback.replace(
+      /\|/g,
+      ''
+    )
+  ) {
+    return ''
+  }
+
+
+  return (
+    'fallback:' +
+    smallHash(
+      fallback
+    )
+  )
+}
+
+
+function stripPublishedWorkflowFields(
+  record
+) {
+  const next = {
+    ...record,
+  }
+
+
+  delete next.reviewStatus
+  delete next.newsroomAction
+  delete next.serverAction
+  delete next.action
+  delete next.previousRecord
+  delete next.incomingRecord
+  delete next.changedFields
+  delete next.targetId
+  delete next.targetExternalId
+  delete next.missingPolls
+  delete next.status
+
+
+  return next
+}
+
+
+function normalizePublishedNewsRecord({
+  record,
+  existing =
+    null,
+  active =
+    null,
+  archiveReason =
+    '',
+}) {
+  const now =
+    new Date()
+      .toISOString()
+
+
+  const cleaned =
+    stripPublishedWorkflowFields(
+      record ||
+      {}
+    )
+
+
+  const identity =
+    publishedNewsIdentity(
+      {
+        ...existing,
+        ...cleaned,
+      }
+    )
+
+
+  if (
+    !identity
+  ) {
+    throw new Error(
+      'Published NEWS record requires an id, externalId, or usable identity fields.'
+    )
+  }
+
+
+  const isActive =
+    active ===
+      null
+      ? cleaned.active !==
+          false
+      : Boolean(
+          active
+        )
+
+
+  const firstPublishedAt =
+    existing?.firstPublishedAt ||
+    cleaned.firstPublishedAt ||
+    cleaned.publishedAt ||
+    existing?.publishedAt ||
+    now
+
+
+  const id =
+    cleanText(
+      existing?.id ||
+      cleaned.id
+    ) ||
+    (
+      'server-news-' +
+      smallHash(
+        identity
+      )
+    )
+
+
+  const normalized = {
+    ...existing,
+    ...cleaned,
+
+    id,
+
+    city:
+      cleanText(
+        cleaned.city ||
+        existing?.city
+      ) ||
+      'toronto',
+
+    type:
+      'news',
+
+    active:
+      isActive,
+
+    firstPublishedAt,
+
+    approvedAt:
+      existing?.approvedAt ||
+      cleaned.approvedAt ||
+      now,
+
+    serverPublishedAt:
+      existing?.serverPublishedAt ||
+      now,
+
+    serverUpdatedAt:
+      now,
+
+    updatedAt:
+      cleaned.updatedAt ||
+      now,
+
+    archivedAt:
+      isActive
+        ? ''
+        : (
+            existing?.archivedAt ||
+            cleaned.archivedAt ||
+            cleaned.manuallyUnpublishedAt ||
+            cleaned.resolvedAt ||
+            now
+          ),
+
+    archiveReason:
+      isActive
+        ? ''
+        : (
+            cleanText(
+              archiveReason ||
+              cleaned.archiveReason ||
+              cleaned.resolutionReason
+            ) ||
+            'removed-from-live-map'
+          ),
+
+    republishedAt:
+      isActive &&
+      existing?.active ===
+        false
+        ? now
+        : (
+            cleaned.republishedAt ||
+            cleaned.manuallyRepublishedAt ||
+            existing?.republishedAt ||
+            ''
+          ),
+  }
+
+
+  return {
+    identity,
+    record:
+      normalized,
+  }
+}
+
+
+async function upsertPublishedNewsRecord({
+  record,
+  archiveReason =
+    '',
+}) {
+  await ensureLoaded()
+
+
+  const identity =
+    publishedNewsIdentity(
+      record
+    )
+
+
+  const existing =
+    identity
+      ? (
+          store.publishedNews[
+            identity
+          ] ||
+          null
+        )
+      : null
+
+
+  const normalized =
+    normalizePublishedNewsRecord({
+      record,
+      existing,
+
+      active:
+        record?.active ===
+          false
+          ? false
+          : true,
+
+      archiveReason,
+    })
+
+
+  const previous =
+    store.publishedNews[
+      normalized.identity
+    ] ||
+    null
+
+
+  store.publishedNews[
+    normalized.identity
+  ] =
+    normalized.record
+
+
+  await persistStore()
+
+
+  let eventType =
+    previous
+      ? 'published-news-updated'
+      : 'published-news-created'
+
+
+  if (
+    previous?.active ===
+      false &&
+    normalized.record.active ===
+      true
+  ) {
+    eventType =
+      'published-news-republished'
+  }
+
+
+  if (
+    normalized.record.active ===
+      false
+  ) {
+    eventType =
+      'published-news-archived'
+  }
+
+
+  await appendLedgerEvent({
+    eventType,
+
+    outcome:
+      normalized.record.active
+        ? 'published'
+        : normalized.record.archiveReason,
+
+    record:
+      normalized.record,
+  })
+
+
+  return normalized.record
+}
+
+
+async function archivePublishedNewsRecord({
+  id =
+    '',
+  externalId =
+    '',
+  record =
+    null,
+  reason =
+    '',
+}) {
+  await ensureLoaded()
+
+
+  const requestedIdentity =
+    publishedNewsIdentity({
+      id,
+      externalId,
+    })
+
+
+  let identity =
+    requestedIdentity
+
+
+  if (
+    !identity &&
+    record
+  ) {
+    identity =
+      publishedNewsIdentity(
+        record
+      )
+  }
+
+
+  let existing =
+    identity
+      ? (
+          store.publishedNews[
+            identity
+          ] ||
+          null
+        )
+      : null
+
+
+  // If the caller only has one identifier but the record was originally
+  // keyed by the other, find it without deleting or re-keying history.
+  if (
+    !existing
+  ) {
+    const values =
+      Object.values(
+        store.publishedNews ||
+        {}
+      )
+
+
+    existing =
+      values.find(
+        (item) =>
+          (
+            externalId &&
+            cleanText(
+              item?.externalId
+            ) ===
+              cleanText(
+                externalId
+              )
+          ) ||
+          (
+            id &&
+            cleanText(
+              item?.id
+            ) ===
+              cleanText(
+                id
+              )
+          )
+      ) ||
+      null
+
+
+    if (
+      existing
+    ) {
+      identity =
+        publishedNewsIdentity(
+          existing
+        )
+    }
+  }
+
+
+  if (
+    !existing &&
+    !record
+  ) {
+    return null
+  }
+
+
+  const source =
+    {
+      ...existing,
+      ...(record ||
+        {}),
+      active:
+        false,
+    }
+
+
+  const normalized =
+    normalizePublishedNewsRecord({
+      record:
+        source,
+
+      existing,
+
+      active:
+        false,
+
+      archiveReason:
+        reason,
+    })
+
+
+  const finalIdentity =
+    identity ||
+    normalized.identity
+
+
+  store.publishedNews[
+    finalIdentity
+  ] =
+    normalized.record
+
+
+  await persistStore()
+
+
+  await appendLedgerEvent({
+    eventType:
+      'published-news-archived',
+
+    outcome:
+      normalized.record.archiveReason,
+
+    record:
+      normalized.record,
+  })
+
+
+  return normalized.record
+}
+
+
+async function getPublishedNewsRecords({
+  status =
+    'live',
+} = {}) {
+  await ensureLoaded()
+
+
+  const normalizedStatus =
+    cleanText(
+      status
+    )
+      .toLowerCase()
+
+
+  let records =
+    Object.values(
+      store.publishedNews ||
+      {}
+    )
+
+
+  if (
+    normalizedStatus ===
+      'live'
+  ) {
+    records =
+      records.filter(
+        (record) =>
+          record.active !==
+            false
+      )
+  }
+  else if (
+    normalizedStatus ===
+      'archive' ||
+    normalizedStatus ===
+      'archived'
+  ) {
+    records =
+      records.filter(
+        (record) =>
+          record.active ===
+            false
+      )
+  }
+
+
+  return records.sort(
+    (
+      a,
+      b
+    ) =>
+      new Date(
+        b.serverUpdatedAt ||
+        b.updatedAt ||
+        b.publishedAt ||
+        b.firstPublishedAt ||
+        0
+      )
+        .getTime() -
+      new Date(
+        a.serverUpdatedAt ||
+        a.updatedAt ||
+        a.publishedAt ||
+        a.firstPublishedAt ||
+        0
+      )
+        .getTime()
+  )
+}
+
+
+async function publishedNewsCounts() {
+  const all =
+    await getPublishedNewsRecords({
+      status:
+        'all',
+    })
+
+
+  return {
+    all:
+      all.length,
+
+    live:
+      all.filter(
+        (record) =>
+          record.active !==
+            false
+      )
+        .length,
+
+    archive:
+      all.filter(
+        (record) =>
+          record.active ===
+            false
+      )
+        .length,
+  }
+}
+
+
+// ============================================================
 // API
 // ============================================================
 
@@ -3852,6 +4501,344 @@ export function liveNewsroomFeed() {
     configureServer(
       server
     ) {
+      // --------------------------------------------------------
+      // PUBLIC PUBLISHED NEWS
+      // --------------------------------------------------------
+      //
+      // GET:
+      //   /api/geographic/toronto/news/published
+      //   /api/geographic/toronto/news/published?status=archive
+      //   /api/geographic/toronto/news/published?status=all
+      //
+      // The public map will use status=live (the default).
+      //
+      // --------------------------------------------------------
+
+      server.middlewares.use(
+        '/api/geographic/toronto/news/published',
+
+        async (
+          req,
+          res,
+          next
+        ) => {
+          if (
+            req.method !==
+              'GET'
+          ) {
+            next()
+            return
+          }
+
+
+          try {
+            const url =
+              new URL(
+                req.url ||
+                '/',
+                'http://localhost'
+              )
+
+
+            const status =
+              cleanText(
+                url.searchParams.get(
+                  'status'
+                )
+              ) ||
+              'live'
+
+
+            const records =
+              await getPublishedNewsRecords({
+                status,
+              })
+
+
+            sendJson(
+              res,
+              200,
+              {
+                ok:
+                  true,
+
+                status,
+
+                count:
+                  records.length,
+
+                updatedAt:
+                  store.updatedAt,
+
+                records,
+              }
+            )
+          }
+          catch (
+            error
+          ) {
+            sendJson(
+              res,
+              500,
+              {
+                ok:
+                  false,
+
+                records:
+                  [],
+
+                error:
+                  String(
+                    error?.message ||
+                    error
+                  ),
+              }
+            )
+          }
+        }
+      )
+
+
+      // --------------------------------------------------------
+      // ADMIN PUBLISHED NEWS UPSERT
+      // --------------------------------------------------------
+      //
+      // POST:
+      //   /api/geographic/toronto/newsroom/published/upsert
+      //
+      // Body:
+      //   { record: {...} }
+      //   { records: [{...}, {...}] }
+      //
+      // This route lives under /newsroom/ so the existing Admin
+      // server authentication protects mutations.
+      //
+      // --------------------------------------------------------
+
+      server.middlewares.use(
+        '/api/geographic/toronto/newsroom/published/upsert',
+
+        async (
+          req,
+          res,
+          next
+        ) => {
+          if (
+            req.method !==
+              'POST'
+          ) {
+            next()
+            return
+          }
+
+
+          try {
+            const body =
+              await readJsonBody(
+                req
+              )
+
+
+            const incoming =
+              Array.isArray(
+                body.records
+              )
+                ? body.records
+                : (
+                    body.record
+                      ? [
+                          body.record,
+                        ]
+                      : []
+                  )
+
+
+            if (
+              incoming.length ===
+                0
+            ) {
+              sendJson(
+                res,
+                400,
+                {
+                  ok:
+                    false,
+
+                  error:
+                    'Missing published NEWS record.',
+                }
+              )
+
+              return
+            }
+
+
+            const records =
+              []
+
+
+            for (
+              const record
+              of incoming
+            ) {
+              records.push(
+                await upsertPublishedNewsRecord({
+                  record,
+
+                  archiveReason:
+                    body.archiveReason ||
+                    '',
+                })
+              )
+            }
+
+
+            sendJson(
+              res,
+              200,
+              {
+                ok:
+                  true,
+
+                count:
+                  records.length,
+
+                records,
+              }
+            )
+          }
+          catch (
+            error
+          ) {
+            sendJson(
+              res,
+              400,
+              {
+                ok:
+                  false,
+
+                error:
+                  String(
+                    error?.message ||
+                    error
+                  ),
+              }
+            )
+          }
+        }
+      )
+
+
+      // --------------------------------------------------------
+      // ADMIN ARCHIVE / REMOVE FROM LIVE MAP
+      // --------------------------------------------------------
+      //
+      // POST:
+      //   /api/geographic/toronto/newsroom/published/archive
+      //
+      // This NEVER deletes the historical record. It only sets
+      // active:false and records archivedAt/archiveReason.
+      //
+      // --------------------------------------------------------
+
+      server.middlewares.use(
+        '/api/geographic/toronto/newsroom/published/archive',
+
+        async (
+          req,
+          res,
+          next
+        ) => {
+          if (
+            req.method !==
+              'POST'
+          ) {
+            next()
+            return
+          }
+
+
+          try {
+            const body =
+              await readJsonBody(
+                req
+              )
+
+
+            const record =
+              await archivePublishedNewsRecord({
+                id:
+                  body.id ||
+                  body.record?.id ||
+                  '',
+
+                externalId:
+                  body.externalId ||
+                  body.record?.externalId ||
+                  '',
+
+                record:
+                  body.record ||
+                  null,
+
+                reason:
+                  body.reason ||
+                  'removed-from-live-map',
+              })
+
+
+            if (
+              !record
+            ) {
+              sendJson(
+                res,
+                404,
+                {
+                  ok:
+                    false,
+
+                  error:
+                    'Published NEWS record not found.',
+                }
+              )
+
+              return
+            }
+
+
+            sendJson(
+              res,
+              200,
+              {
+                ok:
+                  true,
+
+                record,
+              }
+            )
+          }
+          catch (
+            error
+          ) {
+            sendJson(
+              res,
+              400,
+              {
+                ok:
+                  false,
+
+                error:
+                  String(
+                    error?.message ||
+                    error
+                  ),
+              }
+            )
+          }
+        }
+      )
+
+
       server.middlewares.use(
         '/api/geographic/toronto/newsroom/pending',
 
@@ -4246,6 +5233,9 @@ export function liveNewsroomFeed() {
                   )
                     .length,
               },
+
+              publishedNews:
+                await publishedNewsCounts(),
 
               updatedAt:
                 store.updatedAt,
