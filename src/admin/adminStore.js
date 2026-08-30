@@ -1,9 +1,4 @@
 import {
-  PINS,
-} from '../content/pins.js'
-
-
-import {
   getNewsExpiresAt,
   newsRecordIsCurrent,
 } from '../newsPolicy.js'
@@ -1187,71 +1182,58 @@ export function addNewReviewItem(
 // ============================================================
 // HISTORIC
 // ============================================================
+//
+// Older builds seeded the historic store from src/content/pins.js.
+// Those legacy field markers were tagged migratedFromPins: true.
+//
+// They are now retired. On the first read after this update, remove
+// any remaining migrated legacy markers once and keep only records
+// created/managed through the Historic admin store.
+//
+// IMPORTANT: an intentionally empty historic array must stay empty.
+// We no longer re-seed old field markers when the array has length 0.
+// ============================================================
 
-function convertPinsToHistoric() {
-  return PINS
-    .filter(
-      (pin) =>
-        pin.active !== false
+const HISTORIC_LEGACY_CLEANUP_KEY =
+  'elppa-geographic-historic-legacy-cleanup-v1'
+
+
+function historicLegacyCleanupComplete() {
+  try {
+    return (
+      localStorage.getItem(
+        HISTORIC_LEGACY_CLEANUP_KEY
+      ) ===
+      'true'
     )
-    .map(
-      (pin) => ({
-        id:
-          pin.id,
-
-        type:
-          'historic',
-
-        city:
-          pin.city ||
-          'toronto',
-
-        title:
-          pin.title ||
-          '',
-
-        description:
-          pin.description ||
-          '',
-
-        location:
-          '',
-
-        longitude:
-          Number(
-            pin.longitude
-          ),
-
-        latitude:
-          Number(
-            pin.latitude
-          ),
-
-        year:
-          pin.year ||
-          '',
-
-        category:
-          'place',
-
-        source:
-          pin.source ||
-          '',
-
-        sourceUrl:
-          '',
-
-        active:
-          pin.active !== false,
-
-        createdAt:
-          new Date()
-            .toISOString(),
-
-        migratedFromPins:
-          true,
-      })
+  } catch (
+    error
+  ) {
+    console.error(
+      'HISTORIC LEGACY CLEANUP READ ERROR:',
+      error
     )
+
+
+    return false
+  }
+}
+
+
+function markHistoricLegacyCleanupComplete() {
+  try {
+    localStorage.setItem(
+      HISTORIC_LEGACY_CLEANUP_KEY,
+      'true'
+    )
+  } catch (
+    error
+  ) {
+    console.error(
+      'HISTORIC LEGACY CLEANUP WRITE ERROR:',
+      error
+    )
+  }
 }
 
 
@@ -1263,27 +1245,35 @@ export function getHistoricItems() {
 
 
   if (
-    existing.length > 0
+    historicLegacyCleanupComplete()
   ) {
     return existing
   }
 
 
-  const migrated =
-    convertPinsToHistoric()
+  const cleaned =
+    existing.filter(
+      (record) =>
+        record?.migratedFromPins !==
+          true
+    )
 
 
   if (
-    migrated.length > 0
+    cleaned.length !==
+      existing.length
   ) {
     writeRecords(
       HISTORIC_KEY,
-      migrated
+      cleaned
     )
   }
 
 
-  return migrated
+  markHistoricLegacyCleanupComplete()
+
+
+  return cleaned
 }
 
 
@@ -1294,6 +1284,9 @@ export function saveHistoricItems(
     HISTORIC_KEY,
     records
   )
+
+
+  markHistoricLegacyCleanupComplete()
 }
 
 
