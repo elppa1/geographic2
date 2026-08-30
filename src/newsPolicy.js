@@ -2,13 +2,17 @@
 // GEOGRAPHIC - LIVE NEWS LIFECYCLE POLICY
 // ============================================================
 //
-// One clock for every place that needs to know whether a live NEWS
-// item should still be on the map / in the live published desk.
+// Citywide shelf-life rules plus local retention windows.
 //
 // IMPORTANT:
-//   - Shelf life starts from the ORIGINAL source timestamp.
+//   - Citywide shelf life starts from the ORIGINAL source timestamp.
 //   - Meaningful updates do NOT restart the clock.
 //   - An official RESOLVE can remove an item earlier.
+//   - Naturally expired stories may still be revealed locally:
+//       neighbourhood view -> up to 14 days
+//       street view        -> up to 30 days
+//   - Manual unpublishes / suppressions / official resolves do NOT
+//     become locally visible again.
 //   - Ordinary editorial/news stories without one of these live-source
 //     policies do not auto-expire here.
 //
@@ -58,6 +62,15 @@ export const NEWS_SHELF_LIFE_HOURS = {
     default:
       7 * 24,
   },
+}
+
+
+export const NEWS_LOCAL_RETENTION_HOURS = {
+  neighbourhood:
+    14 * 24,
+
+  street:
+    30 * 24,
 }
 
 
@@ -546,6 +559,124 @@ export function getNewsExpiresAt(
       1000
   )
     .toISOString()
+}
+
+
+
+export function getNewsLocalRetentionHours(
+  scale =
+    'street'
+) {
+  const normalizedScale =
+    clean(
+      scale
+    )
+
+
+  if (
+    normalizedScale ===
+      'neighbourhood' ||
+    normalizedScale ===
+      'neighborhood'
+  ) {
+    return NEWS_LOCAL_RETENTION_HOURS.neighbourhood
+  }
+
+
+  return NEWS_LOCAL_RETENTION_HOURS.street
+}
+
+
+export function getNewsLocalExpiresAt(
+  record,
+  scale =
+    'street'
+) {
+  const hours =
+    getNewsLocalRetentionHours(
+      scale
+    )
+
+
+  const sourceTime =
+    getNewsSourceTimestamp(
+      record
+    )
+
+
+  const start =
+    new Date(
+      sourceTime ||
+      ''
+    )
+      .getTime()
+
+
+  if (
+    !Number.isFinite(
+      start
+    )
+  ) {
+    return ''
+  }
+
+
+  return new Date(
+    start +
+    Number(
+      hours
+    ) *
+      60 *
+      60 *
+      1000
+  )
+    .toISOString()
+}
+
+
+export function newsRecordIsLocallyRetained(
+  record,
+  scale =
+    'street',
+  now =
+    Date.now()
+) {
+  const expiresAt =
+    getNewsLocalExpiresAt(
+      record,
+      scale
+    )
+
+
+  if (
+    !expiresAt
+  ) {
+    return false
+  }
+
+
+  const expiry =
+    new Date(
+      expiresAt
+    )
+      .getTime()
+
+
+  if (
+    !Number.isFinite(
+      expiry
+    )
+  ) {
+    return false
+  }
+
+
+  return (
+    Number(
+      now
+    ) <
+    expiry
+  )
 }
 
 

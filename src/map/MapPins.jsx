@@ -20,8 +20,13 @@ import {
 } from '../admin/adminStore.js'
 
 
+import {
+  newsRecordIsLocallyRetained,
+} from '../newsPolicy.js'
+
+
 const PUBLISHED_NEWS_ENDPOINT =
-  '/api/geographic/toronto/news/published'
+  '/api/geographic/toronto/news/published?status=all'
 
 
 const PUBLISHED_NEWS_REFRESH_MS =
@@ -2042,9 +2047,19 @@ function mergeNewsRecords(
 // NEWS SCALE / PROMINENCE
 // ============================================================
 //
-// NEWS stays editorially alive according to the existing server
-// lifecycle. These rules only decide how much of that live set
-// should be visible at the current map scale.
+// NEWS now has two separate concepts:
+//
+//   CITYWIDE LIFE
+//     The existing 2 / 5 / 7-day policy decides when a story leaves
+//     the normal citywide live set.
+//
+//   LOCAL RETENTION
+//     A story archived only because its shelf life expired can still
+//     reappear when the user looks closer:
+//       neighbourhood -> up to 14 days
+//       street        -> up to 30 days
+//
+// Manual unpublishes, suppressions and official resolves stay hidden.
 //
 // CITY:
 //   major stories stay visible
@@ -2053,10 +2068,10 @@ function mergeNewsRecords(
 //   hard cap prevents the whole-city view becoming confetti
 //
 // NEIGHBOURHOOD:
-//   almost the full live set appears
+//   naturally expired local stories can reappear up to 14 days
 //
 // STREET:
-//   the full live set appears
+//   naturally expired local stories can reappear up to 30 days
 //
 // Clustering is visual only. It never changes or deletes records.
 //
@@ -2081,7 +2096,7 @@ const NEWS_CITY_ROUTINE_MAX_HOURS =
   12
 
 const NEWS_NEIGHBOURHOOD_ROUTINE_MAX_HOURS =
-  7 * 24
+  14 * 24
 
 
 function getNewsRecordTimestamp(
@@ -2311,6 +2326,68 @@ function newsPriorityRank(
   }
 
   return 1
+}
+
+
+
+function newsArchiveIsNaturalExpiry(
+  pin
+) {
+  return (
+    pin?.active ===
+      false &&
+    normalizeCompareText(
+      pin?.archiveReason
+    ) ===
+      'expired-shelf-life'
+  )
+}
+
+
+function newsRecordCanAppearAtZoom({
+  pin,
+  zoom,
+}) {
+  if (
+    pin?.active !==
+      false
+  ) {
+    return true
+  }
+
+
+  if (
+    !newsArchiveIsNaturalExpiry(
+      pin
+    )
+  ) {
+    return false
+  }
+
+
+  if (
+    zoom <
+      NEWS_CITY_MAX_ZOOM
+  ) {
+    return false
+  }
+
+
+  if (
+    zoom <
+      NEWS_NEIGHBOURHOOD_MAX_ZOOM
+  ) {
+    return newsRecordIsLocallyRetained(
+      pin,
+      'neighbourhood'
+    )
+  }
+
+
+  return newsRecordIsLocallyRetained(
+    pin,
+    'street'
+  )
 }
 
 
@@ -3188,9 +3265,14 @@ function MapPins({
               belongsToCity(
                 pin,
                 cityKey
-              ) &&
-              pin.active !==
-                false
+              )
+          )
+          .filter(
+            (pin) =>
+              newsRecordCanAppearAtZoom({
+                pin,
+                zoom,
+              })
           )
           .filter(
             (pin) =>
