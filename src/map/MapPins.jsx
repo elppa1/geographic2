@@ -35,6 +35,7 @@ const PUBLISHED_NEWS_REFRESH_MS =
 const BUSINESS_CATEGORIES = [
   'store',
   'restaurant',
+  'business',
 ]
 
 
@@ -191,6 +192,129 @@ function newPinMatchesSubtype(
   }
 
   return true
+}
+
+
+// ============================================================
+// NEW BUSINESS RANGE
+// ============================================================
+
+function getNewBusinessDate(
+  pin
+) {
+  const values = [
+    pin.openedAt,
+    pin.openingDate,
+    pin.expectedAt,
+    pin.firstSeenAt,
+    pin.announcedAt,
+    pin.createdAt,
+    pin.publishedAt,
+    pin.updatedAt,
+  ]
+
+  for (
+    const value of values
+  ) {
+    if (
+      !value
+    ) {
+      continue
+    }
+
+    const text =
+      String(
+        value
+      )
+        .trim()
+
+    const date =
+      /^\d{4}-\d{2}-\d{2}$/.test(
+        text
+      )
+        ? new Date(
+            `${text}T12:00:00`
+          )
+        : new Date(
+            text
+          )
+
+    if (
+      !Number.isNaN(
+        date.getTime()
+      )
+    ) {
+      return date
+    }
+  }
+
+  return null
+}
+
+
+function newBusinessMatchesRange(
+  pin,
+  range
+) {
+  const days =
+    Number(
+      range ||
+      30
+    )
+
+  if (
+    !Number.isFinite(
+      days
+    ) ||
+    days <=
+      0
+  ) {
+    return true
+  }
+
+  const businessDate =
+    getNewBusinessDate(
+      pin
+    )
+
+  if (
+    !businessDate
+  ) {
+    return false
+  }
+
+  const now =
+    new Date()
+
+  if (
+    businessDate.getTime() >
+    now.getTime()
+  ) {
+    return false
+  }
+
+  const cutoff =
+    new Date()
+
+  cutoff.setHours(
+    0,
+    0,
+    0,
+    0
+  )
+
+  cutoff.setDate(
+    cutoff.getDate() -
+    (
+      days -
+      1
+    )
+  )
+
+  return (
+    businessDate.getTime() >=
+    cutoff.getTime()
+  )
 }
 
 
@@ -1924,6 +2048,7 @@ function MapPins({
   selectedPinId,
   activePinFilter,
   newSubtypeFilter,
+  newBusinessRangeFilter,
   onDirections,
   onLongWay,
 }) {
@@ -2239,6 +2364,15 @@ function MapPins({
                 newSubtypeFilter
               )
           )
+          .filter(
+            (pin) =>
+              newSubtypeFilter !==
+                'businesses' ||
+              newBusinessMatchesRange(
+                pin,
+                newBusinessRangeFilter
+              )
+          )
           .map(
             (pin) => ({
               pin,
@@ -2300,6 +2434,7 @@ function MapPins({
     selectedLayer?.layerType,
     activePinFilter,
     newSubtypeFilter,
+    newBusinessRangeFilter,
     contentRevision,
     serverNewsItems,
     onDirections,

@@ -94,6 +94,9 @@ const GeographicMap =
           'all',
 
         onChangeNewSubtypeFilter,
+
+        newBusinessRangeFilter =
+          '30',
       },
 
       ref
@@ -1458,6 +1461,10 @@ const GeographicMap =
 
               newSubtypeFilter={
                 newSubtypeFilter
+              }
+
+              newBusinessRangeFilter={
+                newBusinessRangeFilter
               }
 
               onDirections={

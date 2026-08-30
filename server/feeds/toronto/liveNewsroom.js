@@ -121,6 +121,10 @@ const MISSING_POLLS_TO_RESOLVE =
   2
 
 
+const FIRE_UNAPPROVED_MAX_AGE_MS =
+  2 * 24 * 60 * 60 * 1000
+
+
 const MAX_EVENTS =
   1500
 
@@ -1189,6 +1193,82 @@ async function observeRecord({
     ''
 
 
+  if (
+    sourceKey ===
+      'fire' &&
+    existing?.unapprovedExpired ===
+      true
+  ) {
+    const suppressedRecord = {
+      ...existing,
+      ...record,
+
+      externalId,
+
+      active:
+        false,
+
+      published:
+        false,
+
+      resolved:
+        true,
+
+      unapprovedExpired:
+        true,
+
+      unapprovedExpiredAt:
+        existing.unapprovedExpiredAt ||
+        now,
+
+      resolutionReason:
+        existing.resolutionReason ||
+        'unapproved-fire-48-hours',
+
+      lastSeenAt:
+        now,
+
+      lastCheckedAt:
+        now,
+
+      missingPolls:
+        0,
+
+      sourceSnapshot:
+        sourceSnapshot(
+          record
+        ),
+
+      sourceFingerprint:
+        currentFingerprint,
+    }
+
+
+    sourceState[
+      externalId
+    ] =
+      suppressedRecord
+
+
+    store.sources[
+      sourceKey
+    ] =
+      sourceState
+
+
+    await persistStore()
+
+
+    return {
+      action:
+        'seen',
+
+      record:
+        suppressedRecord,
+    }
+  }
+
+
   let action =
     forceAction
 
@@ -1285,6 +1365,10 @@ async function observeRecord({
     externalId,
 
     firstSeenAt,
+
+    newsroomFirstQueuedAt:
+      existing?.newsroomFirstQueuedAt ||
+      now,
 
     lastSeenAt:
       now,
@@ -2270,144 +2354,6 @@ function parseFireRows(
 }
 
 
-function torontoWallClockToIso({
-  year,
-  month,
-  day,
-  hour,
-  minute,
-  second,
-}) {
-  const targetWallClock =
-    Date.UTC(
-      Number(
-        year
-      ),
-      Number(
-        month
-      ) -
-        1,
-      Number(
-        day
-      ),
-      Number(
-        hour
-      ),
-      Number(
-        minute
-      ),
-      Number(
-        second ||
-        0
-      )
-    )
-
-
-  let guess =
-    targetWallClock
-
-
-  const formatter =
-    new Intl.DateTimeFormat(
-      'en-CA',
-      {
-        timeZone:
-          'America/Toronto',
-
-        year:
-          'numeric',
-
-        month:
-          '2-digit',
-
-        day:
-          '2-digit',
-
-        hour:
-          '2-digit',
-
-        minute:
-          '2-digit',
-
-        second:
-          '2-digit',
-
-        hourCycle:
-          'h23',
-      }
-    )
-
-
-  for (
-    let attempt =
-      0;
-    attempt <
-      3;
-    attempt++
-  ) {
-    const parts =
-      Object.fromEntries(
-        formatter
-          .formatToParts(
-            new Date(
-              guess
-            )
-          )
-          .filter(
-            (
-              part
-            ) =>
-              part.type !==
-                'literal'
-          )
-          .map(
-            (
-              part
-            ) => [
-              part.type,
-              part.value,
-            ]
-          )
-      )
-
-
-    const displayedWallClock =
-      Date.UTC(
-        Number(
-          parts.year
-        ),
-        Number(
-          parts.month
-        ) -
-          1,
-        Number(
-          parts.day
-        ),
-        Number(
-          parts.hour
-        ),
-        Number(
-          parts.minute
-        ),
-        Number(
-          parts.second
-        )
-      )
-
-
-    guess +=
-      targetWallClock -
-      displayedWallClock
-  }
-
-
-  return new Date(
-    guess
-  )
-    .toISOString()
-}
-
-
 function parseTorontoFireTime(
   value
 ) {
@@ -2425,57 +2371,6 @@ function parseTorontoFireTime(
   }
 
 
-  const hasExplicitTimezone =
-    /(?:Z|[+-]\d{2}:?\d{2})$/i.test(
-      clean
-    )
-
-
-  const localMatch =
-    clean.match(
-      /(\d{4})-(\d{2})-(\d{2})(?:T|\s)+(\d{1,2}):(\d{2})(?::(\d{2}))?/
-    )
-
-
-  if (
-    localMatch &&
-    !hasExplicitTimezone
-  ) {
-    return torontoWallClockToIso({
-      year:
-        localMatch[
-          1
-        ],
-
-      month:
-        localMatch[
-          2
-        ],
-
-      day:
-        localMatch[
-          3
-        ],
-
-      hour:
-        localMatch[
-          4
-        ],
-
-      minute:
-        localMatch[
-          5
-        ],
-
-      second:
-        localMatch[
-          6
-        ] ||
-        '00',
-    })
-  }
-
-
   const direct =
     new Date(
       clean
@@ -2489,6 +2384,40 @@ function parseTorontoFireTime(
   ) {
     return direct
       .toISOString()
+  }
+
+
+  // Common Toronto Fire display: YYYY-MM-DD HH:mm:ss
+  const match =
+    clean.match(
+      /(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/
+    )
+
+
+  if (
+    match
+  ) {
+    const isoLike =
+      (
+        `${match[1]}-${match[2]}-${match[3]}T` +
+        `${match[4].padStart(2, '0')}:${match[5]}:${match[6] || '00'}`
+      )
+
+
+    const parsed =
+      new Date(
+        isoLike
+      )
+
+
+    if (
+      !Number.isNaN(
+        parsed.getTime()
+      )
+    ) {
+      return parsed
+        .toISOString()
+    }
   }
 
 
@@ -2519,534 +2448,6 @@ function normalizeFireLocationPiece(
 }
 
 
-const FIRE_STREET_SUFFIXES = {
-  ST:
-    'Street',
-
-  STREET:
-    'Street',
-
-  AVE:
-    'Avenue',
-
-  AV:
-    'Avenue',
-
-  AVENUE:
-    'Avenue',
-
-  RD:
-    'Road',
-
-  ROAD:
-    'Road',
-
-  BLVD:
-    'Boulevard',
-
-  BOULEVARD:
-    'Boulevard',
-
-  DR:
-    'Drive',
-
-  DRIVE:
-    'Drive',
-
-  LN:
-    'Lane',
-
-  LANE:
-    'Lane',
-
-  CRT:
-    'Court',
-
-  CT:
-    'Court',
-
-  COURT:
-    'Court',
-
-  CRES:
-    'Crescent',
-
-  CRESCENT:
-    'Crescent',
-
-  GRV:
-    'Grove',
-
-  GROVE:
-    'Grove',
-
-  GT:
-    'Gate',
-
-  GATE:
-    'Gate',
-
-  WAY:
-    'Way',
-
-  PKWY:
-    'Parkway',
-
-  PARKWAY:
-    'Parkway',
-
-  TRL:
-    'Trail',
-
-  TRAIL:
-    'Trail',
-
-  HWY:
-    'Highway',
-
-  HIGHWAY:
-    'Highway',
-
-  PL:
-    'Place',
-
-  PLACE:
-    'Place',
-
-  TER:
-    'Terrace',
-
-  TERR:
-    'Terrace',
-
-  TERRACE:
-    'Terrace',
-
-  CIR:
-    'Circle',
-
-  CIRCLE:
-    'Circle',
-
-  SQ:
-    'Square',
-
-  SQUARE:
-    'Square',
-
-  MALL:
-    'Mall',
-
-  MEWS:
-    'Mews',
-}
-
-
-const FIRE_DIRECTIONS = {
-  N:
-    'North',
-
-  S:
-    'South',
-
-  E:
-    'East',
-
-  W:
-    'West',
-
-  NORTH:
-    'North',
-
-  SOUTH:
-    'South',
-
-  EAST:
-    'East',
-
-  WEST:
-    'West',
-}
-
-
-function titleCaseFireStreetWord(
-  value
-) {
-  const text =
-    String(
-      value ||
-      ''
-    )
-      .toLowerCase()
-
-
-  return text
-    .split(
-      /([-'’])/
-    )
-    .map(
-      (
-        part
-      ) => {
-        if (
-          part ===
-            '-' ||
-          part ===
-            "'" ||
-          part ===
-            '’'
-        ) {
-          return part
-        }
-
-
-        return part
-          ? (
-              part.charAt(
-                0
-              )
-                .toUpperCase() +
-              part.slice(
-                1
-              )
-            )
-          : ''
-      }
-    )
-    .join(
-      ''
-    )
-}
-
-
-function formatFireStreetSegment(
-  value
-) {
-  const clean =
-    normalizeFireLocationPiece(
-      value
-    )
-      .replace(
-        /\s+/g,
-        ' '
-      )
-      .trim()
-
-
-  if (
-    !clean
-  ) {
-    return ''
-  }
-
-
-  const tokens =
-    clean.split(
-      /\s+/
-    )
-
-
-  let suffixIndex =
-    -1
-
-
-  for (
-    let index =
-      tokens.length -
-      1;
-    index >=
-      0;
-    index--
-  ) {
-    const token =
-      String(
-        tokens[
-          index
-        ] ||
-        ''
-      )
-        .replace(
-          /[^A-Za-z]/g,
-          ''
-        )
-        .toUpperCase()
-
-
-    if (
-      FIRE_STREET_SUFFIXES[
-        token
-      ]
-    ) {
-      suffixIndex =
-        index
-
-      break
-    }
-  }
-
-
-  // A suffix by itself is dispatch shorthand, not a street name.
-  // Example: "LN W PETER..." must NOT become "Lane West".
-  if (
-    suffixIndex <=
-      0
-  ) {
-    return ''
-  }
-
-
-  const directionToken =
-    String(
-      tokens[
-        suffixIndex +
-        1
-      ] ||
-      ''
-    )
-      .replace(
-        /[^A-Za-z]/g,
-        ''
-      )
-      .toUpperCase()
-
-
-  const endIndex =
-    FIRE_DIRECTIONS[
-      directionToken
-    ]
-      ? suffixIndex +
-        1
-      : suffixIndex
-
-
-  const streetTokens =
-    tokens.slice(
-      0,
-      endIndex +
-        1
-    )
-
-
-  return streetTokens
-    .map(
-      (
-        token,
-        index
-      ) => {
-        const bare =
-          String(
-            token ||
-            ''
-          )
-            .replace(
-              /^[^A-Za-z0-9]+|[^A-Za-z0-9.'’\-]+$/g,
-              ''
-            )
-
-
-        const upper =
-          bare.toUpperCase()
-
-
-        if (
-          index ===
-            suffixIndex &&
-          FIRE_STREET_SUFFIXES[
-            upper
-          ]
-        ) {
-          return FIRE_STREET_SUFFIXES[
-            upper
-          ]
-        }
-
-
-        if (
-          index ===
-            suffixIndex +
-              1 &&
-          FIRE_DIRECTIONS[
-            upper
-          ]
-        ) {
-          return FIRE_DIRECTIONS[
-            upper
-          ]
-        }
-
-
-        if (
-          /^\d+[A-Za-z]?$/.test(
-            bare
-          )
-        ) {
-          return bare
-        }
-
-
-        return titleCaseFireStreetWord(
-          bare
-        )
-      }
-    )
-    .filter(
-      Boolean
-    )
-    .join(
-      ' '
-    )
-}
-
-
-function fireStreetCandidates(
-  value
-) {
-  const raw =
-    normalizeFireLocationPiece(
-      value
-    )
-
-
-  if (
-    !raw
-  ) {
-    return []
-  }
-
-
-  const pieces =
-    raw.split(
-      /\s*(?:\/|,|;|\s+&\s+|\s+AT\s+)\s*/i
-    )
-      .map(
-        (
-          piece
-        ) =>
-          formatFireStreetSegment(
-            piece
-          )
-      )
-      .filter(
-        Boolean
-      )
-
-
-  return pieces.filter(
-    (
-      piece,
-      index
-    ) =>
-      pieces.findIndex(
-        (
-          other
-        ) =>
-          other.toLowerCase() ===
-          piece.toLowerCase()
-      ) ===
-      index
-  )
-}
-
-
-function sameFireStreet(
-  first,
-  second
-) {
-  return (
-    cleanText(
-      first
-    )
-      .toLowerCase() ===
-    cleanText(
-      second
-    )
-      .toLowerCase()
-  )
-}
-
-
-function buildFireLocation({
-  primeStreet,
-  crossStreet,
-}) {
-  const primeCandidates =
-    fireStreetCandidates(
-      primeStreet
-    )
-
-
-  const crossCandidates =
-    fireStreetCandidates(
-      crossStreet
-    )
-
-
-  const primary =
-    primeCandidates[
-      0
-    ] ||
-    crossCandidates[
-      0
-    ] ||
-    ''
-
-
-  const secondary =
-    crossCandidates.find(
-      (
-        candidate
-      ) =>
-        !sameFireStreet(
-          candidate,
-          primary
-        )
-    ) ||
-    primeCandidates.find(
-      (
-        candidate,
-        index
-      ) =>
-        index >
-          0 &&
-        !sameFireStreet(
-          candidate,
-          primary
-        )
-    ) ||
-    ''
-
-
-  if (
-    primary &&
-    secondary
-  ) {
-    return (
-      primary +
-      ' & ' +
-      secondary
-    )
-  }
-
-
-  if (
-    primary
-  ) {
-    return primary
-  }
-
-
-  // Keep the source wording editable rather than inventing a location.
-  return (
-    normalizeFireLocationPiece(
-      primeStreet
-    ) ||
-    normalizeFireLocationPiece(
-      crossStreet
-    )
-  )
-}
-
-
 function fireIncidentShouldBeReviewed({
   incidentType,
   alarmLevel,
@@ -3056,32 +2457,6 @@ function fireIncidentShouldBeReviewed({
       incidentType
     )
       .toLowerCase()
-
-
-  const blockedPatterns = [
-    /^medical\b/i,
-    /^alarm single source\b/i,
-    /^check call\b/i,
-    /^rescue\s*-\s*elevator\b/i,
-    /^water problem\b/i,
-    /^public assist\b/i,
-    /^assist\s*-\s*/i,
-    /^alarm\s*-\s*/i,
-  ]
-
-
-  if (
-    blockedPatterns.some(
-      (
-        pattern
-      ) =>
-        pattern.test(
-          type
-        )
-    )
-  ) {
-    return false
-  }
 
 
   const alarm =
@@ -3100,6 +2475,32 @@ function fireIncidentShouldBeReviewed({
       1
   ) {
     return true
+  }
+
+
+  const blockedPatterns = [
+    /^medical\b/i,
+    /^alarm single source\b/i,
+    /^check call\b/i,
+    /^rescue - elevator\b/i,
+    /^water problem\b/i,
+    /^public assist\b/i,
+    /^assist - /i,
+    /^alarm - /i,
+  ]
+
+
+  if (
+    blockedPatterns.some(
+      (
+        pattern
+      ) =>
+        pattern.test(
+          type
+        )
+    )
+  ) {
+    return false
   }
 
 
@@ -3133,763 +2534,6 @@ function fireIncidentShouldBeReviewed({
         type
       )
   )
-}
-
-
-function publicFireIncidentLabel(
-  incidentType
-) {
-  return (
-    cleanText(
-      incidentType
-    ) ||
-    'Toronto Fire call'
-  )
-}
-
-
-function formatFireDispatchClock(
-  value
-) {
-  const raw =
-    cleanText(
-      value
-    )
-
-
-  if (
-    !raw
-  ) {
-    return ''
-  }
-
-
-  const hasExplicitTimezone =
-    /(?:Z|[+-]\d{2}:?\d{2})$/i.test(
-      raw
-    )
-
-
-  const localClock =
-    raw.match(
-      /(?:T|\s)(\d{1,2}):(\d{2})(?::\d{2})?/
-    )
-
-
-  if (
-    localClock &&
-    !hasExplicitTimezone
-  ) {
-    const hour24 =
-      Number(
-        localClock[
-          1
-        ]
-      )
-
-
-    const minute =
-      localClock[
-        2
-      ]
-
-
-    if (
-      Number.isFinite(
-        hour24
-      ) &&
-      hour24 >=
-        0 &&
-      hour24 <=
-        23
-    ) {
-      const suffix =
-        hour24 >=
-          12
-          ? 'PM'
-          : 'AM'
-
-
-      const hour12 =
-        hour24 %
-          12 ||
-        12
-
-
-      return (
-        `${hour12}:${minute} ${suffix}`
-      )
-    }
-  }
-
-
-  const parsed =
-    new Date(
-      raw
-    )
-
-
-  if (
-    Number.isNaN(
-      parsed.getTime()
-    )
-  ) {
-    return ''
-  }
-
-
-  return new Intl.DateTimeFormat(
-    'en-CA',
-    {
-      timeZone:
-        'America/Toronto',
-
-      hour:
-        'numeric',
-
-      minute:
-        '2-digit',
-
-      hour12:
-        true,
-    }
-  )
-    .format(
-      parsed
-    )
-    .replace(
-      /\s*a\.?\s*m\.?$/i,
-      ' AM'
-    )
-    .replace(
-      /\s*p\.?\s*m\.?$/i,
-      ' PM'
-    )
-}
-
-
-function publicFireDescription({
-  dispatchTime,
-}) {
-  const clock =
-    formatFireDispatchClock(
-      dispatchTime
-    )
-
-
-  return clock
-    ? (
-        'Toronto Fire crews responded to this call at ' +
-        clock +
-        '.'
-      )
-    : 'Toronto Fire crews responded to this call.'
-}
-
-
-function storedFireIncidentType(
-  record
-) {
-  const raw =
-    cleanText(
-      record?.fireRawIncidentType ||
-      record?.incidentType ||
-      record?.eventType
-    )
-
-
-  if (
-    raw
-  ) {
-    return raw
-  }
-
-
-  const title =
-    cleanText(
-      record?.title
-    )
-
-
-  const titleType =
-    title
-      .split(
-        /\s+·\s+/
-      )[
-        0
-      ] ||
-    ''
-
-
-  const genericFallbacks = {
-    'Fire response':
-      'Fire',
-
-    'Hazardous materials response':
-      'Hazmat',
-
-    'Gas leak':
-      'Gas Leak',
-
-    'Carbon monoxide response':
-      'Carbon Monoxide',
-
-    'Vehicle collision response':
-      'Vehicle Accident',
-
-    'Water rescue':
-      'Water Rescue',
-
-    'Technical rescue':
-      'Technical Rescue',
-
-    'Structural collapse response':
-      'Structural Collapse',
-
-    'Explosion response':
-      'Explosion',
-
-    'Smoke investigation':
-      'Smoke Investigation',
-
-    'Toronto Fire response':
-      'Toronto Fire call',
-  }
-
-
-  return (
-    genericFallbacks[
-      titleType
-    ] ||
-    titleType ||
-    'Toronto Fire call'
-  )
-}
-
-
-function storedFireDispatchTime(
-  record
-) {
-  const raw =
-    cleanText(
-      record?.fireRawDispatchTime
-    )
-
-
-  if (
-    raw
-  ) {
-    return raw
-  }
-
-
-  const description =
-    cleanText(
-      record?.description
-    )
-
-
-  const dispatchMatch =
-    description.match(
-      /\bDispatch\s+([^·]+?)(?:\s*·|$)/i
-    )
-
-
-  if (
-    dispatchMatch?.[
-      1
-    ]
-  ) {
-    return cleanText(
-      dispatchMatch[
-        1
-      ]
-    )
-  }
-
-
-  return cleanText(
-    record?.publishedAt
-  )
-}
-
-
-function storedFireAlarmLevel(
-  record
-) {
-  const direct =
-    cleanText(
-      record?.alarmLevel
-    )
-
-
-  if (
-    direct
-  ) {
-    return direct
-  }
-
-
-  const description =
-    cleanText(
-      record?.description
-    )
-
-
-  const alarmMatch =
-    description.match(
-      /\bAlarm\s+([0-9.]+)/i
-    )
-
-
-  return cleanText(
-    alarmMatch?.[
-      1
-    ] ||
-    ''
-  )
-}
-
-
-function storedFireLocation(
-  record
-) {
-  const rawPrime =
-    cleanText(
-      record?.fireRawPrimeStreet
-    )
-
-
-  const rawCross =
-    cleanText(
-      record?.fireRawCrossStreets
-    )
-
-
-  if (
-    rawPrime ||
-    rawCross
-  ) {
-    const rebuilt =
-      buildFireLocation({
-        primeStreet:
-          rawPrime,
-
-        crossStreet:
-          rawCross,
-      })
-
-
-    if (
-      rebuilt
-    ) {
-      return rebuilt
-    }
-  }
-
-
-  let existing =
-    cleanText(
-      record?.intersection ||
-      record?.location
-    )
-
-
-  if (
-    !existing
-  ) {
-    const title =
-      cleanText(
-        record?.title
-      )
-
-
-    const titleParts =
-      title.split(
-        /\s+·\s+/
-      )
-
-
-    if (
-      titleParts.length >
-        1
-    ) {
-      existing =
-        cleanText(
-          titleParts
-            .slice(
-              1
-            )
-            .join(
-              ' · '
-            )
-        )
-    }
-  }
-
-
-  if (
-    !existing
-  ) {
-    return ''
-  }
-
-
-  return (
-    buildFireLocation({
-      primeStreet:
-        existing,
-
-      crossStreet:
-        '',
-    }) ||
-    existing
-  )
-}
-
-
-function isStoredFireEvent(
-  record
-) {
-  const source =
-    cleanText(
-      record?.source ||
-      record?.scraperSource ||
-      record?.newsroomSource ||
-      record?.origin
-    )
-      .toLowerCase()
-
-
-  return (
-    record?.sourceKey ===
-      'fire' ||
-    record?.category ===
-      'fire' ||
-    source.includes(
-      'toronto fire'
-    ) ||
-    source.includes(
-      'fire services'
-    ) ||
-    source.includes(
-      'fire-active'
-    )
-  )
-}
-
-
-function upgradeStoredFireRecord(
-  record
-) {
-  if (
-    !record ||
-    typeof record !==
-      'object'
-  ) {
-    return record
-  }
-
-
-  const incidentType =
-    storedFireIncidentType(
-      record
-    )
-
-
-  const dispatchTime =
-    storedFireDispatchTime(
-      record
-    )
-
-
-  const location =
-    storedFireLocation(
-      record
-    )
-
-
-  const incidentLabel =
-    publicFireIncidentLabel(
-      incidentType
-    )
-
-
-  const correctedPublishedAt =
-    dispatchTime
-      ? parseTorontoFireTime(
-          dispatchTime
-        )
-      : record?.publishedAt ||
-        ''
-
-
-  return {
-    ...record,
-
-    title:
-      (
-        incidentLabel +
-        (
-          location
-            ? (
-                ' · ' +
-                location
-              )
-            : ''
-        )
-      ),
-
-    description:
-      publicFireDescription({
-        dispatchTime,
-      }),
-
-    location,
-
-    intersection:
-      location,
-
-    publishedAt:
-      correctedPublishedAt,
-
-    fireRawIncidentType:
-      cleanText(
-        record?.fireRawIncidentType ||
-        incidentType
-      ),
-
-    fireRawDispatchTime:
-      cleanText(
-        record?.fireRawDispatchTime ||
-        dispatchTime
-      ),
-  }
-}
-
-
-async function cleanupPendingFireEvents() {
-  await ensureLoaded()
-
-
-  const now =
-    new Date()
-      .toISOString()
-
-
-  const filteredEvents =
-    []
-
-
-  let changed =
-    false
-
-
-  store.events =
-    store.events.map(
-      (
-        event
-      ) => {
-        if (
-          event?.status !==
-            'pending' ||
-          !isStoredFireEvent(
-            event
-          )
-        ) {
-          return event
-        }
-
-
-        const incidentType =
-          storedFireIncidentType(
-            event
-          )
-
-
-        const alarmLevel =
-          storedFireAlarmLevel(
-            event
-          )
-
-
-        const externalId =
-          cleanText(
-            event?.externalId
-          )
-
-
-        if (
-          !fireIncidentShouldBeReviewed({
-            incidentType,
-            alarmLevel,
-          })
-        ) {
-          const filtered = {
-            ...event,
-
-            status:
-              'acked',
-
-            outcome:
-              'filtered-fire-call',
-
-            ackedAt:
-              now,
-
-            resolutionReason:
-              'filtered-by-fire-news-policy',
-          }
-
-
-          filteredEvents.push(
-            filtered
-          )
-
-
-          if (
-            externalId &&
-            store.sources?.fire?.[
-              externalId
-            ]
-          ) {
-            store.sources.fire[
-              externalId
-            ] = {
-              ...store.sources.fire[
-                externalId
-              ],
-
-              active:
-                false,
-
-              resolved:
-                true,
-
-              resolvedAt:
-                now,
-
-              resolutionReason:
-                'filtered-by-fire-news-policy',
-            }
-          }
-
-
-          changed =
-            true
-
-
-          return filtered
-        }
-
-
-        const upgradedIncoming =
-          upgradeStoredFireRecord(
-            event?.incomingRecord ||
-            event
-          )
-
-
-        const upgraded = {
-          ...upgradeStoredFireRecord(
-            event
-          ),
-
-          incomingRecord:
-            upgradedIncoming,
-
-          sourceSnapshot:
-            sourceSnapshot(
-              upgradedIncoming
-            ),
-
-          sourceFingerprint:
-            fingerprint(
-              upgradedIncoming
-            ),
-        }
-
-
-        if (
-          JSON.stringify(
-            upgraded
-          ) !==
-          JSON.stringify(
-            event
-          )
-        ) {
-          changed =
-            true
-        }
-
-
-        if (
-          externalId &&
-          store.sources?.fire?.[
-            externalId
-          ]
-        ) {
-          const upgradedSource =
-            upgradeStoredFireRecord(
-              store.sources.fire[
-                externalId
-              ]
-            )
-
-
-          store.sources.fire[
-            externalId
-          ] = {
-            ...upgradedSource,
-
-            sourceSnapshot:
-              sourceSnapshot(
-                upgradedSource
-              ),
-
-            sourceFingerprint:
-              fingerprint(
-                upgradedSource
-              ),
-          }
-        }
-
-
-        return upgraded
-      }
-    )
-
-
-  if (
-    changed
-  ) {
-    await persistStore()
-  }
-
-
-  for (
-    const event
-    of filteredEvents
-  ) {
-    await appendLedgerEvent({
-      eventType:
-        'newsroom-filtered',
-
-      outcome:
-        'filtered-fire-call',
-
-      record:
-        event,
-    })
-  }
-
-
-  return {
-    changed,
-
-    filtered:
-      filteredEvents.length,
-  }
 }
 
 
@@ -3962,32 +2606,110 @@ function normalizeFireRow(
   }
 
 
-  const location =
-    buildFireLocation({
-      primeStreet:
-        cells[0],
-
-      crossStreet:
-        cells[1],
-    })
+  let location =
+    ''
 
 
   if (
-    !location
+    primeStreet &&
+    crossStreet
   ) {
-    return null
+    location =
+      (
+        primeStreet +
+        ' & ' +
+        crossStreet
+      )
+  }
+  else if (
+    primeStreet
+  ) {
+    location =
+      primeStreet
+  }
+  else {
+    const crossPieces =
+      crossStreet
+        .split(
+          /\s*\/\s*/
+        )
+        .map(
+          normalizeFireLocationPiece
+        )
+        .filter(
+          Boolean
+        )
+
+
+    location =
+      crossPieces.length >=
+        2
+        ? (
+            crossPieces[0] +
+            ' & ' +
+            crossPieces[1]
+          )
+        : crossStreet
+  }
+
+
+  const descriptionParts =
+    []
+
+
+  if (
+    dispatchTime
+  ) {
+    descriptionParts.push(
+      'Dispatch ' +
+      dispatchTime
+    )
+  }
+
+
+  if (
+    alarmLevel
+  ) {
+    descriptionParts.push(
+      'Alarm ' +
+      alarmLevel
+    )
+  }
+
+
+  if (
+    area
+  ) {
+    descriptionParts.push(
+      'Area ' +
+      area
+    )
+  }
+
+
+  if (
+    dispatchedUnits
+  ) {
+    descriptionParts.push(
+      'Units ' +
+      dispatchedUnits
+    )
+  }
+
+
+  if (
+    incidentNumber
+  ) {
+    descriptionParts.push(
+      'Incident ' +
+      incidentNumber
+    )
   }
 
 
   const publishedAt =
     parseTorontoFireTime(
       dispatchTime
-    )
-
-
-  const incidentLabel =
-    publicFireIncidentLabel(
-      incidentType
     )
 
 
@@ -4027,15 +2749,18 @@ function normalizeFireRow(
 
     title:
       (
-        incidentLabel +
+        (
+          incidentType ||
+          'Toronto Fire incident'
+        ) +
         ' · ' +
         location
       ),
 
     description:
-      publicFireDescription({
-        dispatchTime,
-      }),
+      descriptionParts.join(
+        ' · '
+      ),
 
     location,
 
@@ -4078,22 +2803,6 @@ function normalizeFireRow(
     dispatchedUnits,
 
     incidentNumber,
-
-    fireRawIncidentType:
-      incidentType,
-
-    fireRawDispatchTime:
-      dispatchTime,
-
-    fireRawPrimeStreet:
-      cleanText(
-        cells[0]
-      ),
-
-    fireRawCrossStreets:
-      cleanText(
-        cells[1]
-      ),
   }
 }
 
@@ -4634,6 +3343,9 @@ export async function syncTorontoLiveNewsroom() {
 
 
   try {
+    await expireUnapprovedFireEvents()
+
+
     const [
       ttc,
       fire,
@@ -5543,11 +4255,215 @@ async function readJsonBody(
 }
 
 
+async function expireUnapprovedFireEvents() {
+  await ensureLoaded()
+
+
+  const nowMs =
+    Date.now()
+
+
+  const now =
+    new Date(
+      nowMs
+    )
+      .toISOString()
+
+
+  const expiredEvents =
+    []
+
+
+  const expiredExternalIds =
+    new Set()
+
+
+  store.events =
+    store.events.map(
+      (
+        event
+      ) => {
+        if (
+          event.status !==
+            'pending' ||
+          event.sourceKey !==
+            'fire' ||
+          event.published ===
+            true ||
+          event.newsroomAction !==
+            'new'
+        ) {
+          return event
+        }
+
+
+        const sourceRecord =
+          store.sources.fire?.[
+            event.externalId
+          ] ||
+          null
+
+
+        const firstQueuedAt =
+          sourceRecord?.newsroomFirstQueuedAt ||
+          event.queuedAt ||
+          event.receivedAt ||
+          ''
+
+
+        const firstQueuedMs =
+          new Date(
+            firstQueuedAt
+          )
+            .getTime()
+
+
+        if (
+          !Number.isFinite(
+            firstQueuedMs
+          ) ||
+          (
+            nowMs -
+            firstQueuedMs
+          ) <
+            FIRE_UNAPPROVED_MAX_AGE_MS
+        ) {
+          return event
+        }
+
+
+        const expired = {
+          ...event,
+
+          status:
+            'acked',
+
+          reviewStatus:
+            'expired',
+
+          active:
+            false,
+
+          outcome:
+            'expired-unapproved-fire-48-hours',
+
+          ackedAt:
+            now,
+
+          unapprovedExpired:
+            true,
+
+          unapprovedExpiredAt:
+            now,
+        }
+
+
+        expiredEvents.push(
+          expired
+        )
+
+
+        if (
+          event.externalId
+        ) {
+          expiredExternalIds.add(
+            event.externalId
+          )
+        }
+
+
+        return expired
+      }
+    )
+
+
+  for (
+    const externalId
+    of expiredExternalIds
+  ) {
+    const existing =
+      store.sources.fire?.[
+        externalId
+      ]
+
+
+    if (
+      !existing ||
+      existing.published ===
+        true
+    ) {
+      continue
+    }
+
+
+    store.sources.fire[
+      externalId
+    ] = {
+      ...existing,
+
+      active:
+        false,
+
+      published:
+        false,
+
+      resolved:
+        true,
+
+      resolvedAt:
+        existing.resolvedAt ||
+        now,
+
+      resolutionReason:
+        'unapproved-fire-48-hours',
+
+      unapprovedExpired:
+        true,
+
+      unapprovedExpiredAt:
+        existing.unapprovedExpiredAt ||
+        now,
+    }
+  }
+
+
+  if (
+    expiredEvents.length ===
+      0
+  ) {
+    return 0
+  }
+
+
+  await persistStore()
+
+
+  for (
+    const event
+    of expiredEvents
+  ) {
+    await appendLedgerEvent({
+      eventType:
+        'unapproved-fire-expired',
+
+      outcome:
+        'expired-unapproved-fire-48-hours',
+
+      record:
+        event,
+    })
+  }
+
+
+  return expiredEvents.length
+}
+
+
 async function pendingEvents() {
   await ensureLoaded()
 
 
-  await cleanupPendingFireEvents()
+  await expireUnapprovedFireEvents()
 
 
   const now =

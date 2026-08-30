@@ -152,6 +152,15 @@ function GeographicApp() {
 
 
   const [
+    newBusinessRangeFilter,
+    setNewBusinessRangeFilter,
+  ] =
+    useState(
+      '30'
+    )
+
+
+  const [
     opacity,
     setOpacity,
   ] =
@@ -231,6 +240,10 @@ function GeographicApp() {
 
         onChangeNewSubtypeFilter={
           setNewSubtypeFilter
+        }
+
+        newBusinessRangeFilter={
+          newBusinessRangeFilter
         }
       />
 
@@ -564,6 +577,162 @@ function GeographicApp() {
               }}
             >
               DEVELOPMENTS
+            </button>
+          </div>
+        )}
+
+
+        {activePinFilter ===
+          'new' &&
+          newSubtypeFilter ===
+            'businesses' && (
+          <div
+            style={{
+              display:
+                'flex',
+
+              gap:
+                '2px',
+
+              marginLeft:
+                '0',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() =>
+                setNewBusinessRangeFilter(
+                  '15'
+                )
+              }
+              style={{
+                border:
+                  '1px solid rgba(0,0,0,0.14)',
+
+                padding:
+                  '4px 7px',
+
+                background:
+                  newBusinessRangeFilter ===
+                  '15'
+                    ? '#111'
+                    : '#fff',
+
+                color:
+                  newBusinessRangeFilter ===
+                  '15'
+                    ? '#fff'
+                    : '#111',
+
+                font:
+                  'inherit',
+
+                fontSize:
+                  '7px',
+
+                fontWeight:
+                  '700',
+
+                letterSpacing:
+                  '0.08em',
+
+                cursor:
+                  'pointer',
+              }}
+            >
+              15 DAYS
+            </button>
+
+
+            <button
+              type="button"
+              onClick={() =>
+                setNewBusinessRangeFilter(
+                  '30'
+                )
+              }
+              style={{
+                border:
+                  '1px solid rgba(0,0,0,0.14)',
+
+                padding:
+                  '4px 7px',
+
+                background:
+                  newBusinessRangeFilter ===
+                  '30'
+                    ? '#111'
+                    : '#fff',
+
+                color:
+                  newBusinessRangeFilter ===
+                  '30'
+                    ? '#fff'
+                    : '#111',
+
+                font:
+                  'inherit',
+
+                fontSize:
+                  '7px',
+
+                fontWeight:
+                  '700',
+
+                letterSpacing:
+                  '0.08em',
+
+                cursor:
+                  'pointer',
+              }}
+            >
+              1 MONTH
+            </button>
+
+
+            <button
+              type="button"
+              onClick={() =>
+                setNewBusinessRangeFilter(
+                  '60'
+                )
+              }
+              style={{
+                border:
+                  '1px solid rgba(0,0,0,0.14)',
+
+                padding:
+                  '4px 7px',
+
+                background:
+                  newBusinessRangeFilter ===
+                  '60'
+                    ? '#111'
+                    : '#fff',
+
+                color:
+                  newBusinessRangeFilter ===
+                  '60'
+                    ? '#fff'
+                    : '#111',
+
+                font:
+                  'inherit',
+
+                fontSize:
+                  '7px',
+
+                fontWeight:
+                  '700',
+
+                letterSpacing:
+                  '0.08em',
+
+                cursor:
+                  'pointer',
+              }}
+            >
+              2 MONTHS
             </button>
           </div>
         )}
