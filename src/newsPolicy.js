@@ -1,5 +1,5 @@
 // ============================================================
-// GEOGRAPHIC · LIVE NEWS LIFECYCLE POLICY
+// GEOGRAPHIC - LIVE NEWS LIFECYCLE POLICY
 // ============================================================
 //
 // One clock for every place that needs to know whether a live NEWS
@@ -13,34 +13,52 @@
 //     policies do not auto-expire here.
 //
 // Current rules:
-//   TTC                 4 hours
-//   TPS missing person  7 days
-//   TPS shooting        48 hours
-//   TPS collision       24 hours
-//   TPS other live item 24 hours (existing default)
-//   Toronto Fire        72 hours
+//   TTC                         feed-controlled; no fixed timer
+//   TPS missing person          3 days
+//   TPS shooting / stabbing     3 days
+//   TPS collision               5 days
+//   TPS other live item         2 days
+//   Toronto Fire major          7 days
+//   Toronto Fire standard       5 days
+//   Toronto Fire minor / gas    2 days
+//
+// TTC is intentionally timer-free here. The live newsroom removes a
+// TTC alert after it disappears from the official feed for the required
+// consecutive missing polls.
 //
 // ============================================================
 
 export const NEWS_SHELF_LIFE_HOURS = {
   ttc:
-    4,
+    null,
 
   fire:
-    72,
+    5 * 24,
+
+  fireMajor:
+    7 * 24,
+
+  fireMinor:
+    2 * 24,
 
   police: {
     missing:
-      7 * 24,
+      3 * 24,
 
     shooting:
-      48,
+      3 * 24,
+
+    stabbing:
+      3 * 24,
+
+    major:
+      3 * 24,
 
     collision:
-      24,
+      5 * 24,
 
     default:
-      24,
+      2 * 24,
   },
 }
 
@@ -54,6 +72,246 @@ function clean(
   )
     .trim()
     .toLowerCase()
+}
+
+
+function getRecordSearchText(
+  record
+) {
+  return [
+    record?.category,
+    record?.title,
+    record?.description,
+    record?.incidentType,
+    record?.eventType,
+  ]
+    .map(
+      clean
+    )
+    .filter(
+      Boolean
+    )
+    .join(
+      ' '
+    )
+}
+
+
+function getFireAlarmLevel(
+  record
+) {
+  const direct =
+    Number(
+      String(
+        record?.alarmLevel ??
+        ''
+      )
+        .trim()
+        .replace(
+          /[^0-9.-]/g,
+          ''
+        )
+    )
+
+
+  if (
+    Number.isFinite(
+      direct
+    )
+  ) {
+    return direct
+  }
+
+
+  const text =
+    getRecordSearchText(
+      record
+    )
+
+
+  const match =
+    text.match(
+      /\balarm(?:\s+level)?\s*[:#-]?\s*(\d+)\b/i
+    )
+
+
+  if (
+    !match
+  ) {
+    return null
+  }
+
+
+  const parsed =
+    Number(
+      match[1]
+    )
+
+
+  return Number.isFinite(
+    parsed
+  )
+    ? parsed
+    : null
+}
+
+
+function getFireShelfLifeHours(
+  record
+) {
+  const text =
+    getRecordSearchText(
+      record
+    )
+
+
+  const alarmLevel =
+    getFireAlarmLevel(
+      record
+    )
+
+
+  const majorFire =
+    (
+      Number.isFinite(
+        Number(
+          alarmLevel
+        )
+      ) &&
+      Number(
+        alarmLevel
+      ) >=
+        2
+    ) ||
+    /\bhigh[\s-]?rise\b/i.test(
+      text
+    ) ||
+    /\bmultiple[\s-]?alarm\b/i.test(
+      text
+    ) ||
+    /\bmulti[\s-]?alarm\b/i.test(
+      text
+    )
+
+
+  if (
+    majorFire
+  ) {
+    return NEWS_SHELF_LIFE_HOURS.fireMajor
+  }
+
+
+  const minorFire =
+    /\bgas leak\b/i.test(
+      text
+    ) ||
+    /\bnatural gas\b/i.test(
+      text
+    ) ||
+    /\bgas odou?r\b/i.test(
+      text
+    ) ||
+    /\bhazmat\b/i.test(
+      text
+    ) ||
+    /\bhazardous material/i.test(
+      text
+    ) ||
+    /\bcarbon monoxide\b/i.test(
+      text
+    )
+
+
+  if (
+    minorFire
+  ) {
+    return NEWS_SHELF_LIFE_HOURS.fireMinor
+  }
+
+
+  return NEWS_SHELF_LIFE_HOURS.fire
+}
+
+
+function getPoliceShelfLifeHours(
+  record
+) {
+  const category =
+    clean(
+      record?.category
+    )
+
+
+  const text =
+    getRecordSearchText(
+      record
+    )
+
+
+  if (
+    category ===
+      'located'
+  ) {
+    return null
+  }
+
+
+  if (
+    category ===
+      'missing'
+  ) {
+    return NEWS_SHELF_LIFE_HOURS.police.missing
+  }
+
+
+  if (
+    category ===
+      'collision'
+  ) {
+    return NEWS_SHELF_LIFE_HOURS.police.collision
+  }
+
+
+  if (
+    category ===
+      'shooting'
+  ) {
+    return NEWS_SHELF_LIFE_HOURS.police.shooting
+  }
+
+
+  if (
+    category ===
+      'stabbing'
+  ) {
+    return NEWS_SHELF_LIFE_HOURS.police.stabbing
+  }
+
+
+  const majorPoliceIncident =
+    category ===
+      'homicide' ||
+    category ===
+      'firearm' ||
+    /\bhomicide\b/i.test(
+      text
+    ) ||
+    /\bfirearm\b/i.test(
+      text
+    ) ||
+    /\bshots fired\b/i.test(
+      text
+    )
+
+
+  if (
+    majorPoliceIncident
+  ) {
+    return NEWS_SHELF_LIFE_HOURS.police.major
+  }
+
+
+  return NEWS_SHELF_LIFE_HOURS.police.default
 }
 
 
@@ -138,7 +396,9 @@ export function getNewsShelfLifeHours(
     sourceKey ===
       'fire'
   ) {
-    return NEWS_SHELF_LIFE_HOURS.fire
+    return getFireShelfLifeHours(
+      record
+    )
   }
 
 
@@ -146,47 +406,9 @@ export function getNewsShelfLifeHours(
     sourceKey ===
       'police'
   ) {
-    const category =
-      clean(
-        record?.category
-      )
-
-
-    // LOCATED is a newsroom RESOLVE event, not a new live pin with
-    // its own shelf-life clock.
-    if (
-      category ===
-        'located'
-    ) {
-      return null
-    }
-
-
-    if (
-      category ===
-        'missing'
-    ) {
-      return NEWS_SHELF_LIFE_HOURS.police.missing
-    }
-
-
-    if (
-      category ===
-        'shooting'
-    ) {
-      return NEWS_SHELF_LIFE_HOURS.police.shooting
-    }
-
-
-    if (
-      category ===
-        'collision'
-    ) {
-      return NEWS_SHELF_LIFE_HOURS.police.collision
-    }
-
-
-    return NEWS_SHELF_LIFE_HOURS.police.default
+    return getPoliceShelfLifeHours(
+      record
+    )
   }
 
 
@@ -207,9 +429,6 @@ export function getNewsSourceTimestamp(
     sourceKey ===
       'ttc'
   ) {
-    // active-period-start is the best TTC-provided per-alert time.
-    // If TTC omitted it, firstSeenAt freezes Geographic's first
-    // observation instead of allowing every feed poll to restart time.
     if (
       record?.ttcSourceTimeKind ===
         'active-period-start' &&
@@ -269,6 +488,18 @@ export function getNewsExpiresAt(
     getNewsShelfLifeHours(
       record
     )
+
+
+  if (
+    hours ===
+      null ||
+    hours ===
+      undefined ||
+    hours ===
+      ''
+  ) {
+    return ''
+  }
 
 
   if (
