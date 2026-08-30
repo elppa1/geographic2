@@ -1723,14 +1723,19 @@ function createMarker({
     pin,
   })
 
-  appendRouteActions({
-    popupContent,
-    pin,
-    longitude,
-    latitude,
-    onDirections,
-    onLongWay,
-  })
+  if (
+    pinType !==
+      'news'
+  ) {
+    appendRouteActions({
+      popupContent,
+      pin,
+      longitude,
+      latitude,
+      onDirections,
+      onLongWay,
+    })
+  }
 
   const popup =
     new Popup({
