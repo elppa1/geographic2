@@ -2270,6 +2270,144 @@ function parseFireRows(
 }
 
 
+function torontoWallClockToIso({
+  year,
+  month,
+  day,
+  hour,
+  minute,
+  second,
+}) {
+  const targetWallClock =
+    Date.UTC(
+      Number(
+        year
+      ),
+      Number(
+        month
+      ) -
+        1,
+      Number(
+        day
+      ),
+      Number(
+        hour
+      ),
+      Number(
+        minute
+      ),
+      Number(
+        second ||
+        0
+      )
+    )
+
+
+  let guess =
+    targetWallClock
+
+
+  const formatter =
+    new Intl.DateTimeFormat(
+      'en-CA',
+      {
+        timeZone:
+          'America/Toronto',
+
+        year:
+          'numeric',
+
+        month:
+          '2-digit',
+
+        day:
+          '2-digit',
+
+        hour:
+          '2-digit',
+
+        minute:
+          '2-digit',
+
+        second:
+          '2-digit',
+
+        hourCycle:
+          'h23',
+      }
+    )
+
+
+  for (
+    let attempt =
+      0;
+    attempt <
+      3;
+    attempt++
+  ) {
+    const parts =
+      Object.fromEntries(
+        formatter
+          .formatToParts(
+            new Date(
+              guess
+            )
+          )
+          .filter(
+            (
+              part
+            ) =>
+              part.type !==
+                'literal'
+          )
+          .map(
+            (
+              part
+            ) => [
+              part.type,
+              part.value,
+            ]
+          )
+      )
+
+
+    const displayedWallClock =
+      Date.UTC(
+        Number(
+          parts.year
+        ),
+        Number(
+          parts.month
+        ) -
+          1,
+        Number(
+          parts.day
+        ),
+        Number(
+          parts.hour
+        ),
+        Number(
+          parts.minute
+        ),
+        Number(
+          parts.second
+        )
+      )
+
+
+    guess +=
+      targetWallClock -
+      displayedWallClock
+  }
+
+
+  return new Date(
+    guess
+  )
+    .toISOString()
+}
+
+
 function parseTorontoFireTime(
   value
 ) {
@@ -2287,6 +2425,57 @@ function parseTorontoFireTime(
   }
 
 
+  const hasExplicitTimezone =
+    /(?:Z|[+-]\d{2}:?\d{2})$/i.test(
+      clean
+    )
+
+
+  const localMatch =
+    clean.match(
+      /(\d{4})-(\d{2})-(\d{2})(?:T|\s)+(\d{1,2}):(\d{2})(?::(\d{2}))?/
+    )
+
+
+  if (
+    localMatch &&
+    !hasExplicitTimezone
+  ) {
+    return torontoWallClockToIso({
+      year:
+        localMatch[
+          1
+        ],
+
+      month:
+        localMatch[
+          2
+        ],
+
+      day:
+        localMatch[
+          3
+        ],
+
+      hour:
+        localMatch[
+          4
+        ],
+
+      minute:
+        localMatch[
+          5
+        ],
+
+      second:
+        localMatch[
+          6
+        ] ||
+        '00',
+    })
+  }
+
+
   const direct =
     new Date(
       clean
@@ -2300,40 +2489,6 @@ function parseTorontoFireTime(
   ) {
     return direct
       .toISOString()
-  }
-
-
-  // Common Toronto Fire display: YYYY-MM-DD HH:mm:ss
-  const match =
-    clean.match(
-      /(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/
-    )
-
-
-  if (
-    match
-  ) {
-    const isoLike =
-      (
-        `${match[1]}-${match[2]}-${match[3]}T` +
-        `${match[4].padStart(2, '0')}:${match[5]}:${match[6] || '00'}`
-      )
-
-
-    const parsed =
-      new Date(
-        isoLike
-      )
-
-
-    if (
-      !Number.isNaN(
-        parsed.getTime()
-      )
-    ) {
-      return parsed
-        .toISOString()
-    }
   }
 
 
@@ -2632,8 +2787,6 @@ function formatFireStreetSegment(
 
   // A suffix by itself is dispatch shorthand, not a street name.
   // Example: "LN W PETER..." must NOT become "Lane West".
-  // Real lanes such as "TEMPERANCE LN" still pass because LN has
-  // an actual street-name token before it.
   if (
     suffixIndex <=
       0
@@ -2672,14 +2825,6 @@ function formatFireStreetSegment(
       endIndex +
         1
     )
-
-
-  if (
-    streetTokens.length <
-      2
-  ) {
-    return ''
-  }
 
 
   return streetTokens
@@ -2840,6 +2985,9 @@ function buildFireLocation({
     primeCandidates[
       0
     ] ||
+    crossCandidates[
+      0
+    ] ||
     ''
 
 
@@ -2887,34 +3035,7 @@ function buildFireLocation({
   }
 
 
-  if (
-    crossCandidates.length >=
-      2
-  ) {
-    return (
-      crossCandidates[
-        0
-      ] +
-      ' & ' +
-      crossCandidates[
-        1
-      ]
-    )
-  }
-
-
-  if (
-    crossCandidates.length ===
-      1
-  ) {
-    return crossCandidates[
-      0
-    ]
-  }
-
-
-  // Last-resort fallback: keep the source text editable rather than
-  // inventing a location or throwing the record away.
+  // Keep the source wording editable rather than inventing a location.
   return (
     normalizeFireLocationPiece(
       primeStreet
@@ -2937,6 +3058,32 @@ function fireIncidentShouldBeReviewed({
       .toLowerCase()
 
 
+  const blockedPatterns = [
+    /^medical\b/i,
+    /^alarm single source\b/i,
+    /^check call\b/i,
+    /^rescue\s*-\s*elevator\b/i,
+    /^water problem\b/i,
+    /^public assist\b/i,
+    /^assist\s*-\s*/i,
+    /^alarm\s*-\s*/i,
+  ]
+
+
+  if (
+    blockedPatterns.some(
+      (
+        pattern
+      ) =>
+        pattern.test(
+          type
+        )
+    )
+  ) {
+    return false
+  }
+
+
   const alarm =
     Number(
       cleanText(
@@ -2953,32 +3100,6 @@ function fireIncidentShouldBeReviewed({
       1
   ) {
     return true
-  }
-
-
-  const blockedPatterns = [
-    /^medical\b/i,
-    /^alarm single source\b/i,
-    /^check call\b/i,
-    /^rescue - elevator\b/i,
-    /^water problem\b/i,
-    /^public assist\b/i,
-    /^assist - /i,
-    /^alarm - /i,
-  ]
-
-
-  if (
-    blockedPatterns.some(
-      (
-        pattern
-      ) =>
-        pattern.test(
-          type
-        )
-    )
-  ) {
-    return false
   }
 
 
@@ -3018,14 +3139,10 @@ function fireIncidentShouldBeReviewed({
 function publicFireIncidentLabel(
   incidentType
 ) {
-  const raw =
+  return (
     cleanText(
       incidentType
-    )
-
-
-  return (
-    raw ||
+    ) ||
     'Toronto Fire call'
   )
 }
@@ -3047,8 +3164,6 @@ function formatFireDispatchClock(
   }
 
 
-  // Toronto Fire's CAD timestamp is normally local wall-clock time.
-  // Preserve that clock directly when the source gives no timezone.
   const hasExplicitTimezone =
     /(?:Z|[+-]\d{2}:?\d{2})$/i.test(
       raw
@@ -3162,18 +3277,13 @@ function publicFireDescription({
     )
 
 
-  if (
-    clock
-  ) {
-    return (
-      'Toronto Fire crews responded to this call at ' +
-      clock +
-      '.'
-    )
-  }
-
-
-  return 'Toronto Fire crews responded to this call.'
+  return clock
+    ? (
+        'Toronto Fire crews responded to this call at ' +
+        clock +
+        '.'
+      )
+    : 'Toronto Fire crews responded to this call.'
 }
 
 
@@ -3304,6 +3414,43 @@ function storedFireDispatchTime(
 }
 
 
+function storedFireAlarmLevel(
+  record
+) {
+  const direct =
+    cleanText(
+      record?.alarmLevel
+    )
+
+
+  if (
+    direct
+  ) {
+    return direct
+  }
+
+
+  const description =
+    cleanText(
+      record?.description
+    )
+
+
+  const alarmMatch =
+    description.match(
+      /\bAlarm\s+([0-9.]+)/i
+    )
+
+
+  return cleanText(
+    alarmMatch?.[
+      1
+    ] ||
+    ''
+  )
+}
+
+
 function storedFireLocation(
   record
 ) {
@@ -3341,11 +3488,44 @@ function storedFireLocation(
   }
 
 
-  const existing =
+  let existing =
     cleanText(
       record?.intersection ||
       record?.location
     )
+
+
+  if (
+    !existing
+  ) {
+    const title =
+      cleanText(
+        record?.title
+      )
+
+
+    const titleParts =
+      title.split(
+        /\s+·\s+/
+      )
+
+
+    if (
+      titleParts.length >
+        1
+    ) {
+      existing =
+        cleanText(
+          titleParts
+            .slice(
+              1
+            )
+            .join(
+              ' · '
+            )
+        )
+    }
+  }
 
 
   if (
@@ -3364,6 +3544,37 @@ function storedFireLocation(
         '',
     }) ||
     existing
+  )
+}
+
+
+function isStoredFireEvent(
+  record
+) {
+  const source =
+    cleanText(
+      record?.source ||
+      record?.scraperSource ||
+      record?.newsroomSource ||
+      record?.origin
+    )
+      .toLowerCase()
+
+
+  return (
+    record?.sourceKey ===
+      'fire' ||
+    record?.category ===
+      'fire' ||
+    source.includes(
+      'toronto fire'
+    ) ||
+    source.includes(
+      'fire services'
+    ) ||
+    source.includes(
+      'fire-active'
+    )
   )
 }
 
@@ -3404,6 +3615,15 @@ function upgradeStoredFireRecord(
     )
 
 
+  const correctedPublishedAt =
+    dispatchTime
+      ? parseTorontoFireTime(
+          dispatchTime
+        )
+      : record?.publishedAt ||
+        ''
+
+
   return {
     ...record,
 
@@ -3430,6 +3650,9 @@ function upgradeStoredFireRecord(
     intersection:
       location,
 
+    publishedAt:
+      correctedPublishedAt,
+
     fireRawIncidentType:
       cleanText(
         record?.fireRawIncidentType ||
@@ -3445,8 +3668,17 @@ function upgradeStoredFireRecord(
 }
 
 
-async function refreshPendingFireCards() {
+async function cleanupPendingFireEvents() {
   await ensureLoaded()
+
+
+  const now =
+    new Date()
+      .toISOString()
+
+
+  const filteredEvents =
+    []
 
 
   let changed =
@@ -3461,17 +3693,94 @@ async function refreshPendingFireCards() {
         if (
           event?.status !==
             'pending' ||
-          event?.sourceKey !==
-            'fire'
+          !isStoredFireEvent(
+            event
+          )
         ) {
           return event
         }
 
 
-        const upgradedTop =
-          upgradeStoredFireRecord(
+        const incidentType =
+          storedFireIncidentType(
             event
           )
+
+
+        const alarmLevel =
+          storedFireAlarmLevel(
+            event
+          )
+
+
+        const externalId =
+          cleanText(
+            event?.externalId
+          )
+
+
+        if (
+          !fireIncidentShouldBeReviewed({
+            incidentType,
+            alarmLevel,
+          })
+        ) {
+          const filtered = {
+            ...event,
+
+            status:
+              'acked',
+
+            outcome:
+              'filtered-fire-call',
+
+            ackedAt:
+              now,
+
+            resolutionReason:
+              'filtered-by-fire-news-policy',
+          }
+
+
+          filteredEvents.push(
+            filtered
+          )
+
+
+          if (
+            externalId &&
+            store.sources?.fire?.[
+              externalId
+            ]
+          ) {
+            store.sources.fire[
+              externalId
+            ] = {
+              ...store.sources.fire[
+                externalId
+              ],
+
+              active:
+                false,
+
+              resolved:
+                true,
+
+              resolvedAt:
+                now,
+
+              resolutionReason:
+                'filtered-by-fire-news-policy',
+            }
+          }
+
+
+          changed =
+            true
+
+
+          return filtered
+        }
 
 
         const upgradedIncoming =
@@ -3482,7 +3791,9 @@ async function refreshPendingFireCards() {
 
 
         const upgraded = {
-          ...upgradedTop,
+          ...upgradeStoredFireRecord(
+            event
+          ),
 
           incomingRecord:
             upgradedIncoming,
@@ -3512,30 +3823,23 @@ async function refreshPendingFireCards() {
         }
 
 
-        const externalId =
-          cleanText(
-            event?.externalId
-          )
-
-
-        const currentSource =
-          externalId
-            ? store.sources?.fire?.[
-                externalId
-              ]
-            : null
-
-
         if (
-          currentSource
+          externalId &&
+          store.sources?.fire?.[
+            externalId
+          ]
         ) {
           const upgradedSource =
             upgradeStoredFireRecord(
-              currentSource
+              store.sources.fire[
+                externalId
+              ]
             )
 
 
-          const sourceWithFingerprint = {
+          store.sources.fire[
+            externalId
+          ] = {
             ...upgradedSource,
 
             sourceSnapshot:
@@ -3547,25 +3851,6 @@ async function refreshPendingFireCards() {
               fingerprint(
                 upgradedSource
               ),
-          }
-
-
-          if (
-            JSON.stringify(
-              sourceWithFingerprint
-            ) !==
-            JSON.stringify(
-              currentSource
-            )
-          ) {
-            store.sources.fire[
-              externalId
-            ] =
-              sourceWithFingerprint
-
-
-            changed =
-              true
           }
         }
 
@@ -3579,15 +3864,32 @@ async function refreshPendingFireCards() {
     changed
   ) {
     await persistStore()
-
-
-    console.log(
-      'TORONTO FIRE · UPGRADED STORED PENDING CARDS'
-    )
   }
 
 
-  return changed
+  for (
+    const event
+    of filteredEvents
+  ) {
+    await appendLedgerEvent({
+      eventType:
+        'newsroom-filtered',
+
+      outcome:
+        'filtered-fire-call',
+
+      record:
+        event,
+    })
+  }
+
+
+  return {
+    changed,
+
+    filtered:
+      filteredEvents.length,
+  }
 }
 
 
@@ -3670,21 +3972,22 @@ function normalizeFireRow(
     })
 
 
-  const incidentLabel =
-    publicFireIncidentLabel(
-      incidentType
-    )
-
-
-  const publicDescription =
-    publicFireDescription({
-      dispatchTime,
-    })
+  if (
+    !location
+  ) {
+    return null
+  }
 
 
   const publishedAt =
     parseTorontoFireTime(
       dispatchTime
+    )
+
+
+  const incidentLabel =
+    publicFireIncidentLabel(
+      incidentType
     )
 
 
@@ -3725,18 +4028,14 @@ function normalizeFireRow(
     title:
       (
         incidentLabel +
-        (
-          location
-            ? (
-                ' · ' +
-                location
-              )
-            : ''
-        )
+        ' · ' +
+        location
       ),
 
     description:
-      publicDescription,
+      publicFireDescription({
+        dispatchTime,
+      }),
 
     location,
 
@@ -5248,10 +5547,7 @@ async function pendingEvents() {
   await ensureLoaded()
 
 
-  // Existing Fire cards are persistent snapshots. Upgrade every pending
-  // Fire card once it is read so older queue items use the same current
-  // location parser, source incident type and reader-facing copy.
-  await refreshPendingFireCards()
+  await cleanupPendingFireEvents()
 
 
   const now =

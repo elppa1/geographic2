@@ -31,6 +31,34 @@ function AdminPinMap({
     useRef(null)
 
 
+  const draggableRef =
+    useRef(
+      draggable
+    )
+
+
+  const onChangeRef =
+    useRef(
+      onChange
+    )
+
+
+  useEffect(() => {
+    draggableRef.current =
+      draggable
+  }, [
+    draggable,
+  ])
+
+
+  useEffect(() => {
+    onChangeRef.current =
+      onChange
+  }, [
+    onChange,
+  ])
+
+
   // ==========================================================
   // CREATE MAP
   // ==========================================================
@@ -45,12 +73,41 @@ function AdminPinMap({
     }
 
 
-    const initialLongitude =
+    const hasInitialLongitude =
+      longitude !==
+        null &&
+      longitude !==
+        undefined &&
+      longitude !==
+        '' &&
       Number.isFinite(
         Number(
           longitude
         )
       )
+
+
+    const hasInitialLatitude =
+      latitude !==
+        null &&
+      latitude !==
+        undefined &&
+      latitude !==
+        '' &&
+      Number.isFinite(
+        Number(
+          latitude
+        )
+      )
+
+
+    const hasInitialPosition =
+      hasInitialLongitude &&
+      hasInitialLatitude
+
+
+    const initialLongitude =
+      hasInitialPosition
         ? Number(
             longitude
           )
@@ -61,11 +118,7 @@ function AdminPinMap({
 
 
     const initialLatitude =
-      Number.isFinite(
-        Number(
-          latitude
-        )
-      )
+      hasInitialPosition
         ? Number(
             latitude
           )
@@ -121,15 +174,38 @@ function AdminPinMap({
         ],
 
         zoom:
-          Number.isFinite(
-            Number(
-              longitude
-            )
-          )
+          hasInitialPosition
             ? 16
             : city.zoom ||
               11,
       })
+
+
+    const handleMapClick =
+      (
+        event
+      ) => {
+        if (
+          !draggableRef.current
+        ) {
+          return
+        }
+
+
+        onChangeRef.current?.({
+          longitude:
+            event.lngLat.lng,
+
+          latitude:
+            event.lngLat.lat,
+        })
+      }
+
+
+    map.on(
+      'click',
+      handleMapClick
+    )
 
 
     mapRef.current =
@@ -144,6 +220,12 @@ function AdminPinMap({
         null
 
 
+      map.off(
+        'click',
+        handleMapClick
+      )
+
+
       map.remove()
 
 
@@ -156,12 +238,81 @@ function AdminPinMap({
 
 
   // ==========================================================
+  // CUSTOM MODE CURSOR
+  // ==========================================================
+
+  useEffect(() => {
+    const map =
+      mapRef.current
+
+
+    if (
+      !map
+    ) {
+      return
+    }
+
+
+    map.getCanvas().style.cursor =
+      draggable
+        ? 'crosshair'
+        : ''
+  }, [
+    draggable,
+  ])
+
+
+  // ==========================================================
   // MARKER
   // ==========================================================
 
   useEffect(() => {
     const map =
       mapRef.current
+
+
+    const hasLongitude =
+      longitude !==
+        null &&
+      longitude !==
+        undefined &&
+      longitude !==
+        '' &&
+      Number.isFinite(
+        Number(
+          longitude
+        )
+      )
+
+
+    const hasLatitude =
+      latitude !==
+        null &&
+      latitude !==
+        undefined &&
+      latitude !==
+        '' &&
+      Number.isFinite(
+        Number(
+          latitude
+        )
+      )
+
+
+    if (
+      !map ||
+      !hasLongitude ||
+      !hasLatitude
+    ) {
+      markerRef.current?.remove()
+
+
+      markerRef.current =
+        null
+
+
+      return
+    }
 
 
     const nextLongitude =
@@ -174,26 +325,6 @@ function AdminPinMap({
       Number(
         latitude
       )
-
-
-    if (
-      !map ||
-      !Number.isFinite(
-        nextLongitude
-      ) ||
-      !Number.isFinite(
-        nextLatitude
-      )
-    ) {
-      markerRef.current?.remove()
-
-
-      markerRef.current =
-        null
-
-
-      return
-    }
 
 
     if (
@@ -234,7 +365,7 @@ function AdminPinMap({
             marker.getLngLat()
 
 
-          onChange?.({
+          onChangeRef.current?.({
             longitude:
               position.lng,
 
@@ -281,7 +412,6 @@ function AdminPinMap({
     longitude,
     latitude,
     draggable,
-    onChange,
   ])
 
 

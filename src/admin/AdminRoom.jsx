@@ -2726,6 +2726,16 @@ function normalizeSourceUrl(
 function normalizePinRecord(
   record
 ) {
+  const pinPositionMode =
+    record.pinPositionMode ||
+    'auto'
+
+
+  const customPosition =
+    pinPositionMode ===
+    'custom'
+
+
   return {
     ...record,
 
@@ -2739,19 +2749,31 @@ function normalizePinRecord(
         record.imageUrl
       ),
 
-    pinPositionMode:
-      record.pinPositionMode ||
-      'auto',
+    pinPositionMode,
 
     searchedLongitude:
-      record.searchedLongitude ??
-      record.longitude ??
-      null,
+      customPosition
+        ? (
+            record.searchedLongitude ??
+            null
+          )
+        : (
+            record.searchedLongitude ??
+            record.longitude ??
+            null
+          ),
 
     searchedLatitude:
-      record.searchedLatitude ??
-      record.latitude ??
-      null,
+      customPosition
+        ? (
+            record.searchedLatitude ??
+            null
+          )
+        : (
+            record.searchedLatitude ??
+            record.latitude ??
+            null
+          ),
   }
 }
 
@@ -2822,14 +2844,30 @@ function normalizeHistoricRecord(
       'auto',
 
     searchedLongitude:
-      pinRecord.searchedLongitude ??
-      pinRecord.longitude ??
-      null,
+      pinRecord.pinPositionMode ===
+        'custom'
+        ? (
+            pinRecord.searchedLongitude ??
+            null
+          )
+        : (
+            pinRecord.searchedLongitude ??
+            pinRecord.longitude ??
+            null
+          ),
 
     searchedLatitude:
-      pinRecord.searchedLatitude ??
-      pinRecord.latitude ??
-      null,
+      pinRecord.pinPositionMode ===
+        'custom'
+        ? (
+            pinRecord.searchedLatitude ??
+            null
+          )
+        : (
+            pinRecord.searchedLatitude ??
+            pinRecord.latitude ??
+            null
+          ),
   }
 }
 
@@ -6416,6 +6454,15 @@ function AdminRoom() {
           mode ===
           'auto'
         ) {
+          const hasSearchedPosition =
+            isUsableCoordinate(
+              current.searchedLongitude
+            ) &&
+            isUsableCoordinate(
+              current.searchedLatitude
+            )
+
+
           return {
             ...current,
 
@@ -6423,12 +6470,18 @@ function AdminRoom() {
               'auto',
 
             longitude:
-              current.searchedLongitude ??
-              current.longitude,
+              hasSearchedPosition
+                ? Number(
+                    current.searchedLongitude
+                  )
+                : null,
 
             latitude:
-              current.searchedLatitude ??
-              current.latitude,
+              hasSearchedPosition
+                ? Number(
+                    current.searchedLatitude
+                  )
+                : null,
           }
         }
 
@@ -6475,33 +6528,46 @@ function AdminRoom() {
     setDraft(
       (
         current
-      ) => ({
-        ...current,
+      ) => {
+        const customPosition =
+          current.pinPositionMode ===
+          'custom'
 
-        location:
-          value,
 
-        intersection:
-          '',
+        return {
+          ...current,
 
-        longitude:
-          null,
+          location:
+            value,
 
-        latitude:
-          null,
+          intersection:
+            '',
 
-        searchedLongitude:
-          null,
+          longitude:
+            customPosition
+              ? current.longitude
+              : null,
 
-        searchedLatitude:
-          null,
+          latitude:
+            customPosition
+              ? current.latitude
+              : null,
 
-        pinPositionMode:
-          'auto',
+          searchedLongitude:
+            null,
 
-        locationOverridden:
-          true,
-      })
+          searchedLatitude:
+            null,
+
+          pinPositionMode:
+            customPosition
+              ? 'custom'
+              : 'auto',
+
+          locationOverridden:
+            true,
+        }
+      }
     )
   }
 
@@ -6524,33 +6590,55 @@ function AdminRoom() {
     setDraft(
       (
         current
-      ) => ({
-        ...current,
+      ) => {
+        const customPosition =
+          current.pinPositionMode ===
+          'custom'
 
-        location:
-          result.location ||
-          result.name,
 
-        intersection:
-          result.intersection ||
-          result.name,
+        const hasCustomPosition =
+          customPosition &&
+          hasRecordCoordinates(
+            current
+          )
 
-        searchedLongitude:
-          longitude,
 
-        searchedLatitude:
-          latitude,
+        return {
+          ...current,
 
-        longitude,
+          location:
+            result.location ||
+            result.name,
 
-        latitude,
+          intersection:
+            result.intersection ||
+            result.name,
 
-        pinPositionMode:
-          'auto',
+          searchedLongitude:
+            longitude,
 
-        locationOverridden:
-          true,
-      })
+          searchedLatitude:
+            latitude,
+
+          longitude:
+            hasCustomPosition
+              ? current.longitude
+              : longitude,
+
+          latitude:
+            hasCustomPosition
+              ? current.latitude
+              : latitude,
+
+          pinPositionMode:
+            customPosition
+              ? 'custom'
+              : 'auto',
+
+          locationOverridden:
+            true,
+        }
+      }
     )
   }
 
@@ -6786,10 +6874,8 @@ function AdminRoom() {
         ),
 
       longitude:
-        Number.isFinite(
-          Number(
-            draft.longitude
-          )
+        isUsableCoordinate(
+          draft.longitude
         )
           ? Number(
               draft.longitude
@@ -6797,10 +6883,8 @@ function AdminRoom() {
           : null,
 
       latitude:
-        Number.isFinite(
-          Number(
-            draft.latitude
-          )
+        isUsableCoordinate(
+          draft.latitude
         )
           ? Number(
               draft.latitude
@@ -6808,10 +6892,8 @@ function AdminRoom() {
           : null,
 
       searchedLongitude:
-        Number.isFinite(
-          Number(
-            draft.searchedLongitude
-          )
+        isUsableCoordinate(
+          draft.searchedLongitude
         )
           ? Number(
               draft.searchedLongitude
@@ -6819,10 +6901,8 @@ function AdminRoom() {
           : null,
 
       searchedLatitude:
-        Number.isFinite(
-          Number(
-            draft.searchedLatitude
-          )
+        isUsableCoordinate(
+          draft.searchedLatitude
         )
           ? Number(
               draft.searchedLatitude
@@ -9803,6 +9883,15 @@ function AdminRoom() {
     )
 
 
+  const showPinPositionControls =
+    Boolean(
+      hasPinLocation ||
+      draft.location ||
+      draft.intersection ||
+      editingReviewId
+    )
+
+
   // ==========================================================
   // RENDER
   // ==========================================================
@@ -10131,7 +10220,7 @@ function AdminRoom() {
             </div>
 
 
-            {hasPinLocation && (
+            {showPinPositionControls && (
               <div className="admin-field admin-field-wide">
                 <span>
                   PIN POSITION
@@ -10195,8 +10284,16 @@ function AdminRoom() {
                 <div className="admin-pin-position-note">
                   {draft.pinPositionMode ===
                   'custom'
-                    ? 'DRAG THE PIN TO ITS EXACT LOCATION.'
-                    : 'USING THE SEARCHED LOCATION.'}
+                    ? (
+                        hasPinLocation
+                          ? 'CLICK THE MAP OR DRAG THE PIN TO ITS EXACT LOCATION.'
+                          : 'CLICK THE MAP TO PLACE THE PIN.'
+                      )
+                    : (
+                        hasPinLocation
+                          ? 'USING THE SEARCHED LOCATION.'
+                          : 'SEARCH FOR A LOCATION, OR CHOOSE CUSTOM TO PLACE THE PIN MANUALLY.'
+                      )}
                 </div>
               </div>
             )}
