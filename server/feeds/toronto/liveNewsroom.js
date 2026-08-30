@@ -2364,6 +2364,561 @@ function normalizeFireLocationPiece(
 }
 
 
+const FIRE_STREET_SUFFIXES = {
+  ST:
+    'Street',
+
+  STREET:
+    'Street',
+
+  AVE:
+    'Avenue',
+
+  AV:
+    'Avenue',
+
+  AVENUE:
+    'Avenue',
+
+  RD:
+    'Road',
+
+  ROAD:
+    'Road',
+
+  BLVD:
+    'Boulevard',
+
+  BOULEVARD:
+    'Boulevard',
+
+  DR:
+    'Drive',
+
+  DRIVE:
+    'Drive',
+
+  LN:
+    'Lane',
+
+  LANE:
+    'Lane',
+
+  CRT:
+    'Court',
+
+  CT:
+    'Court',
+
+  COURT:
+    'Court',
+
+  CRES:
+    'Crescent',
+
+  CRESCENT:
+    'Crescent',
+
+  GRV:
+    'Grove',
+
+  GROVE:
+    'Grove',
+
+  GT:
+    'Gate',
+
+  GATE:
+    'Gate',
+
+  WAY:
+    'Way',
+
+  PKWY:
+    'Parkway',
+
+  PARKWAY:
+    'Parkway',
+
+  TRL:
+    'Trail',
+
+  TRAIL:
+    'Trail',
+
+  HWY:
+    'Highway',
+
+  HIGHWAY:
+    'Highway',
+
+  PL:
+    'Place',
+
+  PLACE:
+    'Place',
+
+  TER:
+    'Terrace',
+
+  TERR:
+    'Terrace',
+
+  TERRACE:
+    'Terrace',
+
+  CIR:
+    'Circle',
+
+  CIRCLE:
+    'Circle',
+
+  SQ:
+    'Square',
+
+  SQUARE:
+    'Square',
+
+  MALL:
+    'Mall',
+
+  MEWS:
+    'Mews',
+}
+
+
+const FIRE_DIRECTIONS = {
+  N:
+    'North',
+
+  S:
+    'South',
+
+  E:
+    'East',
+
+  W:
+    'West',
+
+  NORTH:
+    'North',
+
+  SOUTH:
+    'South',
+
+  EAST:
+    'East',
+
+  WEST:
+    'West',
+}
+
+
+function titleCaseFireStreetWord(
+  value
+) {
+  const text =
+    String(
+      value ||
+      ''
+    )
+      .toLowerCase()
+
+
+  return text
+    .split(
+      /([-'’])/
+    )
+    .map(
+      (
+        part
+      ) => {
+        if (
+          part ===
+            '-' ||
+          part ===
+            "'" ||
+          part ===
+            '’'
+        ) {
+          return part
+        }
+
+
+        return part
+          ? (
+              part.charAt(
+                0
+              )
+                .toUpperCase() +
+              part.slice(
+                1
+              )
+            )
+          : ''
+      }
+    )
+    .join(
+      ''
+    )
+}
+
+
+function formatFireStreetSegment(
+  value
+) {
+  const clean =
+    normalizeFireLocationPiece(
+      value
+    )
+      .replace(
+        /\s+/g,
+        ' '
+      )
+      .trim()
+
+
+  if (
+    !clean
+  ) {
+    return ''
+  }
+
+
+  const tokens =
+    clean.split(
+      /\s+/
+    )
+
+
+  let suffixIndex =
+    -1
+
+
+  for (
+    let index =
+      tokens.length -
+      1;
+    index >=
+      0;
+    index--
+  ) {
+    const token =
+      String(
+        tokens[
+          index
+        ] ||
+        ''
+      )
+        .replace(
+          /[^A-Za-z]/g,
+          ''
+        )
+        .toUpperCase()
+
+
+    if (
+      FIRE_STREET_SUFFIXES[
+        token
+      ]
+    ) {
+      suffixIndex =
+        index
+
+      break
+    }
+  }
+
+
+  if (
+    suffixIndex <
+      0
+  ) {
+    return ''
+  }
+
+
+  const directionToken =
+    String(
+      tokens[
+        suffixIndex +
+        1
+      ] ||
+      ''
+    )
+      .replace(
+        /[^A-Za-z]/g,
+        ''
+      )
+      .toUpperCase()
+
+
+  const endIndex =
+    FIRE_DIRECTIONS[
+      directionToken
+    ]
+      ? suffixIndex +
+        1
+      : suffixIndex
+
+
+  const streetTokens =
+    tokens.slice(
+      0,
+      endIndex +
+        1
+    )
+
+
+  if (
+    streetTokens.length <
+      2
+  ) {
+    return ''
+  }
+
+
+  return streetTokens
+    .map(
+      (
+        token,
+        index
+      ) => {
+        const bare =
+          String(
+            token ||
+            ''
+          )
+            .replace(
+              /^[^A-Za-z0-9]+|[^A-Za-z0-9.'’\-]+$/g,
+              ''
+            )
+
+
+        const upper =
+          bare.toUpperCase()
+
+
+        if (
+          FIRE_STREET_SUFFIXES[
+            upper
+          ]
+        ) {
+          return FIRE_STREET_SUFFIXES[
+            upper
+          ]
+        }
+
+
+        if (
+          FIRE_DIRECTIONS[
+            upper
+          ] &&
+          index >
+            0
+        ) {
+          return FIRE_DIRECTIONS[
+            upper
+          ]
+        }
+
+
+        if (
+          /^\d+[A-Za-z]?$/.test(
+            bare
+          )
+        ) {
+          return bare
+        }
+
+
+        return titleCaseFireStreetWord(
+          bare
+        )
+      }
+    )
+    .filter(
+      Boolean
+    )
+    .join(
+      ' '
+    )
+}
+
+
+function fireStreetCandidates(
+  value
+) {
+  const raw =
+    normalizeFireLocationPiece(
+      value
+    )
+
+
+  if (
+    !raw
+  ) {
+    return []
+  }
+
+
+  const pieces =
+    raw.split(
+      /\s*(?:\/|,|;|\s+&\s+|\s+AT\s+)\s*/i
+    )
+      .map(
+        (
+          piece
+        ) =>
+          formatFireStreetSegment(
+            piece
+          )
+      )
+      .filter(
+        Boolean
+      )
+
+
+  return pieces.filter(
+    (
+      piece,
+      index
+    ) =>
+      pieces.findIndex(
+        (
+          other
+        ) =>
+          other.toLowerCase() ===
+          piece.toLowerCase()
+      ) ===
+      index
+  )
+}
+
+
+function sameFireStreet(
+  first,
+  second
+) {
+  return (
+    cleanText(
+      first
+    )
+      .toLowerCase() ===
+    cleanText(
+      second
+    )
+      .toLowerCase()
+  )
+}
+
+
+function buildFireLocation({
+  primeStreet,
+  crossStreet,
+}) {
+  const primeCandidates =
+    fireStreetCandidates(
+      primeStreet
+    )
+
+
+  const crossCandidates =
+    fireStreetCandidates(
+      crossStreet
+    )
+
+
+  const primary =
+    primeCandidates[
+      0
+    ] ||
+    ''
+
+
+  const secondary =
+    crossCandidates.find(
+      (
+        candidate
+      ) =>
+        !sameFireStreet(
+          candidate,
+          primary
+        )
+    ) ||
+    primeCandidates.find(
+      (
+        candidate,
+        index
+      ) =>
+        index >
+          0 &&
+        !sameFireStreet(
+          candidate,
+          primary
+        )
+    ) ||
+    ''
+
+
+  if (
+    primary &&
+    secondary
+  ) {
+    return (
+      primary +
+      ' & ' +
+      secondary
+    )
+  }
+
+
+  if (
+    primary
+  ) {
+    return primary
+  }
+
+
+  if (
+    crossCandidates.length >=
+      2
+  ) {
+    return (
+      crossCandidates[
+        0
+      ] +
+      ' & ' +
+      crossCandidates[
+        1
+      ]
+    )
+  }
+
+
+  if (
+    crossCandidates.length ===
+      1
+  ) {
+    return crossCandidates[
+      0
+    ]
+  }
+
+
+  // Last-resort fallback: keep the source text editable rather than
+  // inventing a location or throwing the record away.
+  return (
+    normalizeFireLocationPiece(
+      primeStreet
+    ) ||
+    normalizeFireLocationPiece(
+      crossStreet
+    )
+  )
+}
+
+
 function fireIncidentShouldBeReviewed({
   incidentType,
   alarmLevel,
@@ -2522,51 +3077,14 @@ function normalizeFireRow(
   }
 
 
-  let location =
-    ''
+  const location =
+    buildFireLocation({
+      primeStreet:
+        cells[0],
 
-
-  if (
-    primeStreet &&
-    crossStreet
-  ) {
-    location =
-      (
-        primeStreet +
-        ' & ' +
-        crossStreet
-      )
-  }
-  else if (
-    primeStreet
-  ) {
-    location =
-      primeStreet
-  }
-  else {
-    const crossPieces =
-      crossStreet
-        .split(
-          /\s*\/\s*/
-        )
-        .map(
-          normalizeFireLocationPiece
-        )
-        .filter(
-          Boolean
-        )
-
-
-    location =
-      crossPieces.length >=
-        2
-        ? (
-            crossPieces[0] +
-            ' & ' +
-            crossPieces[1]
-          )
-        : crossStreet
-  }
+      crossStreet:
+        cells[1],
+    })
 
 
   const descriptionParts =
@@ -2719,6 +3237,16 @@ function normalizeFireRow(
     dispatchedUnits,
 
     incidentNumber,
+
+    fireRawPrimeStreet:
+      cleanText(
+        cells[0]
+      ),
+
+    fireRawCrossStreets:
+      cleanText(
+        cells[1]
+      ),
   }
 }
 
