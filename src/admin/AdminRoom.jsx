@@ -2726,16 +2726,6 @@ function normalizeSourceUrl(
 function normalizePinRecord(
   record
 ) {
-  const pinPositionMode =
-    record.pinPositionMode ||
-    'auto'
-
-
-  const customPosition =
-    pinPositionMode ===
-    'custom'
-
-
   return {
     ...record,
 
@@ -2749,31 +2739,19 @@ function normalizePinRecord(
         record.imageUrl
       ),
 
-    pinPositionMode,
+    pinPositionMode:
+      record.pinPositionMode ||
+      'auto',
 
     searchedLongitude:
-      customPosition
-        ? (
-            record.searchedLongitude ??
-            null
-          )
-        : (
-            record.searchedLongitude ??
-            record.longitude ??
-            null
-          ),
+      record.searchedLongitude ??
+      record.longitude ??
+      null,
 
     searchedLatitude:
-      customPosition
-        ? (
-            record.searchedLatitude ??
-            null
-          )
-        : (
-            record.searchedLatitude ??
-            record.latitude ??
-            null
-          ),
+      record.searchedLatitude ??
+      record.latitude ??
+      null,
   }
 }
 
@@ -2844,30 +2822,14 @@ function normalizeHistoricRecord(
       'auto',
 
     searchedLongitude:
-      pinRecord.pinPositionMode ===
-        'custom'
-        ? (
-            pinRecord.searchedLongitude ??
-            null
-          )
-        : (
-            pinRecord.searchedLongitude ??
-            pinRecord.longitude ??
-            null
-          ),
+      pinRecord.searchedLongitude ??
+      pinRecord.longitude ??
+      null,
 
     searchedLatitude:
-      pinRecord.pinPositionMode ===
-        'custom'
-        ? (
-            pinRecord.searchedLatitude ??
-            null
-          )
-        : (
-            pinRecord.searchedLatitude ??
-            pinRecord.latitude ??
-            null
-          ),
+      pinRecord.searchedLatitude ??
+      pinRecord.latitude ??
+      null,
   }
 }
 
@@ -6454,15 +6416,6 @@ function AdminRoom() {
           mode ===
           'auto'
         ) {
-          const hasSearchedPosition =
-            isUsableCoordinate(
-              current.searchedLongitude
-            ) &&
-            isUsableCoordinate(
-              current.searchedLatitude
-            )
-
-
           return {
             ...current,
 
@@ -6470,18 +6423,12 @@ function AdminRoom() {
               'auto',
 
             longitude:
-              hasSearchedPosition
-                ? Number(
-                    current.searchedLongitude
-                  )
-                : null,
+              current.searchedLongitude ??
+              current.longitude,
 
             latitude:
-              hasSearchedPosition
-                ? Number(
-                    current.searchedLatitude
-                  )
-                : null,
+              current.searchedLatitude ??
+              current.latitude,
           }
         }
 
@@ -6529,9 +6476,12 @@ function AdminRoom() {
       (
         current
       ) => {
-        const customPosition =
+        const keepCustomPin =
           current.pinPositionMode ===
-          'custom'
+            'custom' &&
+          hasRecordCoordinates(
+            current
+          )
 
 
         return {
@@ -6544,12 +6494,12 @@ function AdminRoom() {
             '',
 
           longitude:
-            customPosition
+            keepCustomPin
               ? current.longitude
               : null,
 
           latitude:
-            customPosition
+            keepCustomPin
               ? current.latitude
               : null,
 
@@ -6560,7 +6510,7 @@ function AdminRoom() {
             null,
 
           pinPositionMode:
-            customPosition
+            keepCustomPin
               ? 'custom'
               : 'auto',
 
@@ -6591,13 +6541,9 @@ function AdminRoom() {
       (
         current
       ) => {
-        const customPosition =
+        const keepCustomPin =
           current.pinPositionMode ===
-          'custom'
-
-
-        const hasCustomPosition =
-          customPosition &&
+            'custom' &&
           hasRecordCoordinates(
             current
           )
@@ -6621,17 +6567,17 @@ function AdminRoom() {
             latitude,
 
           longitude:
-            hasCustomPosition
+            keepCustomPin
               ? current.longitude
               : longitude,
 
           latitude:
-            hasCustomPosition
+            keepCustomPin
               ? current.latitude
               : latitude,
 
           pinPositionMode:
-            customPosition
+            keepCustomPin
               ? 'custom'
               : 'auto',
 
@@ -6874,8 +6820,10 @@ function AdminRoom() {
         ),
 
       longitude:
-        isUsableCoordinate(
-          draft.longitude
+        Number.isFinite(
+          Number(
+            draft.longitude
+          )
         )
           ? Number(
               draft.longitude
@@ -6883,8 +6831,10 @@ function AdminRoom() {
           : null,
 
       latitude:
-        isUsableCoordinate(
-          draft.latitude
+        Number.isFinite(
+          Number(
+            draft.latitude
+          )
         )
           ? Number(
               draft.latitude
@@ -6892,8 +6842,10 @@ function AdminRoom() {
           : null,
 
       searchedLongitude:
-        isUsableCoordinate(
-          draft.searchedLongitude
+        Number.isFinite(
+          Number(
+            draft.searchedLongitude
+          )
         )
           ? Number(
               draft.searchedLongitude
@@ -6901,8 +6853,10 @@ function AdminRoom() {
           : null,
 
       searchedLatitude:
-        isUsableCoordinate(
-          draft.searchedLatitude
+        Number.isFinite(
+          Number(
+            draft.searchedLatitude
+          )
         )
           ? Number(
               draft.searchedLatitude
@@ -9883,15 +9837,6 @@ function AdminRoom() {
     )
 
 
-  const showPinPositionControls =
-    Boolean(
-      hasPinLocation ||
-      draft.location ||
-      draft.intersection ||
-      editingReviewId
-    )
-
-
   // ==========================================================
   // RENDER
   // ==========================================================
@@ -10220,11 +10165,10 @@ function AdminRoom() {
             </div>
 
 
-            {showPinPositionControls && (
-              <div className="admin-field admin-field-wide">
-                <span>
-                  PIN POSITION
-                </span>
+            <div className="admin-field admin-field-wide">
+              <span>
+                PIN POSITION
+              </span>
 
                 <div className="admin-pin-position-controls">
                   <button
@@ -10281,22 +10225,21 @@ function AdminRoom() {
                   }
                 />
 
-                <div className="admin-pin-position-note">
-                  {draft.pinPositionMode ===
-                  'custom'
-                    ? (
-                        hasPinLocation
-                          ? 'CLICK THE MAP OR DRAG THE PIN TO ITS EXACT LOCATION.'
-                          : 'CLICK THE MAP TO PLACE THE PIN.'
-                      )
-                    : (
-                        hasPinLocation
-                          ? 'USING THE SEARCHED LOCATION.'
-                          : 'SEARCH FOR A LOCATION, OR CHOOSE CUSTOM TO PLACE THE PIN MANUALLY.'
-                      )}
-                </div>
+              <div className="admin-pin-position-note">
+                {draft.pinPositionMode ===
+                'custom'
+                  ? (
+                      hasPinLocation
+                        ? 'CLICK THE MAP OR DRAG THE PIN TO ITS EXACT LOCATION.'
+                        : 'CLICK THE MAP TO PLACE THE PIN.'
+                    )
+                  : (
+                      hasPinLocation
+                        ? 'USING THE SEARCHED LOCATION.'
+                        : 'SEARCH FOR A LOCATION OR CHOOSE CUSTOM TO PLACE IT YOURSELF.'
+                    )}
               </div>
-            )}
+            </div>
 
 
             {tab ===

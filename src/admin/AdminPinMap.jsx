@@ -11,6 +11,25 @@ import {
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 
+function hasCoordinate(
+  value
+) {
+  return (
+    value !==
+      null &&
+    value !==
+      undefined &&
+    value !==
+      '' &&
+    Number.isFinite(
+      Number(
+        value
+      )
+    )
+  )
+}
+
+
 function AdminPinMap({
   city,
   longitude,
@@ -31,34 +50,6 @@ function AdminPinMap({
     useRef(null)
 
 
-  const draggableRef =
-    useRef(
-      draggable
-    )
-
-
-  const onChangeRef =
-    useRef(
-      onChange
-    )
-
-
-  useEffect(() => {
-    draggableRef.current =
-      draggable
-  }, [
-    draggable,
-  ])
-
-
-  useEffect(() => {
-    onChangeRef.current =
-      onChange
-  }, [
-    onChange,
-  ])
-
-
   // ==========================================================
   // CREATE MAP
   // ==========================================================
@@ -73,41 +64,17 @@ function AdminPinMap({
     }
 
 
-    const hasInitialLongitude =
-      longitude !==
-        null &&
-      longitude !==
-        undefined &&
-      longitude !==
-        '' &&
-      Number.isFinite(
-        Number(
-          longitude
-        )
+    const hasInitialPin =
+      hasCoordinate(
+        longitude
+      ) &&
+      hasCoordinate(
+        latitude
       )
-
-
-    const hasInitialLatitude =
-      latitude !==
-        null &&
-      latitude !==
-        undefined &&
-      latitude !==
-        '' &&
-      Number.isFinite(
-        Number(
-          latitude
-        )
-      )
-
-
-    const hasInitialPosition =
-      hasInitialLongitude &&
-      hasInitialLatitude
 
 
     const initialLongitude =
-      hasInitialPosition
+      hasInitialPin
         ? Number(
             longitude
           )
@@ -118,7 +85,7 @@ function AdminPinMap({
 
 
     const initialLatitude =
-      hasInitialPosition
+      hasInitialPin
         ? Number(
             latitude
           )
@@ -174,11 +141,50 @@ function AdminPinMap({
         ],
 
         zoom:
-          hasInitialPosition
+          hasInitialPin
             ? 16
             : city.zoom ||
               11,
       })
+
+
+    mapRef.current =
+      map
+
+
+    return () => {
+      markerRef.current?.remove()
+
+
+      markerRef.current =
+        null
+
+
+      map.remove()
+
+
+      mapRef.current =
+        null
+    }
+  }, [
+    city,
+  ])
+
+
+  // ==========================================================
+  // CLICK TO PLACE CUSTOM PIN
+  // ==========================================================
+
+  useEffect(() => {
+    const map =
+      mapRef.current
+
+
+    if (
+      !map
+    ) {
+      return
+    }
 
 
     const handleMapClick =
@@ -186,13 +192,13 @@ function AdminPinMap({
         event
       ) => {
         if (
-          !draggableRef.current
+          !draggable
         ) {
           return
         }
 
 
-        onChangeRef.current?.({
+        onChange?.({
           longitude:
             event.lngLat.lng,
 
@@ -208,57 +214,15 @@ function AdminPinMap({
     )
 
 
-    mapRef.current =
-      map
-
-
     return () => {
-      markerRef.current?.remove()
-
-
-      markerRef.current =
-        null
-
-
       map.off(
         'click',
         handleMapClick
       )
-
-
-      map.remove()
-
-
-      mapRef.current =
-        null
     }
-  }, [
-    city,
-  ])
-
-
-  // ==========================================================
-  // CUSTOM MODE CURSOR
-  // ==========================================================
-
-  useEffect(() => {
-    const map =
-      mapRef.current
-
-
-    if (
-      !map
-    ) {
-      return
-    }
-
-
-    map.getCanvas().style.cursor =
-      draggable
-        ? 'crosshair'
-        : ''
   }, [
     draggable,
+    onChange,
   ])
 
 
@@ -271,38 +235,14 @@ function AdminPinMap({
       mapRef.current
 
 
-    const hasLongitude =
-      longitude !==
-        null &&
-      longitude !==
-        undefined &&
-      longitude !==
-        '' &&
-      Number.isFinite(
-        Number(
-          longitude
-        )
-      )
-
-
-    const hasLatitude =
-      latitude !==
-        null &&
-      latitude !==
-        undefined &&
-      latitude !==
-        '' &&
-      Number.isFinite(
-        Number(
-          latitude
-        )
-      )
-
-
     if (
       !map ||
-      !hasLongitude ||
-      !hasLatitude
+      !hasCoordinate(
+        longitude
+      ) ||
+      !hasCoordinate(
+        latitude
+      )
     ) {
       markerRef.current?.remove()
 
@@ -365,7 +305,7 @@ function AdminPinMap({
             marker.getLngLat()
 
 
-          onChangeRef.current?.({
+          onChange?.({
             longitude:
               position.lng,
 
@@ -412,6 +352,7 @@ function AdminPinMap({
     longitude,
     latitude,
     draggable,
+    onChange,
   ])
 
 
