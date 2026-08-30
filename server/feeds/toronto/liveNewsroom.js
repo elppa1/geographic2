@@ -2630,8 +2630,12 @@ function formatFireStreetSegment(
   }
 
 
+  // A suffix by itself is dispatch shorthand, not a street name.
+  // Example: "LN W PETER..." must NOT become "Lane West".
+  // Real lanes such as "TEMPERANCE LN" still pass because LN has
+  // an actual street-name token before it.
   if (
-    suffixIndex <
+    suffixIndex <=
       0
   ) {
     return ''
@@ -2700,6 +2704,8 @@ function formatFireStreetSegment(
 
 
         if (
+          index ===
+            suffixIndex &&
           FIRE_STREET_SUFFIXES[
             upper
           ]
@@ -2711,11 +2717,12 @@ function formatFireStreetSegment(
 
 
         if (
+          index ===
+            suffixIndex +
+              1 &&
           FIRE_DIRECTIONS[
             upper
-          ] &&
-          index >
-            0
+          ]
         ) {
           return FIRE_DIRECTIONS[
             upper
@@ -3017,148 +3024,570 @@ function publicFireIncidentLabel(
     )
 
 
-  const lower =
-    raw.toLowerCase()
-
-
-  if (
-    /\bhazmat\b/.test(
-      lower
-    ) ||
-    /\bhazardous\b/.test(
-      lower
-    ) ||
-    /\bchemical\b/.test(
-      lower
-    )
-  ) {
-    return 'Hazardous materials response'
-  }
-
-
-  if (
-    /\bgas leak\b/.test(
-      lower
-    )
-  ) {
-    return 'Gas leak'
-  }
-
-
-  if (
-    /\bcarbon monoxide\b/.test(
-      lower
-    )
-  ) {
-    return 'Carbon monoxide response'
-  }
-
-
-  if (
-    /\bvehicle accident\b/.test(
-      lower
-    ) ||
-    /\bextrication\b/.test(
-      lower
-    )
-  ) {
-    return 'Vehicle collision response'
-  }
-
-
-  if (
-    /\bwater rescue\b/.test(
-      lower
-    ) ||
-    /\bmarine rescue\b/.test(
-      lower
-    )
-  ) {
-    return 'Water rescue'
-  }
-
-
-  if (
-    /\btechnical rescue\b/.test(
-      lower
-    ) ||
-    /\bhigh angle\b/.test(
-      lower
-    ) ||
-    /\bconfined space\b/.test(
-      lower
-    ) ||
-    /\btrench\b/.test(
-      lower
-    )
-  ) {
-    return 'Technical rescue'
-  }
-
-
-  if (
-    /\bstructural collapse\b/.test(
-      lower
-    )
-  ) {
-    return 'Structural collapse response'
-  }
-
-
-  if (
-    /\bexplosion\b/.test(
-      lower
-    )
-  ) {
-    return 'Explosion response'
-  }
-
-
-  if (
-    /\bsmoke\b/.test(
-      lower
-    )
-  ) {
-    return 'Smoke investigation'
-  }
-
-
-  if (
-    /\bfire\b/.test(
-      lower
-    )
-  ) {
-    return 'Fire response'
-  }
-
-
   return (
     raw ||
-    'Toronto Fire response'
+    'Toronto Fire call'
   )
 }
 
 
-function publicFireDescription({
-  incidentLabel,
-  location,
-}) {
+function formatFireDispatchClock(
+  value
+) {
+  const raw =
+    cleanText(
+      value
+    )
+
+
   if (
-    !location
+    !raw
+  ) {
+    return ''
+  }
+
+
+  // Toronto Fire's CAD timestamp is normally local wall-clock time.
+  // Preserve that clock directly when the source gives no timezone.
+  const hasExplicitTimezone =
+    /(?:Z|[+-]\d{2}:?\d{2})$/i.test(
+      raw
+    )
+
+
+  const localClock =
+    raw.match(
+      /(?:T|\s)(\d{1,2}):(\d{2})(?::\d{2})?/
+    )
+
+
+  if (
+    localClock &&
+    !hasExplicitTimezone
+  ) {
+    const hour24 =
+      Number(
+        localClock[
+          1
+        ]
+      )
+
+
+    const minute =
+      localClock[
+        2
+      ]
+
+
+    if (
+      Number.isFinite(
+        hour24
+      ) &&
+      hour24 >=
+        0 &&
+      hour24 <=
+        23
+    ) {
+      const suffix =
+        hour24 >=
+          12
+          ? 'PM'
+          : 'AM'
+
+
+      const hour12 =
+        hour24 %
+          12 ||
+        12
+
+
+      return (
+        `${hour12}:${minute} ${suffix}`
+      )
+    }
+  }
+
+
+  const parsed =
+    new Date(
+      raw
+    )
+
+
+  if (
+    Number.isNaN(
+      parsed.getTime()
+    )
+  ) {
+    return ''
+  }
+
+
+  return new Intl.DateTimeFormat(
+    'en-CA',
+    {
+      timeZone:
+        'America/Toronto',
+
+      hour:
+        'numeric',
+
+      minute:
+        '2-digit',
+
+      hour12:
+        true,
+    }
+  )
+    .format(
+      parsed
+    )
+    .replace(
+      /\s*a\.?\s*m\.?$/i,
+      ' AM'
+    )
+    .replace(
+      /\s*p\.?\s*m\.?$/i,
+      ' PM'
+    )
+}
+
+
+function publicFireDescription({
+  dispatchTime,
+}) {
+  const clock =
+    formatFireDispatchClock(
+      dispatchTime
+    )
+
+
+  if (
+    clock
   ) {
     return (
-      'Toronto Fire crews are responding to ' +
-      incidentLabel.toLowerCase() +
+      'Toronto Fire crews responded to this call at ' +
+      clock +
       '.'
     )
   }
 
 
+  return 'Toronto Fire crews responded to this call.'
+}
+
+
+function storedFireIncidentType(
+  record
+) {
+  const raw =
+    cleanText(
+      record?.fireRawIncidentType ||
+      record?.incidentType ||
+      record?.eventType
+    )
+
+
+  if (
+    raw
+  ) {
+    return raw
+  }
+
+
+  const title =
+    cleanText(
+      record?.title
+    )
+
+
+  const titleType =
+    title
+      .split(
+        /\s+·\s+/
+      )[
+        0
+      ] ||
+    ''
+
+
+  const genericFallbacks = {
+    'Fire response':
+      'Fire',
+
+    'Hazardous materials response':
+      'Hazmat',
+
+    'Gas leak':
+      'Gas Leak',
+
+    'Carbon monoxide response':
+      'Carbon Monoxide',
+
+    'Vehicle collision response':
+      'Vehicle Accident',
+
+    'Water rescue':
+      'Water Rescue',
+
+    'Technical rescue':
+      'Technical Rescue',
+
+    'Structural collapse response':
+      'Structural Collapse',
+
+    'Explosion response':
+      'Explosion',
+
+    'Smoke investigation':
+      'Smoke Investigation',
+
+    'Toronto Fire response':
+      'Toronto Fire call',
+  }
+
+
   return (
-    'Toronto Fire crews are responding near ' +
-    location +
-    '.'
+    genericFallbacks[
+      titleType
+    ] ||
+    titleType ||
+    'Toronto Fire call'
   )
+}
+
+
+function storedFireDispatchTime(
+  record
+) {
+  const raw =
+    cleanText(
+      record?.fireRawDispatchTime
+    )
+
+
+  if (
+    raw
+  ) {
+    return raw
+  }
+
+
+  const description =
+    cleanText(
+      record?.description
+    )
+
+
+  const dispatchMatch =
+    description.match(
+      /\bDispatch\s+([^·]+?)(?:\s*·|$)/i
+    )
+
+
+  if (
+    dispatchMatch?.[
+      1
+    ]
+  ) {
+    return cleanText(
+      dispatchMatch[
+        1
+      ]
+    )
+  }
+
+
+  return cleanText(
+    record?.publishedAt
+  )
+}
+
+
+function storedFireLocation(
+  record
+) {
+  const rawPrime =
+    cleanText(
+      record?.fireRawPrimeStreet
+    )
+
+
+  const rawCross =
+    cleanText(
+      record?.fireRawCrossStreets
+    )
+
+
+  if (
+    rawPrime ||
+    rawCross
+  ) {
+    const rebuilt =
+      buildFireLocation({
+        primeStreet:
+          rawPrime,
+
+        crossStreet:
+          rawCross,
+      })
+
+
+    if (
+      rebuilt
+    ) {
+      return rebuilt
+    }
+  }
+
+
+  const existing =
+    cleanText(
+      record?.intersection ||
+      record?.location
+    )
+
+
+  if (
+    !existing
+  ) {
+    return ''
+  }
+
+
+  return (
+    buildFireLocation({
+      primeStreet:
+        existing,
+
+      crossStreet:
+        '',
+    }) ||
+    existing
+  )
+}
+
+
+function upgradeStoredFireRecord(
+  record
+) {
+  if (
+    !record ||
+    typeof record !==
+      'object'
+  ) {
+    return record
+  }
+
+
+  const incidentType =
+    storedFireIncidentType(
+      record
+    )
+
+
+  const dispatchTime =
+    storedFireDispatchTime(
+      record
+    )
+
+
+  const location =
+    storedFireLocation(
+      record
+    )
+
+
+  const incidentLabel =
+    publicFireIncidentLabel(
+      incidentType
+    )
+
+
+  return {
+    ...record,
+
+    title:
+      (
+        incidentLabel +
+        (
+          location
+            ? (
+                ' · ' +
+                location
+              )
+            : ''
+        )
+      ),
+
+    description:
+      publicFireDescription({
+        dispatchTime,
+      }),
+
+    location,
+
+    intersection:
+      location,
+
+    fireRawIncidentType:
+      cleanText(
+        record?.fireRawIncidentType ||
+        incidentType
+      ),
+
+    fireRawDispatchTime:
+      cleanText(
+        record?.fireRawDispatchTime ||
+        dispatchTime
+      ),
+  }
+}
+
+
+async function refreshPendingFireCards() {
+  await ensureLoaded()
+
+
+  let changed =
+    false
+
+
+  store.events =
+    store.events.map(
+      (
+        event
+      ) => {
+        if (
+          event?.status !==
+            'pending' ||
+          event?.sourceKey !==
+            'fire'
+        ) {
+          return event
+        }
+
+
+        const upgradedTop =
+          upgradeStoredFireRecord(
+            event
+          )
+
+
+        const upgradedIncoming =
+          upgradeStoredFireRecord(
+            event?.incomingRecord ||
+            event
+          )
+
+
+        const upgraded = {
+          ...upgradedTop,
+
+          incomingRecord:
+            upgradedIncoming,
+
+          sourceSnapshot:
+            sourceSnapshot(
+              upgradedIncoming
+            ),
+
+          sourceFingerprint:
+            fingerprint(
+              upgradedIncoming
+            ),
+        }
+
+
+        if (
+          JSON.stringify(
+            upgraded
+          ) !==
+          JSON.stringify(
+            event
+          )
+        ) {
+          changed =
+            true
+        }
+
+
+        const externalId =
+          cleanText(
+            event?.externalId
+          )
+
+
+        const currentSource =
+          externalId
+            ? store.sources?.fire?.[
+                externalId
+              ]
+            : null
+
+
+        if (
+          currentSource
+        ) {
+          const upgradedSource =
+            upgradeStoredFireRecord(
+              currentSource
+            )
+
+
+          const sourceWithFingerprint = {
+            ...upgradedSource,
+
+            sourceSnapshot:
+              sourceSnapshot(
+                upgradedSource
+              ),
+
+            sourceFingerprint:
+              fingerprint(
+                upgradedSource
+              ),
+          }
+
+
+          if (
+            JSON.stringify(
+              sourceWithFingerprint
+            ) !==
+            JSON.stringify(
+              currentSource
+            )
+          ) {
+            store.sources.fire[
+              externalId
+            ] =
+              sourceWithFingerprint
+
+
+            changed =
+              true
+          }
+        }
+
+
+        return upgraded
+      }
+    )
+
+
+  if (
+    changed
+  ) {
+    await persistStore()
+
+
+    console.log(
+      'TORONTO FIRE · UPGRADED STORED PENDING CARDS'
+    )
+  }
+
+
+  return changed
 }
 
 
@@ -3249,8 +3678,7 @@ function normalizeFireRow(
 
   const publicDescription =
     publicFireDescription({
-      incidentLabel,
-      location,
+      dispatchTime,
     })
 
 
@@ -4818,6 +5246,12 @@ async function readJsonBody(
 
 async function pendingEvents() {
   await ensureLoaded()
+
+
+  // Existing Fire cards are persistent snapshots. Upgrade every pending
+  // Fire card once it is read so older queue items use the same current
+  // location parser, source incident type and reader-facing copy.
+  await refreshPendingFireCards()
 
 
   const now =
