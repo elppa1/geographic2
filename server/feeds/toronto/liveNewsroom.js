@@ -3008,6 +3008,160 @@ function fireIncidentShouldBeReviewed({
 }
 
 
+function publicFireIncidentLabel(
+  incidentType
+) {
+  const raw =
+    cleanText(
+      incidentType
+    )
+
+
+  const lower =
+    raw.toLowerCase()
+
+
+  if (
+    /\bhazmat\b/.test(
+      lower
+    ) ||
+    /\bhazardous\b/.test(
+      lower
+    ) ||
+    /\bchemical\b/.test(
+      lower
+    )
+  ) {
+    return 'Hazardous materials response'
+  }
+
+
+  if (
+    /\bgas leak\b/.test(
+      lower
+    )
+  ) {
+    return 'Gas leak'
+  }
+
+
+  if (
+    /\bcarbon monoxide\b/.test(
+      lower
+    )
+  ) {
+    return 'Carbon monoxide response'
+  }
+
+
+  if (
+    /\bvehicle accident\b/.test(
+      lower
+    ) ||
+    /\bextrication\b/.test(
+      lower
+    )
+  ) {
+    return 'Vehicle collision response'
+  }
+
+
+  if (
+    /\bwater rescue\b/.test(
+      lower
+    ) ||
+    /\bmarine rescue\b/.test(
+      lower
+    )
+  ) {
+    return 'Water rescue'
+  }
+
+
+  if (
+    /\btechnical rescue\b/.test(
+      lower
+    ) ||
+    /\bhigh angle\b/.test(
+      lower
+    ) ||
+    /\bconfined space\b/.test(
+      lower
+    ) ||
+    /\btrench\b/.test(
+      lower
+    )
+  ) {
+    return 'Technical rescue'
+  }
+
+
+  if (
+    /\bstructural collapse\b/.test(
+      lower
+    )
+  ) {
+    return 'Structural collapse response'
+  }
+
+
+  if (
+    /\bexplosion\b/.test(
+      lower
+    )
+  ) {
+    return 'Explosion response'
+  }
+
+
+  if (
+    /\bsmoke\b/.test(
+      lower
+    )
+  ) {
+    return 'Smoke investigation'
+  }
+
+
+  if (
+    /\bfire\b/.test(
+      lower
+    )
+  ) {
+    return 'Fire response'
+  }
+
+
+  return (
+    raw ||
+    'Toronto Fire response'
+  )
+}
+
+
+function publicFireDescription({
+  incidentLabel,
+  location,
+}) {
+  if (
+    !location
+  ) {
+    return (
+      'Toronto Fire crews are responding to ' +
+      incidentLabel.toLowerCase() +
+      '.'
+    )
+  }
+
+
+  return (
+    'Toronto Fire crews are responding near ' +
+    location +
+    '.'
+  )
+}
+
+
 function normalizeFireRow(
   cells
 ) {
@@ -3087,58 +3241,17 @@ function normalizeFireRow(
     })
 
 
-  const descriptionParts =
-    []
-
-
-  if (
-    dispatchTime
-  ) {
-    descriptionParts.push(
-      'Dispatch ' +
-      dispatchTime
+  const incidentLabel =
+    publicFireIncidentLabel(
+      incidentType
     )
-  }
 
 
-  if (
-    alarmLevel
-  ) {
-    descriptionParts.push(
-      'Alarm ' +
-      alarmLevel
-    )
-  }
-
-
-  if (
-    area
-  ) {
-    descriptionParts.push(
-      'Area ' +
-      area
-    )
-  }
-
-
-  if (
-    dispatchedUnits
-  ) {
-    descriptionParts.push(
-      'Units ' +
-      dispatchedUnits
-    )
-  }
-
-
-  if (
-    incidentNumber
-  ) {
-    descriptionParts.push(
-      'Incident ' +
-      incidentNumber
-    )
-  }
+  const publicDescription =
+    publicFireDescription({
+      incidentLabel,
+      location,
+    })
 
 
   const publishedAt =
@@ -3183,18 +3296,19 @@ function normalizeFireRow(
 
     title:
       (
+        incidentLabel +
         (
-          incidentType ||
-          'Toronto Fire incident'
-        ) +
-        ' · ' +
-        location
+          location
+            ? (
+                ' · ' +
+                location
+              )
+            : ''
+        )
       ),
 
     description:
-      descriptionParts.join(
-        ' · '
-      ),
+      publicDescription,
 
     location,
 
@@ -3237,6 +3351,12 @@ function normalizeFireRow(
     dispatchedUnits,
 
     incidentNumber,
+
+    fireRawIncidentType:
+      incidentType,
+
+    fireRawDispatchTime:
+      dispatchTime,
 
     fireRawPrimeStreet:
       cleanText(
