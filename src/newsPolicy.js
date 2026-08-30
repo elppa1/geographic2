@@ -14,10 +14,8 @@
 //
 // Current rules:
 //   TTC                         feed-controlled; no fixed timer
-//   TPS missing person          3 days
-//   TPS shooting / stabbing     3 days
-//   TPS collision               5 days
-//   TPS other live item         2 days
+//   TPS missing person          5 days unless officially resolved
+//   TPS all other police        7 days
 //   Toronto Fire major          7 days
 //   Toronto Fire standard       5 days
 //   Toronto Fire minor / gas    2 days
@@ -43,22 +41,22 @@ export const NEWS_SHELF_LIFE_HOURS = {
 
   police: {
     missing:
-      3 * 24,
-
-    shooting:
-      3 * 24,
-
-    stabbing:
-      3 * 24,
-
-    major:
-      3 * 24,
-
-    collision:
       5 * 24,
 
+    shooting:
+      7 * 24,
+
+    stabbing:
+      7 * 24,
+
+    major:
+      7 * 24,
+
+    collision:
+      7 * 24,
+
     default:
-      2 * 24,
+      7 * 24,
   },
 }
 
@@ -248,6 +246,8 @@ function getPoliceShelfLifeHours(
     )
 
 
+  // LOCATED is a newsroom RESOLVE event, not a new live pin with
+  // its own shelf-life clock.
   if (
     category ===
       'located'
