@@ -2102,7 +2102,7 @@ function normalizeTtcRecord(
       sourceTime.kind,
 
     newsShelfLife:
-      '4-hours',
+      'feed-controlled',
 
     active:
       true,
@@ -2731,6 +2731,8 @@ function normalizeFireRow(
 async function resolveMissing({
   sourceKey,
   seenIds,
+  resolvePublishedMissing =
+    true,
 }) {
   await ensureLoaded()
 
@@ -2851,6 +2853,18 @@ async function resolveMissing({
         )
 
 
+      continue
+    }
+
+
+    // TTC should resolve when an alert disappears from the official
+    // feed. Fire is different: live CAD only describes incidents that
+    // are currently active. Once a published Fire incident leaves CAD,
+    // the public story keeps running until its NEWS shelf life expires.
+    if (
+      resolvePublishedMissing !==
+        true
+    ) {
       continue
     }
 
@@ -3185,6 +3199,9 @@ async function syncFire() {
       'fire',
 
     seenIds,
+
+    resolvePublishedMissing:
+      false,
   })
 
 
@@ -3867,11 +3884,120 @@ async function archivePublishedNewsRecord({
 }
 
 
+async function expirePublishedNewsShelfLife() {
+  await ensureLoaded()
+
+
+  const now =
+    new Date()
+      .toISOString()
+
+
+  const expiredRecords =
+    []
+
+
+  for (
+    const [
+      identity,
+      record,
+    ]
+    of Object.entries(
+      store.publishedNews ||
+      {}
+    )
+  ) {
+    if (
+      record?.active ===
+        false ||
+      newsRecordIsCurrent(
+        record
+      )
+    ) {
+      continue
+    }
+
+
+    const expiresAt =
+      getNewsExpiresAt(
+        record
+      ) ||
+      record?.expiresAt ||
+      ''
+
+
+    const archivedRecord = {
+      ...record,
+
+      active:
+        false,
+
+      expiresAt,
+
+      archivedAt:
+        record?.archivedAt ||
+        expiresAt ||
+        now,
+
+      archiveReason:
+        'expired-shelf-life',
+
+      serverUpdatedAt:
+        now,
+    }
+
+
+    store.publishedNews[
+      identity
+    ] =
+      archivedRecord
+
+
+    expiredRecords.push(
+      archivedRecord
+    )
+  }
+
+
+  if (
+    expiredRecords.length ===
+      0
+  ) {
+    return 0
+  }
+
+
+  await persistStore()
+
+
+  for (
+    const record
+    of expiredRecords
+  ) {
+    await appendLedgerEvent({
+      eventType:
+        'published-news-archived',
+
+      outcome:
+        'expired-shelf-life',
+
+      record,
+    })
+  }
+
+
+  return expiredRecords.length
+}
+
+
 async function getPublishedNewsRecords({
   status =
     'live',
 } = {}) {
   await ensureLoaded()
+
+
+  await expirePublishedNewsShelfLife()
 
 
   const normalizedStatus =
