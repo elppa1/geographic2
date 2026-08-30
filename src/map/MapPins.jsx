@@ -2037,6 +2037,816 @@ function mergeNewsRecords(
 }
 
 
+
+// ============================================================
+// NEWS SCALE / PROMINENCE
+// ============================================================
+//
+// NEWS stays editorially alive according to the existing server
+// lifecycle. These rules only decide how much of that live set
+// should be visible at the current map scale.
+//
+// CITY:
+//   major stories stay visible
+//   regular stories are strongest while fresh
+//   routine stories are very fresh only
+//   hard cap prevents the whole-city view becoming confetti
+//
+// NEIGHBOURHOOD:
+//   almost the full live set appears
+//
+// STREET:
+//   the full live set appears
+//
+// Clustering is visual only. It never changes or deletes records.
+//
+// ============================================================
+
+const NEWS_CITY_MAX_ZOOM =
+  11.75
+
+const NEWS_NEIGHBOURHOOD_MAX_ZOOM =
+  14.25
+
+const NEWS_CLUSTER_MAX_ZOOM =
+  15.25
+
+const NEWS_CITY_MAX_PINS =
+  40
+
+const NEWS_CITY_REGULAR_MAX_HOURS =
+  48
+
+const NEWS_CITY_ROUTINE_MAX_HOURS =
+  12
+
+const NEWS_NEIGHBOURHOOD_ROUTINE_MAX_HOURS =
+  7 * 24
+
+
+function getNewsRecordTimestamp(
+  pin
+) {
+  const fire =
+    isTorontoFirePin(
+      pin
+    )
+
+  const ttc =
+    isTtcPin(
+      pin
+    )
+
+  const values =
+    fire
+      ? [
+          pin.firstSeenAt,
+          pin.receivedAt,
+          pin.queuedAt,
+          pin.publishedAt,
+          pin.createdAt,
+          pin.updatedAt,
+        ]
+      : ttc
+        ? [
+            pin.ttcSourceTime,
+            pin.publishedAt,
+            pin.firstSeenAt,
+            pin.receivedAt,
+            pin.createdAt,
+            pin.updatedAt,
+          ]
+        : [
+            pin.publishedAt,
+            pin.firstSeenAt,
+            pin.receivedAt,
+            pin.createdAt,
+            pin.updatedAt,
+          ]
+
+  for (
+    const value of values
+  ) {
+    if (
+      !value
+    ) {
+      continue
+    }
+
+    const date =
+      new Date(
+        value
+      )
+
+    if (
+      !Number.isNaN(
+        date.getTime()
+      )
+    ) {
+      return date
+    }
+  }
+
+  return null
+}
+
+
+function getNewsAgeHours(
+  pin
+) {
+  const date =
+    getNewsRecordTimestamp(
+      pin
+    )
+
+  if (
+    !date
+  ) {
+    return null
+  }
+
+  return Math.max(
+    0,
+    (
+      Date.now() -
+      date.getTime()
+    ) /
+    (
+      60 *
+      60 *
+      1000
+    )
+  )
+}
+
+
+function getNewsPriority(
+  pin
+) {
+  const category =
+    normalizeCompareText(
+      pin?.category
+    )
+
+  const effect =
+    normalizeCompareText(
+      pin?.ttcEffect
+    )
+
+  const text =
+    [
+      pin?.title,
+      pin?.description,
+      pin?.category,
+      pin?.incidentType,
+      pin?.ttcEffect,
+      pin?.ttcCause,
+    ]
+      .filter(
+        Boolean
+      )
+      .join(
+        ' '
+      )
+      .toLowerCase()
+
+  const alarmLevel =
+    Number(
+      pin?.alarmLevel ||
+      0
+    )
+
+  if (
+    alarmLevel >=
+      2 ||
+    [
+      'missing',
+      'missing-person',
+      'shooting',
+      'stabbing',
+      'homicide',
+      'murder',
+    ]
+      .includes(
+        category
+      ) ||
+    /\bmissing person\b|\bshooting\b|\bstabbing\b|\bhomicide\b|\bmurder\b|\bfatal collision\b|\blife[- ]threatening\b|\bexplosion\b|\bmultiple alarm\b|\bmulti[- ]alarm\b|\bsecond alarm\b|\bthird alarm\b|\bhigh[- ]rise fire\b/.test(
+      text
+    ) ||
+    effect ===
+      'NO_SERVICE' ||
+    /\bno service\b|\bservice suspended\b|\bline closure\b|\bsubway shutdown\b|\bfull closure\b/.test(
+      text
+    )
+  ) {
+    return 'major'
+  }
+
+  if (
+    isTtcPin(
+      pin
+    ) &&
+    (
+      effect ===
+        'STOP_MOVED' ||
+      effect ===
+        'BYPASS'
+    )
+  ) {
+    return 'routine'
+  }
+
+  if (
+    isTorontoFirePin(
+      pin
+    ) &&
+    (
+      /\bvehicle fire\b|\bgas leak\b|\bcarbon monoxide\b/.test(
+        text
+      )
+    )
+  ) {
+    return 'routine'
+  }
+
+  if (
+    isTorontoPolicePin(
+      pin
+    ) &&
+    (
+      category ===
+        'collision' &&
+      !/\bfatal\b|\bserious\b|\blife[- ]threatening\b/.test(
+        text
+      )
+    )
+  ) {
+    return 'routine'
+  }
+
+  return 'regular'
+}
+
+
+function newsPriorityRank(
+  pin
+) {
+  const priority =
+    getNewsPriority(
+      pin
+    )
+
+  if (
+    priority ===
+      'major'
+  ) {
+    return 3
+  }
+
+  if (
+    priority ===
+      'regular'
+  ) {
+    return 2
+  }
+
+  return 1
+}
+
+
+function newsPinIsVisibleAtZoom({
+  pin,
+  zoom,
+  selectedPinId,
+}) {
+  if (
+    selectedPinId &&
+    String(
+      pin?.id
+    ) ===
+      String(
+        selectedPinId
+      )
+  ) {
+    return true
+  }
+
+  const priority =
+    getNewsPriority(
+      pin
+    )
+
+  const ageHours =
+    getNewsAgeHours(
+      pin
+    )
+
+  if (
+    zoom <
+      NEWS_CITY_MAX_ZOOM
+  ) {
+    if (
+      priority ===
+        'major'
+    ) {
+      return true
+    }
+
+    if (
+      ageHours ===
+        null
+    ) {
+      return (
+        priority ===
+        'regular'
+      )
+    }
+
+    if (
+      priority ===
+        'regular'
+    ) {
+      return (
+        ageHours <=
+        NEWS_CITY_REGULAR_MAX_HOURS
+      )
+    }
+
+    return (
+      ageHours <=
+      NEWS_CITY_ROUTINE_MAX_HOURS
+    )
+  }
+
+  if (
+    zoom <
+      NEWS_NEIGHBOURHOOD_MAX_ZOOM
+  ) {
+    if (
+      priority !==
+        'routine'
+    ) {
+      return true
+    }
+
+    if (
+      ageHours ===
+        null
+    ) {
+      return true
+    }
+
+    return (
+      ageHours <=
+      NEWS_NEIGHBOURHOOD_ROUTINE_MAX_HOURS
+    )
+  }
+
+  return true
+}
+
+
+function limitCityNewsPins({
+  pins,
+  zoom,
+  selectedPinId,
+}) {
+  if (
+    zoom >=
+      NEWS_CITY_MAX_ZOOM ||
+    pins.length <=
+      NEWS_CITY_MAX_PINS
+  ) {
+    return pins
+  }
+
+  const sorted =
+    [
+      ...pins,
+    ]
+      .sort(
+        (
+          a,
+          b
+        ) => {
+          const priorityDifference =
+            newsPriorityRank(
+              b
+            ) -
+            newsPriorityRank(
+              a
+            )
+
+          if (
+            priorityDifference !==
+              0
+          ) {
+            return priorityDifference
+          }
+
+          const aTime =
+            getNewsRecordTimestamp(
+              a
+            )?.getTime() ||
+            0
+
+          const bTime =
+            getNewsRecordTimestamp(
+              b
+            )?.getTime() ||
+            0
+
+          return (
+            bTime -
+            aTime
+          )
+        }
+      )
+
+  const limited =
+    sorted.slice(
+      0,
+      NEWS_CITY_MAX_PINS
+    )
+
+  if (
+    selectedPinId
+  ) {
+    const selected =
+      pins.find(
+        (pin) =>
+          String(
+            pin?.id
+          ) ===
+          String(
+            selectedPinId
+          )
+      )
+
+    if (
+      selected &&
+      !limited.some(
+        (pin) =>
+          String(
+            pin?.id
+          ) ===
+          String(
+            selectedPinId
+          )
+      )
+    ) {
+      limited.push(
+        selected
+      )
+    }
+  }
+
+  return limited
+}
+
+
+function newsClusterCellSize(
+  zoom
+) {
+  if (
+    zoom <
+      NEWS_CITY_MAX_ZOOM
+  ) {
+    return 64
+  }
+
+  if (
+    zoom <
+      NEWS_NEIGHBOURHOOD_MAX_ZOOM
+  ) {
+    return 52
+  }
+
+  return 42
+}
+
+
+function groupNewsPinsForMap({
+  map,
+  pins,
+  zoom,
+  selectedPinId,
+}) {
+  if (
+    zoom >=
+      NEWS_CLUSTER_MAX_ZOOM
+  ) {
+    return pins.map(
+      (pin) => ({
+        type:
+          'pin',
+
+        pin,
+      })
+    )
+  }
+
+  const cellSize =
+    newsClusterCellSize(
+      zoom
+    )
+
+  const groups =
+    new Map()
+
+  const selectedGroups =
+    []
+
+  pins.forEach(
+    (pin) => {
+      if (
+        selectedPinId &&
+        String(
+          pin?.id
+        ) ===
+          String(
+            selectedPinId
+          )
+      ) {
+        selectedGroups.push({
+          type:
+            'pin',
+
+          pin,
+        })
+
+        return
+      }
+
+      const longitude =
+        Number(
+          pin?.longitude
+        )
+
+      const latitude =
+        Number(
+          pin?.latitude
+        )
+
+      if (
+        !Number.isFinite(
+          longitude
+        ) ||
+        !Number.isFinite(
+          latitude
+        )
+      ) {
+        return
+      }
+
+      const point =
+        map.project([
+          longitude,
+          latitude,
+        ])
+
+      const key =
+        (
+          Math.floor(
+            point.x /
+            cellSize
+          ) +
+          ':' +
+          Math.floor(
+            point.y /
+            cellSize
+          )
+        )
+
+      const existing =
+        groups.get(
+          key
+        ) ||
+        []
+
+      existing.push(
+        pin
+      )
+
+      groups.set(
+        key,
+        existing
+      )
+    }
+  )
+
+  const grouped =
+    Array.from(
+      groups.values()
+    )
+      .map(
+        (groupPins) => {
+          if (
+            groupPins.length ===
+              1
+          ) {
+            return {
+              type:
+                'pin',
+
+              pin:
+                groupPins[0],
+            }
+          }
+
+          return {
+            type:
+              'cluster',
+
+            pins:
+              groupPins,
+          }
+        }
+      )
+
+  return [
+    ...grouped,
+    ...selectedGroups,
+  ]
+}
+
+
+function createNewsClusterMarker({
+  map,
+  pins,
+}) {
+  if (
+    !Array.isArray(
+      pins
+    ) ||
+    pins.length <
+      2
+  ) {
+    return null
+  }
+
+  const validPins =
+    pins.filter(
+      (pin) =>
+        Number.isFinite(
+          Number(
+            pin?.longitude
+          )
+        ) &&
+        Number.isFinite(
+          Number(
+            pin?.latitude
+          )
+        )
+    )
+
+  if (
+    validPins.length <
+      2
+  ) {
+    return null
+  }
+
+  const longitude =
+    validPins.reduce(
+      (
+        total,
+        pin
+      ) =>
+        total +
+        Number(
+          pin.longitude
+        ),
+      0
+    ) /
+    validPins.length
+
+  const latitude =
+    validPins.reduce(
+      (
+        total,
+        pin
+      ) =>
+        total +
+        Number(
+          pin.latitude
+        ),
+      0
+    ) /
+    validPins.length
+
+  const element =
+    document.createElement(
+      'button'
+    )
+
+  element.type =
+    'button'
+
+  element.setAttribute(
+    'aria-label',
+    `${validPins.length} news stories`
+  )
+
+  element.textContent =
+    String(
+      validPins.length
+    )
+
+  element.style.width =
+    '34px'
+
+  element.style.height =
+    '34px'
+
+  element.style.padding =
+    '0'
+
+  element.style.margin =
+    '0'
+
+  element.style.border =
+    '2px solid #fff'
+
+  element.style.borderRadius =
+    '50%'
+
+  element.style.background =
+    '#111'
+
+  element.style.color =
+    '#fff'
+
+  element.style.font =
+    'inherit'
+
+  element.style.fontSize =
+    '11px'
+
+  element.style.fontWeight =
+    '700'
+
+  element.style.lineHeight =
+    '1'
+
+  element.style.cursor =
+    'pointer'
+
+  element.style.display =
+    'flex'
+
+  element.style.alignItems =
+    'center'
+
+  element.style.justifyContent =
+    'center'
+
+  element.style.boxShadow =
+    '0 1px 5px rgba(0,0,0,0.28)'
+
+  element.addEventListener(
+    'click',
+    (
+      event
+    ) => {
+      event.preventDefault()
+      event.stopPropagation()
+
+      map.easeTo({
+        center: [
+          longitude,
+          latitude,
+        ],
+
+        zoom:
+          Math.min(
+            map.getZoom() +
+              2,
+            16.5
+          ),
+
+        duration:
+          500,
+      })
+    }
+  )
+
+  return new Marker({
+    element,
+
+    anchor:
+      'center',
+  })
+    .setLngLat([
+      longitude,
+      latitude,
+    ])
+    .addTo(
+      map
+    )
+}
+
+
 // ============================================================
 // COMPONENT
 // ============================================================
@@ -2075,6 +2885,15 @@ function MapPins({
   ] =
     useState(
       []
+    )
+
+
+  const [
+    viewportRevision,
+    setViewportRevision,
+  ] =
+    useState(
+      0
     )
 
 
@@ -2214,6 +3033,51 @@ function MapPins({
     []
   )
 
+  useEffect(
+    () => {
+      if (
+        !map
+      ) {
+        return
+      }
+
+      const refreshViewport =
+        () => {
+          setViewportRevision(
+            (
+              current
+            ) =>
+              current + 1
+          )
+        }
+
+      map.on(
+        'zoomend',
+        refreshViewport
+      )
+
+      map.on(
+        'moveend',
+        refreshViewport
+      )
+
+      return () => {
+        map.off(
+          'zoomend',
+          refreshViewport
+        )
+
+        map.off(
+          'moveend',
+          refreshViewport
+        )
+      }
+    },
+    [
+      map,
+    ]
+  )
+
   useEffect(() => {
     if (
       !map ||
@@ -2313,7 +3177,11 @@ function MapPins({
           : getNewsItems()
 
 
-      visiblePins =
+      const zoom =
+        map.getZoom()
+
+
+      const scaleVisibleNews =
         mergedNewsItems
           .filter(
             (pin) =>
@@ -2324,13 +3192,56 @@ function MapPins({
               pin.active !==
                 false
           )
-          .map(
-            (pin) => ({
-              pin,
+          .filter(
+            (pin) =>
+              newsPinIsVisibleAtZoom({
+                pin,
+                zoom,
+                selectedPinId,
+              })
+          )
 
-              pinType:
-                'news',
-            })
+
+      const limitedNews =
+        limitCityNewsPins({
+          pins:
+            scaleVisibleNews,
+
+          zoom,
+
+          selectedPinId,
+        })
+
+
+      visiblePins =
+        groupNewsPinsForMap({
+          map,
+
+          pins:
+            limitedNews,
+
+          zoom,
+
+          selectedPinId,
+        })
+          .map(
+            (item) =>
+              item.type ===
+                'cluster'
+                ? {
+                    clusterPins:
+                      item.pins,
+
+                    pinType:
+                      'news-cluster',
+                  }
+                : {
+                    pin:
+                      item.pin,
+
+                    pinType:
+                      'news',
+                  }
           )
     }
 
@@ -2387,7 +3298,31 @@ function MapPins({
       ({
         pin,
         pinType,
+        clusterPins,
       }) => {
+        if (
+          pinType ===
+            'news-cluster'
+        ) {
+          const clusterMarker =
+            createNewsClusterMarker({
+              map,
+
+              pins:
+                clusterPins,
+            })
+
+          if (
+            clusterMarker
+          ) {
+            markersRef.current.push(
+              clusterMarker
+            )
+          }
+
+          return
+        }
+
         const marker =
           createMarker({
             map,
@@ -2437,6 +3372,8 @@ function MapPins({
     newBusinessRangeFilter,
     contentRevision,
     serverNewsItems,
+    viewportRevision,
+    selectedPinId,
     onDirections,
     onLongWay,
   ])
