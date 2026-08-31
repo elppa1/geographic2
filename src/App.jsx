@@ -225,6 +225,39 @@ function GeographicApp() {
 
   return (
     <main className="app">
+      <style>
+        {`
+          @media (max-width: 700px) {
+            .brand {
+              scale: 0.66;
+              transform-origin: top left;
+            }
+
+            .geographic-sponsor {
+              scale: 0.66;
+              transform-origin: top right;
+            }
+
+            .timeline-shell {
+              scale: 0.66;
+              transform-origin: bottom center;
+            }
+
+            .maplibregl-ctrl-top-left .maplibregl-ctrl,
+            .maplibregl-ctrl-bottom-left .maplibregl-ctrl {
+              scale: 0.72;
+              transform-origin: left center;
+            }
+
+            .maplibregl-ctrl-top-right .maplibregl-ctrl,
+            .maplibregl-ctrl-bottom-right .maplibregl-ctrl {
+              scale: 0.72;
+              transform-origin: right center;
+            }
+          }
+        `}
+      </style>
+
       <GeographicMap
         cityKey={
           cityKey
@@ -265,6 +298,7 @@ function GeographicApp() {
 
 
       <div
+        className="geographic-sponsor"
         style={{
           position:
             'fixed',
@@ -728,52 +762,6 @@ function GeographicApp() {
               type="button"
               onClick={() =>
                 setNewBusinessRangeFilter(
-                  '15'
-                )
-              }
-              style={{
-                border:
-                  '1px solid rgba(0,0,0,0.14)',
-
-                padding:
-                  '4px 7px',
-
-                background:
-                  newBusinessRangeFilter ===
-                  '15'
-                    ? '#111'
-                    : '#fff',
-
-                color:
-                  newBusinessRangeFilter ===
-                  '15'
-                    ? '#fff'
-                    : '#111',
-
-                font:
-                  'inherit',
-
-                fontSize:
-                  '7px',
-
-                fontWeight:
-                  '700',
-
-                letterSpacing:
-                  '0.08em',
-
-                cursor:
-                  'pointer',
-              }}
-            >
-              15 DAYS
-            </button>
-
-
-            <button
-              type="button"
-              onClick={() =>
-                setNewBusinessRangeFilter(
                   '30'
                 )
               }
@@ -859,6 +847,52 @@ function GeographicApp() {
               }}
             >
               2 MONTHS
+            </button>
+
+
+            <button
+              type="button"
+              onClick={() =>
+                setNewBusinessRangeFilter(
+                  '90'
+                )
+              }
+              style={{
+                border:
+                  '1px solid rgba(0,0,0,0.14)',
+
+                padding:
+                  '4px 7px',
+
+                background:
+                  newBusinessRangeFilter ===
+                  '90'
+                    ? '#111'
+                    : '#fff',
+
+                color:
+                  newBusinessRangeFilter ===
+                  '90'
+                    ? '#fff'
+                    : '#111',
+
+                font:
+                  'inherit',
+
+                fontSize:
+                  '7px',
+
+                fontWeight:
+                  '700',
+
+                letterSpacing:
+                  '0.08em',
+
+                cursor:
+                  'pointer',
+              }}
+            >
+              3 MONTHS
             </button>
           </div>
         )}

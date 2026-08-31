@@ -2133,7 +2133,7 @@ function isTtcPin(
 }
 
 
-function getNewsEmoji(
+function getNewsMarkerKind(
   pin
 ) {
   if (
@@ -2141,7 +2141,7 @@ function getNewsEmoji(
       pin
     )
   ) {
-    return '🚔'
+    return 'police'
   }
 
   if (
@@ -2149,20 +2149,20 @@ function getNewsEmoji(
       pin
     )
   ) {
-    return '🚒'
+    return 'fire'
   }
 
   if (
     isTtcPin(pin)
   ) {
-    return '🚌'
+    return 'ttc'
   }
 
-  return ''
+  return 'news'
 }
 
 
-function getNewsEmojiLabel(
+function getNewsMarkerLabel(
   pin
 ) {
   if (
@@ -2191,18 +2191,90 @@ function getNewsEmojiLabel(
 }
 
 
-function appendEmojiMarkerIcon(
+const STABLE_MARKER_ICON_PATHS = {
+  fire:
+    '<path d="M12 2.5c.5 2.8-1.4 4.2-2.4 5.6-.9 1.2-1.4 2.3-1.4 3.7 0 2.2 1.6 4 3.8 4s3.8-1.8 3.8-4c0-1.8-.8-3.2-2.4-4.7.1 1.8-.5 3-1.4 3.8.1-2.7-1.3-4.8-3-6.4 0 0 2.4.2 3 2.7 1.2-1.4 1.4-3.1 0-4.7Z"/><path d="M9.4 17.6c.7.5 1.6.8 2.6.8s1.9-.3 2.6-.8"/>',
+
+  police:
+    '<path d="M12 2.8 18.5 5v5.5c0 4.1-2.7 7.3-6.5 9.5-3.8-2.2-6.5-5.4-6.5-9.5V5L12 2.8Z"/><path d="m12 7 .8 1.7 1.9.2-1.4 1.3.4 1.9-1.7-.9-1.7.9.4-1.9-1.4-1.3 1.9-.2L12 7Z"/>',
+
+  ttc:
+    '<rect x="5.5" y="4.5" width="13" height="13" rx="3"/><path d="M8 8h8M8 12h8M8.5 17.5 7 20M15.5 17.5 17 20"/><circle cx="9" cy="15" r=".8" fill="currentColor" stroke="none"/><circle cx="15" cy="15" r=".8" fill="currentColor" stroke="none"/>',
+
+  business:
+    '<path d="M5 9.5h14l-1.4-4H6.4L5 9.5Z"/><path d="M6.5 9.5v9h11v-9M9 18.5v-5h6v5"/><path d="M5 9.5c0 1.2.9 2 2 2s2-.8 2-2c0 1.2.9 2 2 2s2-.8 2-2c0 1.2.9 2 2 2s2-.8 2-2c0 1.2.9 2 2 2s2-.8 2-2"/>',
+
+  development:
+    '<path d="M6 20V7h8v13M14 11h4v9M8.5 10h3M8.5 13h3M8.5 16h3M16 14h1M16 17h1"/><path d="M4 20h16"/>',
+
+  historic:
+    '<circle cx="12" cy="12" r="7.5"/><path d="M12 7.5V12l3 2"/>',
+
+  news:
+    '<circle cx="12" cy="12" r="7.5"/><path d="M12 8v5"/><circle cx="12" cy="16" r=".8" fill="currentColor" stroke="none"/>',
+
+  new:
+    '<path d="M12 4v16M4 12h16"/>',
+}
+
+
+function appendStableMarkerIcon(
   element,
-  emoji
+  kind
 ) {
+  const compactMobileMarker =
+    typeof window !==
+      'undefined' &&
+    window.matchMedia(
+      '(max-width: 700px)'
+    )
+      .matches
+
+
+  const markerSize =
+    compactMobileMarker
+      ? 22
+      : 28
+
+
+  const svgSize =
+    compactMobileMarker
+      ? 13
+      : 16
+
+
   element.textContent =
-    emoji
+    ''
 
-  element.style.fontSize =
-    '24px'
+  element.style.width =
+    `${markerSize}px`
 
-  element.style.lineHeight =
-    '1'
+  element.style.height =
+    `${markerSize}px`
+
+  element.style.padding =
+    '0'
+
+  element.style.margin =
+    '0'
+
+  element.style.border =
+    '1.25px solid #111'
+
+  element.style.borderRadius =
+    '50%'
+
+  element.style.background =
+    'rgba(255,255,255,0.96)'
+
+  element.style.color =
+    '#111'
+
+  element.style.boxShadow =
+    '0 1px 4px rgba(0,0,0,0.22)'
+
+  element.style.cursor =
+    'pointer'
 
   element.style.display =
     'flex'
@@ -2212,6 +2284,206 @@ function appendEmojiMarkerIcon(
 
   element.style.justifyContent =
     'center'
+
+  element.style.appearance =
+    'none'
+
+  element.style.WebkitAppearance =
+    'none'
+
+  element.style.boxSizing =
+    'border-box'
+
+
+  const svg =
+    document.createElementNS(
+      'http://www.w3.org/2000/svg',
+      'svg'
+    )
+
+
+  svg.setAttribute(
+    'viewBox',
+    '0 0 24 24'
+  )
+
+  svg.setAttribute(
+    'width',
+    String(
+      svgSize
+    )
+  )
+
+  svg.setAttribute(
+    'height',
+    String(
+      svgSize
+    )
+  )
+
+  svg.setAttribute(
+    'aria-hidden',
+    'true'
+  )
+
+  svg.setAttribute(
+    'focusable',
+    'false'
+  )
+
+  svg.setAttribute(
+    'fill',
+    'none'
+  )
+
+  svg.setAttribute(
+    'stroke',
+    'currentColor'
+  )
+
+  svg.setAttribute(
+    'stroke-width',
+    '1.7'
+  )
+
+  svg.setAttribute(
+    'stroke-linecap',
+    'round'
+  )
+
+  svg.setAttribute(
+    'stroke-linejoin',
+    'round'
+  )
+
+
+  svg.innerHTML =
+    STABLE_MARKER_ICON_PATHS[
+      kind
+    ] ||
+    STABLE_MARKER_ICON_PATHS.news
+
+
+  element.appendChild(
+    svg
+  )
+}
+
+
+function getStableMarkerKind({
+  pin,
+  pinType,
+}) {
+  if (
+    pinType ===
+      'news'
+  ) {
+    return getNewsMarkerKind(
+      pin
+    )
+  }
+
+
+  if (
+    pinType ===
+      'new'
+  ) {
+    const group =
+      getNewLifecycleGroup(
+        pin
+      )
+
+
+    if (
+      group ===
+        'business'
+    ) {
+      return 'business'
+    }
+
+
+    if (
+      group ===
+        'development'
+    ) {
+      return 'development'
+    }
+
+
+    return 'new'
+  }
+
+
+  if (
+    pinType ===
+      'historic'
+  ) {
+    return 'historic'
+  }
+
+
+  return 'news'
+}
+
+
+function getStableMarkerLabel({
+  pin,
+  pinType,
+}) {
+  if (
+    pinType ===
+      'news'
+  ) {
+    return getNewsMarkerLabel(
+      pin
+    )
+  }
+
+
+  if (
+    pinType ===
+      'new'
+  ) {
+    const businessIcon =
+      getNewBusinessIcon(
+        pin
+      )
+
+
+    if (
+      businessIcon?.label
+    ) {
+      return businessIcon.label
+    }
+
+
+    const group =
+      getNewLifecycleGroup(
+        pin
+      )
+
+
+    if (
+      group ===
+        'development'
+    ) {
+      return 'Development'
+    }
+
+
+    return 'New'
+  }
+
+
+  if (
+    pinType ===
+      'historic'
+  ) {
+    return 'Historic'
+  }
+
+
+  return 'Geographic'
 }
 
 
@@ -2526,171 +2798,59 @@ function createMarker({
   element.type =
     'button'
 
-  const newsEmoji =
-    pinType ===
-    'news'
-      ? getNewsEmoji(
-          pin
-        )
-      : ''
+  const stableMarkerKind =
+    getStableMarkerKind({
+      pin,
+      pinType,
+    })
 
 
-  const newBusinessIcon =
-    pinType ===
-    'new'
-      ? getNewBusinessIcon(
-          pin
-        )
-      : null
+  const stableMarkerLabel =
+    getStableMarkerLabel({
+      pin,
+      pinType,
+    })
+
+
+  element.className =
+    (
+      'geographic-pin-stable-marker ' +
+      `geographic-pin-stable-marker-${stableMarkerKind}`
+    )
 
 
   if (
-    newsEmoji
+    isTtcPin(
+      pin
+    )
   ) {
-    const iconLabel =
-      getNewsEmojiLabel(
-        pin
-      )
-
-    element.className =
-      'geographic-pin-emoji-marker'
-
-    element.style.width =
-      '32px'
-
-    element.style.height =
-      '32px'
-
-    element.style.padding =
-      '0'
-
-    element.style.margin =
-      '0'
-
-    element.style.border =
-      'none'
-
-    element.style.borderRadius =
-      '0'
-
-    element.style.background =
-      'transparent'
-
-    element.style.boxShadow =
-      'none'
-
-    element.style.cursor =
-      'pointer'
-
-    element.style.display =
-      'flex'
-
-    element.style.alignItems =
-      'center'
-
-    element.style.justifyContent =
-      'center'
-
-    element.style.appearance =
-      'none'
-
-    element.style.WebkitAppearance =
-      'none'
-
-    if (
-      isTtcPin(
-        pin
-      )
-    ) {
-      element.style.zIndex =
-        '20'
-    }
-
-    element.setAttribute(
-      'aria-label',
-      pin.title
-        ? `${iconLabel} · ${pin.title}`
-        : `${iconLabel} marker`
-    )
-
-    appendEmojiMarkerIcon(
-      element,
-      newsEmoji
-    )
+    element.style.zIndex =
+      '20'
   }
-  else if (
-    newBusinessIcon
-  ) {
-    element.className =
-      'geographic-pin-emoji-marker geographic-pin-new-business-emoji-marker'
 
-    element.style.width =
-      '32px'
 
-    element.style.height =
-      '32px'
+  element.setAttribute(
+    'aria-label',
+    pin.title
+      ? `${stableMarkerLabel} · ${pin.title}`
+      : `${stableMarkerLabel} marker`
+  )
 
-    element.style.padding =
-      '0'
 
-    element.style.margin =
-      '0'
+  appendStableMarkerIcon(
+    element,
+    stableMarkerKind
+  )
 
-    element.style.border =
-      'none'
 
-    element.style.borderRadius =
-      '0'
-
-    element.style.background =
-      'transparent'
-
-    element.style.boxShadow =
-      'none'
-
-    element.style.cursor =
-      'pointer'
-
-    element.style.display =
-      'flex'
-
-    element.style.alignItems =
-      'center'
-
-    element.style.justifyContent =
-      'center'
-
-    element.style.appearance =
-      'none'
-
-    element.style.WebkitAppearance =
-      'none'
-
-    element.setAttribute(
-      'aria-label',
-      pin.title
-        ? `${newBusinessIcon.label} · ${pin.title}`
-        : `${newBusinessIcon.label} marker`
+  const compactMobilePopup =
+    typeof window !==
+      'undefined' &&
+    window.matchMedia(
+      '(max-width: 700px)'
     )
+      .matches
 
-    appendEmojiMarkerIcon(
-      element,
-      newBusinessIcon.emoji
-    )
-  }
-  else {
-    element.className =
-      (
-        'geographic-pin ' +
-        `geographic-pin-${pinType}`
-      )
-
-    element.setAttribute(
-      'aria-label',
-      pin.title ||
-      'Geographic marker'
-    )
-  }
 
   const popupContent =
     document.createElement(
@@ -2703,193 +2863,257 @@ function createMarker({
       `geographic-pin-card-${pinType}`
     )
 
-  appendText({
-    parent:
-      popupContent,
-
-    className:
-      'geographic-pin-type',
-
-    text:
-      pinType.toUpperCase(),
-  })
 
   if (
+    compactMobilePopup &&
     pinType ===
-    'historic'
+      'news'
   ) {
     appendText({
       parent:
         popupContent,
 
       className:
-        'geographic-pin-year',
+        'geographic-pin-title',
 
       text:
-        getHistoricDateLabel(
-          pin
-        ),
+        pin.title,
     })
-  }
 
-  if (
-    pinType ===
-    'news'
-  ) {
-    appendText({
-      parent:
-        popupContent,
 
-      className:
-        'geographic-pin-year',
-
-      text:
-        formatNewsDate(
-          pin.publishedAt
-        ),
-    })
-  }
-
-  if (
-    pinType ===
-    'new'
-  ) {
-    const ageLabel =
-      BUSINESS_CATEGORIES.includes(
-        String(
-          pin.category ||
-          ''
-        )
-          .toLowerCase()
+    const titleText =
+      normalizeCompareText(
+        pin.title
       )
-        ? getNewBusinessAgeLabel(
-            pin
-          )
-        : ''
 
 
-    appendText({
-      parent:
-        popupContent,
-
-      className:
-        'geographic-pin-year',
-
-      text:
-        [
-          formatStatus(
-            pin.status
-          ),
-          ageLabel,
-        ]
-          .filter(
-            Boolean
-          )
-          .join(
-            ' · '
-          ),
-    })
-  }
-
-  appendText({
-    parent:
-      popupContent,
-
-    className:
-      'geographic-pin-title',
-
-    text:
-      pin.title,
-  })
-
-  appendText({
-    parent:
-      popupContent,
-
-    className:
-      'geographic-pin-location',
-
-    text:
-      (
+    const locationText =
+      String(
         pin.intersection ||
-        pin.location
-      ),
-  })
+        pin.location ||
+        ''
+      )
+        .trim()
 
-  if (
-    pinType ===
-      'news'
-  ) {
-    appendNewsImage({
+
+    if (
+      locationText &&
+      !titleText.includes(
+        normalizeCompareText(
+          locationText
+        )
+      )
+    ) {
+      appendText({
+        parent:
+          popupContent,
+
+        className:
+          'geographic-pin-location',
+
+        text:
+          locationText,
+      })
+    }
+
+
+    appendSource({
       parent:
         popupContent,
 
       pin,
     })
   }
-
-
-  appendText({
-    parent:
-      popupContent,
-
-    className:
-      'geographic-pin-description',
-
-    text:
-      pin.description,
-  })
-
-  if (
-    pin.category
-  ) {
+  else {
     appendText({
       parent:
         popupContent,
 
       className:
-        'geographic-pin-category',
+        'geographic-pin-type',
 
       text:
-        String(
-          pin.category
-        )
-          .replace(
-            /-/g,
-            ' '
-          )
-          .toUpperCase(),
+        pinType.toUpperCase(),
     })
-  }
 
-  appendSource({
-    parent:
-      popupContent,
 
-    pin,
-  })
+    if (
+      pinType ===
+      'historic'
+    ) {
+      appendText({
+        parent:
+          popupContent,
 
-  if (
-    pinType !==
+        className:
+          'geographic-pin-year',
+
+        text:
+          getHistoricDateLabel(
+            pin
+          ),
+      })
+    }
+
+
+    if (
+      pinType ===
       'news'
-  ) {
-    appendRouteActions({
-      popupContent,
-      pin,
-      longitude,
-      latitude,
-      onDirections,
-      onLongWay,
-    })
-  }
+    ) {
+      appendText({
+        parent:
+          popupContent,
 
-  const compactMobilePopup =
-    typeof window !==
-      'undefined' &&
-    window.matchMedia(
-      '(max-width: 700px)'
-    )
-      .matches
+        className:
+          'geographic-pin-year',
+
+        text:
+          formatNewsDate(
+            pin.publishedAt
+          ),
+      })
+    }
+
+
+    if (
+      pinType ===
+      'new'
+    ) {
+      const ageLabel =
+        BUSINESS_CATEGORIES.includes(
+          String(
+            pin.category ||
+            ''
+          )
+            .toLowerCase()
+        )
+          ? getNewBusinessAgeLabel(
+              pin
+            )
+          : ''
+
+
+      appendText({
+        parent:
+          popupContent,
+
+        className:
+          'geographic-pin-year',
+
+        text:
+          [
+            formatStatus(
+              pin.status
+            ),
+            ageLabel,
+          ]
+            .filter(
+              Boolean
+            )
+            .join(
+              ' · '
+            ),
+      })
+    }
+
+
+    appendText({
+      parent:
+        popupContent,
+
+      className:
+        'geographic-pin-title',
+
+      text:
+        pin.title,
+    })
+
+
+    appendText({
+      parent:
+        popupContent,
+
+      className:
+        'geographic-pin-location',
+
+      text:
+        (
+          pin.intersection ||
+          pin.location
+        ),
+    })
+
+
+    if (
+      pinType ===
+        'news'
+    ) {
+      appendNewsImage({
+        parent:
+          popupContent,
+
+        pin,
+      })
+    }
+
+
+    appendText({
+      parent:
+        popupContent,
+
+      className:
+        'geographic-pin-description',
+
+      text:
+        pin.description,
+    })
+
+
+    if (
+      pin.category
+    ) {
+      appendText({
+        parent:
+          popupContent,
+
+        className:
+          'geographic-pin-category',
+
+        text:
+          String(
+            pin.category
+          )
+            .replace(
+              /-/g,
+              ' '
+            )
+            .toUpperCase(),
+      })
+    }
+
+
+    appendSource({
+      parent:
+        popupContent,
+
+      pin,
+    })
+
+
+    if (
+      pinType !==
+        'news'
+    ) {
+      appendRouteActions({
+        popupContent,
+        pin,
+        longitude,
+        latitude,
+        onDirections,
+        onLongWay,
+      })
+    }
+  }
 
 
   if (
@@ -2899,19 +3123,85 @@ function createMarker({
       '0'
 
     popupContent.style.width =
-      'min(190px, calc(100vw - 64px))'
+      'min(165px, calc(100vw - 56px))'
 
     popupContent.style.maxWidth =
-      'calc(100vw - 64px)'
+      'calc(100vw - 56px)'
 
     popupContent.style.maxHeight =
-      '46vh'
+      pinType ===
+        'news'
+        ? '34vh'
+        : '38vh'
 
     popupContent.style.overflowY =
       'auto'
 
     popupContent.style.overscrollBehavior =
       'contain'
+
+    popupContent.style.fontSize =
+      '0.78em'
+
+    popupContent.style.lineHeight =
+      '1.2'
+
+
+    const mobileTitle =
+      popupContent.querySelector(
+        '.geographic-pin-title'
+      )
+
+
+    if (
+      mobileTitle
+    ) {
+      mobileTitle.style.fontSize =
+        '10px'
+
+      mobileTitle.style.lineHeight =
+        '1.18'
+
+      mobileTitle.style.marginBottom =
+        '4px'
+    }
+
+
+    const mobileLocation =
+      popupContent.querySelector(
+        '.geographic-pin-location'
+      )
+
+
+    if (
+      mobileLocation
+    ) {
+      mobileLocation.style.fontSize =
+        '8px'
+
+      mobileLocation.style.lineHeight =
+        '1.2'
+
+      mobileLocation.style.marginBottom =
+        '5px'
+    }
+
+
+    const mobileSource =
+      popupContent.querySelector(
+        '.geographic-pin-source'
+      )
+
+
+    if (
+      mobileSource
+    ) {
+      mobileSource.style.fontSize =
+        '7px'
+
+      mobileSource.style.lineHeight =
+        '1.2'
+    }
   }
 
 
@@ -2928,7 +3218,7 @@ function createMarker({
 
       maxWidth:
         compactMobilePopup
-          ? '210px'
+          ? '178px'
           : '280px',
     })
       .setDOMContent(
