@@ -333,10 +333,10 @@ function GeographicApp() {
             .timeline-shell {
               scale: 1;
               transform-origin: bottom center;
-              width: calc(100vw - 12px) !important;
+              width: calc(100vw - 16px) !important;
               max-width: none !important;
-              bottom: max(6px, env(safe-area-inset-bottom)) !important;
-              padding: 6px 8px 8px !important;
+              bottom: max(10px, env(safe-area-inset-bottom)) !important;
+              padding: 4px 6px 5px !important;
             }
 
             .timeline-years {
@@ -344,9 +344,9 @@ function GeographicApp() {
             }
 
             .timeline-button {
-              min-width: 42px !important;
-              padding: 5px 6px !important;
-              font-size: 7px !important;
+              min-width: 38px !important;
+              padding: 4px 5px !important;
+              font-size: 6px !important;
               line-height: 1 !important;
             }
 

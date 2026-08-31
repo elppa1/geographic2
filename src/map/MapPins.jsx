@@ -2266,9 +2266,6 @@ function appendEmojiMarkerIcon(
   element,
   emoji
 ) {
-  element.textContent =
-    emoji
-
   const compactMobileMarker =
     typeof window !==
       'undefined' &&
@@ -2277,11 +2274,6 @@ function appendEmojiMarkerIcon(
     )
       .matches
 
-
-  element.style.fontSize =
-    compactMobileMarker
-      ? '13px'
-      : '24px'
 
   element.style.lineHeight =
     '1'
@@ -2294,6 +2286,87 @@ function appendEmojiMarkerIcon(
 
   element.style.justifyContent =
     'center'
+
+
+  if (
+    !compactMobileMarker
+  ) {
+    element.textContent =
+      emoji
+
+    element.style.fontSize =
+      '24px'
+
+    return
+  }
+
+
+  element.textContent =
+    ''
+
+
+  const iconShell =
+    document.createElement(
+      'span'
+    )
+
+
+  const ringColor =
+    emoji ===
+      '🚒'
+      ? 'rgba(205, 48, 48, 0.68)'
+      : emoji ===
+          '🚔'
+        ? 'rgba(45, 92, 170, 0.68)'
+        : emoji ===
+            '🚌'
+          ? 'rgba(20, 20, 20, 0.50)'
+          : 'rgba(20, 20, 20, 0.28)'
+
+
+  iconShell.textContent =
+    emoji
+
+  iconShell.style.width =
+    '24px'
+
+  iconShell.style.height =
+    '24px'
+
+  iconShell.style.display =
+    'grid'
+
+  iconShell.style.placeItems =
+    'center'
+
+  iconShell.style.flex =
+    '0 0 24px'
+
+  iconShell.style.border =
+    `1px solid ${ringColor}`
+
+  iconShell.style.borderRadius =
+    '50%'
+
+  iconShell.style.background =
+    'rgba(255, 255, 255, 0.94)'
+
+  iconShell.style.boxShadow =
+    '0 1px 4px rgba(0, 0, 0, 0.34)'
+
+  iconShell.style.fontSize =
+    '16px'
+
+  iconShell.style.lineHeight =
+    '1'
+
+  iconShell.style.pointerEvents =
+    'none'
+
+
+  element.appendChild(
+    iconShell
+  )
 }
 
 
