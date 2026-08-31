@@ -919,6 +919,15 @@ const EMPTY_NEW = {
   status:
     'proposed',
 
+  cuisine:
+    '',
+
+  businessUrl:
+    '',
+
+  leadStatus:
+    '',
+
   announcedAt:
     '',
 
@@ -1528,6 +1537,38 @@ function getReviewSourceLabel(
 
 
   return 'SOURCE'
+}
+
+
+// ============================================================
+// NOWSERVING RESTAURANT LEAD
+// ============================================================
+
+function isNowServingLead(
+  record
+) {
+  const source =
+    String(
+      record?.source ||
+      record?.scraperSource ||
+      record?.leadSource ||
+      ''
+    )
+      .trim()
+      .toLowerCase()
+
+
+  return (
+    record?.type ===
+      'new' &&
+    (
+      source.includes(
+        'nowserving'
+      ) ||
+      record?.leadSource ===
+        'nowserving'
+    )
+  )
 }
 
 
@@ -2734,6 +2775,11 @@ function normalizePinRecord(
     imageUrl:
       normalizeSourceUrl(
         record.imageUrl
+      ),
+
+    businessUrl:
+      normalizeSourceUrl(
+        record.businessUrl
       ),
 
     pinPositionMode:
@@ -6811,6 +6857,11 @@ function AdminRoom() {
           draft.sourceUrl
         ),
 
+      businessUrl:
+        normalizeSourceUrl(
+          draft.businessUrl
+        ),
+
       imageUrl:
         normalizeSourceUrl(
           draft.imageUrl
@@ -6968,6 +7019,62 @@ function AdminRoom() {
             item.id ===
             editingReviewId
         )
+
+
+      if (
+        tab ===
+          'new' &&
+        sourceReview &&
+        isNowServingLead(
+          sourceReview
+        )
+      ) {
+        if (
+          !String(
+            record.description ||
+            ''
+          )
+            .trim()
+        ) {
+          window.alert(
+            'Write a short Geographic description before publishing this restaurant.'
+          )
+
+
+          return
+        }
+
+
+        if (
+          !String(
+            record.location ||
+            record.intersection ||
+            ''
+          )
+            .trim()
+        ) {
+          window.alert(
+            'Confirm the restaurant location before publishing.'
+          )
+
+
+          return
+        }
+
+
+        if (
+          !hasRecordCoordinates(
+            record
+          )
+        ) {
+          window.alert(
+            'Confirm the map pin before publishing this restaurant.'
+          )
+
+
+          return
+        }
+      }
 
 
       if (
@@ -9262,6 +9369,18 @@ function AdminRoom() {
       }
 
 
+      if (
+        tab ===
+          'new' &&
+        sourceReview &&
+        isNowServingLead(
+          sourceReview
+        )
+      ) {
+        return 'EDIT RESTAURANT LEAD'
+      }
+
+
       return (
         `REVIEW + PUBLISH ${tabLabel(tab)}`
       )
@@ -9320,6 +9439,18 @@ function AdminRoom() {
           'resolve'
       ) {
         return 'ACKNOWLEDGE'
+      }
+
+
+      if (
+        tab ===
+          'new' &&
+        sourceReview &&
+        isNowServingLead(
+          sourceReview
+        )
+      ) {
+        return 'PUBLISH NEW BUSINESS'
       }
 
 
@@ -10017,6 +10148,28 @@ function AdminRoom() {
 
                 <label className="admin-field">
                   <span>
+                    CUISINE / FOOD TYPE
+                  </span>
+
+                  <input
+                    value={
+                      draft.cuisine ||
+                      ''
+                    }
+                    onChange={
+                      (event) =>
+                        updateDraft(
+                          'cuisine',
+                          event.target.value
+                        )
+                    }
+                    placeholder="Pizza, Japanese, Indian, cafe..."
+                  />
+                </label>
+
+
+                <label className="admin-field">
+                  <span>
                     STATUS
                   </span>
 
@@ -10485,6 +10638,31 @@ function AdminRoom() {
             </label>
 
 
+            {tab ===
+              'new' && (
+              <label className="admin-field admin-field-wide">
+                <span>
+                  BUSINESS LINK
+                </span>
+
+                <input
+                  type="url"
+                  value={
+                    draft.businessUrl ||
+                    ''
+                  }
+                  onChange={
+                    (event) =>
+                      updateDraft(
+                        'businessUrl',
+                        event.target.value
+                      )
+                  }
+                  placeholder="Official website or Instagram"
+                />
+              </label>
+            )}
+
 
             {tab ===
               'news' && (
@@ -10699,6 +10877,118 @@ function AdminRoom() {
                   </>
                 )}
               </div>
+
+
+              {tab ===
+                'new' &&
+                cityKey ===
+                  'toronto' &&
+                scraperAvailable && (
+                <div
+                  style={{
+                    border:
+                      '1px solid rgba(0,0,0,0.18)',
+
+                    padding:
+                      '12px',
+
+                    marginBottom:
+                      '12px',
+                  }}
+                >
+                  <div
+                    style={{
+                      display:
+                        'flex',
+
+                      alignItems:
+                        'center',
+
+                      justifyContent:
+                        'space-between',
+
+                      gap:
+                        '12px',
+
+                      flexWrap:
+                        'wrap',
+                    }}
+                  >
+                    <div>
+                      <div
+                        className="admin-record-meta"
+                        style={{
+                          fontWeight:
+                            700,
+                        }}
+                      >
+                        NOWSERVINGTO RESTAURANT LEADS
+                      </div>
+
+                      <div className="admin-record-meta">
+                        DISCOVERY ONLY · EDIT + CONFIRM BEFORE PUBLISHING
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="admin-save"
+                      disabled={
+                        scraperRunning
+                      }
+                      onClick={
+                        updateCurrentCity
+                      }
+                    >
+                      {scraperRunning
+                        ? 'SYNCING…'
+                        : 'SYNC NOWSERVING'}
+                    </button>
+                  </div>
+
+
+                  {scraperError && (
+                    <div
+                      className="admin-record-meta"
+                      style={{
+                        marginTop:
+                          '10px',
+                      }}
+                    >
+                      ERROR · {scraperError}
+                    </div>
+                  )}
+
+
+                  {scraperResult && (
+                    <div
+                      className="admin-record-meta"
+                      style={{
+                        marginTop:
+                          '10px',
+                      }}
+                    >
+                      FOUND · {
+                        Number(
+                          scraperResult.found ||
+                          scraperResult.eligible ||
+                          0
+                        )
+                      } · ADDED · {
+                        Number(
+                          scraperResult.added ||
+                          0
+                        )
+                      } · SKIPPED · {
+                        Number(
+                          scraperResult.skipped ||
+                          0
+                        )
+                      }
+                    </div>
+                  )}
+                </div>
+              )}
 
 
               {tab ===
@@ -11210,6 +11500,14 @@ function AdminRoom() {
                             : 'new'
 
 
+                        const nowServingLead =
+                          tab ===
+                            'new' &&
+                          isNowServingLead(
+                            record
+                          )
+
+
                         const previousRecord =
                           record.previousRecord ||
                           null
@@ -11643,6 +11941,41 @@ function AdminRoom() {
                             )}
 
 
+                            {nowServingLead && (
+                              <>
+                                <div className="admin-record-meta">
+                                  RESTAURANT LEAD · NOWSERVINGTO · UNVERIFIED
+                                </div>
+
+                                {record.cuisine && (
+                                  <div className="admin-record-meta">
+                                    CUISINE · {
+                                      String(
+                                        record.cuisine
+                                      )
+                                        .toUpperCase()
+                                    }
+                                  </div>
+                                )}
+
+                                {record.sourceFirstSeenLabel && (
+                                  <div className="admin-record-meta">
+                                    SOURCE FIRST SEEN · {
+                                      String(
+                                        record.sourceFirstSeenLabel
+                                      )
+                                        .toUpperCase()
+                                    }
+                                  </div>
+                                )}
+
+                                <div className="admin-record-meta">
+                                  PIN · CONFIRM IN EDITOR
+                                </div>
+                              </>
+                            )}
+
+
                             {tab !==
                               'news' &&
                               record.publishedAt && (
@@ -11779,66 +12112,97 @@ function AdminRoom() {
 
 
                             <div className="admin-record-actions">
-                              <button
-                                type="button"
-                                className="admin-review-approve"
-                                disabled={
-                                  approvingReviewId ===
-                                  record.id
-                                }
-                                onClick={() =>
-                                  approveReview(
-                                    record
+                              {nowServingLead
+                                ? (
+                                    <>
+                                      <button
+                                        type="button"
+                                        className="admin-review-approve"
+                                        onClick={() =>
+                                          editReview(
+                                            record
+                                          )
+                                        }
+                                      >
+                                        EDIT LEAD
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          rejectReview(
+                                            record
+                                          )
+                                        }
+                                      >
+                                        REJECT
+                                      </button>
+                                    </>
                                   )
-                                }
-                              >
-                                {
-                                  approvingReviewId ===
-                                  record.id
-                                    ? 'PLACING…'
-                                    : tab ===
-                                        'news'
-                                      ? getNewsroomApproveLabel(
-                                          record
+                                : (
+                                    <>
+                                      <button
+                                        type="button"
+                                        className="admin-review-approve"
+                                        disabled={
+                                          approvingReviewId ===
+                                          record.id
+                                        }
+                                        onClick={() =>
+                                          approveReview(
+                                            record
+                                          )
+                                        }
+                                      >
+                                        {
+                                          approvingReviewId ===
+                                          record.id
+                                            ? 'PLACING…'
+                                            : tab ===
+                                                'news'
+                                              ? getNewsroomApproveLabel(
+                                                  record
+                                                )
+                                              : 'APPROVE'
+                                        }
+                                      </button>
+
+                                      {!(
+                                        tab ===
+                                          'news' &&
+                                        (
+                                          newsroomAction ===
+                                            'update' ||
+                                          newsroomAction ===
+                                            'resolve'
                                         )
-                                      : 'APPROVE'
-                                }
-                              </button>
+                                      ) && (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              editReview(
+                                                record
+                                              )
+                                            }
+                                          >
+                                            EDIT
+                                          </button>
 
-                              {!(
-                                tab ===
-                                  'news' &&
-                                (
-                                  newsroomAction ===
-                                    'update' ||
-                                  newsroomAction ===
-                                    'resolve'
-                                )
-                              ) && (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      editReview(
-                                        record
-                                      )
-                                    }
-                                  >
-                                    EDIT
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      rejectReview(
-                                        record
-                                      )
-                                    }
-                                  >
-                                    REJECT
-                                  </button>
-                                </>
-                              )}
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              rejectReview(
+                                                record
+                                              )
+                                            }
+                                          >
+                                            REJECT
+                                          </button>
+                                        </>
+                                      )}
+                                    </>
+                                  )}
                             </div>
                           </article>
                         )
