@@ -6868,10 +6868,8 @@ function AdminRoom() {
         ),
 
       longitude:
-        Number.isFinite(
-          Number(
-            draft.longitude
-          )
+        isUsableCoordinate(
+          draft.longitude
         )
           ? Number(
               draft.longitude
@@ -6879,10 +6877,8 @@ function AdminRoom() {
           : null,
 
       latitude:
-        Number.isFinite(
-          Number(
-            draft.latitude
-          )
+        isUsableCoordinate(
+          draft.latitude
         )
           ? Number(
               draft.latitude
@@ -6890,10 +6886,8 @@ function AdminRoom() {
           : null,
 
       searchedLongitude:
-        Number.isFinite(
-          Number(
-            draft.searchedLongitude
-          )
+        isUsableCoordinate(
+          draft.searchedLongitude
         )
           ? Number(
               draft.searchedLongitude
@@ -6901,10 +6895,8 @@ function AdminRoom() {
           : null,
 
       searchedLatitude:
-        Number.isFinite(
-          Number(
-            draft.searchedLatitude
-          )
+        isUsableCoordinate(
+          draft.searchedLatitude
         )
           ? Number(
               draft.searchedLatitude
@@ -7029,22 +7021,6 @@ function AdminRoom() {
           sourceReview
         )
       ) {
-        if (
-          !String(
-            record.description ||
-            ''
-          )
-            .trim()
-        ) {
-          window.alert(
-            'Write a short Geographic description before publishing this restaurant.'
-          )
-
-
-          return
-        }
-
-
         if (
           !String(
             record.location ||
@@ -10250,6 +10226,33 @@ function AdminRoom() {
                     }
                   />
                 </label>
+
+
+                {draft.sourceFirstSeenLabel && (
+                  <div className="admin-field">
+                    <span>
+                      NOWSERVING FIRST SEEN
+                    </span>
+
+                    <div
+                      style={{
+                        border:
+                          '1px solid rgba(0,0,0,0.18)',
+
+                        padding:
+                          '11px 12px',
+
+                        minHeight:
+                          '18px',
+                      }}
+                    >
+                      {String(
+                        draft.sourceFirstSeenLabel
+                      )
+                        .toUpperCase()}
+                    </div>
+                  </div>
+                )}
               </>
             )}
 
@@ -11845,6 +11848,18 @@ function AdminRoom() {
                                   </p>
                                 )}
                               </>
+                            )}
+
+
+                            {record.sourceFirstSeenLabel && (
+                              <div className="admin-record-meta">
+                                NOWSERVING FIRST SEEN · {
+                                  String(
+                                    record.sourceFirstSeenLabel
+                                  )
+                                    .toUpperCase()
+                                }
+                              </div>
                             )}
 
 
