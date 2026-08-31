@@ -2320,10 +2320,37 @@ function appendEmojiMarkerIcon(
     !compactMobileMarker
   ) {
     element.textContent =
+      ''
+
+
+    const desktopIconShell =
+      document.createElement(
+        'span'
+      )
+
+
+    desktopIconShell.textContent =
       emoji
 
-    element.style.fontSize =
+    desktopIconShell.style.display =
+      'inline-block'
+
+    desktopIconShell.style.fontSize =
       '24px'
+
+    desktopIconShell.style.lineHeight =
+      '1'
+
+    desktopIconShell.style.pointerEvents =
+      'none'
+
+    desktopIconShell.style.transformOrigin =
+      'center center'
+
+
+    element.appendChild(
+      desktopIconShell
+    )
 
     return
   }
@@ -2744,8 +2771,14 @@ function applyMarkerActivityPulse({
 
 
   const target =
-    element.firstElementChild ||
-    element
+    element.firstElementChild
+
+
+  if (
+    !target
+  ) {
+    return
+  }
 
 
   if (
