@@ -1559,6 +1559,77 @@ function appendSource({
 
 
 // ============================================================
+// MOBILE BUSINESS LINK
+// ============================================================
+
+function appendMobileBusinessLink({
+  parent,
+  pin,
+}) {
+  const href =
+    normalizeUrl(
+      pin?.businessUrl ||
+      pin?.sourceUrl
+    )
+
+
+  if (
+    !href
+  ) {
+    return
+  }
+
+
+  const shell =
+    document.createElement(
+      'div'
+    )
+
+  shell.className =
+    'geographic-pin-source'
+
+
+  const link =
+    document.createElement(
+      'a'
+    )
+
+  link.href =
+    href
+
+  link.target =
+    '_blank'
+
+  link.rel =
+    'noopener noreferrer'
+
+  link.className =
+    'geographic-pin-source-link'
+
+  link.textContent =
+    'LINK ↗'
+
+  link.addEventListener(
+    'click',
+    (
+      event
+    ) => {
+      event.stopPropagation()
+    }
+  )
+
+
+  shell.appendChild(
+    link
+  )
+
+  parent.appendChild(
+    shell
+  )
+}
+
+
+// ============================================================
 // ROUTE ACTIONS
 // ============================================================
 
@@ -2198,8 +2269,19 @@ function appendEmojiMarkerIcon(
   element.textContent =
     emoji
 
+  const compactMobileMarker =
+    typeof window !==
+      'undefined' &&
+    window.matchMedia(
+      '(max-width: 700px)'
+    )
+      .matches
+
+
   element.style.fontSize =
-    '24px'
+    compactMobileMarker
+      ? '10px'
+      : '24px'
 
   element.style.lineHeight =
     '1'
@@ -2718,6 +2800,60 @@ function createMarker({
     pinType ===
       'news'
   ) {
+    const showMobileNewsDate =
+      isTorontoFirePin(
+        pin
+      ) ||
+      isTorontoPolicePin(
+        pin
+      )
+
+
+    if (
+      showMobileNewsDate
+    ) {
+      appendText({
+        parent:
+          popupContent,
+
+        className:
+          'geographic-pin-year',
+
+        text:
+          formatNewsDate(
+            pin.publishedAt
+          ),
+      })
+    }
+
+
+    appendText({
+      parent:
+        popupContent,
+
+      className:
+        'geographic-pin-title',
+
+      text:
+        pin.title,
+    })
+  }
+  else if (
+    compactMobilePopup &&
+    pinType ===
+      'new' &&
+    (
+      normalizeCompareText(
+        pin.newType
+      ) ===
+        'business' ||
+      BUSINESS_CATEGORIES.includes(
+        normalizeCompareText(
+          pin.category
+        )
+      )
+    )
+  ) {
     appendText({
       parent:
         popupContent,
@@ -2730,43 +2866,30 @@ function createMarker({
     })
 
 
-    const titleText =
-      normalizeCompareText(
-        pin.title
-      )
+    appendText({
+      parent:
+        popupContent,
+
+      className:
+        'geographic-pin-category',
+
+      text:
+        (
+          pin.cuisine ||
+          newBusinessIcon?.label ||
+          String(
+            pin.category ||
+            'Business'
+          )
+            .replace(
+              /-/g,
+              ' '
+            )
+        ),
+    })
 
 
-    const locationText =
-      String(
-        pin.intersection ||
-        pin.location ||
-        ''
-      )
-        .trim()
-
-
-    if (
-      locationText &&
-      !titleText.includes(
-        normalizeCompareText(
-          locationText
-        )
-      )
-    ) {
-      appendText({
-        parent:
-          popupContent,
-
-        className:
-          'geographic-pin-location',
-
-        text:
-          locationText,
-      })
-    }
-
-
-    appendSource({
+    appendMobileBusinessLink({
       parent:
         popupContent,
 
@@ -2972,7 +3095,25 @@ function createMarker({
       '0'
 
     popupContent.style.width =
-      'min(165px, calc(100vw - 56px))'
+      pinType ===
+        'news' ||
+      (
+        pinType ===
+          'new' &&
+        (
+          normalizeCompareText(
+            pin.newType
+          ) ===
+            'business' ||
+          BUSINESS_CATEGORIES.includes(
+            normalizeCompareText(
+              pin.category
+            )
+          )
+        )
+      )
+        ? 'min(145px, calc(100vw - 64px))'
+        : 'min(165px, calc(100vw - 56px))'
 
     popupContent.style.maxWidth =
       'calc(100vw - 56px)'
@@ -2994,6 +3135,26 @@ function createMarker({
 
     popupContent.style.lineHeight =
       '1.2'
+
+
+    const mobileDate =
+      popupContent.querySelector(
+        '.geographic-pin-year'
+      )
+
+
+    if (
+      mobileDate
+    ) {
+      mobileDate.style.fontSize =
+        '7px'
+
+      mobileDate.style.lineHeight =
+        '1.15'
+
+      mobileDate.style.marginBottom =
+        '3px'
+    }
 
 
     const mobileTitle =
@@ -3033,6 +3194,79 @@ function createMarker({
 
       mobileLocation.style.marginBottom =
         '5px'
+    }
+
+
+    const mobileCategory =
+      popupContent.querySelector(
+        '.geographic-pin-category'
+      )
+
+
+    if (
+      mobileCategory
+    ) {
+      mobileCategory.style.marginTop =
+        '0'
+
+      mobileCategory.style.fontSize =
+        '7px'
+
+      mobileCategory.style.lineHeight =
+        '1.2'
+
+      mobileCategory.style.letterSpacing =
+        '0.05em'
+
+      mobileCategory.style.opacity =
+        '0.55'
+    }
+
+
+    const mobileImage =
+      popupContent.querySelector(
+        'img'
+      )
+
+
+    if (
+      mobileImage
+    ) {
+      const mobileImageLink =
+        mobileImage.parentElement
+
+
+      if (
+        mobileImageLink
+      ) {
+        mobileImageLink.style.display =
+          'block'
+
+        mobileImageLink.style.width =
+          '74px'
+
+        mobileImageLink.style.margin =
+          '3px 0 5px'
+      }
+
+
+      mobileImage.style.width =
+        '74px'
+
+      mobileImage.style.height =
+        '46px'
+
+      mobileImage.style.maxHeight =
+        '46px'
+
+      mobileImage.style.margin =
+        '0'
+
+      mobileImage.style.objectFit =
+        'cover'
+
+      mobileImage.style.borderRadius =
+        '3px'
     }
 
 
