@@ -1263,6 +1263,76 @@ function formatNewsDate(
 }
 
 
+function formatNewsDateTime(
+  value
+) {
+  if (
+    !value
+  ) {
+    return ''
+  }
+
+
+  const date =
+    value instanceof Date
+      ? value
+      : new Date(
+          value
+        )
+
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return String(
+      value
+    )
+  }
+
+
+  const dateText =
+    date.toLocaleDateString(
+      'en-CA',
+      {
+        timeZone:
+          'America/Toronto',
+
+        year:
+          'numeric',
+
+        month:
+          'short',
+
+        day:
+          'numeric',
+      }
+    )
+
+
+  const timeText =
+    date.toLocaleTimeString(
+      'en-CA',
+      {
+        timeZone:
+          'America/Toronto',
+
+        hour:
+          'numeric',
+
+        minute:
+          '2-digit',
+      }
+    )
+
+
+  return (
+    `${dateText} · ${timeText}`
+  )
+}
+
+
 function formatStatus(
   value
 ) {
@@ -3255,7 +3325,10 @@ function createMarker({
           'geographic-pin-year',
 
         text:
-          formatNewsDate(
+          formatNewsDateTime(
+            getNewsRecordTimestamp(
+              pin
+            ) ||
             pin.publishedAt
           ),
       })
