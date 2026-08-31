@@ -28,6 +28,10 @@ const SCRAPER_PROCESSED_KEY =
   'elppa-geographic-scraper-processed'
 
 
+export const GEOGRAPHIC_STORE_CHANGE_EVENT =
+  'elppa-geographic-store-change'
+
+
 // ============================================================
 // GENERIC STORE
 // ============================================================
@@ -85,6 +89,23 @@ function writeRecords(
         records
       )
     )
+
+
+    if (
+      typeof window !==
+        'undefined'
+    ) {
+      window.dispatchEvent(
+        new CustomEvent(
+          GEOGRAPHIC_STORE_CHANGE_EVENT,
+          {
+            detail: {
+              key,
+            },
+          }
+        )
+      )
+    }
   } catch (
     error
   ) {

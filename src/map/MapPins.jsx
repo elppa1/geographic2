@@ -14,6 +14,7 @@ import {
 } from '../cities/index.js'
 
 import {
+  GEOGRAPHIC_STORE_CHANGE_EVENT,
   getHistoricItems,
   getNewsItems,
   getNewItems,
@@ -30,6 +31,14 @@ const PUBLISHED_NEWS_ENDPOINT =
 
 
 const PUBLISHED_NEWS_REFRESH_MS =
+  15 * 1000
+
+
+const PUBLISHED_NEW_ENDPOINT =
+  '/api/geographic/toronto/new/published?status=all'
+
+
+const PUBLISHED_NEW_REFRESH_MS =
   15 * 1000
 
 
@@ -204,6 +213,55 @@ function newPinMatchesSubtype(
 // NEW BUSINESS RANGE
 // ============================================================
 
+function parseNewBusinessDateValue(
+  value
+) {
+  if (
+    !value
+  ) {
+    return null
+  }
+
+
+  const text =
+    String(
+      value
+    )
+      .trim()
+
+
+  if (
+    !text
+  ) {
+    return null
+  }
+
+
+  const date =
+    /^\d{4}-\d{2}-\d{2}$/.test(
+      text
+    )
+      ? new Date(
+          `${text}T12:00:00`
+        )
+      : new Date(
+          text
+        )
+
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return null
+  }
+
+
+  return date
+}
+
+
 function getNewBusinessDate(
   pin
 ) {
@@ -211,47 +269,32 @@ function getNewBusinessDate(
     pin.openedAt,
     pin.openingDate,
     pin.expectedAt,
+    pin.sourceFirstSeenAt,
     pin.firstSeenAt,
     pin.announcedAt,
     pin.createdAt,
     pin.publishedAt,
+    pin.serverPublishedAt,
     pin.updatedAt,
   ]
+
 
   for (
     const value of values
   ) {
-    if (
-      !value
-    ) {
-      continue
-    }
-
-    const text =
-      String(
+    const date =
+      parseNewBusinessDateValue(
         value
       )
-        .trim()
 
-    const date =
-      /^\d{4}-\d{2}-\d{2}$/.test(
-        text
-      )
-        ? new Date(
-            `${text}T12:00:00`
-          )
-        : new Date(
-            text
-          )
 
     if (
-      !Number.isNaN(
-        date.getTime()
-      )
+      date
     ) {
       return date
     }
   }
+
 
   return null
 }
@@ -285,7 +328,7 @@ function newBusinessMatchesRange(
   if (
     !businessDate
   ) {
-    return false
+    return true
   }
 
   const now =
@@ -320,6 +363,166 @@ function newBusinessMatchesRange(
     businessDate.getTime() >=
     cutoff.getTime()
   )
+}
+
+
+function formatNewBusinessDate(
+  date
+) {
+  return date
+    .toLocaleDateString(
+      'en-CA',
+      {
+        year:
+          'numeric',
+
+        month:
+          'short',
+
+        day:
+          'numeric',
+      }
+    )
+    .toUpperCase()
+}
+
+
+function formatBusinessAge({
+  date,
+  prefix,
+  exactAfterDays =
+    45,
+}) {
+  const diffMs =
+    Date.now() -
+    date.getTime()
+
+
+  if (
+    diffMs <
+      0
+  ) {
+    return (
+      `${prefix} ` +
+      formatNewBusinessDate(
+        date
+      )
+    )
+  }
+
+
+  const days =
+    Math.floor(
+      diffMs /
+      (
+        24 *
+        60 *
+        60 *
+        1000
+      )
+    )
+
+
+  if (
+    days ===
+      0
+  ) {
+    return `${prefix} TODAY`
+  }
+
+
+  if (
+    days ===
+      1
+  ) {
+    return `${prefix} YESTERDAY`
+  }
+
+
+  if (
+    days <
+      exactAfterDays
+  ) {
+    return (
+      `${prefix} ${days} DAYS AGO`
+    )
+  }
+
+
+  return (
+    `${prefix} ` +
+    formatNewBusinessDate(
+      date
+    )
+  )
+}
+
+
+function getNewBusinessAgeLabel(
+  pin
+) {
+  const openingDate =
+    parseNewBusinessDateValue(
+      pin?.openedAt ||
+      pin?.openingDate
+    )
+
+
+  if (
+    openingDate
+  ) {
+    return formatBusinessAge({
+      date:
+        openingDate,
+
+      prefix:
+        'OPENED',
+    })
+  }
+
+
+  const firstSeenDate =
+    parseNewBusinessDateValue(
+      pin?.sourceFirstSeenAt ||
+      pin?.firstSeenAt
+    )
+
+
+  if (
+    firstSeenDate
+  ) {
+    return formatBusinessAge({
+      date:
+        firstSeenDate,
+
+      prefix:
+        'FIRST SEEN',
+
+      exactAfterDays:
+        45,
+    })
+  }
+
+
+  const sourceLabel =
+    String(
+      pin?.sourceFirstSeenLabel ||
+      ''
+    )
+      .trim()
+
+
+  if (
+    sourceLabel
+  ) {
+    return (
+      'FIRST SEEN ' +
+      sourceLabel.toUpperCase()
+    )
+  }
+
+
+  return ''
 }
 
 
@@ -2040,6 +2243,20 @@ function createMarker({
     pinType ===
     'new'
   ) {
+    const ageLabel =
+      BUSINESS_CATEGORIES.includes(
+        String(
+          pin.category ||
+          ''
+        )
+          .toLowerCase()
+      )
+        ? getNewBusinessAgeLabel(
+            pin
+          )
+        : ''
+
+
     appendText({
       parent:
         popupContent,
@@ -2048,9 +2265,18 @@ function createMarker({
         'geographic-pin-year',
 
       text:
-        formatStatus(
-          pin.status
-        ),
+        [
+          formatStatus(
+            pin.status
+          ),
+          ageLabel,
+        ]
+          .filter(
+            Boolean
+          )
+          .join(
+            ' · '
+          ),
     })
   }
 
@@ -2954,6 +3180,15 @@ function MapPins({
 
 
   const [
+    serverNewItems,
+    setServerNewItems,
+  ] =
+    useState(
+      []
+    )
+
+
+  const [
     viewportRevision,
     setViewportRevision,
   ] =
@@ -3073,6 +3308,115 @@ function MapPins({
 
   useEffect(
     () => {
+      if (
+        cityKey !==
+          'toronto'
+      ) {
+        setServerNewItems(
+          []
+        )
+
+
+        return
+      }
+
+
+      let cancelled =
+        false
+
+
+      async function loadPublishedNew() {
+        try {
+          const response =
+            await fetch(
+              PUBLISHED_NEW_ENDPOINT,
+              {
+                headers: {
+                  Accept:
+                    'application/json',
+                },
+
+                cache:
+                  'no-store',
+              }
+            )
+
+
+          if (
+            !response.ok
+          ) {
+            throw new Error(
+              'Published NEW request failed with HTTP ' +
+              response.status
+            )
+          }
+
+
+          const payload =
+            await response.json()
+
+
+          if (
+            cancelled
+          ) {
+            return
+          }
+
+
+          setServerNewItems(
+            Array.isArray(
+              payload?.records
+            )
+              ? payload.records
+              : []
+          )
+        }
+        catch (
+          error
+        ) {
+          if (
+            cancelled
+          ) {
+            return
+          }
+
+
+          console.warn(
+            'PUBLIC MAP · RAILWAY NEW LOAD FAILED:',
+            error
+          )
+        }
+      }
+
+
+      loadPublishedNew()
+
+
+      const interval =
+        window.setInterval(
+          loadPublishedNew,
+          PUBLISHED_NEW_REFRESH_MS
+        )
+
+
+      return () => {
+        cancelled =
+          true
+
+
+        window.clearInterval(
+          interval
+        )
+      }
+    },
+    [
+      cityKey,
+    ]
+  )
+
+
+  useEffect(
+    () => {
       const handleStorageChange =
         () => {
           setContentRevision(
@@ -3088,9 +3432,22 @@ function MapPins({
         handleStorageChange
       )
 
+
+      window.addEventListener(
+        GEOGRAPHIC_STORE_CHANGE_EVENT,
+        handleStorageChange
+      )
+
+
       return () => {
         window.removeEventListener(
           'storage',
+          handleStorageChange
+        )
+
+
+        window.removeEventListener(
+          GEOGRAPHIC_STORE_CHANGE_EVENT,
           handleStorageChange
         )
       }
@@ -3302,8 +3659,18 @@ function MapPins({
         selectedLayer,
       })
     ) {
+      const mergedNewItems =
+        cityKey ===
+          'toronto'
+          ? mergeNewsRecords(
+              getNewItems(),
+              serverNewItems
+            )
+          : getNewItems()
+
+
       visiblePins =
-        getNewItems()
+        mergedNewItems
           .filter(
             (pin) =>
               belongsToCity(
@@ -3411,6 +3778,7 @@ function MapPins({
     newBusinessRangeFilter,
     contentRevision,
     serverNewsItems,
+    serverNewItems,
     viewportRevision,
     selectedPinId,
     onDirections,

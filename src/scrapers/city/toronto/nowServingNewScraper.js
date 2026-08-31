@@ -12,9 +12,11 @@
 // - cuisine / food type when available
 // - NowServing listing URL
 // - source "first seen" label when available
+// - an approximate source-first-seen date derived from that label
 //
-// The editor must open the lead, confirm the pin, write Geographic's
-// own description, add/confirm the business link and publish it.
+// NowServing's own page says "first seen" is evidence timing, not an
+// exact opening date. We preserve that distinction. The editor confirms
+// the pin and may add/confirm the business link before publishing.
 //
 // ============================================================
 
@@ -293,6 +295,178 @@ function getSourceFirstSeenLabel(
 }
 
 
+function toDateOnly(
+  value
+) {
+  const date =
+    value instanceof Date
+      ? new Date(
+          value.getTime()
+        )
+      : new Date(
+          value
+        )
+
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return ''
+  }
+
+
+  return date
+    .toISOString()
+    .slice(
+      0,
+      10
+    )
+}
+
+
+function sourceFirstSeenDateFromLabel(
+  label,
+  baseDate =
+    new Date()
+) {
+  const normalized =
+    cleanText(
+      label
+    )
+      .toLowerCase()
+
+
+  if (
+    !normalized
+  ) {
+    return ''
+  }
+
+
+  const date =
+    new Date(
+      baseDate
+    )
+
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return ''
+  }
+
+
+  date.setHours(
+    12,
+    0,
+    0,
+    0
+  )
+
+
+  if (
+    normalized ===
+      'today'
+  ) {
+    return toDateOnly(
+      date
+    )
+  }
+
+
+  if (
+    normalized ===
+      'yesterday'
+  ) {
+    date.setDate(
+      date.getDate() -
+      1
+    )
+
+
+    return toDateOnly(
+      date
+    )
+  }
+
+
+  const match =
+    normalized.match(
+      /^(\d+)\s+(day|days|week|weeks|month|months)\s+ago$/
+    )
+
+
+  if (
+    !match
+  ) {
+    return ''
+  }
+
+
+  const amount =
+    Number(
+      match[1]
+    )
+
+
+  const unit =
+    match[2]
+
+
+  if (
+    !Number.isFinite(
+      amount
+    )
+  ) {
+    return ''
+  }
+
+
+  if (
+    unit.startsWith(
+      'day'
+    )
+  ) {
+    date.setDate(
+      date.getDate() -
+      amount
+    )
+  }
+  else if (
+    unit.startsWith(
+      'week'
+    )
+  ) {
+    date.setDate(
+      date.getDate() -
+      (
+        amount *
+        7
+      )
+    )
+  }
+  else if (
+    unit.startsWith(
+      'month'
+    )
+  ) {
+    date.setMonth(
+      date.getMonth() -
+      amount
+    )
+  }
+
+
+  return toDateOnly(
+    date
+  )
+}
+
+
 function getCuisine(
   container,
   heading
@@ -403,7 +577,9 @@ function makeExternalId({
 
 
 function parseNowServingHtml(
-  html
+  html,
+  sourceDate =
+    new Date()
 ) {
   const parser =
     new DOMParser()
@@ -499,6 +675,13 @@ function parseNowServingHtml(
         )
 
 
+      const sourceFirstSeenAt =
+        sourceFirstSeenDateFromLabel(
+          sourceFirstSeenLabel,
+          sourceDate
+        )
+
+
       const externalId =
         makeExternalId({
           listingUrl,
@@ -532,7 +715,7 @@ function parseNowServingHtml(
           'restaurant',
 
         status:
-          'proposed',
+          'open',
 
         title:
           name,
@@ -582,6 +765,27 @@ function parseNowServingHtml(
           'unverified',
 
         sourceFirstSeenLabel,
+
+        sourceFirstSeenAt,
+
+        sourceDateKind:
+          'first-seen',
+
+        sourceDateAccuracy:
+          sourceFirstSeenAt
+            ? 'source-relative'
+            : '',
+
+        sourceEditionDate:
+          toDateOnly(
+            sourceDate
+          ),
+
+        firstSeenAt:
+          sourceFirstSeenAt,
+
+        openedAt:
+          '',
 
         announcedAt:
           '',
@@ -641,7 +845,22 @@ export async function scrapeNowServingNew() {
   }
 
 
+  const sourceDate =
+    payload.sourceEditionDate
+      ? new Date(
+          `${payload.sourceEditionDate}T12:00:00`
+        )
+      : (
+          payload.fetchedAt
+            ? new Date(
+                payload.fetchedAt
+              )
+            : new Date()
+        )
+
+
   return parseNowServingHtml(
-    payload.html
+    payload.html,
+    sourceDate
   )
 }
