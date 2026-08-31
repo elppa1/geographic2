@@ -39,6 +39,22 @@ const STREET_NAME = [
 
 
 // ============================================================
+// MOBILE STREET LABEL DENSITY / SCALE
+// ============================================================
+
+function useCompactStreetLabels() {
+  return (
+    typeof window !==
+      'undefined' &&
+    window.matchMedia(
+      '(max-width: 700px)'
+    )
+      .matches
+  )
+}
+
+
+// ============================================================
 // ADD STREET LABELS
 // ============================================================
 
@@ -50,6 +66,10 @@ export function addStreetLabels({
   ) {
     return
   }
+
+
+  const compact =
+    useCompactStreetLabels()
 
 
   // ==========================================================
@@ -146,41 +166,72 @@ export function addStreetLabels({
           'Noto Sans Regular',
         ],
 
-        'text-size': [
-          'interpolate',
+        'text-size':
+          compact
+            ? [
+                'interpolate',
 
-          [
-            'linear',
-          ],
+                [
+                  'linear',
+                ],
 
-          [
-            'zoom',
-          ],
+                [
+                  'zoom',
+                ],
 
-          11,
-          10,
+                11,
+                7,
 
-          14,
-          11,
+                14,
+                7.5,
 
-          17,
-          13,
+                17,
+                8.5,
 
-          19,
-          14,
-        ],
+                19,
+                9.5,
+              ]
+            : [
+                'interpolate',
+
+                [
+                  'linear',
+                ],
+
+                [
+                  'zoom',
+                ],
+
+                11,
+                10,
+
+                14,
+                11,
+
+                17,
+                13,
+
+                19,
+                14,
+              ],
 
         'text-letter-spacing':
-          0.08,
+          compact
+            ? 0.035
+            : 0.08,
 
         'text-transform':
-          'uppercase',
+          compact
+            ? 'none'
+            : 'uppercase',
 
         'text-max-angle':
           35,
 
         'text-padding':
-          4,
+          compact
+            ? 2
+            : 4,
 
         'text-rotation-alignment':
           'map',
@@ -189,7 +240,9 @@ export function addStreetLabels({
           'viewport',
 
         'symbol-spacing':
-          320,
+          compact
+            ? 380
+            : 320,
 
         'text-allow-overlap':
           false,
@@ -200,16 +253,24 @@ export function addStreetLabels({
 
       paint: {
         'text-color':
-          '#F2C94C',
+          compact
+            ? 'rgba(242, 201, 76, 0.88)'
+            : '#F2C94C',
 
         'text-halo-color':
-          'rgba(20, 20, 20, 0.94)',
+          compact
+            ? 'rgba(20, 20, 20, 0.82)'
+            : 'rgba(20, 20, 20, 0.94)',
 
         'text-halo-width':
-          2.2,
+          compact
+            ? 1.05
+            : 2.2,
 
         'text-halo-blur':
-          0.4,
+          compact
+            ? 0.2
+            : 0.4,
       },
     })
   }
@@ -279,38 +340,67 @@ export function addStreetLabels({
           'Noto Sans Regular',
         ],
 
-        'text-size': [
-          'interpolate',
+        'text-size':
+          compact
+            ? [
+                'interpolate',
 
-          [
-            'linear',
-          ],
+                [
+                  'linear',
+                ],
 
-          [
-            'zoom',
-          ],
+                [
+                  'zoom',
+                ],
 
-          15,
-          9,
+                15,
+                6.5,
 
-          16,
-          10,
+                16,
+                7,
 
-          18,
-          11,
+                18,
+                7.75,
 
-          20,
-          12,
-        ],
+                20,
+                8.5,
+              ]
+            : [
+                'interpolate',
+
+                [
+                  'linear',
+                ],
+
+                [
+                  'zoom',
+                ],
+
+                15,
+                9,
+
+                16,
+                10,
+
+                18,
+                11,
+
+                20,
+                12,
+              ],
 
         'text-letter-spacing':
-          0.03,
+          compact
+            ? 0.015
+            : 0.03,
 
         'text-max-angle':
           40,
 
         'text-padding':
-          3,
+          compact
+            ? 2
+            : 3,
 
         'text-rotation-alignment':
           'map',
@@ -319,7 +409,9 @@ export function addStreetLabels({
           'viewport',
 
         'symbol-spacing':
-          280,
+          compact
+            ? 340
+            : 280,
 
         'text-allow-overlap':
           false,
@@ -330,16 +422,24 @@ export function addStreetLabels({
 
       paint: {
         'text-color':
-          'rgba(242, 201, 76, 0.90)',
+          compact
+            ? 'rgba(242, 201, 76, 0.78)'
+            : 'rgba(242, 201, 76, 0.90)',
 
         'text-halo-color':
-          'rgba(20, 20, 20, 0.88)',
+          compact
+            ? 'rgba(20, 20, 20, 0.78)'
+            : 'rgba(20, 20, 20, 0.88)',
 
         'text-halo-width':
-          1.8,
+          compact
+            ? 0.85
+            : 1.8,
 
         'text-halo-blur':
-          0.35,
+          compact
+            ? 0.18
+            : 0.35,
       },
     })
   }

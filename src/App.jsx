@@ -194,6 +194,15 @@ function GeographicApp() {
     )
 
 
+  const [
+    mobileHeaderOpen,
+    setMobileHeaderOpen,
+  ] =
+    useState(
+      true
+    )
+
+
   useEffect(
     () => {
       setEnhanced(
@@ -227,31 +236,162 @@ function GeographicApp() {
     <main className="app">
       <style>
         {`
+          .mobile-brand-toggle {
+            display: none;
+          }
+
           @media (max-width: 700px) {
             .brand {
-              scale: 0.66;
+              top: 10px !important;
+              left: 10px !important;
+              width: calc(100vw - 94px);
+              min-height: 30px;
+              padding: 6px 7px !important;
+              gap: 4px !important;
+              scale: 1;
               transform-origin: top left;
+              font-size: 8px !important;
+              letter-spacing: 0.10em !important;
+            }
+
+            .brand-main-row {
+              position: relative;
+              display: flex !important;
+              align-items: center !important;
+              flex-wrap: wrap;
+              gap: 4px !important;
+              width: 100%;
+              min-height: 18px;
+              padding-right: 18px;
+            }
+
+            .brand-title {
+              white-space: nowrap;
+              line-height: 1;
+            }
+
+            .brand-primary-filters {
+              order: 3;
+              width: 100%;
+              gap: 1px !important;
+              margin-top: 2px;
+            }
+
+            .brand-secondary-filters,
+            .brand-range-filters {
+              gap: 1px !important;
+              max-width: 100%;
+              overflow-x: auto;
+              scrollbar-width: none;
+            }
+
+            .brand-secondary-filters::-webkit-scrollbar,
+            .brand-range-filters::-webkit-scrollbar {
+              display: none;
+            }
+
+            .brand button:not(.mobile-brand-toggle) {
+              min-height: 20px;
+              padding: 3px 5px !important;
+              font-size: 6px !important;
+              line-height: 1.05 !important;
+              letter-spacing: 0.05em !important;
+            }
+
+            .mobile-brand-toggle {
+              position: absolute;
+              top: 5px;
+              right: 5px;
+              z-index: 4;
+              display: grid;
+              width: 18px;
+              height: 18px;
+              place-items: center;
+              border: 0;
+              padding: 0;
+              background: transparent;
+              color: #111;
+              font: inherit;
+              font-size: 10px;
+              line-height: 1;
+              cursor: pointer;
+            }
+
+            .mobile-header-collapsed .brand-primary-filters,
+            .mobile-header-collapsed .brand-secondary-filters,
+            .mobile-header-collapsed .brand-range-filters {
+              display: none !important;
             }
 
             .geographic-sponsor {
-              scale: 0.66;
+              top: 10px !important;
+              right: 10px !important;
+              scale: 0.62;
               transform-origin: top right;
             }
 
             .timeline-shell {
-              scale: 0.66;
+              scale: 1;
               transform-origin: bottom center;
+              width: calc(100vw - 12px) !important;
+              max-width: none !important;
+              bottom: max(6px, env(safe-area-inset-bottom)) !important;
+              padding: 6px 8px 8px !important;
+            }
+
+            .timeline-years {
+              gap: 1px !important;
+            }
+
+            .timeline-button {
+              min-width: 42px !important;
+              padding: 5px 6px !important;
+              font-size: 7px !important;
+              line-height: 1 !important;
+            }
+
+            .opacity-row {
+              gap: 6px !important;
+              margin-top: 6px !important;
+              font-size: 7px !important;
+            }
+
+            .layer-info {
+              margin-top: 6px !important;
+              padding-top: 6px !important;
+              font-size: 7px !important;
+              line-height: 1.25 !important;
+            }
+
+            .layer-info-main {
+              gap: 6px !important;
+            }
+
+            .layer-title {
+              font-size: 7px !important;
+              line-height: 1.25 !important;
+            }
+
+            .layer-source {
+              font-size: 6px !important;
+            }
+
+            .enhance-button {
+              min-width: 58px !important;
+              min-height: 22px !important;
+              padding: 4px 5px !important;
+              font-size: 6px !important;
             }
 
             .maplibregl-ctrl-top-left .maplibregl-ctrl,
             .maplibregl-ctrl-bottom-left .maplibregl-ctrl {
-              scale: 0.72;
+              scale: 0.66;
               transform-origin: left center;
             }
 
             .maplibregl-ctrl-top-right .maplibregl-ctrl,
             .maplibregl-ctrl-bottom-right .maplibregl-ctrl {
-              scale: 0.72;
+              scale: 0.66;
               transform-origin: right center;
             }
           }
@@ -409,7 +549,11 @@ function GeographicApp() {
 
 
       <div
-        className="brand"
+        className={
+          mobileHeaderOpen
+            ? 'brand mobile-header-open'
+            : 'brand mobile-header-collapsed'
+        }
         style={{
           display:
             'flex',
@@ -422,6 +566,7 @@ function GeographicApp() {
         }}
       >
         <div
+          className="brand-main-row"
           style={{
             display:
               'flex',
@@ -433,13 +578,14 @@ function GeographicApp() {
               '12px',
           }}
         >
-          <span>
+          <span className="brand-title">
             {city.name}
             {' GEOGRAPHIC'}
           </span>
 
 
           <div
+            className="brand-primary-filters"
             style={{
               display:
                 'flex',
@@ -585,12 +731,39 @@ function GeographicApp() {
               NEW
             </button>
           </div>
+
+
+          <button
+            type="button"
+            className="mobile-brand-toggle"
+            onClick={() =>
+              setMobileHeaderOpen(
+                (
+                  current
+                ) =>
+                  !current
+              )
+            }
+            aria-label={
+              mobileHeaderOpen
+                ? 'Collapse map controls'
+                : 'Expand map controls'
+            }
+            aria-expanded={
+              mobileHeaderOpen
+            }
+          >
+            {mobileHeaderOpen
+              ? '▴'
+              : '▾'}
+          </button>
         </div>
 
 
         {activePinFilter ===
           'new' && (
           <div
+            className="brand-secondary-filters"
             style={{
               display:
                 'flex',
@@ -747,6 +920,7 @@ function GeographicApp() {
           newSubtypeFilter ===
             'businesses' && (
           <div
+            className="brand-range-filters"
             style={{
               display:
                 'flex',
