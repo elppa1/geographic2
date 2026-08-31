@@ -461,10 +461,24 @@ function formatBusinessAge({
 function getNewBusinessAgeLabel(
   pin
 ) {
+  const status =
+    String(
+      pin?.status ||
+      ''
+    )
+      .toLowerCase()
+
+
   const openingDate =
     parseNewBusinessDateValue(
       pin?.openedAt ||
-      pin?.openingDate
+      pin?.openingDate ||
+      (
+        status ===
+          'open'
+          ? pin?.expectedAt
+          : ''
+      )
     )
 
 
@@ -600,6 +614,45 @@ function getNewLifecycleDays(
 function getNewLifecycleDate(
   pin
 ) {
+  const category =
+    String(
+      pin.category ||
+      ''
+    )
+      .toLowerCase()
+
+
+  const status =
+    String(
+      pin.status ||
+      'proposed'
+    )
+      .toLowerCase()
+
+
+  if (
+    BUSINESS_CATEGORIES.includes(
+      category
+    ) &&
+    status ===
+      'open'
+  ) {
+    const openingDate =
+      parseNewBusinessDateValue(
+        pin.openedAt ||
+        pin.openingDate ||
+        pin.expectedAt
+      )
+
+
+    if (
+      openingDate
+    ) {
+      return openingDate
+    }
+  }
+
+
   const values = [
     pin.lifecycleUpdatedAt,
     pin.statusUpdatedAt,

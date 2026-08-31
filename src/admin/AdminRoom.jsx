@@ -7002,6 +7002,30 @@ function AdminRoom() {
 
     if (
       tab ===
+        'new' &&
+      (
+        record.category ===
+          'store' ||
+        record.category ===
+          'restaurant' ||
+        record.category ===
+          'business'
+      ) &&
+      String(
+        record.status ||
+        ''
+      )
+        .toLowerCase() ===
+        'open' &&
+      record.expectedAt
+    ) {
+      record.openedAt =
+        record.expectedAt
+    }
+
+
+    if (
+      tab ===
       'historic'
     ) {
       const automaticLayers =
