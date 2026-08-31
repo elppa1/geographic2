@@ -4293,10 +4293,7 @@ function MapPins({
       const mergedNewsItems =
         cityKey ===
           'toronto'
-          ? mergeNewsRecords(
-              getNewsItems(),
-              serverNewsItems
-            )
+          ? serverNewsItems
           : getNewsItems()
 
 
@@ -4363,10 +4360,7 @@ function MapPins({
       const mergedNewItems =
         cityKey ===
           'toronto'
-          ? mergeNewRecords(
-              getNewItems(),
-              serverNewItems
-            )
+          ? serverNewItems
           : getNewItems()
 
 

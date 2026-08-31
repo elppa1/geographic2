@@ -5832,25 +5832,14 @@ function AdminRoom() {
 
 
       const localToronto =
-        mergePublishedNewRecords(
-          latestLocal.filter(
-            (
-              record
-            ) =>
-              belongsToCity(
-                record,
-                'toronto'
-              )
-          ),
-          legacyPublishedNew.filter(
-            (
-              record
-            ) =>
-              belongsToCity(
-                record,
-                'toronto'
-              )
-          )
+        latestLocal.filter(
+          (
+            record
+          ) =>
+            belongsToCity(
+              record,
+              'toronto'
+            )
         )
 
 

@@ -13,6 +13,7 @@
   "dependencies": {
     "gtfs-realtime-bindings": "^2.2.0",
     "maplibre-gl": "^6.4.0",
+    "pg": "^8.23.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "sharp": "^0.35.3",

@@ -26,6 +26,13 @@ import {
 } from '../../../src/newsPolicy.js'
 
 
+import {
+  findGeographicPin,
+  getGeographicPins,
+  upsertGeographicPin,
+} from '../../db/geographicPins.js'
+
+
 const __filename =
   fileURLToPath(
     import.meta.url
@@ -1329,7 +1336,7 @@ async function observeRecord({
   // older source-state rows whose `published` flag predates the
   // server-owned publishedNews dataset.
   const existingPublishedRecord =
-    findPublishedNewsRecord(
+    await findPublishedNewsRecord(
       record
     )
 
@@ -3264,7 +3271,7 @@ async function resolveMissing({
         'ttc'
     ) {
       const publishedRecord =
-        findPublishedNewsRecord(
+        await findPublishedNewsRecord(
           resolvedRecord
         )
 
@@ -3848,75 +3855,39 @@ function policeCaseKeys(
 }
 
 
-function findPublishedNewsRecord(
+async function findPublishedNewsRecord(
   record
 ) {
-  const externalId =
-    cleanText(
-      record?.externalId
-    )
+  return findGeographicPin({
+    city:
+      'toronto',
 
+    type:
+      'news',
 
-  const records =
-    Object.values(
-      store.publishedNews ||
-      {}
-    )
+    subtype:
+      '',
 
+    identity:
+      publishedNewsIdentity(
+        record
+      ),
 
-  if (
-    externalId
-  ) {
-    const exact =
-      records.find(
-        (item) =>
-          cleanText(
-            item?.externalId
-          ) ===
-            externalId
-      )
+    externalId:
+      cleanText(
+        record?.externalId
+      ),
 
+    id:
+      cleanText(
+        record?.id
+      ),
 
-    if (
-      exact
-    ) {
-      return exact
-    }
-  }
-
-
-  // TPS releases use Case # / GO number as the stable incident key.
-  // This fallback keeps updates attached to older approved records
-  // even if those records predate the current externalId format.
-  const incomingCaseKeys =
-    new Set(
+    caseKeys:
       policeCaseKeys(
         record
-      )
-    )
-
-
-  if (
-    incomingCaseKeys.size ===
-      0
-  ) {
-    return null
-  }
-
-
-  return records.find(
-    (item) =>
-      policeCaseKeys(
-        item
-      )
-        .some(
-          (key) =>
-            incomingCaseKeys.has(
-              key
-            )
-        )
-  ) ||
-    null
+      ),
+  })
 }
 
 
@@ -4331,21 +4302,10 @@ async function upsertPublishedNewsRecord({
   await ensureLoaded()
 
 
-  const identity =
-    publishedNewsIdentity(
+  const existing =
+    await findPublishedNewsRecord(
       record
     )
-
-
-  const existing =
-    identity
-      ? (
-          store.publishedNews[
-            identity
-          ] ||
-          null
-        )
-      : null
 
 
   const normalized =
@@ -4363,32 +4323,45 @@ async function upsertPublishedNewsRecord({
     })
 
 
-  const previous =
-    store.publishedNews[
-      normalized.identity
-    ] ||
-    null
+  const previousIdentity =
+    existing
+      ? publishedNewsIdentity(
+          existing
+        )
+      : ''
 
 
-  store.publishedNews[
-    normalized.identity
-  ] =
-    normalized.record
+  const savedRecord =
+    await upsertGeographicPin({
+      city:
+        'toronto',
 
+      type:
+        'news',
 
-  await persistStore()
+      subtype:
+        '',
+
+      identity:
+        normalized.identity,
+
+      previousIdentity,
+
+      record:
+        normalized.record,
+    })
 
 
   let eventType =
-    previous
+    existing
       ? 'published-news-updated'
       : 'published-news-created'
 
 
   if (
-    previous?.active ===
+    existing?.active ===
       false &&
-    normalized.record.active ===
+    savedRecord.active ===
       true
   ) {
     eventType =
@@ -4397,7 +4370,7 @@ async function upsertPublishedNewsRecord({
 
 
   if (
-    normalized.record.active ===
+    savedRecord.active ===
       false
   ) {
     eventType =
@@ -4409,16 +4382,16 @@ async function upsertPublishedNewsRecord({
     eventType,
 
     outcome:
-      normalized.record.active
+      savedRecord.active
         ? 'published'
-        : normalized.record.archiveReason,
+        : savedRecord.archiveReason,
 
     record:
-      normalized.record,
+      savedRecord,
   })
 
 
-  return normalized.record
+  return savedRecord
 }
 
 
@@ -4435,85 +4408,26 @@ async function archivePublishedNewsRecord({
   await ensureLoaded()
 
 
-  const requestedIdentity =
-    publishedNewsIdentity({
-      id,
-      externalId,
-    })
+  const candidate = {
+    ...(record ||
+      {}),
 
+    id:
+      id ||
+      record?.id ||
+      '',
 
-  let identity =
-    requestedIdentity
-
-
-  if (
-    !identity &&
-    record
-  ) {
-    identity =
-      publishedNewsIdentity(
-        record
-      )
+    externalId:
+      externalId ||
+      record?.externalId ||
+      '',
   }
 
 
-  let existing =
-    identity
-      ? (
-          store.publishedNews[
-            identity
-          ] ||
-          null
-        )
-      : null
-
-
-  // If the caller only has one identifier but the record was originally
-  // keyed by the other, find it without deleting or re-keying history.
-  if (
-    !existing
-  ) {
-    const values =
-      Object.values(
-        store.publishedNews ||
-        {}
-      )
-
-
-    existing =
-      values.find(
-        (item) =>
-          (
-            externalId &&
-            cleanText(
-              item?.externalId
-            ) ===
-              cleanText(
-                externalId
-              )
-          ) ||
-          (
-            id &&
-            cleanText(
-              item?.id
-            ) ===
-              cleanText(
-                id
-              )
-          )
-      ) ||
-      null
-
-
-    if (
-      existing
-    ) {
-      identity =
-        publishedNewsIdentity(
-          existing
-        )
-    }
-  }
+  const existing =
+    await findPublishedNewsRecord(
+      candidate
+    )
 
 
   if (
@@ -4524,14 +4438,13 @@ async function archivePublishedNewsRecord({
   }
 
 
-  const source =
-    {
-      ...existing,
-      ...(record ||
-        {}),
-      active:
-        false,
-    }
+  const source = {
+    ...existing,
+    ...(record ||
+      {}),
+    active:
+      false,
+  }
 
 
   const normalized =
@@ -4549,18 +4462,30 @@ async function archivePublishedNewsRecord({
     })
 
 
-  const finalIdentity =
-    identity ||
-    normalized.identity
+  const savedRecord =
+    await upsertGeographicPin({
+      city:
+        'toronto',
 
+      type:
+        'news',
 
-  store.publishedNews[
-    finalIdentity
-  ] =
-    normalized.record
+      subtype:
+        '',
 
+      identity:
+        normalized.identity,
 
-  await persistStore()
+      previousIdentity:
+        existing
+          ? publishedNewsIdentity(
+              existing
+            )
+          : '',
+
+      record:
+        normalized.record,
+    })
 
 
   await appendLedgerEvent({
@@ -4568,14 +4493,14 @@ async function archivePublishedNewsRecord({
       'published-news-archived',
 
     outcome:
-      normalized.record.archiveReason,
+      savedRecord.archiveReason,
 
     record:
-      normalized.record,
+      savedRecord,
   })
 
 
-  return normalized.record
+  return savedRecord
 }
 
 
@@ -4588,19 +4513,29 @@ async function expirePublishedNewsShelfLife() {
       .toISOString()
 
 
+  const allRecords =
+    await getGeographicPins({
+      city:
+        'toronto',
+
+      type:
+        'news',
+
+      subtype:
+        '',
+
+      status:
+        'all',
+    })
+
+
   const expiredRecords =
     []
 
 
   for (
-    const [
-      identity,
-      record,
-    ]
-    of Object.entries(
-      store.publishedNews ||
-      {}
-    )
+    const record
+    of allRecords
   ) {
     if (
       record?.active ===
@@ -4642,27 +4577,36 @@ async function expirePublishedNewsShelfLife() {
     }
 
 
-    store.publishedNews[
-      identity
-    ] =
-      archivedRecord
+    const savedRecord =
+      await upsertGeographicPin({
+        city:
+          'toronto',
+
+        type:
+          'news',
+
+        subtype:
+          '',
+
+        identity:
+          publishedNewsIdentity(
+            archivedRecord
+          ),
+
+        previousIdentity:
+          publishedNewsIdentity(
+            record
+          ),
+
+        record:
+          archivedRecord,
+      })
 
 
     expiredRecords.push(
-      archivedRecord
+      savedRecord
     )
   }
-
-
-  if (
-    expiredRecords.length ===
-      0
-  ) {
-    return 0
-  }
-
-
-  await persistStore()
 
 
   for (
@@ -4702,37 +4646,20 @@ async function getPublishedNewsRecords({
       .toLowerCase()
 
 
-  let records =
-    Object.values(
-      store.publishedNews ||
-      {}
-    )
+  const records =
+    await getGeographicPins({
+      city:
+        'toronto',
 
+      type:
+        'news',
 
-  if (
-    normalizedStatus ===
-      'live'
-  ) {
-    records =
-      records.filter(
-        (record) =>
-          record.active !==
-            false
-      )
-  }
-  else if (
-    normalizedStatus ===
-      'archive' ||
-    normalizedStatus ===
-      'archived'
-  ) {
-    records =
-      records.filter(
-        (record) =>
-          record.active ===
-            false
-      )
-  }
+      subtype:
+        '',
+
+      status:
+        normalizedStatus,
+    })
 
 
   return records.sort(

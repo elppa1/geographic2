@@ -1,26 +1,8 @@
 import {
-  mkdir,
-  readFile,
-  writeFile,
-} from 'node:fs/promises'
-
-import {
-  join,
-  resolve,
-} from 'node:path'
-
-import {
-  fileURLToPath,
-} from 'node:url'
-
-
-const DEFAULT_DATA_DIR =
-  fileURLToPath(
-    new URL(
-      '../../../data/',
-      import.meta.url
-    )
-  )
+  findGeographicPin,
+  getGeographicPins,
+  upsertGeographicPin,
+} from '../../../db/geographicPins.js'
 
 
 function cleanText(
@@ -309,176 +291,10 @@ export function createPublishedNewFeed({
   }
 
 
-  const dataDir =
-    resolve(
-      process.env.GEOGRAPHIC_DATA_DIR ||
-      DEFAULT_DATA_DIR
-    )
+  void fileName
 
 
-  const storePath =
-    join(
-      dataDir,
-      fileName
-    )
-
-
-  let loaded =
-    false
-
-
-  let loadPromise =
-    null
-
-
-  let writeChain =
-    Promise.resolve()
-
-
-  let store = {
-    version:
-      1,
-
-    city:
-      'toronto',
-
-    newType:
-      normalizedNewType,
-
-    records:
-      {},
-
-    updatedAt:
-      '',
-  }
-
-
-  async function ensureLoaded() {
-    if (
-      loaded
-    ) {
-      return
-    }
-
-
-    if (
-      loadPromise
-    ) {
-      await loadPromise
-      return
-    }
-
-
-    loadPromise =
-      (async () => {
-        try {
-          const raw =
-            await readFile(
-              storePath,
-              'utf8'
-            )
-
-
-          const parsed =
-            JSON.parse(
-              raw
-            )
-
-
-          if (
-            parsed &&
-            typeof parsed ===
-              'object'
-          ) {
-            store = {
-              ...store,
-              ...parsed,
-
-              city:
-                'toronto',
-
-              newType:
-                normalizedNewType,
-
-              records:
-                parsed.records &&
-                typeof parsed.records ===
-                  'object' &&
-                !Array.isArray(
-                  parsed.records
-                )
-                  ? parsed.records
-                  : {},
-            }
-          }
-        }
-        catch (
-          error
-        ) {
-          if (
-            error?.code !==
-              'ENOENT'
-          ) {
-            console.warn(
-              `TORONTO NEW ${normalizedNewType.toUpperCase()} · STORE READ FAILED:`,
-              error
-            )
-          }
-        }
-        finally {
-          loaded =
-            true
-        }
-      })()
-
-
-    try {
-      await loadPromise
-    }
-    finally {
-      loadPromise =
-        null
-    }
-  }
-
-
-
-  async function persistStore() {
-    store.updatedAt =
-      new Date()
-        .toISOString()
-
-
-    writeChain =
-      writeChain.then(
-        async () => {
-          await mkdir(
-            dataDir,
-            {
-              recursive:
-                true,
-            }
-          )
-
-
-          await writeFile(
-            storePath,
-            JSON.stringify(
-              store,
-              null,
-              2
-            ),
-            'utf8'
-          )
-        }
-      )
-
-
-    return writeChain
-  }
-
-
-  function findEntry(
+  async function findEntry(
     record
   ) {
     const identity =
@@ -487,67 +303,39 @@ export function createPublishedNewFeed({
       )
 
 
-    if (
-      identity &&
-      store.records?.[
-        identity
-      ]
-    ) {
-      return [
+    const existing =
+      await findGeographicPin({
+        city:
+          'toronto',
+
+        type:
+          'new',
+
+        subtype:
+          normalizedNewType,
+
         identity,
-        store.records[
-          identity
-        ],
-      ]
-    }
+
+        externalId:
+          cleanText(
+            record?.externalId
+          ),
+
+        id:
+          cleanText(
+            record?.id
+          ),
+      })
 
 
-    const externalId =
-      cleanText(
-        record?.externalId
-      )
-
-
-    const id =
-      cleanText(
-        record?.id
-      )
-
-
-    const match =
-      Object.entries(
-        store.records ||
-        {}
-      )
-        .find(
-          ([
-            ,
-            item,
-          ]) =>
-            (
-              externalId &&
-              cleanText(
-                item?.externalId
-              ) ===
-                externalId
-            ) ||
-            (
-              id &&
-              cleanText(
-                item?.id
-              ) ===
-                id
-            )
-        )
-
-
-    return (
-      match ||
-      [
-        '',
-        null,
-      ]
-    )
+    return [
+      existing
+        ? recordIdentity(
+            existing
+          )
+        : '',
+      existing,
+    ]
   }
 
 
@@ -702,14 +490,11 @@ export function createPublishedNewFeed({
   async function upsertRecord(
     record
   ) {
-    await ensureLoaded()
-
-
     const [
       existingIdentity,
       existing,
     ] =
-      findEntry(
+      await findEntry(
         record
       )
 
@@ -721,27 +506,25 @@ export function createPublishedNewFeed({
       })
 
 
-    if (
-      existingIdentity &&
-      existingIdentity !==
-        normalized.identity
-    ) {
-      delete store.records[
-        existingIdentity
-      ]
-    }
+    return upsertGeographicPin({
+      city:
+        'toronto',
 
+      type:
+        'new',
 
-    store.records[
-      normalized.identity
-    ] =
-      normalized.record
+      subtype:
+        normalizedNewType,
 
+      identity:
+        normalized.identity,
 
-    await persistStore()
+      previousIdentity:
+        existingIdentity,
 
-
-    return normalized.record
+      record:
+        normalized.record,
+    })
   }
 
 
@@ -755,9 +538,6 @@ export function createPublishedNewFeed({
     reason =
       'removed-from-live-map',
   }) {
-    await ensureLoaded()
-
-
     const candidate = {
       ...(record ||
         {}),
@@ -778,7 +558,7 @@ export function createPublishedNewFeed({
       existingIdentity,
       existing,
     ] =
-      findEntry(
+      await findEntry(
         candidate
       )
 
@@ -810,27 +590,25 @@ export function createPublishedNewFeed({
       })
 
 
-    if (
-      existingIdentity &&
-      existingIdentity !==
-        normalized.identity
-    ) {
-      delete store.records[
-        existingIdentity
-      ]
-    }
+    return upsertGeographicPin({
+      city:
+        'toronto',
 
+      type:
+        'new',
 
-    store.records[
-      normalized.identity
-    ] =
-      normalized.record
+      subtype:
+        normalizedNewType,
 
+      identity:
+        normalized.identity,
 
-    await persistStore()
+      previousIdentity:
+        existingIdentity,
 
-
-    return normalized.record
+      record:
+        normalized.record,
+    })
   }
 
 
@@ -838,72 +616,18 @@ export function createPublishedNewFeed({
     status =
       'live',
   } = {}) {
-    await ensureLoaded()
+    return getGeographicPins({
+      city:
+        'toronto',
 
+      type:
+        'new',
 
-    const normalizedStatus =
-      cleanText(
-        status
-      )
-        .toLowerCase()
+      subtype:
+        normalizedNewType,
 
-
-    let records =
-      Object.values(
-        store.records ||
-        {}
-      )
-
-
-    if (
-      normalizedStatus ===
-        'live'
-    ) {
-      records =
-        records.filter(
-          (record) =>
-            record.active !==
-              false
-        )
-    }
-    else if (
-      normalizedStatus ===
-        'archive' ||
-      normalizedStatus ===
-        'archived' ||
-      normalizedStatus ===
-        'unpublished'
-    ) {
-      records =
-        records.filter(
-          (record) =>
-            record.active ===
-              false
-        )
-    }
-
-
-    return records
-      .sort(
-        (
-          a,
-          b
-        ) =>
-          new Date(
-            b.serverUpdatedAt ||
-            b.updatedAt ||
-            b.publishedAt ||
-            0
-          )
-            .getTime() -
-          new Date(
-            a.serverUpdatedAt ||
-            a.updatedAt ||
-            a.publishedAt ||
-            0
-          )
-            .getTime()
-      )
+      status,
+    })
   }
 
 
@@ -1216,7 +940,9 @@ export function createPublishedNewFeed({
                   records.length,
 
                 updatedAt:
-                  store.updatedAt,
+                  records[0]?.serverUpdatedAt ||
+                  records[0]?.updatedAt ||
+                  '',
 
                 records,
               }
