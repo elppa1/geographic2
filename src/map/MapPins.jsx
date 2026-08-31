@@ -1709,7 +1709,6 @@ function appendRouteActions({
   longitude,
   latitude,
   onDirections,
-  onLongWay,
 }) {
   const actions =
     document.createElement(
@@ -1753,49 +1752,8 @@ function appendRouteActions({
     }
   )
 
-  const longWayButton =
-    document.createElement(
-      'button'
-    )
-
-  longWayButton.type =
-    'button'
-
-  longWayButton.className =
-    (
-      'geographic-route-action ' +
-      'geographic-route-action-long'
-    )
-
-  longWayButton.textContent =
-    'TAKE THE LONG WAY'
-
-  longWayButton.addEventListener(
-    'click',
-    () => {
-      onLongWay?.({
-        id:
-          pin.id,
-
-        name:
-          pin.title,
-
-        longitude,
-
-        latitude,
-
-        type:
-          'geographic',
-      })
-    }
-  )
-
   actions.appendChild(
     directionsButton
-  )
-
-  actions.appendChild(
-    longWayButton
   )
 
   popupContent.appendChild(
@@ -2962,7 +2920,6 @@ function createMarker({
   markerOffset =
     [0, 0],
   onDirections,
-  onLongWay,
 }) {
   const longitude =
     Number(
@@ -3521,7 +3478,6 @@ function createMarker({
         longitude,
         latitude,
         onDirections,
-        onLongWay,
       })
     }
   }
@@ -4312,6 +4268,94 @@ function newsArchiveIsNaturalExpiry(
 }
 
 
+function newsRecordIsAvailableForHistory(
+  pin
+) {
+  return (
+    pin?.active !==
+      false ||
+    newsArchiveIsNaturalExpiry(
+      pin
+    )
+  )
+}
+
+
+function newsRecordMatchesHistoryRange({
+  pin,
+  range,
+}) {
+  if (
+    range ===
+      'curated' ||
+    !range
+  ) {
+    return true
+  }
+
+
+  if (
+    !newsRecordIsAvailableForHistory(
+      pin
+    )
+  ) {
+    return false
+  }
+
+
+  // A TTC alert that is still active remains useful even if it began
+  // before the selected look-back window.
+  if (
+    isTtcPin(
+      pin
+    ) &&
+    pin?.active !==
+      false
+  ) {
+    return true
+  }
+
+
+  if (
+    range ===
+      'all'
+  ) {
+    return true
+  }
+
+
+  const maxHours =
+    Number(
+      range
+    )
+
+
+  if (
+    !Number.isFinite(
+      maxHours
+    ) ||
+    maxHours <=
+      0
+  ) {
+    return false
+  }
+
+
+  const ageHours =
+    getNewsAgeHours(
+      pin
+    )
+
+
+  return (
+    ageHours !==
+      null &&
+    ageHours <=
+      maxHours
+  )
+}
+
+
 function newsRecordCanAppearAtZoom({
   pin,
   zoom,
@@ -4615,7 +4659,6 @@ function MapPins({
   newSubtypeFilter,
   newBusinessRangeFilter,
   onDirections,
-  onLongWay,
 }) {
   const markersRef =
     useRef([])
@@ -5139,41 +5182,33 @@ function MapPins({
               )
           )
           .filter(
-            (pin) => {
-              if (
-                newsRangeFilter !==
-                  '24'
-              ) {
-                return true
-              }
-
-              const ageHours =
-                getNewsAgeHours(
-                  pin
-                )
-
-              return (
-                ageHours !==
-                  null &&
-                ageHours <=
-                  24
-              )
-            }
-          )
-          .filter(
             (pin) =>
-              newsRecordCanAppearAtZoom({
+              newsRecordMatchesHistoryRange({
                 pin,
-                zoom,
+                range:
+                  newsRangeFilter,
               })
           )
           .filter(
             (pin) =>
-              newsPinIsVisibleAtZoom({
-                pin,
-                zoom,
-                selectedPinId,
-              })
+              newsRangeFilter ===
+                'curated'
+                ? newsRecordCanAppearAtZoom({
+                    pin,
+                    zoom,
+                  })
+                : true
+          )
+          .filter(
+            (pin) =>
+              newsRangeFilter ===
+                'curated'
+                ? newsPinIsVisibleAtZoom({
+                    pin,
+                    zoom,
+                    selectedPinId,
+                  })
+                : true
           )
 
 
@@ -5280,7 +5315,6 @@ function MapPins({
             pinType,
             markerOffset,
             onDirections,
-            onLongWay,
           })
 
         if (
@@ -5328,7 +5362,6 @@ function MapPins({
     viewportRevision,
     selectedPinId,
     onDirections,
-    onLongWay,
   ])
 
   useEffect(() => {

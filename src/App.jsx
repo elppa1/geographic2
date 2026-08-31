@@ -15,6 +15,92 @@ import {
 } from './cities/index.js'
 
 
+const NEWS_HISTORY_STEPS = [
+  {
+    value:
+      '24',
+
+    label:
+      '24 HRS',
+  },
+
+  {
+    value:
+      '72',
+
+    label:
+      '3 DAYS',
+  },
+
+  {
+    value:
+      '168',
+
+    label:
+      '7 DAYS',
+  },
+
+  {
+    value:
+      '336',
+
+    label:
+      '14 DAYS',
+  },
+
+  {
+    value:
+      '720',
+
+    label:
+      '30 DAYS',
+  },
+
+  {
+    value:
+      'all',
+
+    label:
+      'ALL',
+  },
+]
+
+
+function getNewsHistoryStepIndex(
+  value
+) {
+  const index =
+    NEWS_HISTORY_STEPS.findIndex(
+      (
+        option
+      ) =>
+        option.value ===
+        value
+    )
+
+  return index >=
+    0
+    ? index
+    : 0
+}
+
+
+function getNewsHistoryLabel(
+  value
+) {
+  return (
+    NEWS_HISTORY_STEPS.find(
+      (
+        option
+      ) =>
+        option.value ===
+        value
+    )?.label ||
+    ''
+  )
+}
+
+
 function GeographicApp() {
   const cityKey =
     'toronto'
@@ -40,16 +126,6 @@ function GeographicApp() {
       'https://progains.ca/'
     )
       .trim()
-
-
-  const sponsorTagline =
-    sponsorUrl
-      .toLowerCase()
-      .includes(
-        'progains.ca'
-      )
-      ? 'HIGH PROTEIN ICE CREAM TORONTO'
-      : ''
 
 
   const timelineLayers =
@@ -173,7 +249,7 @@ function GeographicApp() {
     setNewsRangeFilter,
   ] =
     useState(
-      'live'
+      'curated'
     )
 
 
@@ -388,7 +464,61 @@ function GeographicApp() {
             border-bottom: 1px solid rgba(0,0,0,0.35);
           }
 
+          .news-history-control {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+          }
+
+          .news-history-slider-shell {
+            width: 150px;
+          }
+
+          .news-history-slider-labels {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            min-height: 8px;
+            margin-bottom: 1px;
+            font-size: 5px;
+            font-weight: 700;
+            line-height: 1;
+            letter-spacing: 0.06em;
+            opacity: 0.68;
+          }
+
+          .news-history-slider-labels span:nth-child(2) {
+            text-align: center;
+            opacity: 0.9;
+          }
+
+          .news-history-slider-labels span:nth-child(3) {
+            text-align: right;
+          }
+
+          .news-history-slider {
+            display: block;
+            width: 100%;
+            height: 10px;
+            margin: 0;
+            padding: 0;
+            accent-color: #111;
+            cursor: pointer;
+          }
+
           @media (max-width: 700px) {
+            .news-history-control {
+              gap: 4px;
+            }
+
+            .news-history-slider-shell {
+              width: 112px;
+            }
+
+            .news-history-slider-labels {
+              font-size: 4.5px;
+            }
+
             .brand {
               top: 10px !important;
               left: 10px !important;
@@ -712,36 +842,11 @@ function GeographicApp() {
                   {sponsorName.toUpperCase()}
                 </span>
 
-                {sponsorTagline && (
-                  <span
-                    style={{
-                      display:
-                        'block',
-
-                      marginTop:
-                        '2px',
-
-                      fontSize:
-                        '6px',
-
-                      fontWeight:
-                        700,
-
-                      letterSpacing:
-                        '0.06em',
-
-                      lineHeight:
-                        1.25,
-
-                      opacity:
-                        0.68,
-                    }}
-                  >
-                    {sponsorTagline}
-                  </span>
-                )}
-
-                {sponsorTagline && (
+                {sponsorUrl
+                  .toLowerCase()
+                  .includes(
+                    'progains.ca'
+                  ) && (
                   <span
                     style={{
                       display:
@@ -1017,24 +1122,12 @@ function GeographicApp() {
 
         {activePinFilter ===
           'news' && (
-          <div
-            className="brand-range-filters"
-            style={{
-              display:
-                'flex',
-
-              gap:
-                '2px',
-
-              marginLeft:
-                '0',
-            }}
-          >
+          <div className="news-history-control">
             <button
               type="button"
               onClick={() =>
                 setNewsRangeFilter(
-                  'live'
+                  'curated'
                 )
               }
               style={{
@@ -1046,13 +1139,13 @@ function GeographicApp() {
 
                 background:
                   newsRangeFilter ===
-                  'live'
+                  'curated'
                     ? '#111'
                     : '#fff',
 
                 color:
                   newsRangeFilter ===
-                  'live'
+                  'curated'
                     ? '#fff'
                     : '#111',
 
@@ -1072,54 +1165,81 @@ function GeographicApp() {
                   'pointer',
               }}
             >
-              LIVE
+              CURATED
             </button>
 
 
-            <button
-              type="button"
-              onClick={() =>
-                setNewsRangeFilter(
-                  '24'
-                )
-              }
-              style={{
-                border:
-                  '1px solid rgba(0,0,0,0.14)',
+            <div className="news-history-slider-shell">
+              <div className="news-history-slider-labels">
+                <span>
+                  24 HRS
+                </span>
 
-                padding:
-                  '4px 7px',
+                <span>
+                  {newsRangeFilter !==
+                    'curated' &&
+                  newsRangeFilter !==
+                    '24' &&
+                  newsRangeFilter !==
+                    'all'
+                    ? getNewsHistoryLabel(
+                        newsRangeFilter
+                      )
+                    : ''}
+                </span>
 
-                background:
+                <span>
+                  ALL
+                </span>
+              </div>
+
+              <input
+                className="news-history-slider"
+                type="range"
+                min="0"
+                max={
+                  String(
+                    NEWS_HISTORY_STEPS.length -
+                    1
+                  )
+                }
+                step="1"
+                value={
+                  getNewsHistoryStepIndex(
+                    newsRangeFilter ===
+                      'curated'
+                      ? '24'
+                      : newsRangeFilter
+                  )
+                }
+                onChange={
+                  (
+                    event
+                  ) => {
+                    const option =
+                      NEWS_HISTORY_STEPS[
+                        Number(
+                          event.target.value
+                        )
+                      ]
+
+                    setNewsRangeFilter(
+                      option?.value ||
+                      '24'
+                    )
+                  }
+                }
+                aria-label="News history range"
+                title={
                   newsRangeFilter ===
-                  '24'
-                    ? '#111'
-                    : '#fff',
-
-                color:
-                  newsRangeFilter ===
-                  '24'
-                    ? '#fff'
-                    : '#111',
-
-                font:
-                  'inherit',
-
-                fontSize:
-                  '7px',
-
-                fontWeight:
-                  '700',
-
-                letterSpacing:
-                  '0.08em',
-
-                cursor:
-                  'pointer',
-              }}
-            >
-              24 HRS
-            </button>
+                    'curated'
+                    ? 'CURATED'
+                    : getNewsHistoryLabel(
+                        newsRangeFilter
+                      )
+                }
+              />
+            </div>
           </div>
         )}
 
@@ -1374,6 +1494,12 @@ function GeographicApp() {
                 stories may disappear from the broad city view while still
                 remaining visible when you zoom into the neighbourhood or
                 street.
+              </p>
+
+              <p>
+                CURATED is the default NEWS view. It prioritizes what matters
+                now; use the time slider to look back through the available
+                news history.
               </p>
 
               <p>

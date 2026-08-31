@@ -39,7 +39,6 @@ import DirectionsPanel from './DirectionsPanel.jsx'
 
 import {
   getDirectRoute,
-  getLongWayRoute,
 } from './routeService.js'
 
 
@@ -91,7 +90,7 @@ const GeographicMap =
         onChangePinFilter,
 
         newsRangeFilter =
-          'live',
+          'curated',
 
         newSubtypeFilter =
           'all',
@@ -943,9 +942,7 @@ const GeographicMap =
       const startRoute =
         useCallback(
           async (
-            destination,
-            longWay =
-              false
+            destination
           ) => {
             try {
               routeStepMarkerRef.current?.remove()
@@ -977,16 +974,10 @@ const GeographicMap =
 
 
               const nextRoute =
-                longWay
-                  ? await getLongWayRoute({
-                      start,
-                      destination,
-                      cityKey,
-                    })
-                  : await getDirectRoute({
-                      start,
-                      destination,
-                    })
+                await getDirectRoute({
+                  start,
+                  destination,
+                })
 
 
               setRoute(
@@ -1022,7 +1013,6 @@ const GeographicMap =
           },
           [
             getUserLocation,
-            cityKey,
           ]
         )
 
@@ -1033,24 +1023,7 @@ const GeographicMap =
             destination
           ) => {
             startRoute(
-              destination,
-              false
-            )
-          },
-          [
-            startRoute,
-          ]
-        )
-
-
-      const handleLongWay =
-        useCallback(
-          (
-            destination
-          ) => {
-            startRoute(
-              destination,
-              true
+              destination
             )
           },
           [
@@ -1317,48 +1290,8 @@ const GeographicMap =
         )
 
 
-        const longWayButton =
-          document.createElement(
-            'button'
-          )
-
-
-        longWayButton.type =
-          'button'
-
-
-        longWayButton.className =
-          (
-            'geographic-route-action ' +
-            'geographic-route-action-long'
-          )
-
-
-        longWayButton.textContent =
-          'TAKE THE LONG WAY'
-
-
-        longWayButton.addEventListener(
-          'click',
-          () => {
-            handleLongWay({
-              ...result,
-
-              longitude,
-
-              latitude,
-            })
-          }
-        )
-
-
         actions.appendChild(
           directionsButton
-        )
-
-
-        actions.appendChild(
-          longWayButton
         )
 
 
@@ -1477,10 +1410,6 @@ const GeographicMap =
               onDirections={
                 handleDirections
               }
-
-              onLongWay={
-                handleLongWay
-              }
             />
           )}
 
@@ -1535,14 +1464,6 @@ const GeographicMap =
 
             onStepChange={
               handleStepChange
-            }
-
-            onDirect={
-              handleDirections
-            }
-
-            onLongWay={
-              handleLongWay
             }
           />
         </>

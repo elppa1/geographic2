@@ -88,8 +88,6 @@ function DirectionsPanel({
   error,
   onClear,
   onStepChange,
-  onDirect,
-  onLongWay,
 }) {
   const [
     navigating,
@@ -105,26 +103,13 @@ function DirectionsPanel({
     useState(0)
 
 
-  const [
-    stepsOpen,
-    setStepsOpen,
-  ] =
-    useState(false)
-
-
   useEffect(() => {
     setNavigating(
       false
     )
 
-
     setCurrentStep(
       0
-    )
-
-
-    setStepsOpen(
-      false
     )
 
 
@@ -157,27 +142,6 @@ function DirectionsPanel({
     ]
 
 
-  const isLongWay =
-    route?.kind ===
-    'long'
-
-
-  const extraMinutes =
-    isLongWay &&
-    !route?.fallback &&
-    route?.directSeconds
-      ? Math.max(
-          1,
-          Math.round(
-            (
-              route.seconds -
-              route.directSeconds
-            ) / 60
-          )
-        )
-      : 0
-
-
   const atLastStep =
     currentStep >=
     steps.length - 1
@@ -187,8 +151,7 @@ function DirectionsPanel({
     index
   ) {
     if (
-      steps.length ===
-      0
+      steps.length === 0
     ) {
       return
     }
@@ -221,11 +184,6 @@ function DirectionsPanel({
   function startWalking() {
     setNavigating(
       true
-    )
-
-
-    setStepsOpen(
-      false
     )
 
 
@@ -263,40 +221,6 @@ function DirectionsPanel({
   }
 
 
-  function toggleSteps() {
-    setStepsOpen(
-      (
-        current
-      ) => {
-        const next =
-          !current
-
-
-        if (
-          !next &&
-          !navigating
-        ) {
-          onStepChange?.(
-            null
-          )
-        }
-
-
-        return next
-      }
-    )
-  }
-
-
-  function chooseStep(
-    index
-  ) {
-    showStep(
-      index
-    )
-  }
-
-
   function backToRoutes() {
     setNavigating(
       false
@@ -308,87 +232,8 @@ function DirectionsPanel({
     )
 
 
-    setStepsOpen(
-      false
-    )
-
-
     onStepChange?.(
       null
-    )
-  }
-
-
-  function chooseDirect() {
-    if (
-      loading ||
-      !destination ||
-      route?.kind ===
-        'direct'
-    ) {
-      return
-    }
-
-
-    setNavigating(
-      false
-    )
-
-
-    setCurrentStep(
-      0
-    )
-
-
-    setStepsOpen(
-      false
-    )
-
-
-    onStepChange?.(
-      null
-    )
-
-
-    onDirect?.(
-      destination
-    )
-  }
-
-
-  function chooseLongWay() {
-    if (
-      loading ||
-      !destination ||
-      route?.kind ===
-        'long'
-    ) {
-      return
-    }
-
-
-    setNavigating(
-      false
-    )
-
-
-    setCurrentStep(
-      0
-    )
-
-
-    setStepsOpen(
-      false
-    )
-
-
-    onStepChange?.(
-      null
-    )
-
-
-    onLongWay?.(
-      destination
     )
   }
 
@@ -400,75 +245,6 @@ function DirectionsPanel({
 
 
     onClear?.()
-  }
-
-
-  function renderSteps() {
-    if (
-      !stepsOpen
-    ) {
-      return null
-    }
-
-
-    return (
-      <div className="directions-step-list">
-        {steps.map(
-          (
-            step,
-            index
-          ) => {
-            const selected =
-              index ===
-              currentStep
-
-
-            return (
-              <button
-                type="button"
-                className={
-                  selected
-                    ? 'directions-step directions-step-active'
-                    : 'directions-step'
-                }
-                key={
-                  step.id ||
-                  index
-                }
-                onClick={() =>
-                  chooseStep(
-                    index
-                  )
-                }
-              >
-                <span className="directions-step-number">
-                  {
-                    index +
-                    1
-                  }
-                </span>
-
-
-                <span className="directions-step-content">
-                  <strong>
-                    {
-                      step.instruction
-                    }
-                  </strong>
-
-
-                  <span className="directions-step-meta">
-                    {formatDistance(
-                      step.distance
-                    ) || 'NOW'}
-                  </span>
-                </span>
-              </button>
-            )
-          }
-        )}
-      </div>
-    )
   }
 
 
@@ -522,64 +298,8 @@ function DirectionsPanel({
             </div>
 
 
-            <div className="directions-mode-switch">
-              <button
-                type="button"
-                className={
-                  route.kind ===
-                  'direct'
-                    ? (
-                        'directions-mode-button ' +
-                        'directions-mode-button-active'
-                      )
-                    : 'directions-mode-button'
-                }
-                onClick={
-                  chooseDirect
-                }
-                disabled={
-                  loading
-                }
-                aria-pressed={
-                  route.kind ===
-                  'direct'
-                }
-              >
-                DIRECTIONS
-              </button>
-
-
-              <button
-                type="button"
-                className={
-                  route.kind ===
-                  'long'
-                    ? (
-                        'directions-mode-button ' +
-                        'directions-mode-button-active'
-                      )
-                    : 'directions-mode-button'
-                }
-                onClick={
-                  chooseLongWay
-                }
-                disabled={
-                  loading
-                }
-                aria-pressed={
-                  route.kind ===
-                  'long'
-                }
-              >
-                TAKE THE LONG WAY
-              </button>
-            </div>
-
-
             <div className="directions-route-label">
-              {isLongWay
-                ? 'TAKE THE LONG WAY'
-                : 'WALKING DIRECTIONS'}
+              WALKING DIRECTIONS
             </div>
 
 
@@ -596,75 +316,6 @@ function DirectionsPanel({
             </div>
 
 
-            {isLongWay &&
-              !route.fallback &&
-              extraMinutes >
-                0 && (
-                <div className="directions-detour">
-                  +{extraMinutes} MIN
-                </div>
-              )}
-
-
-            {isLongWay &&
-              route.fallback && (
-                <div className="directions-note">
-                  DIRECT ROUTE IS ALREADY THE GOOD ROUTE.
-                </div>
-              )}
-
-
-            {isLongWay &&
-              !route.fallback && (
-                <div className="directions-note">
-                  {route.scenicPlace?.name
-                    ? (
-                        `VIA ${route.scenicPlace.name}`
-                      )
-                    : (
-                        'A LITTLE FARTHER. MORE ROOM TO WANDER.'
-                      )}
-                </div>
-              )}
-
-
-            {steps.length >
-              0 && (
-              <div className="directions-all-shell">
-                <button
-                  type="button"
-                  className={
-                    stepsOpen
-                      ? 'directions-all-toggle directions-all-toggle-open'
-                      : 'directions-all-toggle'
-                  }
-                  onClick={
-                    toggleSteps
-                  }
-                  aria-expanded={
-                    stepsOpen
-                  }
-                >
-                  <span>
-                    ALL DIRECTIONS
-                  </span>
-
-
-                  <span className="directions-all-arrow">
-                    {stepsOpen
-                      ? '▴'
-                      : '▾'}
-                  </span>
-                </button>
-
-
-                {
-                  renderSteps()
-                }
-              </div>
-            )}
-
-
             <button
               type="button"
               className="directions-start"
@@ -672,8 +323,7 @@ function DirectionsPanel({
                 startWalking
               }
               disabled={
-                steps.length ===
-                  0 ||
+                steps.length === 0 ||
                 loading
               }
             >
@@ -694,7 +344,7 @@ function DirectionsPanel({
                 backToRoutes
               }
             >
-              ← BACK TO ROUTES
+              ← BACK TO ROUTE
             </button>
 
 
@@ -704,7 +354,6 @@ function DirectionsPanel({
                 {' / '}
                 {steps.length}
               </span>
-
 
               <span>
                 {formatTime(
@@ -744,40 +393,6 @@ function DirectionsPanel({
             )}
 
 
-            <div className="directions-all-shell directions-all-shell-navigation">
-              <button
-                type="button"
-                className={
-                  stepsOpen
-                    ? 'directions-all-toggle directions-all-toggle-open'
-                    : 'directions-all-toggle'
-                }
-                onClick={
-                  toggleSteps
-                }
-                aria-expanded={
-                  stepsOpen
-                }
-              >
-                <span>
-                  ALL DIRECTIONS
-                </span>
-
-
-                <span className="directions-all-arrow">
-                  {stepsOpen
-                    ? '▴'
-                    : '▾'}
-                </span>
-              </button>
-
-
-              {
-                renderSteps()
-              }
-            </div>
-
-
             <div className="navigation-controls">
               <button
                 type="button"
@@ -786,8 +401,7 @@ function DirectionsPanel({
                   previousStep
                 }
                 disabled={
-                  currentStep ===
-                  0
+                  currentStep === 0
                 }
               >
                 PREVIOUS
@@ -812,7 +426,7 @@ function DirectionsPanel({
                     backToRoutes
                   }
                 >
-                  ROUTES
+                  ROUTE
                 </button>
               )}
             </div>
