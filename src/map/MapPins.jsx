@@ -2280,7 +2280,7 @@ function appendEmojiMarkerIcon(
 
   element.style.fontSize =
     compactMobileMarker
-      ? '10px'
+      ? '12px'
       : '24px'
 
   element.style.lineHeight =
@@ -2800,6 +2800,14 @@ function createMarker({
     pinType ===
       'news'
   ) {
+    appendNewsImage({
+      parent:
+        popupContent,
+
+      pin,
+    })
+
+
     const showMobileNewsDate =
       isTorontoFirePin(
         pin
@@ -2854,6 +2862,14 @@ function createMarker({
       )
     )
   ) {
+    appendNewsImage({
+      parent:
+        popupContent,
+
+      pin,
+    })
+
+
     appendText({
       parent:
         popupContent,
@@ -3136,6 +3152,9 @@ function createMarker({
     popupContent.style.lineHeight =
       '1.2'
 
+    popupContent.style.display =
+      'flow-root'
+
 
     const mobileDate =
       popupContent.querySelector(
@@ -3243,21 +3262,33 @@ function createMarker({
           'block'
 
         mobileImageLink.style.width =
-          '74px'
+          '42px'
+
+        mobileImageLink.style.height =
+          '32px'
+
+        mobileImageLink.style.float =
+          'right'
 
         mobileImageLink.style.margin =
-          '3px 0 5px'
+          '0 0 2px 6px'
+
+        mobileImageLink.style.overflow =
+          'hidden'
+
+        mobileImageLink.style.borderRadius =
+          '2px'
       }
 
 
       mobileImage.style.width =
-        '74px'
+        '42px'
 
       mobileImage.style.height =
-        '46px'
+        '32px'
 
       mobileImage.style.maxHeight =
-        '46px'
+        '32px'
 
       mobileImage.style.margin =
         '0'
@@ -3266,7 +3297,7 @@ function createMarker({
         'cover'
 
       mobileImage.style.borderRadius =
-        '3px'
+        '2px'
     }
 
 
