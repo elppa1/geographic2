@@ -34,8 +34,16 @@ const PUBLISHED_NEWS_REFRESH_MS =
   15 * 1000
 
 
-const PUBLISHED_NEW_ENDPOINT =
+const LEGACY_PUBLISHED_NEW_ENDPOINT =
   '/api/geographic/toronto/new/published?status=all'
+
+
+const PUBLISHED_NEW_BUSINESS_ENDPOINT =
+  '/api/geographic/toronto/new/business/published?status=all'
+
+
+const PUBLISHED_NEW_DEVELOPMENT_ENDPOINT =
+  '/api/geographic/toronto/new/development/published?status=all'
 
 
 const PUBLISHED_NEW_REFRESH_MS =
@@ -180,6 +188,14 @@ function newPinMatchesSubtype(
     return true
   }
 
+  const explicitType =
+    String(
+      pin.newType ||
+      ''
+    )
+      .toLowerCase()
+
+
   const category =
     String(
       pin.category ||
@@ -191,8 +207,15 @@ function newPinMatchesSubtype(
     subtype ===
     'businesses'
   ) {
-    return BUSINESS_CATEGORIES.includes(
-      category
+    return (
+      explicitType ===
+        'business' ||
+      (
+        !explicitType &&
+        BUSINESS_CATEGORIES.includes(
+          category
+        )
+      )
     )
   }
 
@@ -200,8 +223,15 @@ function newPinMatchesSubtype(
     subtype ===
     'developments'
   ) {
-    return DEVELOPMENT_CATEGORIES.includes(
-      category
+    return (
+      explicitType ===
+        'development' ||
+      (
+        !explicitType &&
+        DEVELOPMENT_CATEGORIES.includes(
+          category
+        )
+      )
     )
   }
 
@@ -547,6 +577,24 @@ function getNewBusinessAgeLabel(
 function getNewLifecycleGroup(
   pin
 ) {
+  const explicitType =
+    String(
+      pin.newType ||
+      ''
+    )
+      .toLowerCase()
+
+
+  if (
+    explicitType ===
+      'business' ||
+    explicitType ===
+      'development'
+  ) {
+    return explicitType
+  }
+
+
   const category =
     String(
       pin.category ||
@@ -631,8 +679,19 @@ function getNewLifecycleDate(
 
 
   if (
-    BUSINESS_CATEGORIES.includes(
-      category
+    (
+      String(
+        pin.newType ||
+        ''
+      )
+        .toLowerCase() ===
+        'business' ||
+      (
+        !pin.newType &&
+        BUSINESS_CATEGORIES.includes(
+          category
+        )
+      )
     ) &&
     status ===
       'open'
@@ -1632,6 +1691,46 @@ const NEW_BUSINESS_ICONS = {
       'Burgers',
   },
 
+  sandwiches: {
+    emoji:
+      '🥪',
+
+    label:
+      'Sandwiches / Deli',
+  },
+
+  'hot-dogs': {
+    emoji:
+      '🌭',
+
+    label:
+      'Hot Dogs',
+  },
+
+  'fried-chicken': {
+    emoji:
+      '🍗',
+
+    label:
+      'Fried Chicken',
+  },
+
+  bbq: {
+    emoji:
+      '🍖',
+
+    label:
+      'BBQ / Smokehouse',
+  },
+
+  steakhouse: {
+    emoji:
+      '🥩',
+
+    label:
+      'Steakhouse',
+  },
+
   'sushi-japanese': {
     emoji:
       '🍣',
@@ -1645,7 +1744,39 @@ const NEW_BUSINESS_ICONS = {
       '🍜',
 
     label:
-      'Noodles',
+      'Noodles / Ramen / Pho',
+  },
+
+  dumplings: {
+    emoji:
+      '🥟',
+
+    label:
+      'Dumplings',
+  },
+
+  chinese: {
+    emoji:
+      '🥡',
+
+    label:
+      'Chinese / Takeout',
+  },
+
+  korean: {
+    emoji:
+      '🍲',
+
+    label:
+      'Korean',
+  },
+
+  'thai-southeast-asian': {
+    emoji:
+      '🌶️',
+
+    label:
+      'Thai / Southeast Asian',
   },
 
   'indian-south-asian': {
@@ -1656,12 +1787,52 @@ const NEW_BUSINESS_ICONS = {
       'Indian / South Asian',
   },
 
+  'middle-eastern': {
+    emoji:
+      '🥙',
+
+    label:
+      'Middle Eastern / Shawarma',
+  },
+
+  mediterranean: {
+    emoji:
+      '🫒',
+
+    label:
+      'Mediterranean',
+  },
+
+  caribbean: {
+    emoji:
+      '🌴',
+
+    label:
+      'Caribbean',
+  },
+
   mexican: {
     emoji:
       '🌮',
 
     label:
-      'Mexican',
+      'Mexican / Tacos',
+  },
+
+  'italian-pasta': {
+    emoji:
+      '🍝',
+
+    label:
+      'Italian / Pasta',
+  },
+
+  'breakfast-brunch': {
+    emoji:
+      '🍳',
+
+    label:
+      'Breakfast / Brunch',
   },
 
   bakery: {
@@ -1672,20 +1843,76 @@ const NEW_BUSINESS_ICONS = {
       'Bakery',
   },
 
+  bagels: {
+    emoji:
+      '🥯',
+
+    label:
+      'Bagels',
+  },
+
   cafe: {
     emoji:
       '☕',
 
     label:
-      'Cafe',
+      'Cafe / Coffee',
   },
 
-  dessert: {
+  'bubble-tea': {
+    emoji:
+      '🧋',
+
+    label:
+      'Bubble Tea',
+  },
+
+  'ice-cream': {
     emoji:
       '🍦',
 
     label:
-      'Dessert',
+      'Ice Cream / Gelato',
+  },
+
+  dessert: {
+    emoji:
+      '🍰',
+
+    label:
+      'Dessert / Cakes',
+  },
+
+  donuts: {
+    emoji:
+      '🍩',
+
+    label:
+      'Donuts',
+  },
+
+  seafood: {
+    emoji:
+      '🦞',
+
+    label:
+      'Seafood',
+  },
+
+  'salads-healthy': {
+    emoji:
+      '🥗',
+
+    label:
+      'Salads / Healthy',
+  },
+
+  'vegan-vegetarian': {
+    emoji:
+      '🌱',
+
+    label:
+      'Vegan / Vegetarian',
   },
 
   'bar-pub': {
@@ -1694,6 +1921,22 @@ const NEW_BUSINESS_ICONS = {
 
     label:
       'Bar / Pub',
+  },
+
+  'cocktail-bar': {
+    emoji:
+      '🍸',
+
+    label:
+      'Cocktail Bar',
+  },
+
+  'wine-bar': {
+    emoji:
+      '🍷',
+
+    label:
+      'Wine Bar',
   },
 }
 
@@ -2807,6 +3050,97 @@ function mergeNewsRecords(
 
 
 
+function mergeNewRecords(
+  localRecords,
+  serverRecords
+) {
+  const merged =
+    new Map()
+
+
+  for (
+    const pin
+    of (
+      Array.isArray(
+        localRecords
+      )
+        ? localRecords
+        : []
+    )
+  ) {
+    const key =
+      getNewsIdentity(
+        pin
+      )
+
+
+    if (
+      key
+    ) {
+      merged.set(
+        key,
+        pin
+      )
+    }
+  }
+
+
+  for (
+    const pin
+    of (
+      Array.isArray(
+        serverRecords
+      )
+        ? serverRecords
+        : []
+    )
+  ) {
+    const key =
+      getNewsIdentity(
+        pin
+      )
+
+
+    if (
+      !key
+    ) {
+      continue
+    }
+
+
+    const local =
+      merged.get(
+        key
+      )
+
+
+    if (
+      local?.serverSyncPending ===
+        true
+    ) {
+      continue
+    }
+
+
+    merged.set(
+      key,
+      local
+        ? {
+            ...local,
+            ...pin,
+          }
+        : pin
+    )
+  }
+
+
+  return Array.from(
+    merged.values()
+  )
+}
+
+
+
 // ============================================================
 // NEWS SCALE / PROMINENCE
 // ============================================================
@@ -3580,65 +3914,130 @@ function MapPins({
         false
 
 
-      async function loadPublishedNew() {
-        try {
-          const response =
-            await fetch(
-              PUBLISHED_NEW_ENDPOINT,
-              {
-                headers: {
-                  Accept:
-                    'application/json',
-                },
+      async function loadPublishedNewEndpoint(
+        endpoint,
+        label,
+        {
+          optional =
+            false,
+        } = {}
+      ) {
+        const response =
+          await fetch(
+            endpoint,
+            {
+              headers: {
+                Accept:
+                  'application/json',
+              },
 
-                cache:
-                  'no-store',
-              }
-            )
-
-
-          if (
-            !response.ok
-          ) {
-            throw new Error(
-              'Published NEW request failed with HTTP ' +
-              response.status
-            )
-          }
-
-
-          const payload =
-            await response.json()
-
-
-          if (
-            cancelled
-          ) {
-            return
-          }
-
-
-          setServerNewItems(
-            Array.isArray(
-              payload?.records
-            )
-              ? payload.records
-              : []
+              cache:
+                'no-store',
+            }
           )
-        }
-        catch (
-          error
+
+
+        if (
+          !response.ok
         ) {
           if (
-            cancelled
+            optional
           ) {
-            return
+            return []
           }
 
 
-          console.warn(
-            'PUBLIC MAP · RAILWAY NEW LOAD FAILED:',
-            error
+          throw new Error(
+            `${label} request failed with HTTP ` +
+            response.status
+          )
+        }
+
+
+        const payload =
+          await response.json()
+
+
+        return (
+          Array.isArray(
+            payload?.records
+          )
+            ? payload.records
+            : []
+        )
+      }
+
+
+      async function loadPublishedNew() {
+        const results =
+          await Promise.allSettled([
+            loadPublishedNewEndpoint(
+              LEGACY_PUBLISHED_NEW_ENDPOINT,
+              'Legacy published NEW',
+              {
+                optional:
+                  true,
+              }
+            ),
+
+            loadPublishedNewEndpoint(
+              PUBLISHED_NEW_BUSINESS_ENDPOINT,
+              'Published NEW business'
+            ),
+
+            loadPublishedNewEndpoint(
+              PUBLISHED_NEW_DEVELOPMENT_ENDPOINT,
+              'Published NEW development'
+            ),
+          ])
+
+
+        if (
+          cancelled
+        ) {
+          return
+        }
+
+
+        const records =
+          []
+
+
+        results.forEach(
+          (
+            result
+          ) => {
+            if (
+              result.status ===
+                'fulfilled'
+            ) {
+              records.push(
+                ...result.value
+              )
+            }
+            else {
+              console.warn(
+                'PUBLIC MAP · TORONTO NEW LOAD FAILED:',
+                result.reason
+              )
+            }
+          }
+        )
+
+
+        if (
+          records.length >
+            0 ||
+          results.every(
+            (
+              result
+            ) =>
+              result.status ===
+                'fulfilled'
+          )
+        ) {
+          setServerNewItems(
+            records
           )
         }
       }
@@ -3917,7 +4316,7 @@ function MapPins({
       const mergedNewItems =
         cityKey ===
           'toronto'
-          ? mergeNewsRecords(
+          ? mergeNewRecords(
               getNewItems(),
               serverNewItems
             )

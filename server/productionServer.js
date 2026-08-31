@@ -55,6 +55,14 @@ import {
 } from './feeds/toronto/nowServing.js'
 
 import {
+  torontoNewBusinessFeed,
+} from './feeds/toronto/new/business.js'
+
+import {
+  torontoNewDevelopmentFeed,
+} from './feeds/toronto/new/development.js'
+
+import {
   locationSearchApi,
 } from './locationSearch.js'
 
@@ -323,6 +331,21 @@ function requestNeedsAdminAuth(
     pathname.startsWith(
       '/api/geographic/toronto/newsroom/'
     )
+  ) {
+    return true
+  }
+
+
+  if (
+    pathname.startsWith(
+      '/api/geographic/toronto/new/'
+    ) &&
+    String(
+      req.method ||
+      'GET'
+    )
+      .toUpperCase() !==
+      'GET'
   ) {
     return true
   }
@@ -1325,6 +1348,8 @@ const plugins = [
   ttcAlertsFeed(),
   liveNewsroomFeed(),
   nowServingFeed(),
+  torontoNewBusinessFeed(),
+  torontoNewDevelopmentFeed(),
 ]
 
 

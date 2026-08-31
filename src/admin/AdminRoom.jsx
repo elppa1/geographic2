@@ -91,12 +91,40 @@ const PUBLISHED_NEWS_ARCHIVE_ENDPOINT =
   '/api/geographic/toronto/newsroom/published/archive'
 
 
-const PUBLISHED_NEW_UPSERT_ENDPOINT =
-  '/api/geographic/toronto/newsroom/new/published/upsert'
+const LEGACY_PUBLISHED_NEW_ENDPOINT =
+  '/api/geographic/toronto/new/published'
 
 
-const PUBLISHED_NEW_ARCHIVE_ENDPOINT =
-  '/api/geographic/toronto/newsroom/new/published/archive'
+const PUBLISHED_NEW_BUSINESS_ENDPOINT =
+  '/api/geographic/toronto/new/business/published'
+
+
+const PUBLISHED_NEW_BUSINESS_UPSERT_ENDPOINT =
+  '/api/geographic/toronto/new/business/published/upsert'
+
+
+const PUBLISHED_NEW_BUSINESS_ARCHIVE_ENDPOINT =
+  '/api/geographic/toronto/new/business/published/archive'
+
+
+const PUBLISHED_NEW_DEVELOPMENT_ENDPOINT =
+  '/api/geographic/toronto/new/development/published'
+
+
+const PUBLISHED_NEW_DEVELOPMENT_UPSERT_ENDPOINT =
+  '/api/geographic/toronto/new/development/published/upsert'
+
+
+const PUBLISHED_NEW_DEVELOPMENT_ARCHIVE_ENDPOINT =
+  '/api/geographic/toronto/new/development/published/archive'
+
+
+const TORONTO_NEW_SERVER_MIGRATION_KEY =
+  'elppa-geographic-toronto-new-server-migrated-v1'
+
+
+const PUBLISHED_NEW_PULL_MS =
+  15 * 1000
 
 
 const PERSISTENT_NEWSROOM_PULL_MS =
@@ -947,13 +975,29 @@ const EMPTY_NEW = {
 }
 
 
+const NEW_BUSINESS_CATEGORIES = [
+  'store',
+  'restaurant',
+  'business',
+]
+
+
+const NEW_DEVELOPMENT_CATEGORIES = [
+  'development',
+  'construction',
+  'housing',
+  'transit',
+  'public-space',
+]
+
+
 const NEW_BUSINESS_ICON_OPTIONS = [
   {
     value:
       'restaurant',
 
     label:
-      '🍽️ RESTAURANT',
+      '🍽️ RESTAURANT / GENERAL',
   },
   {
     value:
@@ -971,6 +1015,41 @@ const NEW_BUSINESS_ICON_OPTIONS = [
   },
   {
     value:
+      'sandwiches',
+
+    label:
+      '🥪 SANDWICHES / DELI',
+  },
+  {
+    value:
+      'hot-dogs',
+
+    label:
+      '🌭 HOT DOGS',
+  },
+  {
+    value:
+      'fried-chicken',
+
+    label:
+      '🍗 FRIED CHICKEN',
+  },
+  {
+    value:
+      'bbq',
+
+    label:
+      '🍖 BBQ / SMOKEHOUSE',
+  },
+  {
+    value:
+      'steakhouse',
+
+    label:
+      '🥩 STEAKHOUSE',
+  },
+  {
+    value:
       'sushi-japanese',
 
     label:
@@ -981,7 +1060,35 @@ const NEW_BUSINESS_ICON_OPTIONS = [
       'noodles',
 
     label:
-      '🍜 NOODLES',
+      '🍜 NOODLES / RAMEN / PHO',
+  },
+  {
+    value:
+      'dumplings',
+
+    label:
+      '🥟 DUMPLINGS',
+  },
+  {
+    value:
+      'chinese',
+
+    label:
+      '🥡 CHINESE / TAKEOUT',
+  },
+  {
+    value:
+      'korean',
+
+    label:
+      '🍲 KOREAN',
+  },
+  {
+    value:
+      'thai-southeast-asian',
+
+    label:
+      '🌶️ THAI / SOUTHEAST ASIAN',
   },
   {
     value:
@@ -992,10 +1099,45 @@ const NEW_BUSINESS_ICON_OPTIONS = [
   },
   {
     value:
+      'middle-eastern',
+
+    label:
+      '🥙 MIDDLE EASTERN / SHAWARMA',
+  },
+  {
+    value:
+      'mediterranean',
+
+    label:
+      '🫒 MEDITERRANEAN',
+  },
+  {
+    value:
+      'caribbean',
+
+    label:
+      '🌴 CARIBBEAN',
+  },
+  {
+    value:
       'mexican',
 
     label:
-      '🌮 MEXICAN',
+      '🌮 MEXICAN / TACOS',
+  },
+  {
+    value:
+      'italian-pasta',
+
+    label:
+      '🍝 ITALIAN / PASTA',
+  },
+  {
+    value:
+      'breakfast-brunch',
+
+    label:
+      '🍳 BREAKFAST / BRUNCH',
   },
   {
     value:
@@ -1006,17 +1148,66 @@ const NEW_BUSINESS_ICON_OPTIONS = [
   },
   {
     value:
+      'bagels',
+
+    label:
+      '🥯 BAGELS',
+  },
+  {
+    value:
       'cafe',
 
     label:
-      '☕ CAFÉ',
+      '☕ CAFÉ / COFFEE',
+  },
+  {
+    value:
+      'bubble-tea',
+
+    label:
+      '🧋 BUBBLE TEA',
+  },
+  {
+    value:
+      'ice-cream',
+
+    label:
+      '🍦 ICE CREAM / GELATO',
   },
   {
     value:
       'dessert',
 
     label:
-      '🍦 DESSERT',
+      '🍰 DESSERT / CAKES',
+  },
+  {
+    value:
+      'donuts',
+
+    label:
+      '🍩 DONUTS',
+  },
+  {
+    value:
+      'seafood',
+
+    label:
+      '🦞 SEAFOOD',
+  },
+  {
+    value:
+      'salads-healthy',
+
+    label:
+      '🥗 SALADS / HEALTHY',
+  },
+  {
+    value:
+      'vegan-vegetarian',
+
+    label:
+      '🌱 VEGAN / VEGETARIAN',
   },
   {
     value:
@@ -1025,7 +1216,236 @@ const NEW_BUSINESS_ICON_OPTIONS = [
     label:
       '🍺 BAR / PUB',
   },
+  {
+    value:
+      'cocktail-bar',
+
+    label:
+      '🍸 COCKTAIL BAR',
+  },
+  {
+    value:
+      'wine-bar',
+
+    label:
+      '🍷 WINE BAR',
+  },
 ]
+
+
+function getNewServerSubtype(
+  record
+) {
+  const explicitType =
+    String(
+      record?.newType ||
+      ''
+    )
+      .trim()
+      .toLowerCase()
+
+
+  if (
+    explicitType ===
+      'business' ||
+    explicitType ===
+      'development'
+  ) {
+    return explicitType
+  }
+
+
+  const category =
+    String(
+      record?.category ||
+      ''
+    )
+      .trim()
+      .toLowerCase()
+
+
+  if (
+    NEW_BUSINESS_CATEGORIES.includes(
+      category
+    )
+  ) {
+    return 'business'
+  }
+
+
+  if (
+    NEW_DEVELOPMENT_CATEGORIES.includes(
+      category
+    )
+  ) {
+    return 'development'
+  }
+
+
+  return ''
+}
+
+
+function newRecordIdentity(
+  record
+) {
+  const externalId =
+    String(
+      record?.externalId ||
+      ''
+    )
+      .trim()
+
+
+  if (
+    externalId
+  ) {
+    return (
+      'external:' +
+      externalId
+    )
+  }
+
+
+  const id =
+    String(
+      record?.id ||
+      ''
+    )
+      .trim()
+
+
+  if (
+    id
+  ) {
+    return (
+      'id:' +
+      id
+    )
+  }
+
+
+  return ''
+}
+
+
+function mergePublishedNewRecords(
+  localRecords,
+  serverRecords
+) {
+  const merged =
+    new Map()
+
+
+  for (
+    const record
+    of (
+      Array.isArray(
+        localRecords
+      )
+        ? localRecords
+        : []
+    )
+  ) {
+    const key =
+      newRecordIdentity(
+        record
+      )
+
+
+    if (
+      key
+    ) {
+      merged.set(
+        key,
+        record
+      )
+    }
+  }
+
+
+  for (
+    const record
+    of (
+      Array.isArray(
+        serverRecords
+      )
+        ? serverRecords
+        : []
+    )
+  ) {
+    const key =
+      newRecordIdentity(
+        record
+      )
+
+
+    if (
+      !key
+    ) {
+      continue
+    }
+
+
+    const local =
+      merged.get(
+        key
+      )
+
+
+    if (
+      local?.serverSyncPending ===
+        true
+    ) {
+      continue
+    }
+
+
+    merged.set(
+      key,
+      local
+        ? {
+            ...local,
+            ...record,
+          }
+        : record
+    )
+  }
+
+
+  return Array.from(
+    merged.values()
+  )
+}
+
+
+function torontoNewMigrationComplete() {
+  try {
+    return (
+      window.localStorage.getItem(
+        TORONTO_NEW_SERVER_MIGRATION_KEY
+      ) ===
+      'true'
+    )
+  }
+  catch {
+    return false
+  }
+}
+
+
+function markTorontoNewMigrationComplete() {
+  try {
+    window.localStorage.setItem(
+      TORONTO_NEW_SERVER_MIGRATION_KEY,
+      'true'
+    )
+  }
+  catch {
+    // Server persistence still works even if this browser cannot
+    // remember that the one-time migration has completed.
+  }
+}
 
 
 const EMPTY_HISTORIC = {
@@ -5351,243 +5771,6 @@ function AdminRoom() {
   }
 
 
-  // ==========================================================
-  // SERVER-OWNED PUBLISHED NEW
-  // ==========================================================
-  //
-  // Toronto NEW uses the same persistent server store as the public map.
-  // localStorage remains only the Admin/browser cache.
-  //
-  // ==========================================================
-
-  async function postPublishedNewRecords(
-    records
-  ) {
-    const normalizedRecords =
-      (
-        Array.isArray(
-          records
-        )
-          ? records
-          : [
-              records,
-            ]
-      )
-        .filter(
-          Boolean
-        )
-        .map(
-          normalizePinRecord
-        )
-
-
-    if (
-      normalizedRecords.length ===
-        0
-    ) {
-      return []
-    }
-
-
-    const response =
-      await fetch(
-        PUBLISHED_NEW_UPSERT_ENDPOINT,
-        {
-          method:
-            'POST',
-
-          headers: {
-            'Content-Type':
-              'application/json',
-
-            Accept:
-              'application/json',
-          },
-
-          body:
-            JSON.stringify({
-              records:
-                normalizedRecords,
-            }),
-        }
-      )
-
-
-    const payload =
-      await response.json()
-
-
-    if (
-      !response.ok ||
-      payload?.ok !==
-        true
-    ) {
-      throw new Error(
-        payload?.error ||
-        (
-          'Published NEW save failed · ' +
-          response.status
-        )
-      )
-    }
-
-
-    return (
-      Array.isArray(
-        payload.records
-      )
-        ? payload.records
-            .map(
-              normalizePinRecord
-            )
-        : normalizedRecords
-    )
-  }
-
-
-  async function publishNewRecordOnServer(
-    record,
-    {
-      silent =
-        false,
-    } = {}
-  ) {
-    try {
-      const records =
-        await postPublishedNewRecords(
-          [
-            record,
-          ]
-        )
-
-
-      return (
-        records[0] ||
-        normalizePinRecord(
-          record
-        )
-      )
-    }
-    catch (
-      error
-    ) {
-      console.error(
-        'PUBLISHED NEW SERVER SAVE FAILED:',
-        error
-      )
-
-
-      if (
-        !silent
-      ) {
-        window.alert(
-          'Could not save this NEW pin to the server. Nothing was published. Please try again.'
-        )
-      }
-
-
-      return null
-    }
-  }
-
-
-  async function archiveNewRecordOnServer(
-    record,
-    reason =
-      'removed-from-live-map',
-    {
-      silent =
-        false,
-    } = {}
-  ) {
-    if (
-      !record
-    ) {
-      return null
-    }
-
-
-    try {
-      const response =
-        await fetch(
-          PUBLISHED_NEW_ARCHIVE_ENDPOINT,
-          {
-            method:
-              'POST',
-
-            headers: {
-              'Content-Type':
-                'application/json',
-
-              Accept:
-                'application/json',
-            },
-
-            body:
-              JSON.stringify({
-                id:
-                  record.id ||
-                  '',
-
-                externalId:
-                  record.externalId ||
-                  '',
-
-                record,
-
-                reason,
-              }),
-          }
-        )
-
-
-      const payload =
-        await response.json()
-
-
-      if (
-        !response.ok ||
-        payload?.ok !==
-          true ||
-        !payload?.record
-      ) {
-        throw new Error(
-          payload?.error ||
-          (
-            'Published NEW archive failed · ' +
-            response.status
-          )
-        )
-      }
-
-
-      return normalizePinRecord(
-        payload.record
-      )
-    }
-    catch (
-      error
-    ) {
-      console.error(
-        'PUBLISHED NEW SERVER ARCHIVE FAILED:',
-        error
-      )
-
-
-      if (
-        !silent
-      ) {
-        window.alert(
-          'Could not update this NEW pin on the server. The public map was not changed. Please try again.'
-        )
-      }
-
-
-      return null
-    }
-  }
-
-
   async function refreshPublishedNewsFromServer({
     allowBootstrap =
       true,
@@ -5649,14 +5832,25 @@ function AdminRoom() {
 
 
       const localToronto =
-        latestLocal.filter(
-          (
-            record
-          ) =>
-            belongsToCity(
-              record,
-              'toronto'
-            )
+        mergePublishedNewRecords(
+          latestLocal.filter(
+            (
+              record
+            ) =>
+              belongsToCity(
+                record,
+                'toronto'
+              )
+          ),
+          legacyPublishedNew.filter(
+            (
+              record
+            ) =>
+              belongsToCity(
+                record,
+                'toronto'
+              )
+          )
         )
 
 
@@ -5713,6 +5907,946 @@ function AdminRoom() {
     ) {
       console.warn(
         'PUBLISHED NEWS SERVER REFRESH FAILED:',
+        error
+      )
+
+
+      return null
+    }
+  }
+
+
+  // ==========================================================
+  // TORONTO NEW · SERVER PERSISTENCE
+  // ==========================================================
+  //
+  // NEW is intentionally separate from NEWS.
+  //
+  // Toronto NEW is split into:
+  //   /new/business
+  //   /new/development
+  //
+  // Existing browser pins are migrated once, idempotently, into the
+  // matching server store. Browser data remains as a fallback while the
+  // migration completes so existing pins never disappear.
+  //
+  // ==========================================================
+
+  function getPublishedNewEndpoints(
+    subtype
+  ) {
+    if (
+      subtype ===
+        'business'
+    ) {
+      return {
+        published:
+          PUBLISHED_NEW_BUSINESS_ENDPOINT,
+
+        upsert:
+          PUBLISHED_NEW_BUSINESS_UPSERT_ENDPOINT,
+
+        archive:
+          PUBLISHED_NEW_BUSINESS_ARCHIVE_ENDPOINT,
+      }
+    }
+
+
+    if (
+      subtype ===
+        'development'
+    ) {
+      return {
+        published:
+          PUBLISHED_NEW_DEVELOPMENT_ENDPOINT,
+
+        upsert:
+          PUBLISHED_NEW_DEVELOPMENT_UPSERT_ENDPOINT,
+
+        archive:
+          PUBLISHED_NEW_DEVELOPMENT_ARCHIVE_ENDPOINT,
+      }
+    }
+
+
+    return null
+  }
+
+
+  async function fetchPublishedNewSubtype(
+    subtype
+  ) {
+    const endpoints =
+      getPublishedNewEndpoints(
+        subtype
+      )
+
+
+    if (
+      !endpoints
+    ) {
+      return []
+    }
+
+
+    const response =
+      await fetch(
+        (
+          endpoints.published +
+          '?status=all'
+        ),
+        {
+          method:
+            'GET',
+
+          headers: {
+            Accept:
+              'application/json',
+          },
+
+          cache:
+            'no-store',
+        }
+      )
+
+
+    const payload =
+      await response.json()
+
+
+    if (
+      !response.ok ||
+      payload?.ok !==
+        true
+    ) {
+      throw new Error(
+        payload?.error ||
+        (
+          `Published NEW ${subtype} request failed · ` +
+          response.status
+        )
+      )
+    }
+
+
+    return (
+      Array.isArray(
+        payload.records
+      )
+        ? payload.records
+            .map(
+              normalizePinRecord
+            )
+        : []
+    )
+  }
+
+
+  async function fetchLegacyPublishedNew() {
+    try {
+      const response =
+        await fetch(
+          (
+            LEGACY_PUBLISHED_NEW_ENDPOINT +
+            '?status=all'
+          ),
+          {
+            method:
+              'GET',
+
+            headers: {
+              Accept:
+                'application/json',
+            },
+
+            cache:
+              'no-store',
+          }
+        )
+
+
+      if (
+        !response.ok
+      ) {
+        return []
+      }
+
+
+      const payload =
+        await response.json()
+
+
+      return (
+        Array.isArray(
+          payload?.records
+        )
+          ? payload.records
+              .map(
+                normalizePinRecord
+              )
+          : []
+      )
+    }
+    catch {
+      return []
+    }
+  }
+
+
+  async function postPublishedNewRecords(
+    records,
+    subtype
+  ) {
+    const endpoints =
+      getPublishedNewEndpoints(
+        subtype
+      )
+
+
+    if (
+      !endpoints
+    ) {
+      throw new Error(
+        'Unsupported Toronto NEW subtype.'
+      )
+    }
+
+
+    const normalizedRecords =
+      (
+        Array.isArray(
+          records
+        )
+          ? records
+          : [
+              records,
+            ]
+      )
+        .filter(
+          Boolean
+        )
+        .map(
+          (
+            record
+          ) =>
+            normalizePinRecord({
+              ...record,
+
+              city:
+                'toronto',
+
+              type:
+                'new',
+
+              newType:
+                subtype,
+            })
+        )
+
+
+    if (
+      normalizedRecords.length ===
+        0
+    ) {
+      return []
+    }
+
+
+    const response =
+      await fetch(
+        endpoints.upsert,
+        {
+          method:
+            'POST',
+
+          headers: {
+            'Content-Type':
+              'application/json',
+
+            Accept:
+              'application/json',
+          },
+
+          body:
+            JSON.stringify({
+              records:
+                normalizedRecords,
+            }),
+        }
+      )
+
+
+    const payload =
+      await response.json()
+
+
+    if (
+      !response.ok ||
+      payload?.ok !==
+        true
+    ) {
+      throw new Error(
+        payload?.error ||
+        (
+          `Published NEW ${subtype} save failed · ` +
+          response.status
+        )
+      )
+    }
+
+
+    return (
+      Array.isArray(
+        payload.records
+      )
+        ? payload.records
+            .map(
+              (
+                record
+              ) =>
+                normalizePinRecord({
+                  ...record,
+
+                  serverSyncPending:
+                    false,
+                })
+            )
+        : normalizedRecords
+            .map(
+              (
+                record
+              ) => ({
+                ...record,
+
+                serverSyncPending:
+                  false,
+              })
+            )
+    )
+  }
+
+
+  async function publishNewRecordOnServer(
+    record,
+    {
+      silent =
+        false,
+    } = {}
+  ) {
+    const subtype =
+      getNewServerSubtype(
+        record
+      )
+
+
+    if (
+      !subtype
+    ) {
+      return normalizePinRecord(
+        record
+      )
+    }
+
+
+    try {
+      const records =
+        await postPublishedNewRecords(
+          [
+            record,
+          ],
+          subtype
+        )
+
+
+      return (
+        records[0] ||
+        normalizePinRecord({
+          ...record,
+
+          newType:
+            subtype,
+
+          serverSyncPending:
+            false,
+        })
+      )
+    }
+    catch (
+      error
+    ) {
+      console.error(
+        'PUBLISHED NEW SERVER SAVE FAILED:',
+        error
+      )
+
+
+      if (
+        !silent
+      ) {
+        window.alert(
+          'This NEW item was saved in this browser, but the server copy could not be updated. Geographic will keep retrying automatically.'
+        )
+      }
+
+
+      return null
+    }
+  }
+
+
+  async function archiveNewRecordOnServer(
+    record,
+    reason =
+      'removed-from-live-map',
+    {
+      silent =
+        false,
+    } = {}
+  ) {
+    if (
+      !record
+    ) {
+      return null
+    }
+
+
+    const subtype =
+      getNewServerSubtype(
+        record
+      )
+
+
+    const endpoints =
+      getPublishedNewEndpoints(
+        subtype
+      )
+
+
+    if (
+      !endpoints
+    ) {
+      return normalizePinRecord({
+        ...record,
+
+        active:
+          false,
+      })
+    }
+
+
+    try {
+      const response =
+        await fetch(
+          endpoints.archive,
+          {
+            method:
+              'POST',
+
+            headers: {
+              'Content-Type':
+                'application/json',
+
+              Accept:
+                'application/json',
+            },
+
+            body:
+              JSON.stringify({
+                id:
+                  record.id ||
+                  '',
+
+                externalId:
+                  record.externalId ||
+                  '',
+
+                record,
+
+                reason,
+              }),
+          }
+        )
+
+
+      const payload =
+        await response.json()
+
+
+      if (
+        !response.ok ||
+        payload?.ok !==
+          true ||
+        !payload?.record
+      ) {
+        throw new Error(
+          payload?.error ||
+          (
+            `Published NEW ${subtype} archive failed · ` +
+            response.status
+          )
+        )
+      }
+
+
+      return normalizePinRecord({
+        ...payload.record,
+
+        serverSyncPending:
+          false,
+      })
+    }
+    catch (
+      error
+    ) {
+      console.error(
+        'PUBLISHED NEW SERVER ARCHIVE FAILED:',
+        error
+      )
+
+
+      if (
+        !silent
+      ) {
+        window.alert(
+          'This NEW item was changed in this browser, but the server copy could not be updated. Geographic will keep retrying automatically.'
+        )
+      }
+
+
+      return null
+    }
+  }
+
+
+  async function syncNewRecordForSave(
+    record
+  ) {
+    const subtype =
+      getNewServerSubtype(
+        record
+      )
+
+
+    const preparedRecord =
+      subtype ===
+        'business' &&
+      String(
+        record?.status ||
+        ''
+      )
+        .toLowerCase() ===
+        'open' &&
+      record?.expectedAt &&
+      !record?.openedAt
+        ? {
+            ...record,
+
+            newType:
+              subtype,
+
+            openedAt:
+              record.expectedAt,
+          }
+        : {
+            ...record,
+
+            ...(subtype
+              ? {
+                  newType:
+                    subtype,
+                }
+              : {}),
+          }
+
+
+    if (
+      cityKey !==
+        'toronto' ||
+      !subtype
+    ) {
+      return normalizePinRecord(
+        preparedRecord
+      )
+    }
+
+
+    const serverRecord =
+      await publishNewRecordOnServer(
+        preparedRecord,
+        {
+          silent:
+            true,
+        }
+      )
+
+
+    if (
+      serverRecord
+    ) {
+      return serverRecord
+    }
+
+
+    window.alert(
+      'This NEW item was saved in this browser, but the Toronto NEW server copy could not be updated. It will retry automatically.'
+    )
+
+
+    return normalizePinRecord({
+      ...preparedRecord,
+
+      serverSyncPending:
+        true,
+    })
+  }
+
+
+  async function syncNewRecordForArchive(
+    record,
+    reason
+  ) {
+    const subtype =
+      getNewServerSubtype(
+        record
+      )
+
+
+    if (
+      cityKey !==
+        'toronto' ||
+      !subtype
+    ) {
+      return normalizePinRecord({
+        ...record,
+
+        active:
+          false,
+      })
+    }
+
+
+    const serverRecord =
+      await archiveNewRecordOnServer(
+        record,
+        reason,
+        {
+          silent:
+            true,
+        }
+      )
+
+
+    if (
+      serverRecord
+    ) {
+      return serverRecord
+    }
+
+
+    window.alert(
+      'This NEW item was changed in this browser, but the Toronto NEW server copy could not be updated. It will retry automatically.'
+    )
+
+
+    return normalizePinRecord({
+      ...record,
+
+      newType:
+        subtype,
+
+      active:
+        false,
+
+      serverSyncPending:
+        true,
+    })
+  }
+
+
+  async function refreshPublishedNewFromServer({
+    allowMigration =
+      true,
+  } = {}) {
+    try {
+      let [
+        serverBusiness,
+        serverDevelopment,
+        legacyPublishedNew,
+      ] =
+        await Promise.all([
+          fetchPublishedNewSubtype(
+            'business'
+          ),
+
+          fetchPublishedNewSubtype(
+            'development'
+          ),
+
+          fetchLegacyPublishedNew(),
+        ])
+
+
+      const latestLocal =
+        getNewItems()
+          .map(
+            normalizePinRecord
+          )
+
+
+      const localToronto =
+        latestLocal.filter(
+          (
+            record
+          ) =>
+            belongsToCity(
+              record,
+              'toronto'
+            )
+        )
+
+
+      const otherCities =
+        latestLocal.filter(
+          (
+            record
+          ) =>
+            !belongsToCity(
+              record,
+              'toronto'
+            )
+        )
+
+
+      let localManaged =
+        localToronto.filter(
+          (
+            record
+          ) =>
+            Boolean(
+              getNewServerSubtype(
+                record
+              )
+            )
+        )
+
+
+      const localOther =
+        localToronto.filter(
+          (
+            record
+          ) =>
+            !getNewServerSubtype(
+              record
+            )
+        )
+
+
+      const migrationComplete =
+        torontoNewMigrationComplete()
+
+
+      const serverBySubtype = {
+        business:
+          serverBusiness,
+
+        development:
+          serverDevelopment,
+      }
+
+
+      const pushedKeys =
+        new Set()
+
+
+      for (
+        const subtype of [
+          'business',
+          'development',
+        ]
+      ) {
+        const localSubtype =
+          localManaged.filter(
+            (
+              record
+            ) =>
+              getNewServerSubtype(
+                record
+              ) ===
+              subtype
+          )
+
+
+        const serverSubtype =
+          serverBySubtype[
+            subtype
+          ]
+
+
+        const serverKeys =
+          new Set(
+            serverSubtype
+              .map(
+                newRecordIdentity
+              )
+              .filter(
+                Boolean
+              )
+          )
+
+
+        const recordsToPush =
+          allowMigration &&
+          !migrationComplete
+            ? localSubtype
+            : localSubtype.filter(
+                (
+                  record
+                ) => {
+                  const key =
+                    newRecordIdentity(
+                      record
+                    )
+
+
+                  return (
+                    record.serverSyncPending ===
+                      true ||
+                    (
+                      key &&
+                      !serverKeys.has(
+                        key
+                      )
+                    )
+                  )
+                }
+              )
+
+
+        if (
+          recordsToPush.length >
+            0
+        ) {
+          await postPublishedNewRecords(
+            recordsToPush,
+            subtype
+          )
+
+
+          recordsToPush.forEach(
+            (
+              record
+            ) => {
+              const key =
+                newRecordIdentity(
+                  record
+                )
+
+
+              if (
+                key
+              ) {
+                pushedKeys.add(
+                  key
+                )
+              }
+            }
+          )
+
+
+          serverBySubtype[
+            subtype
+          ] =
+            await fetchPublishedNewSubtype(
+              subtype
+            )
+        }
+      }
+
+
+      if (
+        allowMigration &&
+        !migrationComplete
+      ) {
+        markTorontoNewMigrationComplete()
+      }
+
+
+      localManaged =
+        localManaged.map(
+          (
+            record
+          ) => {
+            const key =
+              newRecordIdentity(
+                record
+              )
+
+
+            if (
+              key &&
+              pushedKeys.has(
+                key
+              )
+            ) {
+              return {
+                ...record,
+
+                serverSyncPending:
+                  false,
+              }
+            }
+
+
+            return record
+          }
+        )
+
+
+      serverBusiness =
+        serverBySubtype.business
+
+
+      serverDevelopment =
+        serverBySubtype.development
+
+
+      const mergedManaged =
+        mergePublishedNewRecords(
+          localManaged,
+          [
+            ...serverBusiness,
+            ...serverDevelopment,
+          ]
+        )
+
+
+      const nextAll = [
+        ...mergedManaged,
+        ...localOther,
+        ...otherCities,
+      ]
+
+
+      saveNewItems(
+        nextAll
+      )
+
+
+      setAllNewItems(
+        nextAll
+      )
+
+
+      return [
+        ...serverBusiness,
+        ...serverDevelopment,
+      ]
+    }
+    catch (
+      error
+    ) {
+      console.warn(
+        'PUBLISHED NEW SERVER REFRESH FAILED:',
         error
       )
 
@@ -6172,6 +7306,55 @@ function AdminRoom() {
         window.setInterval(
           pull,
           PERSISTENT_NEWSROOM_PULL_MS
+        )
+
+
+      return () => {
+        disposed =
+          true
+
+
+        window.clearInterval(
+          intervalId
+        )
+      }
+    },
+    []
+  )
+
+
+  // ==========================================================
+  // TORONTO NEW · BACKGROUND SERVER SYNC
+  // ==========================================================
+
+  useEffect(
+    () => {
+      let disposed =
+        false
+
+
+      async function pullNew() {
+        if (
+          disposed
+        ) {
+          return
+        }
+
+
+        await refreshPublishedNewFromServer({
+          allowMigration:
+            true,
+        })
+      }
+
+
+      pullNew()
+
+
+      const intervalId =
+        window.setInterval(
+          pullNew,
+          PUBLISHED_NEW_PULL_MS
         )
 
 
@@ -7247,6 +8430,25 @@ function AdminRoom() {
 
     if (
       tab ===
+        'new'
+    ) {
+      const subtype =
+        getNewServerSubtype(
+          record
+        )
+
+
+      if (
+        subtype
+      ) {
+        record.newType =
+          subtype
+      }
+    }
+
+
+    if (
+      tab ===
         'new' &&
       (
         record.category ===
@@ -7501,21 +8703,10 @@ function AdminRoom() {
         cityKey ===
           'toronto'
       ) {
-        const serverRecord =
-          await publishNewRecordOnServer(
+        publishedRecord =
+          await syncNewRecordForSave(
             publishedRecord
           )
-
-
-        if (
-          !serverRecord
-        ) {
-          return
-        }
-
-
-        publishedRecord =
-          serverRecord
       }
 
 
@@ -7601,21 +8792,10 @@ function AdminRoom() {
         cityKey ===
           'toronto'
       ) {
-        const serverRecord =
-          await publishNewRecordOnServer(
+        updatedRecord =
+          await syncNewRecordForSave(
             updatedRecord
           )
-
-
-        if (
-          !serverRecord
-        ) {
-          return
-        }
-
-
-        updatedRecord =
-          serverRecord
       }
 
 
@@ -7681,28 +8861,16 @@ function AdminRoom() {
     }
 
 
-
     if (
       tab ===
         'new' &&
       cityKey ===
         'toronto'
     ) {
-      const serverRecord =
-        await publishNewRecordOnServer(
+      nextRecord =
+        await syncNewRecordForSave(
           nextRecord
         )
-
-
-      if (
-        !serverRecord
-      ) {
-        return
-      }
-
-
-      nextRecord =
-        serverRecord
     }
 
 
@@ -9355,26 +10523,10 @@ function AdminRoom() {
       cityKey ===
         'toronto'
     ) {
-      const serverRecord =
-        await publishNewRecordOnServer(
+      publishedRecord =
+        await syncNewRecordForSave(
           publishedRecord
         )
-
-
-      if (
-        !serverRecord
-      ) {
-        setApprovingReviewId(
-          null
-        )
-
-
-        return
-      }
-
-
-      publishedRecord =
-        serverRecord
     }
 
 
@@ -9558,7 +10710,12 @@ function AdminRoom() {
       !window.confirm(
         isNews
           ? 'Remove this NEWS pin from the live map? It will remain in the archive.'
-          : 'Delete this item?'
+          : (
+              tab ===
+                'new'
+                ? 'Remove this NEW pin from the live map? It will remain in the archive.'
+                : 'Delete this item?'
+            )
       )
     ) {
       return
@@ -9620,25 +10777,44 @@ function AdminRoom() {
 
 
     if (
-      !isNews &&
       tab ===
         'new' &&
       cityKey ===
         'toronto' &&
-      target
+      target &&
+      getNewServerSubtype(
+        target
+      )
     ) {
       const archivedRecord =
-        await archiveNewRecordOnServer(
+        await syncNewRecordForArchive(
           target,
           'manual-remove'
         )
 
 
+      persistRecords(
+        records.map(
+          (
+            item
+          ) =>
+            item.id ===
+              id
+              ? archivedRecord
+              : item
+        )
+      )
+
+
       if (
-        !archivedRecord
+        editingId ===
+          id
       ) {
-        return
+        resetDraft()
       }
+
+
+      return
     }
 
 
@@ -9754,33 +10930,24 @@ function AdminRoom() {
     }
 
 
-
     if (
       tab ===
         'new' &&
       cityKey ===
-        'toronto'
+        'toronto' &&
+      getNewServerSubtype(
+        updatedRecord
+      )
     ) {
-      const serverRecord =
+      updatedRecord =
         nextActive
-          ? await publishNewRecordOnServer(
+          ? await syncNewRecordForSave(
               updatedRecord
             )
-          : await archiveNewRecordOnServer(
+          : await syncNewRecordForArchive(
               updatedRecord,
               'manual-unpublish'
             )
-
-
-      if (
-        !serverRecord
-      ) {
-        return
-      }
-
-
-      updatedRecord =
-        serverRecord
     }
 
 
