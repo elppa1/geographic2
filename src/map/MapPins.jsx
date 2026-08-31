@@ -1559,6 +1559,76 @@ function appendSource({
 
 
 // ============================================================
+// MOBILE NEWS STORY LINK
+// ============================================================
+
+function appendMobileNewsStoryLink({
+  parent,
+  pin,
+}) {
+  const href =
+    normalizeUrl(
+      pin?.sourceUrl
+    )
+
+
+  if (
+    !href
+  ) {
+    return
+  }
+
+
+  const shell =
+    document.createElement(
+      'div'
+    )
+
+  shell.className =
+    'geographic-pin-source'
+
+
+  const link =
+    document.createElement(
+      'a'
+    )
+
+  link.href =
+    href
+
+  link.target =
+    '_blank'
+
+  link.rel =
+    'noopener noreferrer'
+
+  link.className =
+    'geographic-pin-source-link'
+
+  link.textContent =
+    'STORY ↗'
+
+  link.addEventListener(
+    'click',
+    (
+      event
+    ) => {
+      event.stopPropagation()
+    }
+  )
+
+
+  shell.appendChild(
+    link
+  )
+
+  parent.appendChild(
+    shell
+  )
+}
+
+
+// ============================================================
 // MOBILE BUSINESS LINK
 // ============================================================
 
@@ -2917,6 +2987,14 @@ function createMarker({
 
       text:
         pin.title,
+    })
+
+
+    appendMobileNewsStoryLink({
+      parent:
+        popupContent,
+
+      pin,
     })
   }
   else if (
