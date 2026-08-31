@@ -163,7 +163,7 @@ function GeographicApp() {
     setNewSubtypeFilter,
   ] =
     useState(
-      'all'
+      'businesses'
     )
 
 
@@ -222,6 +222,16 @@ function GeographicApp() {
   function chooseContentMode(
     mode
   ) {
+    if (
+      mode ===
+        'new'
+    ) {
+      setNewSubtypeFilter(
+        'businesses'
+      )
+    }
+
+
     setActivePinFilter(
       mode
     )
@@ -335,7 +345,7 @@ function GeographicApp() {
               transform-origin: bottom center;
               width: calc(100vw - 16px) !important;
               max-width: none !important;
-              bottom: max(10px, env(safe-area-inset-bottom)) !important;
+              bottom: max(24px, env(safe-area-inset-bottom)) !important;
               padding: 4px 6px 5px !important;
             }
 
@@ -758,161 +768,6 @@ function GeographicApp() {
               : '▾'}
           </button>
         </div>
-
-
-        {activePinFilter ===
-          'new' && (
-          <div
-            className="brand-secondary-filters"
-            style={{
-              display:
-                'flex',
-
-              gap:
-                '2px',
-
-              marginLeft:
-                '0',
-            }}
-          >
-            <button
-              type="button"
-              onClick={() =>
-                setNewSubtypeFilter(
-                  'all'
-                )
-              }
-              style={{
-                border:
-                  '1px solid rgba(0,0,0,0.14)',
-
-                padding:
-                  '4px 7px',
-
-                background:
-                  newSubtypeFilter ===
-                  'all'
-                    ? '#111'
-                    : '#fff',
-
-                color:
-                  newSubtypeFilter ===
-                  'all'
-                    ? '#fff'
-                    : '#111',
-
-                font:
-                  'inherit',
-
-                fontSize:
-                  '7px',
-
-                fontWeight:
-                  '700',
-
-                letterSpacing:
-                  '0.08em',
-
-                cursor:
-                  'pointer',
-              }}
-            >
-              ALL
-            </button>
-
-
-            <button
-              type="button"
-              onClick={() =>
-                setNewSubtypeFilter(
-                  'businesses'
-                )
-              }
-              style={{
-                border:
-                  '1px solid rgba(0,0,0,0.14)',
-
-                padding:
-                  '4px 7px',
-
-                background:
-                  newSubtypeFilter ===
-                  'businesses'
-                    ? '#111'
-                    : '#fff',
-
-                color:
-                  newSubtypeFilter ===
-                  'businesses'
-                    ? '#fff'
-                    : '#111',
-
-                font:
-                  'inherit',
-
-                fontSize:
-                  '7px',
-
-                fontWeight:
-                  '700',
-
-                letterSpacing:
-                  '0.08em',
-
-                cursor:
-                  'pointer',
-              }}
-            >
-              BUSINESSES
-            </button>
-
-
-            <button
-              type="button"
-              onClick={() =>
-                setNewSubtypeFilter(
-                  'developments'
-                )
-              }
-              style={{
-                border:
-                  '1px solid rgba(0,0,0,0.14)',
-
-                padding:
-                  '4px 7px',
-
-                background:
-                  newSubtypeFilter ===
-                  'developments'
-                    ? '#111'
-                    : '#fff',
-
-                color:
-                  newSubtypeFilter ===
-                  'developments'
-                    ? '#fff'
-                    : '#111',
-
-                font:
-                  'inherit',
-
-                fontSize:
-                  '7px',
-
-                fontWeight:
-                  '700',
-
-                letterSpacing:
-                  '0.08em',
-
-                cursor:
-                  'pointer',
-              }}
-            >
-              DEVELOPMENTS
-            </button>
-          </div>
-        )}
 
 
         {activePinFilter ===
