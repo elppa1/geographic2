@@ -5,18 +5,22 @@
 // This is a DISCOVERY scraper only.
 //
 // It deliberately does NOT copy NowServing editorial descriptions.
-// It only creates a generic lead with:
+// It creates generic restaurant leads with:
 //
 // - restaurant name
 // - address
 // - cuisine / food type when available
 // - NowServing listing URL
 // - source "first seen" label when available
-// - an approximate source-first-seen date derived from that label
+// - a rough opening date derived from that label
 //
-// NowServing's own page says "first seen" is evidence timing, not an
-// exact opening date. We preserve that distinction. The editor confirms
-// the pin and may add/confirm the business link before publishing.
+// Toronto Geographic treats that date as an APPROXIMATE opening date.
+// We keep the source-first-seen fields too so the provenance is clear.
+//
+// Historical recovery:
+// the July 31, 2026 NowServing snapshot is also checked for May + June
+// 2026 restaurants so the 2-month and 3-month NEW views can be backfilled.
+// Existing review/published dedupe prevents duplicate leads.
 //
 // ============================================================
 
@@ -30,6 +34,17 @@ const SOURCE = {
   url:
     '/api/geographic/toronto/newsroom/nowserving',
 }
+
+
+const BACKFILL_EDITION =
+  '2026-07'
+
+
+const BACKFILL_OPENING_MONTHS =
+  new Set([
+    '2026-05',
+    '2026-06',
+  ])
 
 
 function cleanText(
@@ -769,11 +784,13 @@ function parseNowServingHtml(
         sourceFirstSeenAt,
 
         sourceDateKind:
-          'first-seen',
+          sourceFirstSeenAt
+            ? 'approx-opening'
+            : '',
 
         sourceDateAccuracy:
           sourceFirstSeenAt
-            ? 'source-relative'
+            ? 'estimated-from-nowserving-first-seen'
             : '',
 
         sourceEditionDate:
@@ -785,7 +802,17 @@ function parseNowServingHtml(
           sourceFirstSeenAt,
 
         openedAt:
-          '',
+          sourceFirstSeenAt,
+
+        openingDateApproximate:
+          Boolean(
+            sourceFirstSeenAt
+          ),
+
+        openingDateSource:
+          sourceFirstSeenAt
+            ? 'nowserving-first-seen'
+            : '',
 
         announcedAt:
           '',
@@ -808,10 +835,12 @@ function parseNowServingHtml(
 }
 
 
-export async function scrapeNowServingNew() {
+async function fetchNowServingRecords(
+  url
+) {
   const response =
     await fetch(
-      SOURCE.url,
+      url,
       {
         headers: {
           Accept:
@@ -863,4 +892,113 @@ export async function scrapeNowServingNew() {
     payload.html,
     sourceDate
   )
+}
+
+
+function getOpeningMonth(
+  record
+) {
+  return String(
+    record?.openedAt ||
+    ''
+  )
+    .slice(
+      0,
+      7
+    )
+}
+
+
+function mergeByExternalId(
+  records
+) {
+  const merged =
+    new Map()
+
+
+  records.forEach(
+    (
+      record
+    ) => {
+      if (
+        !record?.externalId
+      ) {
+        return
+      }
+
+
+      merged.set(
+        record.externalId,
+        record
+      )
+    }
+  )
+
+
+  return Array.from(
+    merged.values()
+  )
+}
+
+
+export async function scrapeNowServingNew() {
+  const currentRecords =
+    await fetchNowServingRecords(
+      SOURCE.url
+    )
+
+
+  let backfillRecords =
+    []
+
+
+  try {
+    const archiveUrl =
+      (
+        SOURCE.url +
+        '?edition=' +
+        encodeURIComponent(
+          BACKFILL_EDITION
+        )
+      )
+
+
+    const archiveRecords =
+      await fetchNowServingRecords(
+        archiveUrl
+      )
+
+
+    backfillRecords =
+      archiveRecords
+        .filter(
+          (
+            record
+          ) =>
+            BACKFILL_OPENING_MONTHS
+              .has(
+                getOpeningMonth(
+                  record
+                )
+              )
+        )
+  }
+  catch (
+    error
+  ) {
+    // Current discovery should still work if the historical snapshot
+    // is temporarily unavailable.
+    console.warn(
+      'NOWSERVING BACKFILL FAILED:',
+      error
+    )
+  }
+
+
+  // Archive first, current second so the freshest copy wins if a
+  // restaurant appears in both sources.
+  return mergeByExternalId([
+    ...backfillRecords,
+    ...currentRecords,
+  ])
 }

@@ -2791,8 +2791,9 @@ function applyMarkerActivityPulse({
 //
 // We keep the actual geographic coordinates untouched and use a small
 // visual pixel offset only when an active TTC marker would collide with
-// another visible NEWS marker. TTC markers are also rendered last so a
-// service alert cannot sit underneath a police or fire icon.
+// another visible NEWS marker. TTC markers are rendered last so they stay
+// above other vehicle/news markers, but they do NOT get a forced z-index;
+// MapLibre popups and text boxes must still render above the marker.
 //
 // ============================================================
 
@@ -3161,15 +3162,6 @@ function createMarker({
 
     element.style.WebkitAppearance =
       'none'
-
-    if (
-      isTtcPin(
-        pin
-      )
-    ) {
-      element.style.zIndex =
-        '20'
-    }
 
     element.setAttribute(
       'aria-label',

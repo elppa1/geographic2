@@ -23,16 +23,76 @@ const CACHE_TTL_MS =
   10 * 60 * 1000
 
 
-let cachedHtml =
-  ''
+const cachedPages =
+  new Map()
 
 
-let cachedAt =
-  0
+const inFlightPages =
+  new Map()
 
 
-let inFlight =
-  null
+function getUpstreamUrl(
+  edition
+) {
+  const normalized =
+    String(
+      edition ||
+      ''
+    )
+      .trim()
+
+
+  if (
+    !normalized
+  ) {
+    return UPSTREAM_URL
+  }
+
+
+  if (
+    !/^\d{4}-\d{2}$/.test(
+      normalized
+    )
+  ) {
+    throw new Error(
+      'NOWSERVING EDITION INVALID'
+    )
+  }
+
+
+  return (
+    'https://nowservingto.com/trends/' +
+    normalized
+  )
+}
+
+
+function getSourceEditionDate(
+  html
+) {
+  const match =
+    String(
+      html ||
+      ''
+    )
+      .match(
+        /\bDAILY\s+EDITION\s+(\d{4})[.\/-](\d{2})[.\/-](\d{2})\b/i
+      )
+
+
+  if (
+    !match
+  ) {
+    return ''
+  }
+
+
+  return (
+    `${match[1]}-` +
+    `${match[2]}-` +
+    `${match[3]}`
+  )
+}
 
 
 function sendJson(
@@ -64,12 +124,20 @@ function sendJson(
 }
 
 
-async function fetchNowServingHtml() {
+async function fetchNowServingHtml(
+  upstreamUrl
+) {
+  const cached =
+    cachedPages.get(
+      upstreamUrl
+    )
+
+
   const fresh =
-    cachedHtml &&
+    cached?.html &&
     (
       Date.now() -
-      cachedAt
+      cached.cachedAt
     ) <
       CACHE_TTL_MS
 
@@ -77,22 +145,26 @@ async function fetchNowServingHtml() {
   if (
     fresh
   ) {
-    return cachedHtml
+    return cached
   }
 
 
   if (
-    inFlight
+    inFlightPages.has(
+      upstreamUrl
+    )
   ) {
-    return inFlight
+    return inFlightPages.get(
+      upstreamUrl
+    )
   }
 
 
-  inFlight =
+  const request =
     (async () => {
       const response =
         await fetch(
-          UPSTREAM_URL,
+          upstreamUrl,
           {
             headers: {
               Accept:
@@ -140,24 +212,37 @@ async function fetchNowServingHtml() {
       }
 
 
-      cachedHtml =
-        html
+      const value = {
+        html,
+
+        cachedAt:
+          Date.now(),
+      }
 
 
-      cachedAt =
-        Date.now()
+      cachedPages.set(
+        upstreamUrl,
+        value
+      )
 
 
-      return html
+      return value
     })()
 
 
+  inFlightPages.set(
+    upstreamUrl,
+    request
+  )
+
+
   try {
-    return await inFlight
+    return await request
   }
   finally {
-    inFlight =
-      null
+    inFlightPages.delete(
+      upstreamUrl
+    )
   }
 }
 
@@ -231,8 +316,26 @@ export function nowServingFeed() {
 
 
           try {
-            const html =
-              await fetchNowServingHtml()
+            const edition =
+              String(
+                url.searchParams.get(
+                  'edition'
+                ) ||
+                ''
+              )
+                .trim()
+
+
+            const upstreamUrl =
+              getUpstreamUrl(
+                edition
+              )
+
+
+            const page =
+              await fetchNowServingHtml(
+                upstreamUrl
+              )
 
 
             sendJson(
@@ -246,16 +349,25 @@ export function nowServingFeed() {
                   'NowServingTO',
 
                 sourceUrl:
-                  UPSTREAM_URL,
+                  upstreamUrl,
+
+                requestedEdition:
+                  edition,
 
                 fetchedAt:
                   new Date(
-                    cachedAt ||
+                    page.cachedAt ||
                     Date.now()
                   )
                     .toISOString(),
 
-                html,
+                sourceEditionDate:
+                  getSourceEditionDate(
+                    page.html
+                  ),
+
+                html:
+                  page.html,
               }
             )
           }
