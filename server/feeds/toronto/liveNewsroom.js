@@ -163,6 +163,10 @@ let storeLoaded =
   false
 
 
+let storeLoadPromise =
+  null
+
+
 let store = {
   version:
     2,
@@ -631,83 +635,120 @@ async function ensureLoaded() {
   }
 
 
-  storeLoaded =
-    true
-
-
-  try {
-    const raw =
-      await readFile(
-        STORE_PATH,
-        'utf8'
-      )
-
-
-    const parsed =
-      JSON.parse(
-        raw
-      )
-
-
-    if (
-      parsed &&
-      typeof parsed ===
-        'object'
-    ) {
-      store = {
-        ...store,
-        ...parsed,
-
-        events:
-          Array.isArray(
-            parsed.events
-          )
-            ? parsed.events
-            : [],
-
-        sources: {
-          ttc:
-            parsed.sources?.ttc ||
-            {},
-
-          fire:
-            parsed.sources?.fire ||
-            {},
-
-          police:
-            parsed.sources?.police ||
-            {},
-        },
-
-        publishedNews:
-          parsed.publishedNews &&
-          typeof parsed.publishedNews ===
-            'object' &&
-          !Array.isArray(
-            parsed.publishedNews
-          )
-            ? parsed.publishedNews
-            : {},
-      }
-    }
-  }
-  catch (
-    error
+  if (
+    storeLoadPromise
   ) {
-    if (
-      error?.code !==
-        'ENOENT'
-    ) {
-      console.warn(
-        'LIVE NEWSROOM · STORE READ FAILED:',
-        error
-      )
-    }
+    await storeLoadPromise
+    return
   }
+
+
+  storeLoadPromise =
+    (async () => {
+      try {
+        const raw =
+          await readFile(
+            STORE_PATH,
+            'utf8'
+          )
+
+
+        const parsed =
+          JSON.parse(
+            raw
+          )
+
+
+        if (
+          !parsed ||
+          typeof parsed !==
+            'object' ||
+          Array.isArray(
+            parsed
+          )
+        ) {
+          throw new Error(
+            'LIVE NEWSROOM · STORE FORMAT INVALID'
+          )
+        }
+
+
+        store = {
+          ...store,
+          ...parsed,
+
+          events:
+            Array.isArray(
+              parsed.events
+            )
+              ? parsed.events
+              : [],
+
+          sources: {
+            ttc:
+              parsed.sources?.ttc ||
+              {},
+
+            fire:
+              parsed.sources?.fire ||
+              {},
+
+            police:
+              parsed.sources?.police ||
+              {},
+          },
+
+          publishedNews:
+            parsed.publishedNews &&
+            typeof parsed.publishedNews ===
+              'object' &&
+            !Array.isArray(
+              parsed.publishedNews
+            )
+              ? parsed.publishedNews
+              : {},
+        }
+
+
+        storeLoaded =
+          true
+      }
+      catch (
+        error
+      ) {
+        if (
+          error?.code ===
+            'ENOENT'
+        ) {
+          storeLoaded =
+            true
+          return
+        }
+
+
+        console.warn(
+          'LIVE NEWSROOM · STORE READ FAILED:',
+          error
+        )
+
+
+        throw error
+      }
+      finally {
+        storeLoadPromise =
+          null
+      }
+    })()
+
+
+  await storeLoadPromise
 }
 
 
 async function persistStore() {
+  await ensureLoaded()
+
+
   store.updatedAt =
     new Date()
       .toISOString()
