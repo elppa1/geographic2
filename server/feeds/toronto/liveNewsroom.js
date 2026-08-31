@@ -121,10 +121,6 @@ const MISSING_POLLS_TO_RESOLVE =
   2
 
 
-const FIRE_UNAPPROVED_MAX_AGE_MS =
-  2 * 24 * 60 * 60 * 1000
-
-
 const MAX_EVENTS =
   1500
 
@@ -1193,82 +1189,6 @@ async function observeRecord({
     ''
 
 
-  if (
-    sourceKey ===
-      'fire' &&
-    existing?.unapprovedExpired ===
-      true
-  ) {
-    const suppressedRecord = {
-      ...existing,
-      ...record,
-
-      externalId,
-
-      active:
-        false,
-
-      published:
-        false,
-
-      resolved:
-        true,
-
-      unapprovedExpired:
-        true,
-
-      unapprovedExpiredAt:
-        existing.unapprovedExpiredAt ||
-        now,
-
-      resolutionReason:
-        existing.resolutionReason ||
-        'unapproved-fire-48-hours',
-
-      lastSeenAt:
-        now,
-
-      lastCheckedAt:
-        now,
-
-      missingPolls:
-        0,
-
-      sourceSnapshot:
-        sourceSnapshot(
-          record
-        ),
-
-      sourceFingerprint:
-        currentFingerprint,
-    }
-
-
-    sourceState[
-      externalId
-    ] =
-      suppressedRecord
-
-
-    store.sources[
-      sourceKey
-    ] =
-      sourceState
-
-
-    await persistStore()
-
-
-    return {
-      action:
-        'seen',
-
-      record:
-        suppressedRecord,
-    }
-  }
-
-
   let action =
     forceAction
 
@@ -1365,10 +1285,6 @@ async function observeRecord({
     externalId,
 
     firstSeenAt,
-
-    newsroomFirstQueuedAt:
-      existing?.newsroomFirstQueuedAt ||
-      now,
 
     lastSeenAt:
       now,
@@ -2433,7 +2349,7 @@ function normalizeFireLocationPiece(
     value
   )
     .replace(
-      /\s*,\s*(?:NY|EY|SC|ET|YK|TO)\b/gi,
+      /\s*,\s*(?:NY|EY|SC|ET|YK|TO|TT)\b/gi,
       ''
     )
     .replace(
@@ -2445,6 +2361,92 @@ function normalizeFireLocationPiece(
       ' / '
     )
     .trim()
+}
+
+
+function fireLocationPieceIsCadNoise(
+  value
+) {
+  const piece =
+    normalizeFireLocationPiece(
+      value
+    )
+
+
+  if (
+    !piece
+  ) {
+    return true
+  }
+
+
+  if (
+    /^(?:TT|NY|EY|SC|ET|YK|TO|TTC)$/i.test(
+      piece
+    )
+  ) {
+    return true
+  }
+
+
+  // Toronto Fire cross-street data sometimes includes CAD routing
+  // notes rather than a street name, for example:
+  //   LN W PETER S ADELAIDE
+  // These should never become part of the public intersection label.
+  if (
+    /^(?:LN\s+[NSEW]\b|[NSEW]\s+OF\b|NB\b|SB\b|EB\b|WB\b)/i.test(
+      piece
+    )
+  ) {
+    return true
+  }
+
+
+  return false
+}
+
+
+function getFireCrossStreetCandidates(
+  value
+) {
+  const normalized =
+    normalizeFireLocationPiece(
+      value
+    )
+
+
+  if (
+    !normalized
+  ) {
+    return []
+  }
+
+
+  const candidates =
+    normalized
+      .split(
+        /\s*\/\s*|\s*&\s*/
+      )
+      .map(
+        normalizeFireLocationPiece
+      )
+      .filter(
+        (piece) =>
+          !fireLocationPieceIsCadNoise(
+            piece
+          )
+      )
+
+
+  return candidates.filter(
+    (piece, index) =>
+      candidates.findIndex(
+        (candidate) =>
+          candidate.toLowerCase() ===
+          piece.toLowerCase()
+      ) ===
+      index
+  )
 }
 
 
@@ -2546,10 +2548,25 @@ function normalizeFireRow(
     )
 
 
-  const crossStreet =
+  const crossStreetSource =
     normalizeFireLocationPiece(
       cells[1]
     )
+
+
+  const crossStreetCandidates =
+    getFireCrossStreetCandidates(
+      crossStreetSource
+    )
+
+
+  const crossStreet =
+    crossStreetCandidates.find(
+      (candidate) =>
+        candidate.toLowerCase() !==
+        primeStreet.toLowerCase()
+    ) ||
+    ''
 
 
   const dispatchTime =
@@ -2600,7 +2617,8 @@ function normalizeFireRow(
 
   if (
     !primeStreet &&
-    !crossStreet
+    crossStreetCandidates.length ===
+      0
   ) {
     return null
   }
@@ -2627,29 +2645,21 @@ function normalizeFireRow(
     location =
       primeStreet
   }
-  else {
-    const crossPieces =
-      crossStreet
-        .split(
-          /\s*\/\s*/
-        )
-        .map(
-          normalizeFireLocationPiece
-        )
-        .filter(
-          Boolean
-        )
-
-
+  else if (
+    crossStreetCandidates.length >=
+      2
+  ) {
     location =
-      crossPieces.length >=
-        2
-        ? (
-            crossPieces[0] +
-            ' & ' +
-            crossPieces[1]
-          )
-        : crossStreet
+      (
+        crossStreetCandidates[0] +
+        ' & ' +
+        crossStreetCandidates[1]
+      )
+  }
+  else {
+    location =
+      crossStreetCandidates[0] ||
+      ''
   }
 
 
@@ -2720,7 +2730,7 @@ function normalizeFireRow(
         incidentNumber ||
         [
           primeStreet,
-          crossStreet,
+          crossStreetSource,
           dispatchTime,
           incidentType,
         ]
@@ -3343,9 +3353,6 @@ export async function syncTorontoLiveNewsroom() {
 
 
   try {
-    await expireUnapprovedFireEvents()
-
-
     const [
       ttc,
       fire,
@@ -4255,215 +4262,8 @@ async function readJsonBody(
 }
 
 
-async function expireUnapprovedFireEvents() {
-  await ensureLoaded()
-
-
-  const nowMs =
-    Date.now()
-
-
-  const now =
-    new Date(
-      nowMs
-    )
-      .toISOString()
-
-
-  const expiredEvents =
-    []
-
-
-  const expiredExternalIds =
-    new Set()
-
-
-  store.events =
-    store.events.map(
-      (
-        event
-      ) => {
-        if (
-          event.status !==
-            'pending' ||
-          event.sourceKey !==
-            'fire' ||
-          event.published ===
-            true ||
-          event.newsroomAction !==
-            'new'
-        ) {
-          return event
-        }
-
-
-        const sourceRecord =
-          store.sources.fire?.[
-            event.externalId
-          ] ||
-          null
-
-
-        const firstQueuedAt =
-          sourceRecord?.newsroomFirstQueuedAt ||
-          event.queuedAt ||
-          event.receivedAt ||
-          ''
-
-
-        const firstQueuedMs =
-          new Date(
-            firstQueuedAt
-          )
-            .getTime()
-
-
-        if (
-          !Number.isFinite(
-            firstQueuedMs
-          ) ||
-          (
-            nowMs -
-            firstQueuedMs
-          ) <
-            FIRE_UNAPPROVED_MAX_AGE_MS
-        ) {
-          return event
-        }
-
-
-        const expired = {
-          ...event,
-
-          status:
-            'acked',
-
-          reviewStatus:
-            'expired',
-
-          active:
-            false,
-
-          outcome:
-            'expired-unapproved-fire-48-hours',
-
-          ackedAt:
-            now,
-
-          unapprovedExpired:
-            true,
-
-          unapprovedExpiredAt:
-            now,
-        }
-
-
-        expiredEvents.push(
-          expired
-        )
-
-
-        if (
-          event.externalId
-        ) {
-          expiredExternalIds.add(
-            event.externalId
-          )
-        }
-
-
-        return expired
-      }
-    )
-
-
-  for (
-    const externalId
-    of expiredExternalIds
-  ) {
-    const existing =
-      store.sources.fire?.[
-        externalId
-      ]
-
-
-    if (
-      !existing ||
-      existing.published ===
-        true
-    ) {
-      continue
-    }
-
-
-    store.sources.fire[
-      externalId
-    ] = {
-      ...existing,
-
-      active:
-        false,
-
-      published:
-        false,
-
-      resolved:
-        true,
-
-      resolvedAt:
-        existing.resolvedAt ||
-        now,
-
-      resolutionReason:
-        'unapproved-fire-48-hours',
-
-      unapprovedExpired:
-        true,
-
-      unapprovedExpiredAt:
-        existing.unapprovedExpiredAt ||
-        now,
-    }
-  }
-
-
-  if (
-    expiredEvents.length ===
-      0
-  ) {
-    return 0
-  }
-
-
-  await persistStore()
-
-
-  for (
-    const event
-    of expiredEvents
-  ) {
-    await appendLedgerEvent({
-      eventType:
-        'unapproved-fire-expired',
-
-      outcome:
-        'expired-unapproved-fire-48-hours',
-
-      record:
-        event,
-    })
-  }
-
-
-  return expiredEvents.length
-}
-
-
 async function pendingEvents() {
   await ensureLoaded()
-
-
-  await expireUnapprovedFireEvents()
 
 
   const now =
