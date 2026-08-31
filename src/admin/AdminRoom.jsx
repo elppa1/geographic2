@@ -922,6 +922,9 @@ const EMPTY_NEW = {
   cuisine:
     '',
 
+  businessIcon:
+    '',
+
   businessUrl:
     '',
 
@@ -934,6 +937,87 @@ const EMPTY_NEW = {
   expectedAt:
     '',
 }
+
+
+const NEW_BUSINESS_ICON_OPTIONS = [
+  {
+    value:
+      'restaurant',
+
+    label:
+      '🍽️ RESTAURANT',
+  },
+  {
+    value:
+      'pizza',
+
+    label:
+      '🍕 PIZZA',
+  },
+  {
+    value:
+      'burgers',
+
+    label:
+      '🍔 BURGERS',
+  },
+  {
+    value:
+      'sushi-japanese',
+
+    label:
+      '🍣 SUSHI / JAPANESE',
+  },
+  {
+    value:
+      'noodles',
+
+    label:
+      '🍜 NOODLES',
+  },
+  {
+    value:
+      'indian-south-asian',
+
+    label:
+      '🍛 INDIAN / SOUTH ASIAN',
+  },
+  {
+    value:
+      'mexican',
+
+    label:
+      '🌮 MEXICAN',
+  },
+  {
+    value:
+      'bakery',
+
+    label:
+      '🥐 BAKERY',
+  },
+  {
+    value:
+      'cafe',
+
+    label:
+      '☕ CAFÉ',
+  },
+  {
+    value:
+      'dessert',
+
+    label:
+      '🍦 DESSERT',
+  },
+  {
+    value:
+      'bar-pub',
+
+    label:
+      '🍺 BAR / PUB',
+  },
+]
 
 
 const EMPTY_HISTORIC = {
@@ -10142,6 +10226,59 @@ function AdminRoom() {
                     placeholder="Pizza, Japanese, Indian, cafe..."
                   />
                 </label>
+
+
+                {(
+                  draft.category ===
+                    'store' ||
+                  draft.category ===
+                    'restaurant' ||
+                  draft.category ===
+                    'business'
+                ) && (
+                  <label className="admin-field">
+                    <span>
+                      MAP ICON
+                    </span>
+
+                    <select
+                      value={
+                        draft.businessIcon ||
+                        ''
+                      }
+                      onChange={
+                        (event) =>
+                          updateDraft(
+                            'businessIcon',
+                            event.target.value
+                          )
+                      }
+                    >
+                      <option value="">
+                        DEFAULT PIN
+                      </option>
+
+                      {NEW_BUSINESS_ICON_OPTIONS.map(
+                        (
+                          option
+                        ) => (
+                          <option
+                            key={
+                              option.value
+                            }
+                            value={
+                              option.value
+                            }
+                          >
+                            {
+                              option.label
+                            }
+                          </option>
+                        )
+                      )}
+                    </select>
+                  </label>
+                )}
 
 
                 <label className="admin-field">

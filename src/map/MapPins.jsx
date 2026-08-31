@@ -1554,6 +1554,137 @@ function normalizeCompareText(
 }
 
 
+const NEW_BUSINESS_ICONS = {
+  restaurant: {
+    emoji:
+      '🍽️',
+
+    label:
+      'Restaurant',
+  },
+
+  pizza: {
+    emoji:
+      '🍕',
+
+    label:
+      'Pizza',
+  },
+
+  burgers: {
+    emoji:
+      '🍔',
+
+    label:
+      'Burgers',
+  },
+
+  'sushi-japanese': {
+    emoji:
+      '🍣',
+
+    label:
+      'Sushi / Japanese',
+  },
+
+  noodles: {
+    emoji:
+      '🍜',
+
+    label:
+      'Noodles',
+  },
+
+  'indian-south-asian': {
+    emoji:
+      '🍛',
+
+    label:
+      'Indian / South Asian',
+  },
+
+  mexican: {
+    emoji:
+      '🌮',
+
+    label:
+      'Mexican',
+  },
+
+  bakery: {
+    emoji:
+      '🥐',
+
+    label:
+      'Bakery',
+  },
+
+  cafe: {
+    emoji:
+      '☕',
+
+    label:
+      'Cafe',
+  },
+
+  dessert: {
+    emoji:
+      '🍦',
+
+    label:
+      'Dessert',
+  },
+
+  'bar-pub': {
+    emoji:
+      '🍺',
+
+    label:
+      'Bar / Pub',
+  },
+}
+
+
+function getNewBusinessIcon(
+  pin
+) {
+  const category =
+    normalizeCompareText(
+      pin?.category
+    )
+
+
+  if (
+    !BUSINESS_CATEGORIES.includes(
+      category
+    )
+  ) {
+    return null
+  }
+
+
+  const iconKey =
+    normalizeCompareText(
+      pin?.businessIcon
+    )
+
+
+  if (
+    !iconKey
+  ) {
+    return null
+  }
+
+
+  return (
+    NEW_BUSINESS_ICONS[
+      iconKey
+    ] ||
+    null
+  )
+}
+
+
 function isTorontoPolicePin(
   pin
 ) {
@@ -2094,6 +2225,16 @@ function createMarker({
         )
       : ''
 
+
+  const newBusinessIcon =
+    pinType ===
+    'new'
+      ? getNewBusinessIcon(
+          pin
+        )
+      : null
+
+
   if (
     newsEmoji
   ) {
@@ -2167,7 +2308,68 @@ function createMarker({
       element,
       newsEmoji
     )
-  } else {
+  }
+  else if (
+    newBusinessIcon
+  ) {
+    element.className =
+      'geographic-pin-emoji-marker geographic-pin-new-business-emoji-marker'
+
+    element.style.width =
+      '32px'
+
+    element.style.height =
+      '32px'
+
+    element.style.padding =
+      '0'
+
+    element.style.margin =
+      '0'
+
+    element.style.border =
+      'none'
+
+    element.style.borderRadius =
+      '0'
+
+    element.style.background =
+      'transparent'
+
+    element.style.boxShadow =
+      'none'
+
+    element.style.cursor =
+      'pointer'
+
+    element.style.display =
+      'flex'
+
+    element.style.alignItems =
+      'center'
+
+    element.style.justifyContent =
+      'center'
+
+    element.style.appearance =
+      'none'
+
+    element.style.WebkitAppearance =
+      'none'
+
+    element.setAttribute(
+      'aria-label',
+      pin.title
+        ? `${newBusinessIcon.label} · ${pin.title}`
+        : `${newBusinessIcon.label} marker`
+    )
+
+    appendEmojiMarkerIcon(
+      element,
+      newBusinessIcon.emoji
+    )
+  }
+  else {
     element.className =
       (
         'geographic-pin ' +

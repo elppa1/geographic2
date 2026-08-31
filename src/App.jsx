@@ -273,7 +273,7 @@ function GeographicApp() {
             '12px',
 
           top:
-            '92px',
+            '12px',
 
           zIndex:
             30,
