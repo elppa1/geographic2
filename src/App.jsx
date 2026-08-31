@@ -138,7 +138,7 @@ function GeographicApp() {
     setActivePinFilter,
   ] =
     useState(
-      'historic'
+      'news'
     )
 
 
