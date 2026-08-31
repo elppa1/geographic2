@@ -1573,6 +1573,275 @@ function appendEmojiMarkerIcon(
 
 
 // ============================================================
+// TTC MARKER VISIBILITY
+// ============================================================
+//
+// Active TTC alerts must not merely survive the NEWS density filters;
+// their icons also need to remain individually visible when several
+// alerts land on the same or nearly the same screen position.
+//
+// We keep the actual geographic coordinates untouched and use a small
+// visual pixel offset only when an active TTC marker would collide with
+// another visible NEWS marker. TTC markers are also rendered last so a
+// service alert cannot sit underneath a police or fire icon.
+//
+// ============================================================
+
+const TTC_MARKER_CLEARANCE_PX =
+  30
+
+
+const TTC_MARKER_OFFSET_CANDIDATES = [
+  [0, 0],
+
+  [34, 0],
+  [-34, 0],
+  [0, 34],
+  [0, -34],
+
+  [24, 24],
+  [-24, 24],
+  [24, -24],
+  [-24, -24],
+
+  [48, 0],
+  [-48, 0],
+  [0, 48],
+  [0, -48],
+
+  [42, 42],
+  [-42, 42],
+  [42, -42],
+  [-42, -42],
+
+  [66, 0],
+  [-66, 0],
+  [0, 66],
+  [0, -66],
+
+  [60, 34],
+  [-60, 34],
+  [60, -34],
+  [-60, -34],
+  [34, 60],
+  [-34, 60],
+  [34, -60],
+  [-34, -60],
+]
+
+
+function activeTtcNewsItem(
+  item
+) {
+  return (
+    item?.pinType ===
+      'news' &&
+    isTtcPin(
+      item?.pin
+    ) &&
+    item?.pin?.active !==
+      false
+  )
+}
+
+
+function projectedPinPoint({
+  map,
+  pin,
+}) {
+  const longitude =
+    Number(
+      pin?.longitude
+    )
+
+  const latitude =
+    Number(
+      pin?.latitude
+    )
+
+  if (
+    !Number.isFinite(
+      longitude
+    ) ||
+    !Number.isFinite(
+      latitude
+    )
+  ) {
+    return null
+  }
+
+  return map.project([
+    longitude,
+    latitude,
+  ])
+}
+
+
+function spreadActiveTtcMarkers({
+  map,
+  items,
+}) {
+  const occupied =
+    []
+
+  const offsets =
+    new Map()
+
+
+  // First reserve the screen positions of every non-TTC NEWS marker.
+  // Active TTC markers will move only when they would otherwise cover
+  // one of these positions or another TTC alert.
+  items
+    .filter(
+      (item) =>
+        !activeTtcNewsItem(
+          item
+        )
+    )
+    .forEach(
+      (item) => {
+        const point =
+          projectedPinPoint({
+            map,
+            pin:
+              item.pin,
+          })
+
+        if (
+          point
+        ) {
+          occupied.push({
+            x:
+              point.x,
+            y:
+              point.y,
+          })
+        }
+      }
+    )
+
+
+  items
+    .filter(
+      activeTtcNewsItem
+    )
+    .forEach(
+      (item) => {
+        const point =
+          projectedPinPoint({
+            map,
+            pin:
+              item.pin,
+          })
+
+        if (
+          !point
+        ) {
+          offsets.set(
+            item,
+            [0, 0]
+          )
+
+          return
+        }
+
+        let chosen =
+          TTC_MARKER_OFFSET_CANDIDATES[
+            TTC_MARKER_OFFSET_CANDIDATES.length -
+            1
+          ]
+
+        for (
+          const candidate
+          of TTC_MARKER_OFFSET_CANDIDATES
+        ) {
+          const candidateX =
+            point.x +
+            candidate[0]
+
+          const candidateY =
+            point.y +
+            candidate[1]
+
+          const collision =
+            occupied.some(
+              (placed) => {
+                const dx =
+                  candidateX -
+                  placed.x
+
+                const dy =
+                  candidateY -
+                  placed.y
+
+                return (
+                  Math.hypot(
+                    dx,
+                    dy
+                  ) <
+                  TTC_MARKER_CLEARANCE_PX
+                )
+              }
+            )
+
+          if (
+            !collision
+          ) {
+            chosen =
+              candidate
+
+            break
+          }
+        }
+
+        offsets.set(
+          item,
+          chosen
+        )
+
+        occupied.push({
+          x:
+            point.x +
+            chosen[0],
+          y:
+            point.y +
+            chosen[1],
+        })
+      }
+    )
+
+
+  const withOffsets =
+    items.map(
+      (item) => ({
+        ...item,
+
+        markerOffset:
+          offsets.get(
+            item
+          ) ||
+          [0, 0],
+      })
+    )
+
+
+  // Render TTC last so even a near-collision cannot bury a live service
+  // alert underneath another source icon.
+  return [
+    ...withOffsets.filter(
+      (item) =>
+        !activeTtcNewsItem(
+          item
+        )
+    ),
+    ...withOffsets.filter(
+      activeTtcNewsItem
+    ),
+  ]
+}
+
+
+// ============================================================
 // CREATE MARKER
 // ============================================================
 
@@ -1580,6 +1849,8 @@ function createMarker({
   map,
   pin,
   pinType,
+  markerOffset =
+    [0, 0],
   onDirections,
   onLongWay,
 }) {
@@ -1672,6 +1943,15 @@ function createMarker({
 
     element.style.WebkitAppearance =
       'none'
+
+    if (
+      isTtcPin(
+        pin
+      )
+    ) {
+      element.style.zIndex =
+        '20'
+    }
 
     element.setAttribute(
       'aria-label',
@@ -1890,6 +2170,9 @@ function createMarker({
 
       anchor:
         'center',
+
+      offset:
+        markerOffset,
     })
       .setLngLat([
         longitude,
@@ -3060,16 +3343,30 @@ function MapPins({
           )
     }
 
+    if (
+      activePinFilter ===
+        'news'
+    ) {
+      visiblePins =
+        spreadActiveTtcMarkers({
+          map,
+          items:
+            visiblePins,
+        })
+    }
+
     visiblePins.forEach(
       ({
         pin,
         pinType,
+        markerOffset,
       }) => {
         const marker =
           createMarker({
             map,
             pin,
             pinType,
+            markerOffset,
             onDirections,
             onLongWay,
           })
