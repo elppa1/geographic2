@@ -2399,10 +2399,28 @@ function appendEmojiMarkerIcon(
 
 
 // ============================================================
-// RECENT PIN PULSE
+// ACTIVE / URGENT PIN PULSE
+// ============================================================
+//
+// NEWS:
+//   - an explicitly LIVE item keeps pulsing while it is live
+//   - an active TTC alert keeps pulsing while it remains active
+//   - Police and Fire pulse for their first 2 hours
+//
+// NEW:
+//   - preserve the existing first-hour pulse for a newly published place
+//
+// Reduced-motion users get a steady glow instead of animation.
+//
 // ============================================================
 
-const RECENT_MARKER_WINDOW_MS =
+const RECENT_NEW_MARKER_WINDOW_MS =
+  60 *
+  60 *
+  1000
+
+const URGENT_NEWS_MARKER_WINDOW_MS =
+  2 *
   60 *
   60 *
   1000
@@ -2463,7 +2481,190 @@ function getRecentMarkerTimestamp({
 }
 
 
-function getRecentMarkerPulseColor({
+function newsPinIsExplicitlyLive(
+  pin
+) {
+  const status =
+    normalizeCompareText(
+      pin?.status
+    )
+
+  return (
+    pin?.live ===
+      true ||
+    pin?.isLive ===
+      true ||
+    status ===
+      'live'
+  )
+}
+
+
+function getMarkerPulseState({
+  pin,
+  pinType,
+}) {
+  if (
+    pinType ===
+      'news'
+  ) {
+    const live =
+      newsPinIsExplicitlyLive(
+        pin
+      )
+
+    const activeTtc =
+      isTtcPin(
+        pin
+      ) &&
+      pin?.active !==
+        false
+
+
+    if (
+      live ||
+      activeTtc
+    ) {
+      return {
+        pulse:
+          true,
+
+        forever:
+          true,
+      }
+    }
+
+
+    const urgentSource =
+      isTorontoPolicePin(
+        pin
+      ) ||
+      isTorontoFirePin(
+        pin
+      )
+
+
+    if (
+      !urgentSource
+    ) {
+      return {
+        pulse:
+          false,
+      }
+    }
+
+
+    const date =
+      getNewsRecordTimestamp(
+        pin
+      )
+
+
+    if (
+      !date
+    ) {
+      return {
+        pulse:
+          false,
+      }
+    }
+
+
+    const ageMs =
+      Date.now() -
+      date.getTime()
+
+
+    if (
+      ageMs <
+        0 ||
+      ageMs >=
+        URGENT_NEWS_MARKER_WINDOW_MS
+    ) {
+      return {
+        pulse:
+          false,
+      }
+    }
+
+
+    return {
+      pulse:
+        true,
+
+      forever:
+        false,
+
+      remainingMs:
+        URGENT_NEWS_MARKER_WINDOW_MS -
+        ageMs,
+    }
+  }
+
+
+  if (
+    pinType ===
+      'new'
+  ) {
+    const timestamp =
+      getRecentMarkerTimestamp({
+        pin,
+        pinType,
+      })
+
+
+    if (
+      !Number.isFinite(
+        timestamp
+      )
+    ) {
+      return {
+        pulse:
+          false,
+      }
+    }
+
+
+    const ageMs =
+      Date.now() -
+      timestamp
+
+
+    if (
+      ageMs <
+        0 ||
+      ageMs >=
+        RECENT_NEW_MARKER_WINDOW_MS
+    ) {
+      return {
+        pulse:
+          false,
+      }
+    }
+
+
+    return {
+      pulse:
+        true,
+
+      forever:
+        false,
+
+      remainingMs:
+        RECENT_NEW_MARKER_WINDOW_MS -
+        ageMs,
+    }
+  }
+
+
+  return {
+    pulse:
+      false,
+  }
+}
+
+
+function getMarkerPulseColor({
   pin,
   pinType,
 }) {
@@ -2480,7 +2681,7 @@ function getRecentMarkerPulseColor({
       pin
     )
   ) {
-    return 'rgba(225, 70, 45, 0.92)'
+    return 'rgba(225, 70, 45, 0.96)'
   }
 
 
@@ -2489,7 +2690,7 @@ function getRecentMarkerPulseColor({
       pin
     )
   ) {
-    return 'rgba(55, 105, 215, 0.92)'
+    return 'rgba(55, 105, 215, 0.96)'
   }
 
 
@@ -2498,15 +2699,15 @@ function getRecentMarkerPulseColor({
       pin
     )
   ) {
-    return 'rgba(225, 170, 45, 0.90)'
+    return 'rgba(225, 170, 45, 0.94)'
   }
 
 
-  return 'rgba(30, 30, 30, 0.55)'
+  return 'rgba(30, 30, 30, 0.60)'
 }
 
 
-function applyRecentMarkerPulse({
+function applyMarkerActivityPulse({
   element,
   pin,
   pinType,
@@ -2521,39 +2722,22 @@ function applyRecentMarkerPulse({
   }
 
 
-  const timestamp =
-    getRecentMarkerTimestamp({
+  const pulseState =
+    getMarkerPulseState({
       pin,
       pinType,
     })
 
 
   if (
-    !Number.isFinite(
-      timestamp
-    )
-  ) {
-    return
-  }
-
-
-  const ageMs =
-    Date.now() -
-    timestamp
-
-
-  if (
-    ageMs <
-      0 ||
-    ageMs >=
-      RECENT_MARKER_WINDOW_MS
+    !pulseState.pulse
   ) {
     return
   }
 
 
   const color =
-    getRecentMarkerPulseColor({
+    getMarkerPulseColor({
       pin,
       pinType,
     })
@@ -2571,7 +2755,7 @@ function applyRecentMarkerPulse({
       .matches
   ) {
     target.style.filter =
-      `drop-shadow(0 0 4px ${color})`
+      `drop-shadow(0 0 5px ${color})`
 
     return
   }
@@ -2585,13 +2769,8 @@ function applyRecentMarkerPulse({
   }
 
 
-  const remainingMs =
-    RECENT_MARKER_WINDOW_MS -
-    ageMs
-
-
   const pulseDuration =
-    1400
+    1200
 
 
   target.animate(
@@ -2600,21 +2779,30 @@ function applyRecentMarkerPulse({
         transform:
           'scale(1)',
 
+        opacity:
+          1,
+
         filter:
           `drop-shadow(0 0 0 ${color})`,
       },
 
       {
         transform:
-          'scale(1.10)',
+          'scale(1.11)',
+
+        opacity:
+          0.72,
 
         filter:
-          `drop-shadow(0 0 6px ${color})`,
+          `drop-shadow(0 0 7px ${color})`,
       },
 
       {
         transform:
           'scale(1)',
+
+        opacity:
+          1,
 
         filter:
           `drop-shadow(0 0 0 ${color})`,
@@ -2625,13 +2813,15 @@ function applyRecentMarkerPulse({
         pulseDuration,
 
       iterations:
-        Math.max(
-          1,
-          Math.ceil(
-            remainingMs /
-            pulseDuration
-          )
-        ),
+        pulseState.forever
+          ? Infinity
+          : Math.max(
+              1,
+              Math.ceil(
+                pulseState.remainingMs /
+                pulseDuration
+              )
+            ),
 
       easing:
         'ease-in-out',
@@ -3043,7 +3233,7 @@ function createMarker({
     )
 
 
-    applyRecentMarkerPulse({
+    applyMarkerActivityPulse({
       element,
       pin,
       pinType,
@@ -3110,7 +3300,7 @@ function createMarker({
     )
 
 
-    applyRecentMarkerPulse({
+    applyMarkerActivityPulse({
       element,
       pin,
       pinType,
