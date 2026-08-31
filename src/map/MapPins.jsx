@@ -2441,6 +2441,248 @@ function appendEmojiMarkerIcon(
 
 
 // ============================================================
+// RECENT PIN PULSE
+// ============================================================
+
+const RECENT_MARKER_WINDOW_MS =
+  60 *
+  60 *
+  1000
+
+
+function getRecentMarkerTimestamp({
+  pin,
+  pinType,
+}) {
+  const values =
+    pinType ===
+      'news'
+      ? [
+          pin?.publishedAt,
+          pin?.firstSeenAt,
+          pin?.receivedAt,
+          pin?.createdAt,
+        ]
+      : pinType ===
+          'new'
+        ? [
+            pin?.serverPublishedAt,
+            pin?.publishedAt,
+            pin?.createdAt,
+            pin?.updatedAt,
+          ]
+        : []
+
+
+  for (
+    const value of values
+  ) {
+    if (
+      !value
+    ) {
+      continue
+    }
+
+
+    const timestamp =
+      new Date(
+        value
+      )
+        .getTime()
+
+
+    if (
+      Number.isFinite(
+        timestamp
+      )
+    ) {
+      return timestamp
+    }
+  }
+
+
+  return null
+}
+
+
+function getRecentMarkerPulseColor({
+  pin,
+  pinType,
+}) {
+  if (
+    pinType ===
+      'new'
+  ) {
+    return 'rgba(214, 159, 39, 0.90)'
+  }
+
+
+  if (
+    isTorontoFirePin(
+      pin
+    )
+  ) {
+    return 'rgba(225, 70, 45, 0.92)'
+  }
+
+
+  if (
+    isTorontoPolicePin(
+      pin
+    )
+  ) {
+    return 'rgba(55, 105, 215, 0.92)'
+  }
+
+
+  if (
+    isTtcPin(
+      pin
+    )
+  ) {
+    return 'rgba(225, 170, 45, 0.90)'
+  }
+
+
+  return 'rgba(30, 30, 30, 0.55)'
+}
+
+
+function applyRecentMarkerPulse({
+  element,
+  pin,
+  pinType,
+}) {
+  if (
+    typeof window ===
+      'undefined' ||
+    !element ||
+    !pin
+  ) {
+    return
+  }
+
+
+  const timestamp =
+    getRecentMarkerTimestamp({
+      pin,
+      pinType,
+    })
+
+
+  if (
+    !Number.isFinite(
+      timestamp
+    )
+  ) {
+    return
+  }
+
+
+  const ageMs =
+    Date.now() -
+    timestamp
+
+
+  if (
+    ageMs <
+      0 ||
+    ageMs >=
+      RECENT_MARKER_WINDOW_MS
+  ) {
+    return
+  }
+
+
+  const color =
+    getRecentMarkerPulseColor({
+      pin,
+      pinType,
+    })
+
+
+  const target =
+    element.firstElementChild ||
+    element
+
+
+  if (
+    window.matchMedia(
+      '(prefers-reduced-motion: reduce)'
+    )
+      .matches
+  ) {
+    target.style.filter =
+      `drop-shadow(0 0 4px ${color})`
+
+    return
+  }
+
+
+  if (
+    typeof target.animate !==
+      'function'
+  ) {
+    return
+  }
+
+
+  const remainingMs =
+    RECENT_MARKER_WINDOW_MS -
+    ageMs
+
+
+  const pulseDuration =
+    1400
+
+
+  target.animate(
+    [
+      {
+        transform:
+          'scale(1)',
+
+        filter:
+          `drop-shadow(0 0 0 ${color})`,
+      },
+
+      {
+        transform:
+          'scale(1.10)',
+
+        filter:
+          `drop-shadow(0 0 6px ${color})`,
+      },
+
+      {
+        transform:
+          'scale(1)',
+
+        filter:
+          `drop-shadow(0 0 0 ${color})`,
+      },
+    ],
+    {
+      duration:
+        pulseDuration,
+
+      iterations:
+        Math.max(
+          1,
+          Math.ceil(
+            remainingMs /
+            pulseDuration
+          )
+        ),
+
+      easing:
+        'ease-in-out',
+    }
+  )
+}
+
+
+// ============================================================
 // TTC MARKER VISIBILITY
 // ============================================================
 //
@@ -2842,6 +3084,13 @@ function createMarker({
       element,
       newsEmoji
     )
+
+
+    applyRecentMarkerPulse({
+      element,
+      pin,
+      pinType,
+    })
   }
   else if (
     newBusinessIcon
@@ -2902,6 +3151,13 @@ function createMarker({
       element,
       newBusinessIcon.emoji
     )
+
+
+    applyRecentMarkerPulse({
+      element,
+      pin,
+      pinType,
+    })
   }
   else {
     element.className =
@@ -3052,6 +3308,22 @@ function createMarker({
               /-/g,
               ' '
             )
+        ),
+    })
+
+
+    appendText({
+      parent:
+        popupContent,
+
+      className:
+        'geographic-pin-location',
+
+      text:
+        (
+          pin.location ||
+          pin.intersection ||
+          ''
         ),
     })
 
