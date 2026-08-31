@@ -1308,7 +1308,7 @@ function GeographicApp() {
                 </div>
 
                 <div className="about-panel-title">
-                  HOW TO USE THIS MAP
+                  ALL ABOUT THIS TOOL
                 </div>
               </div>
 
@@ -1332,9 +1332,9 @@ function GeographicApp() {
               </h2>
 
               <p>
-                Toronto Geographic is a living map of Toronto: current news,
-                new places, and historical maps and aerial photography in one
-                place.
+                Toronto Geographic is a living map of Toronto with current
+                news, and new and historical places, placed over maps and
+                aerial photography.
               </p>
             </section>
 
@@ -1353,19 +1353,13 @@ function GeographicApp() {
 
             <section className="about-section">
               <h2>
-                MAP RULES
+                HISTORIC PINS
               </h2>
 
               <p>
-                Pins mark the best available location. Some are exact
-                addresses, some are intersections, and some are approximate
-                areas.
-              </p>
-
-              <p>
-                Historical maps and aerials are reference material, not exact
-                surveys. Older imagery can be incomplete, misaligned, or
-                approximate.
+                We release about ten pins a month usually under a theme. Once
+                the month disappears, the pin finds a permanent home on the
+                aerial closest to its occurrence.
               </p>
             </section>
 
