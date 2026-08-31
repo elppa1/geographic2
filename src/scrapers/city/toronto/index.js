@@ -3,12 +3,8 @@ import {
 } from '../../shared/runReviewScraper.js'
 
 import {
-  scrapeTorontoDevelopments,
-} from './torontoDevelopmentScraper.js'
-
-import {
-  scrapeBlogToNew,
-} from './blogToScraper.js'
+  scrapeNowServingNew,
+} from './nowServingNewScraper.js'
 
 import {
   scrapeTorontoFireNews,
@@ -49,9 +45,6 @@ import {
 //
 // TPS remains separate because its email/webhook lifecycle handles
 // case updates, missing-person resolution and original expiry.
-//
-// CP24, Beach Metro and other editorial news sources remain in the
-// project but are intentionally disconnected from automatic NEWS.
 //
 // ============================================================
 
@@ -587,35 +580,18 @@ export async function runTorontoNewsScraper() {
 
 
 // ============================================================
-// TORONTO · ALL NEW SOURCES
-// ============================================================
-//
-// NEW remains separate from NEWS.
-//
-// These sources are NOT affected by the official NEWS lifecycle.
-//
-// ============================================================
-
-async function scrapeTorontoNewSources() {
-  const [
-    developmentRecords,
-    blogToRecords,
-  ] =
-    await Promise.all([
-      scrapeTorontoDevelopments(),
-      scrapeBlogToNew(),
-    ])
-
-
-  return [
-    ...developmentRecords,
-    ...blogToRecords,
-  ]
-}
-
-
-// ============================================================
 // TORONTO · NEW
+// ============================================================
+//
+// For now, NEW is intentionally narrow:
+//
+//   NowServingTO
+//       → restaurant discovery leads only
+//
+// No BlogTO, CP24, Beach Metro or development-notice ingestion is
+// active here. NowServing candidates are unverified leads and never
+// publish automatically.
+//
 // ============================================================
 
 export function runTorontoNewScraper() {
@@ -627,15 +603,15 @@ export function runTorontoNewScraper() {
       'new',
 
     source:
-      'toronto-new-sources',
+      'nowserving-restaurant-leads',
 
     scrape:
-      scrapeTorontoNewSources,
+      scrapeNowServingNew,
 
     maxAgeDays:
-      30,
+      90,
 
     includeUndated:
-      false,
+      true,
   })
 }

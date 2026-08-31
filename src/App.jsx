@@ -26,6 +26,22 @@ function GeographicApp() {
     ]
 
 
+  const sponsorName =
+    String(
+      import.meta.env.VITE_GEOGRAPHIC_SPONSOR_NAME ||
+      'AVAILABLE'
+    )
+      .trim()
+
+
+  const sponsorUrl =
+    String(
+      import.meta.env.VITE_GEOGRAPHIC_SPONSOR_URL ||
+      ''
+    )
+      .trim()
+
+
   const timelineLayers =
     useMemo(
       () => {
@@ -246,6 +262,116 @@ function GeographicApp() {
           newBusinessRangeFilter
         }
       />
+
+
+      <div
+        style={{
+          position:
+            'fixed',
+
+          right:
+            '12px',
+
+          top:
+            '92px',
+
+          zIndex:
+            30,
+
+          minWidth:
+            '104px',
+
+          padding:
+            '7px 9px',
+
+          border:
+            '1px solid rgba(0,0,0,0.16)',
+
+          background:
+            'rgba(255,255,255,0.92)',
+
+          backdropFilter:
+            'blur(8px)',
+
+          fontFamily:
+            'inherit',
+
+          textAlign:
+            'right',
+        }}
+      >
+        <div
+          style={{
+            fontSize:
+              '6px',
+
+            fontWeight:
+              700,
+
+            letterSpacing:
+              '0.14em',
+
+            opacity:
+              0.52,
+          }}
+        >
+          SPONSOR
+        </div>
+
+        {sponsorUrl
+          ? (
+              <a
+                href={
+                  sponsorUrl
+                }
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display:
+                    'block',
+
+                  marginTop:
+                    '2px',
+
+                  color:
+                    '#111',
+
+                  fontSize:
+                    '8px',
+
+                  fontWeight:
+                    800,
+
+                  letterSpacing:
+                    '0.08em',
+
+                  textDecoration:
+                    'none',
+                }}
+              >
+                {sponsorName.toUpperCase()}
+              </a>
+            )
+          : (
+              <div
+                style={{
+                  marginTop:
+                    '2px',
+
+                  fontSize:
+                    '8px',
+
+                  fontWeight:
+                    800,
+
+                  letterSpacing:
+                    '0.08em',
+                }}
+              >
+                {sponsorName.toUpperCase()}
+              </div>
+            )}
+      </div>
 
 
       <div

@@ -51,6 +51,10 @@ import {
 } from './feeds/toronto/liveNewsroom.js'
 
 import {
+  nowServingFeed,
+} from './feeds/toronto/nowServing.js'
+
+import {
   locationSearchApi,
 } from './locationSearch.js'
 
@@ -1320,6 +1324,7 @@ const plugins = [
   tpsWebhookFeed(),
   ttcAlertsFeed(),
   liveNewsroomFeed(),
+  nowServingFeed(),
 ]
 
 
