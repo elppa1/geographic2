@@ -91,6 +91,14 @@ const PUBLISHED_NEWS_ARCHIVE_ENDPOINT =
   '/api/geographic/toronto/newsroom/published/archive'
 
 
+const PUBLISHED_NEW_UPSERT_ENDPOINT =
+  '/api/geographic/toronto/newsroom/new/published/upsert'
+
+
+const PUBLISHED_NEW_ARCHIVE_ENDPOINT =
+  '/api/geographic/toronto/newsroom/new/published/archive'
+
+
 const PERSISTENT_NEWSROOM_PULL_MS =
   15 * 1000
 
@@ -5343,6 +5351,243 @@ function AdminRoom() {
   }
 
 
+  // ==========================================================
+  // SERVER-OWNED PUBLISHED NEW
+  // ==========================================================
+  //
+  // Toronto NEW uses the same persistent server store as the public map.
+  // localStorage remains only the Admin/browser cache.
+  //
+  // ==========================================================
+
+  async function postPublishedNewRecords(
+    records
+  ) {
+    const normalizedRecords =
+      (
+        Array.isArray(
+          records
+        )
+          ? records
+          : [
+              records,
+            ]
+      )
+        .filter(
+          Boolean
+        )
+        .map(
+          normalizePinRecord
+        )
+
+
+    if (
+      normalizedRecords.length ===
+        0
+    ) {
+      return []
+    }
+
+
+    const response =
+      await fetch(
+        PUBLISHED_NEW_UPSERT_ENDPOINT,
+        {
+          method:
+            'POST',
+
+          headers: {
+            'Content-Type':
+              'application/json',
+
+            Accept:
+              'application/json',
+          },
+
+          body:
+            JSON.stringify({
+              records:
+                normalizedRecords,
+            }),
+        }
+      )
+
+
+    const payload =
+      await response.json()
+
+
+    if (
+      !response.ok ||
+      payload?.ok !==
+        true
+    ) {
+      throw new Error(
+        payload?.error ||
+        (
+          'Published NEW save failed · ' +
+          response.status
+        )
+      )
+    }
+
+
+    return (
+      Array.isArray(
+        payload.records
+      )
+        ? payload.records
+            .map(
+              normalizePinRecord
+            )
+        : normalizedRecords
+    )
+  }
+
+
+  async function publishNewRecordOnServer(
+    record,
+    {
+      silent =
+        false,
+    } = {}
+  ) {
+    try {
+      const records =
+        await postPublishedNewRecords(
+          [
+            record,
+          ]
+        )
+
+
+      return (
+        records[0] ||
+        normalizePinRecord(
+          record
+        )
+      )
+    }
+    catch (
+      error
+    ) {
+      console.error(
+        'PUBLISHED NEW SERVER SAVE FAILED:',
+        error
+      )
+
+
+      if (
+        !silent
+      ) {
+        window.alert(
+          'Could not save this NEW pin to the server. Nothing was published. Please try again.'
+        )
+      }
+
+
+      return null
+    }
+  }
+
+
+  async function archiveNewRecordOnServer(
+    record,
+    reason =
+      'removed-from-live-map',
+    {
+      silent =
+        false,
+    } = {}
+  ) {
+    if (
+      !record
+    ) {
+      return null
+    }
+
+
+    try {
+      const response =
+        await fetch(
+          PUBLISHED_NEW_ARCHIVE_ENDPOINT,
+          {
+            method:
+              'POST',
+
+            headers: {
+              'Content-Type':
+                'application/json',
+
+              Accept:
+                'application/json',
+            },
+
+            body:
+              JSON.stringify({
+                id:
+                  record.id ||
+                  '',
+
+                externalId:
+                  record.externalId ||
+                  '',
+
+                record,
+
+                reason,
+              }),
+          }
+        )
+
+
+      const payload =
+        await response.json()
+
+
+      if (
+        !response.ok ||
+        payload?.ok !==
+          true ||
+        !payload?.record
+      ) {
+        throw new Error(
+          payload?.error ||
+          (
+            'Published NEW archive failed · ' +
+            response.status
+          )
+        )
+      }
+
+
+      return normalizePinRecord(
+        payload.record
+      )
+    }
+    catch (
+      error
+    ) {
+      console.error(
+        'PUBLISHED NEW SERVER ARCHIVE FAILED:',
+        error
+      )
+
+
+      if (
+        !silent
+      ) {
+        window.alert(
+          'Could not update this NEW pin on the server. The public map was not changed. Please try again.'
+        )
+      }
+
+
+      return null
+    }
+  }
+
+
   async function refreshPublishedNewsFromServer({
     allowBootstrap =
       true,
@@ -7250,6 +7495,30 @@ function AdminRoom() {
       }
 
 
+      if (
+        tab ===
+          'new' &&
+        cityKey ===
+          'toronto'
+      ) {
+        const serverRecord =
+          await publishNewRecordOnServer(
+            publishedRecord
+          )
+
+
+        if (
+          !serverRecord
+        ) {
+          return
+        }
+
+
+        publishedRecord =
+          serverRecord
+      }
+
+
       persistRecords([
         publishedRecord,
         ...records,
@@ -7326,6 +7595,30 @@ function AdminRoom() {
       }
 
 
+      if (
+        tab ===
+          'new' &&
+        cityKey ===
+          'toronto'
+      ) {
+        const serverRecord =
+          await publishNewRecordOnServer(
+            updatedRecord
+          )
+
+
+        if (
+          !serverRecord
+        ) {
+          return
+        }
+
+
+        updatedRecord =
+          serverRecord
+      }
+
+
       persistRecords(
         records.map(
           (item) =>
@@ -7372,6 +7665,31 @@ function AdminRoom() {
     ) {
       const serverRecord =
         await publishNewsRecordOnServer(
+          nextRecord
+        )
+
+
+      if (
+        !serverRecord
+      ) {
+        return
+      }
+
+
+      nextRecord =
+        serverRecord
+    }
+
+
+
+    if (
+      tab ===
+        'new' &&
+      cityKey ===
+        'toronto'
+    ) {
+      const serverRecord =
+        await publishNewRecordOnServer(
           nextRecord
         )
 
@@ -9031,6 +9349,35 @@ function AdminRoom() {
     }
 
 
+    if (
+      tab ===
+        'new' &&
+      cityKey ===
+        'toronto'
+    ) {
+      const serverRecord =
+        await publishNewRecordOnServer(
+          publishedRecord
+        )
+
+
+      if (
+        !serverRecord
+      ) {
+        setApprovingReviewId(
+          null
+        )
+
+
+        return
+      }
+
+
+      publishedRecord =
+        serverRecord
+    }
+
+
     persistRecords([
       publishedRecord,
       ...latestCityRecords,
@@ -9272,6 +9619,29 @@ function AdminRoom() {
     }
 
 
+    if (
+      !isNews &&
+      tab ===
+        'new' &&
+      cityKey ===
+        'toronto' &&
+      target
+    ) {
+      const archivedRecord =
+        await archiveNewRecordOnServer(
+          target,
+          'manual-remove'
+        )
+
+
+      if (
+        !archivedRecord
+      ) {
+        return
+      }
+    }
+
+
     persistRecords(
       records.filter(
         (item) =>
@@ -9367,6 +9737,36 @@ function AdminRoom() {
               updatedRecord
             )
           : await archiveNewsRecordOnServer(
+              updatedRecord,
+              'manual-unpublish'
+            )
+
+
+      if (
+        !serverRecord
+      ) {
+        return
+      }
+
+
+      updatedRecord =
+        serverRecord
+    }
+
+
+
+    if (
+      tab ===
+        'new' &&
+      cityKey ===
+        'toronto'
+    ) {
+      const serverRecord =
+        nextActive
+          ? await publishNewRecordOnServer(
+              updatedRecord
+            )
+          : await archiveNewRecordOnServer(
               updatedRecord,
               'manual-unpublish'
             )
