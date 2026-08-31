@@ -343,6 +343,7 @@ function GeographicApp() {
             .timeline-shell {
               scale: 1;
               transform-origin: bottom center;
+              transform: translate(-50%, -42px) !important;
               width: calc(100vw - 16px) !important;
               max-width: none !important;
               bottom: max(24px, env(safe-area-inset-bottom)) !important;
