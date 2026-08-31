@@ -1,14 +1,58 @@
 import {
-  Pool,
-} from 'pg'
+  mkdir,
+  readFile,
+  rename,
+  writeFile,
+} from 'node:fs/promises'
+
+import {
+  dirname,
+  join,
+} from 'node:path'
+
+import {
+  fileURLToPath,
+} from 'node:url'
 
 
-let pool =
-  null
+const __filename =
+  fileURLToPath(
+    import.meta.url
+  )
 
 
-let schemaPromise =
-  null
+const __dirname =
+  dirname(
+    __filename
+  )
+
+
+const DEFAULT_DATA_DIR =
+  join(
+    __dirname,
+    '..',
+    'data'
+  )
+
+
+const DATA_DIR =
+  String(
+    process.env.GEOGRAPHIC_DATA_DIR ||
+    ''
+  )
+    .trim() ||
+  DEFAULT_DATA_DIR
+
+
+const STORE_PATH =
+  join(
+    DATA_DIR,
+    'geographic-published-pins.json'
+  )
+
+
+let writeChain =
+  Promise.resolve()
 
 
 function cleanText(
@@ -22,130 +66,17 @@ function cleanText(
 }
 
 
-function getDatabaseUrl() {
-  const value =
-    cleanText(
-      process.env.DATABASE_URL
-    )
+function createEmptyStore() {
+  return {
+    version:
+      1,
 
+    updatedAt:
+      '',
 
-  if (
-    !value
-  ) {
-    throw new Error(
-      'DATABASE_URL is not configured. Geographic published pins require PostgreSQL.'
-    )
+    records:
+      [],
   }
-
-
-  return value
-}
-
-
-function getPool() {
-  if (
-    pool
-  ) {
-    return pool
-  }
-
-
-  pool =
-    new Pool({
-      connectionString:
-        getDatabaseUrl(),
-
-      max:
-        8,
-
-      idleTimeoutMillis:
-        30000,
-
-      connectionTimeoutMillis:
-        10000,
-    })
-
-
-  pool.on(
-    'error',
-    (
-      error
-    ) => {
-      console.error(
-        'GEOGRAPHIC DATABASE · POOL ERROR:',
-        error
-      )
-    }
-  )
-
-
-  return pool
-}
-
-
-export async function ensureGeographicPinsTable() {
-  if (
-    schemaPromise
-  ) {
-    return schemaPromise
-  }
-
-
-  schemaPromise =
-    (async () => {
-      const client =
-        await getPool()
-          .connect()
-
-
-      try {
-        await client.query(`
-          CREATE TABLE IF NOT EXISTS geographic_pins (
-            city TEXT NOT NULL,
-            pin_type TEXT NOT NULL,
-            subtype TEXT NOT NULL DEFAULT '',
-            identity TEXT NOT NULL,
-            active BOOLEAN NOT NULL DEFAULT TRUE,
-            payload JSONB NOT NULL,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            PRIMARY KEY (city, pin_type, subtype, identity)
-          )
-        `)
-
-
-        await client.query(`
-          CREATE INDEX IF NOT EXISTS geographic_pins_lookup_idx
-          ON geographic_pins (city, pin_type, subtype, active, updated_at DESC)
-        `)
-
-
-        await client.query(`
-          CREATE INDEX IF NOT EXISTS geographic_pins_external_id_idx
-          ON geographic_pins ((payload ->> 'externalId'))
-        `)
-      }
-      finally {
-        client.release()
-      }
-    })()
-
-
-  try {
-    await schemaPromise
-  }
-  catch (
-    error
-  ) {
-    schemaPromise =
-      null
-
-
-    throw error
-  }
-
-
-  return schemaPromise
 }
 
 
@@ -181,7 +112,7 @@ function normalizedScope({
     !normalizedType
   ) {
     throw new Error(
-      'Geographic database pin type is required.'
+      'Geographic pin type is required.'
     )
   }
 
@@ -199,14 +130,265 @@ function normalizedScope({
 }
 
 
-function recordFromRow(
-  row
+function normalizeStoredRecord(
+  value
+) {
+  if (
+    !value ||
+    typeof value !==
+      'object' ||
+    Array.isArray(
+      value
+    )
+  ) {
+    return null
+  }
+
+
+  const city =
+    cleanText(
+      value.city
+    ) ||
+    'toronto'
+
+
+  const type =
+    cleanText(
+      value.type
+    )
+      .toLowerCase()
+
+
+  const subtype =
+    cleanText(
+      value.subtype
+    )
+      .toLowerCase()
+
+
+  const identity =
+    cleanText(
+      value.identity
+    )
+
+
+  const payload =
+    value.payload &&
+    typeof value.payload ===
+      'object' &&
+    !Array.isArray(
+      value.payload
+    )
+      ? value.payload
+      : {}
+
+
+  if (
+    !type ||
+    !identity
+  ) {
+    return null
+  }
+
+
+  const active =
+    value.active !==
+      false
+
+
+  return {
+    city,
+    type,
+    subtype,
+    identity,
+    active,
+
+    payload: {
+      ...payload,
+      city,
+      type,
+      ...(subtype
+        ? {
+            newType:
+              subtype,
+          }
+        : {}),
+      active,
+    },
+
+    createdAt:
+      cleanText(
+        value.createdAt
+      ) ||
+      new Date()
+        .toISOString(),
+
+    updatedAt:
+      cleanText(
+        value.updatedAt
+      ) ||
+      new Date()
+        .toISOString(),
+  }
+}
+
+
+async function readStore() {
+  try {
+    const raw =
+      await readFile(
+        STORE_PATH,
+        'utf8'
+      )
+
+
+    const parsed =
+      JSON.parse(
+        raw
+      )
+
+
+    if (
+      !parsed ||
+      typeof parsed !==
+        'object' ||
+      Array.isArray(
+        parsed
+      ) ||
+      !Array.isArray(
+        parsed.records
+      )
+    ) {
+      throw new Error(
+        'GEOGRAPHIC PIN STORE FORMAT INVALID'
+      )
+    }
+
+
+    return {
+      version:
+        1,
+
+      updatedAt:
+        cleanText(
+          parsed.updatedAt
+        ),
+
+      records:
+        parsed.records
+          .map(
+            normalizeStoredRecord
+          )
+          .filter(
+            Boolean
+          ),
+    }
+  }
+  catch (
+    error
+  ) {
+    if (
+      error?.code ===
+        'ENOENT'
+    ) {
+      return createEmptyStore()
+    }
+
+
+    console.error(
+      'GEOGRAPHIC PIN STORE · READ FAILED:',
+      error
+    )
+
+
+    throw error
+  }
+}
+
+
+async function writeStoreAtomic(
+  store
+) {
+  await mkdir(
+    DATA_DIR,
+    {
+      recursive:
+        true,
+    }
+  )
+
+
+  const nextStore = {
+    version:
+      1,
+
+    updatedAt:
+      new Date()
+        .toISOString(),
+
+    records:
+      Array.isArray(
+        store?.records
+      )
+        ? store.records
+        : [],
+  }
+
+
+  const tempPath =
+    `${STORE_PATH}.${process.pid}.tmp`
+
+
+  await writeFile(
+    tempPath,
+    JSON.stringify(
+      nextStore,
+      null,
+      2
+    ),
+    'utf8'
+  )
+
+
+  await rename(
+    tempPath,
+    STORE_PATH
+  )
+
+
+  return nextStore
+}
+
+
+function queueWrite(
+  task
+) {
+  const run =
+    writeChain
+      .catch(
+        () => {}
+      )
+      .then(
+        task
+      )
+
+
+  writeChain =
+    run
+
+
+  return run
+}
+
+
+function recordForResponse(
+  entry
 ) {
   const payload =
-    row?.payload &&
-    typeof row.payload ===
+    entry?.payload &&
+    typeof entry.payload ===
       'object'
-      ? row.payload
+      ? entry.payload
       : {}
 
 
@@ -214,9 +396,43 @@ function recordFromRow(
     ...payload,
 
     active:
-      row?.active !==
+      entry?.active !==
         false,
   }
+}
+
+
+function scopeMatches(
+  entry,
+  scope
+) {
+  return (
+    entry.city ===
+      scope.city &&
+    entry.type ===
+      scope.type &&
+    entry.subtype ===
+      scope.subtype
+  )
+}
+
+
+export async function ensureGeographicPinsTable() {
+  await mkdir(
+    DATA_DIR,
+    {
+      recursive:
+        true,
+    }
+  )
+
+
+  // Validate an existing store if there is one. If the file does not yet
+  // exist, readStore returns a fresh empty store without creating anything.
+  await readStore()
+
+
+  return true
 }
 
 
@@ -229,9 +445,6 @@ export async function getGeographicPins({
   status =
     'all',
 } = {}) {
-  await ensureGeographicPinsTable()
-
-
   const scope =
     normalizedScope({
       city,
@@ -247,61 +460,67 @@ export async function getGeographicPins({
       .toLowerCase()
 
 
-  const values = [
-    scope.city,
-    scope.type,
-    scope.subtype,
-  ]
+  const store =
+    await readStore()
 
 
-  let statusSql =
-    ''
+  return store.records
+    .filter(
+      (
+        entry
+      ) =>
+        scopeMatches(
+          entry,
+          scope
+        )
+    )
+    .filter(
+      (
+        entry
+      ) => {
+        if (
+          normalizedStatus ===
+            'live'
+        ) {
+          return entry.active !==
+            false
+        }
 
 
-  if (
-    normalizedStatus ===
-      'live'
-  ) {
-    statusSql =
-      ' AND active = TRUE'
-  }
-  else if (
-    normalizedStatus ===
-      'archive' ||
-    normalizedStatus ===
-      'archived' ||
-    normalizedStatus ===
-      'unpublished'
-  ) {
-    statusSql =
-      ' AND active = FALSE'
-  }
+        if (
+          normalizedStatus ===
+            'archive' ||
+          normalizedStatus ===
+            'archived' ||
+          normalizedStatus ===
+            'unpublished'
+        ) {
+          return entry.active ===
+            false
+        }
 
 
-  const result =
-    await getPool()
-      .query(
-        `
-          SELECT
-            identity,
-            active,
-            payload,
-            created_at,
-            updated_at
-          FROM geographic_pins
-          WHERE city = $1
-            AND pin_type = $2
-            AND subtype = $3
-            ${statusSql}
-          ORDER BY updated_at DESC
-        `,
-        values
-      )
-
-
-  return result.rows
+        return true
+      }
+    )
+    .sort(
+      (
+        a,
+        b
+      ) =>
+        String(
+          b.updatedAt ||
+          ''
+        )
+          .localeCompare(
+            String(
+              a.updatedAt ||
+              ''
+            )
+          )
+    )
     .map(
-      recordFromRow
+      recordForResponse
     )
 }
 
@@ -321,9 +540,6 @@ export async function findGeographicPin({
   caseKeys =
     [],
 } = {}) {
-  await ensureGeographicPinsTable()
-
-
   const scope =
     normalizedScope({
       city,
@@ -377,52 +593,114 @@ export async function findGeographicPin({
   }
 
 
-  const result =
-    await getPool()
-      .query(
-        `
-          SELECT
-            identity,
-            active,
-            payload,
-            created_at,
-            updated_at
-          FROM geographic_pins
-          WHERE city = $1
-            AND pin_type = $2
-            AND subtype = $3
-            AND (
-              ($4 <> '' AND identity = $4)
-              OR ($5 <> '' AND payload ->> 'externalId' = $5)
-              OR ($6 <> '' AND payload ->> 'id' = $6)
-              OR (
-                cardinality($7::text[]) > 0
-                AND (
-                  payload ->> 'caseNumber' = ANY($7::text[])
-                  OR payload ->> 'policeCaseNumber' = ANY($7::text[])
-                  OR payload ->> 'incidentNumber' = ANY($7::text[])
-                  OR payload ->> 'goNumber' = ANY($7::text[])
+  const store =
+    await readStore()
+
+
+  const matching =
+    store.records
+      .filter(
+        (
+          entry
+        ) =>
+          scopeMatches(
+            entry,
+            scope
+          )
+      )
+      .filter(
+        (
+          entry
+        ) => {
+          const payload =
+            entry.payload ||
+            {}
+
+
+          if (
+            normalizedIdentity &&
+            entry.identity ===
+              normalizedIdentity
+          ) {
+            return true
+          }
+
+
+          if (
+            normalizedExternalId &&
+            cleanText(
+              payload.externalId
+            ) ===
+              normalizedExternalId
+          ) {
+            return true
+          }
+
+
+          if (
+            normalizedId &&
+            cleanText(
+              payload.id
+            ) ===
+              normalizedId
+          ) {
+            return true
+          }
+
+
+          if (
+            normalizedCaseKeys.length >
+              0
+          ) {
+            const recordCaseKeys = [
+              payload.caseNumber,
+              payload.policeCaseNumber,
+              payload.incidentNumber,
+              payload.goNumber,
+            ]
+              .map(
+                cleanText
+              )
+              .filter(
+                Boolean
+              )
+
+
+            return recordCaseKeys.some(
+              (
+                key
+              ) =>
+                normalizedCaseKeys.includes(
+                  key
                 )
+            )
+          }
+
+
+          return false
+        }
+      )
+      .sort(
+        (
+          a,
+          b
+        ) =>
+          String(
+            b.updatedAt ||
+            ''
+          )
+            .localeCompare(
+              String(
+                a.updatedAt ||
+                ''
               )
             )
-          ORDER BY updated_at DESC
-          LIMIT 1
-        `,
-        [
-          scope.city,
-          scope.type,
-          scope.subtype,
-          normalizedIdentity,
-          normalizedExternalId,
-          normalizedId,
-          normalizedCaseKeys,
-        ]
       )
 
 
-  return result.rows[0]
-    ? recordFromRow(
-        result.rows[0]
+  return matching[0]
+    ? recordForResponse(
+        matching[0]
       )
     : null
 }
@@ -439,9 +717,6 @@ export async function upsertGeographicPin({
     '',
   record,
 }) {
-  await ensureGeographicPinsTable()
-
-
   const scope =
     normalizedScope({
       city,
@@ -460,7 +735,7 @@ export async function upsertGeographicPin({
     !normalizedIdentity
   ) {
     throw new Error(
-      'Geographic database pin identity is required.'
+      'Geographic pin identity is required.'
     )
   }
 
@@ -468,17 +743,31 @@ export async function upsertGeographicPin({
   if (
     !record ||
     typeof record !==
-      'object'
+      'object' ||
+    Array.isArray(
+      record
+    )
   ) {
     throw new Error(
-      'Geographic database pin record is required.'
+      'Geographic pin record is required.'
     )
   }
+
+
+  const normalizedPreviousIdentity =
+    cleanText(
+      previousIdentity
+    )
 
 
   const active =
     record.active !==
       false
+
+
+  const now =
+    new Date()
+      .toISOString()
 
 
   const payload = {
@@ -501,116 +790,109 @@ export async function upsertGeographicPin({
   }
 
 
-  const client =
-    await getPool()
-      .connect()
+  return queueWrite(
+    async () => {
+      const store =
+        await readStore()
 
 
-  try {
-    await client.query(
-      'BEGIN'
-    )
+      if (
+        normalizedPreviousIdentity &&
+        normalizedPreviousIdentity !==
+          normalizedIdentity
+      ) {
+        store.records =
+          store.records.filter(
+            (
+              entry
+            ) =>
+              !(
+                scopeMatches(
+                  entry,
+                  scope
+                ) &&
+                entry.identity ===
+                  normalizedPreviousIdentity
+              )
+          )
+      }
 
 
-    const normalizedPreviousIdentity =
-      cleanText(
-        previousIdentity
+      const existingIndex =
+        store.records.findIndex(
+          (
+            entry
+          ) =>
+            scopeMatches(
+              entry,
+              scope
+            ) &&
+            entry.identity ===
+              normalizedIdentity
+        )
+
+
+      const existing =
+        existingIndex >=
+          0
+          ? store.records[
+              existingIndex
+            ]
+          : null
+
+
+      const nextEntry = {
+        city:
+          scope.city,
+
+        type:
+          scope.type,
+
+        subtype:
+          scope.subtype,
+
+        identity:
+          normalizedIdentity,
+
+        active,
+
+        payload,
+
+        createdAt:
+          existing?.createdAt ||
+          now,
+
+        updatedAt:
+          now,
+      }
+
+
+      if (
+        existingIndex >=
+          0
+      ) {
+        store.records[
+          existingIndex
+        ] =
+          nextEntry
+      }
+      else {
+        store.records.push(
+          nextEntry
+        )
+      }
+
+
+      await writeStoreAtomic(
+        store
       )
 
 
-    if (
-      normalizedPreviousIdentity &&
-      normalizedPreviousIdentity !==
-        normalizedIdentity
-    ) {
-      await client.query(
-        `
-          DELETE FROM geographic_pins
-          WHERE city = $1
-            AND pin_type = $2
-            AND subtype = $3
-            AND identity = $4
-        `,
-        [
-          scope.city,
-          scope.type,
-          scope.subtype,
-          normalizedPreviousIdentity,
-        ]
+      return recordForResponse(
+        nextEntry
       )
     }
-
-
-    const result =
-      await client.query(
-        `
-          INSERT INTO geographic_pins (
-            city,
-            pin_type,
-            subtype,
-            identity,
-            active,
-            payload,
-            created_at,
-            updated_at
-          )
-          VALUES (
-            $1,
-            $2,
-            $3,
-            $4,
-            $5,
-            $6::jsonb,
-            NOW(),
-            NOW()
-          )
-          ON CONFLICT (city, pin_type, subtype, identity)
-          DO UPDATE SET
-            active = EXCLUDED.active,
-            payload = EXCLUDED.payload,
-            updated_at = NOW()
-          RETURNING
-            identity,
-            active,
-            payload,
-            created_at,
-            updated_at
-        `,
-        [
-          scope.city,
-          scope.type,
-          scope.subtype,
-          normalizedIdentity,
-          active,
-          JSON.stringify(
-            payload
-          ),
-        ]
-      )
-
-
-    await client.query(
-      'COMMIT'
-    )
-
-
-    return recordFromRow(
-      result.rows[0]
-    )
-  }
-  catch (
-    error
-  ) {
-    await client.query(
-      'ROLLBACK'
-    )
-
-
-    throw error
-  }
-  finally {
-    client.release()
-  }
+  )
 }
 
 
@@ -621,9 +903,6 @@ export async function geographicPinsCounts({
   subtype =
     '',
 } = {}) {
-  await ensureGeographicPinsTable()
-
-
   const scope =
     normalizedScope({
       city,
@@ -632,49 +911,52 @@ export async function geographicPinsCounts({
     })
 
 
-  const result =
-    await getPool()
-      .query(
-        `
-          SELECT
-            COUNT(*)::integer AS all_count,
-            COUNT(*) FILTER (WHERE active = TRUE)::integer AS live_count,
-            COUNT(*) FILTER (WHERE active = FALSE)::integer AS archive_count
-          FROM geographic_pins
-          WHERE city = $1
-            AND pin_type = $2
-            AND subtype = $3
-        `,
-        [
-          scope.city,
-          scope.type,
-          scope.subtype,
-        ]
-      )
+  const store =
+    await readStore()
 
 
-  const row =
-    result.rows[0] ||
-    {}
+  const records =
+    store.records.filter(
+      (
+        entry
+      ) =>
+        scopeMatches(
+          entry,
+          scope
+        )
+    )
+
+
+  const live =
+    records.filter(
+      (
+        entry
+      ) =>
+        entry.active !==
+          false
+    )
+      .length
 
 
   return {
     all:
-      Number(
-        row.all_count ||
-        0
-      ),
+      records.length,
 
-    live:
-      Number(
-        row.live_count ||
-        0
-      ),
+    live,
 
     archive:
-      Number(
-        row.archive_count ||
-        0
-      ),
+      records.length -
+      live,
+  }
+}
+
+
+export function getGeographicPinsStoreInfo() {
+  return {
+    dataDir:
+      DATA_DIR,
+
+    storePath:
+      STORE_PATH,
   }
 }
