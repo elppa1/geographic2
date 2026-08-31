@@ -2280,7 +2280,7 @@ function appendEmojiMarkerIcon(
 
   element.style.fontSize =
     compactMobileMarker
-      ? '12px'
+      ? '13px'
       : '24px'
 
   element.style.lineHeight =
