@@ -4611,6 +4611,7 @@ function MapPins({
   selectedLayer,
   selectedPinId,
   activePinFilter,
+  newsRangeFilter,
   newSubtypeFilter,
   newBusinessRangeFilter,
   onDirections,
@@ -5138,6 +5139,28 @@ function MapPins({
               )
           )
           .filter(
+            (pin) => {
+              if (
+                newsRangeFilter !==
+                  '24'
+              ) {
+                return true
+              }
+
+              const ageHours =
+                getNewsAgeHours(
+                  pin
+                )
+
+              return (
+                ageHours !==
+                  null &&
+                ageHours <=
+                  24
+              )
+            }
+          )
+          .filter(
             (pin) =>
               newsRecordCanAppearAtZoom({
                 pin,
@@ -5296,6 +5319,7 @@ function MapPins({
     selectedLayer?.year,
     selectedLayer?.layerType,
     activePinFilter,
+    newsRangeFilter,
     newSubtypeFilter,
     newBusinessRangeFilter,
     contentRevision,

@@ -29,7 +29,7 @@ function GeographicApp() {
   const sponsorName =
     String(
       import.meta.env.VITE_GEOGRAPHIC_SPONSOR_NAME ||
-      'AVAILABLE'
+      'PROGAINS'
     )
       .trim()
 
@@ -37,9 +37,19 @@ function GeographicApp() {
   const sponsorUrl =
     String(
       import.meta.env.VITE_GEOGRAPHIC_SPONSOR_URL ||
-      ''
+      'https://progains.ca/'
     )
       .trim()
+
+
+  const sponsorTagline =
+    sponsorUrl
+      .toLowerCase()
+      .includes(
+        'progains.ca'
+      )
+      ? 'HIGH PROTEIN ICE CREAM TORONTO'
+      : ''
 
 
   const timelineLayers =
@@ -155,6 +165,15 @@ function GeographicApp() {
   ] =
     useState(
       'news'
+    )
+
+
+  const [
+    newsRangeFilter,
+    setNewsRangeFilter,
+  ] =
+    useState(
+      'live'
     )
 
 
@@ -580,6 +599,10 @@ function GeographicApp() {
           setActivePinFilter
         }
 
+        newsRangeFilter={
+          newsRangeFilter
+        }
+
         newSubtypeFilter={
           newSubtypeFilter
         }
@@ -680,7 +703,69 @@ function GeographicApp() {
                     'none',
                 }}
               >
-                {sponsorName.toUpperCase()}
+                <span
+                  style={{
+                    display:
+                      'block',
+                  }}
+                >
+                  {sponsorName.toUpperCase()}
+                </span>
+
+                {sponsorTagline && (
+                  <span
+                    style={{
+                      display:
+                        'block',
+
+                      marginTop:
+                        '2px',
+
+                      fontSize:
+                        '6px',
+
+                      fontWeight:
+                        700,
+
+                      letterSpacing:
+                        '0.06em',
+
+                      lineHeight:
+                        1.25,
+
+                      opacity:
+                        0.68,
+                    }}
+                  >
+                    {sponsorTagline}
+                  </span>
+                )}
+
+                {sponsorTagline && (
+                  <span
+                    style={{
+                      display:
+                        'block',
+
+                      marginTop:
+                        '3px',
+
+                      fontSize:
+                        '6px',
+
+                      fontWeight:
+                        700,
+
+                      letterSpacing:
+                        '0.08em',
+
+                      opacity:
+                        0.72,
+                    }}
+                  >
+                    PROGAINS.CA ↗
+                  </span>
+                )}
               </a>
             )
           : (
@@ -928,6 +1013,115 @@ function GeographicApp() {
               : '▾'}
           </button>
         </div>
+
+
+        {activePinFilter ===
+          'news' && (
+          <div
+            className="brand-range-filters"
+            style={{
+              display:
+                'flex',
+
+              gap:
+                '2px',
+
+              marginLeft:
+                '0',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() =>
+                setNewsRangeFilter(
+                  'live'
+                )
+              }
+              style={{
+                border:
+                  '1px solid rgba(0,0,0,0.14)',
+
+                padding:
+                  '4px 7px',
+
+                background:
+                  newsRangeFilter ===
+                  'live'
+                    ? '#111'
+                    : '#fff',
+
+                color:
+                  newsRangeFilter ===
+                  'live'
+                    ? '#fff'
+                    : '#111',
+
+                font:
+                  'inherit',
+
+                fontSize:
+                  '7px',
+
+                fontWeight:
+                  '700',
+
+                letterSpacing:
+                  '0.08em',
+
+                cursor:
+                  'pointer',
+              }}
+            >
+              LIVE
+            </button>
+
+
+            <button
+              type="button"
+              onClick={() =>
+                setNewsRangeFilter(
+                  '24'
+                )
+              }
+              style={{
+                border:
+                  '1px solid rgba(0,0,0,0.14)',
+
+                padding:
+                  '4px 7px',
+
+                background:
+                  newsRangeFilter ===
+                  '24'
+                    ? '#111'
+                    : '#fff',
+
+                color:
+                  newsRangeFilter ===
+                  '24'
+                    ? '#fff'
+                    : '#111',
+
+                font:
+                  'inherit',
+
+                fontSize:
+                  '7px',
+
+                fontWeight:
+                  '700',
+
+                letterSpacing:
+                  '0.08em',
+
+                cursor:
+                  'pointer',
+              }}
+            >
+              24 HRS
+            </button>
+          </div>
+        )}
 
 
         {activePinFilter ===

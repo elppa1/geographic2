@@ -90,6 +90,9 @@ const GeographicMap =
 
         onChangePinFilter,
 
+        newsRangeFilter =
+          'live',
+
         newSubtypeFilter =
           'all',
 
@@ -1457,6 +1460,10 @@ const GeographicMap =
 
               activePinFilter={
                 activePinFilter
+              }
+
+              newsRangeFilter={
+                newsRangeFilter
               }
 
               newSubtypeFilter={
