@@ -2426,105 +2426,24 @@ function appendEmojiMarkerIcon(
 
 
 // ============================================================
-// ACTIVE / URGENT PIN PULSE
+// ACTIVE / URGENT NEWS PIN PULSE
 // ============================================================
 //
 // NEWS:
-//   - an explicitly LIVE item keeps pulsing while it is live
 //   - an active TTC alert keeps pulsing while it remains active
-//   - Police and Fire pulse for their first 2 hours
+//   - Police and Fire pulse for their first 3 hours
 //
-// NEW:
-//   - preserve the existing first-hour pulse for a newly published place
+// NEW business pins do not pulse.
 //
 // Reduced-motion users get a steady glow instead of animation.
 //
 // ============================================================
 
-const RECENT_NEW_MARKER_WINDOW_MS =
-  60 *
-  60 *
-  1000
-
 const URGENT_NEWS_MARKER_WINDOW_MS =
-  2 *
+  3 *
   60 *
   60 *
   1000
-
-
-function getRecentMarkerTimestamp({
-  pin,
-  pinType,
-}) {
-  const values =
-    pinType ===
-      'news'
-      ? [
-          pin?.publishedAt,
-          pin?.firstSeenAt,
-          pin?.receivedAt,
-          pin?.createdAt,
-        ]
-      : pinType ===
-          'new'
-        ? [
-            pin?.serverPublishedAt,
-            pin?.publishedAt,
-            pin?.createdAt,
-            pin?.updatedAt,
-          ]
-        : []
-
-
-  for (
-    const value of values
-  ) {
-    if (
-      !value
-    ) {
-      continue
-    }
-
-
-    const timestamp =
-      new Date(
-        value
-      )
-        .getTime()
-
-
-    if (
-      Number.isFinite(
-        timestamp
-      )
-    ) {
-      return timestamp
-    }
-  }
-
-
-  return null
-}
-
-
-function newsPinIsExplicitlyLive(
-  pin
-) {
-  const status =
-    normalizeCompareText(
-      pin?.status
-    )
-
-  return (
-    pin?.live ===
-      true ||
-    pin?.isLive ===
-      true ||
-    status ===
-      'live'
-  )
-}
 
 
 function getMarkerPulseState({
@@ -2532,177 +2451,107 @@ function getMarkerPulseState({
   pinType,
 }) {
   if (
-    pinType ===
+    pinType !==
       'news'
   ) {
-    const live =
-      newsPinIsExplicitlyLive(
-        pin
-      )
-
-    const activeTtc =
-      isTtcPin(
-        pin
-      ) &&
-      pin?.active !==
-        false
-
-
-    if (
-      live ||
-      activeTtc
-    ) {
-      return {
-        pulse:
-          true,
-
-        forever:
-          true,
-      }
-    }
-
-
-    const urgentSource =
-      isTorontoPolicePin(
-        pin
-      ) ||
-      isTorontoFirePin(
-        pin
-      )
-
-
-    if (
-      !urgentSource
-    ) {
-      return {
-        pulse:
-          false,
-      }
-    }
-
-
-    const date =
-      getNewsRecordTimestamp(
-        pin
-      )
-
-
-    if (
-      !date
-    ) {
-      return {
-        pulse:
-          false,
-      }
-    }
-
-
-    const ageMs =
-      Date.now() -
-      date.getTime()
-
-
-    if (
-      ageMs <
-        0 ||
-      ageMs >=
-        URGENT_NEWS_MARKER_WINDOW_MS
-    ) {
-      return {
-        pulse:
-          false,
-      }
-    }
-
-
     return {
       pulse:
-        true,
-
-      forever:
         false,
-
-      remainingMs:
-        URGENT_NEWS_MARKER_WINDOW_MS -
-        ageMs,
     }
   }
 
 
+  const activeTtc =
+    isTtcPin(
+      pin
+    ) &&
+    pin?.active !==
+      false
+
+
   if (
-    pinType ===
-      'new'
+    activeTtc
   ) {
-    const timestamp =
-      getRecentMarkerTimestamp({
-        pin,
-        pinType,
-      })
-
-
-    if (
-      !Number.isFinite(
-        timestamp
-      )
-    ) {
-      return {
-        pulse:
-          false,
-      }
-    }
-
-
-    const ageMs =
-      Date.now() -
-      timestamp
-
-
-    if (
-      ageMs <
-        0 ||
-      ageMs >=
-        RECENT_NEW_MARKER_WINDOW_MS
-    ) {
-      return {
-        pulse:
-          false,
-      }
-    }
-
-
     return {
       pulse:
         true,
 
       forever:
-        false,
+        true,
+    }
+  }
 
-      remainingMs:
-        RECENT_NEW_MARKER_WINDOW_MS -
-        ageMs,
+
+  const urgentSource =
+    isTorontoPolicePin(
+      pin
+    ) ||
+    isTorontoFirePin(
+      pin
+    )
+
+
+  if (
+    !urgentSource
+  ) {
+    return {
+      pulse:
+        false,
+    }
+  }
+
+
+  const date =
+    getNewsRecordTimestamp(
+      pin
+    )
+
+
+  if (
+    !date
+  ) {
+    return {
+      pulse:
+        false,
+    }
+  }
+
+
+  const ageMs =
+    Date.now() -
+    date.getTime()
+
+
+  if (
+    ageMs <
+      0 ||
+    ageMs >=
+      URGENT_NEWS_MARKER_WINDOW_MS
+  ) {
+    return {
+      pulse:
+        false,
     }
   }
 
 
   return {
     pulse:
+      true,
+
+    forever:
       false,
+
+    remainingMs:
+      URGENT_NEWS_MARKER_WINDOW_MS -
+      ageMs,
   }
 }
 
 
 function getMarkerPulseColor({
   pin,
-  pinType,
 }) {
-  if (
-    pinType ===
-      'new'
-  ) {
-    return 'rgba(214, 159, 39, 0.90)'
-  }
-
-
   if (
     isTorontoFirePin(
       pin
@@ -2766,7 +2615,6 @@ function applyMarkerActivityPulse({
   const color =
     getMarkerPulseColor({
       pin,
-      pinType,
     })
 
 
