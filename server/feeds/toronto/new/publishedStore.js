@@ -327,6 +327,10 @@ export function createPublishedNewFeed({
     false
 
 
+  let loadPromise =
+    null
+
+
   let writeChain =
     Promise.resolve()
 
@@ -357,65 +361,86 @@ export function createPublishedNewFeed({
     }
 
 
-    loaded =
-      true
+    if (
+      loadPromise
+    ) {
+      await loadPromise
+      return
+    }
+
+
+    loadPromise =
+      (async () => {
+        try {
+          const raw =
+            await readFile(
+              storePath,
+              'utf8'
+            )
+
+
+          const parsed =
+            JSON.parse(
+              raw
+            )
+
+
+          if (
+            parsed &&
+            typeof parsed ===
+              'object'
+          ) {
+            store = {
+              ...store,
+              ...parsed,
+
+              city:
+                'toronto',
+
+              newType:
+                normalizedNewType,
+
+              records:
+                parsed.records &&
+                typeof parsed.records ===
+                  'object' &&
+                !Array.isArray(
+                  parsed.records
+                )
+                  ? parsed.records
+                  : {},
+            }
+          }
+        }
+        catch (
+          error
+        ) {
+          if (
+            error?.code !==
+              'ENOENT'
+          ) {
+            console.warn(
+              `TORONTO NEW ${normalizedNewType.toUpperCase()} · STORE READ FAILED:`,
+              error
+            )
+          }
+        }
+        finally {
+          loaded =
+            true
+        }
+      })()
 
 
     try {
-      const raw =
-        await readFile(
-          storePath,
-          'utf8'
-        )
-
-
-      const parsed =
-        JSON.parse(
-          raw
-        )
-
-
-      if (
-        parsed &&
-        typeof parsed ===
-          'object'
-      ) {
-        store = {
-          ...store,
-          ...parsed,
-
-          city:
-            'toronto',
-
-          newType:
-            normalizedNewType,
-
-          records:
-            parsed.records &&
-            typeof parsed.records ===
-              'object' &&
-            !Array.isArray(
-              parsed.records
-            )
-              ? parsed.records
-              : {},
-        }
-      }
+      await loadPromise
     }
-    catch (
-      error
-    ) {
-      if (
-        error?.code !==
-          'ENOENT'
-      ) {
-        console.warn(
-          `TORONTO NEW ${normalizedNewType.toUpperCase()} · STORE READ FAILED:`,
-          error
-        )
-      }
+    finally {
+      loadPromise =
+        null
     }
   }
+
 
 
   async function persistStore() {
