@@ -105,7 +105,7 @@ const NEW_LIFECYCLE_DAYS = {
       90,
 
     open:
-      60,
+      90,
 
     cancelled:
       14,
@@ -1429,14 +1429,27 @@ function appendNewsImage({
   image.style.width =
     '100%'
 
+  const compactMobileCard =
+    typeof window !==
+      'undefined' &&
+    window.matchMedia(
+      '(max-width: 700px)'
+    )
+      .matches
+
+
   image.style.maxHeight =
-    '220px'
+    compactMobileCard
+      ? '105px'
+      : '220px'
 
   image.style.objectFit =
     'cover'
 
   image.style.margin =
-    '10px 0'
+    compactMobileCard
+      ? '6px 0'
+      : '10px 0'
 
   image.style.borderRadius =
     '4px'
@@ -2870,6 +2883,38 @@ function createMarker({
     })
   }
 
+  const compactMobilePopup =
+    typeof window !==
+      'undefined' &&
+    window.matchMedia(
+      '(max-width: 700px)'
+    )
+      .matches
+
+
+  if (
+    compactMobilePopup
+  ) {
+    popupContent.style.minWidth =
+      '0'
+
+    popupContent.style.width =
+      'min(190px, calc(100vw - 64px))'
+
+    popupContent.style.maxWidth =
+      'calc(100vw - 64px)'
+
+    popupContent.style.maxHeight =
+      '46vh'
+
+    popupContent.style.overflowY =
+      'auto'
+
+    popupContent.style.overscrollBehavior =
+      'contain'
+  }
+
+
   const popup =
     new Popup({
       closeButton:
@@ -2882,7 +2927,9 @@ function createMarker({
         14,
 
       maxWidth:
-        '280px',
+        compactMobilePopup
+          ? '210px'
+          : '280px',
     })
       .setDOMContent(
         popupContent
