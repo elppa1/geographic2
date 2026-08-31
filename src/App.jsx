@@ -203,6 +203,15 @@ function GeographicApp() {
     )
 
 
+  const [
+    aboutOpen,
+    setAboutOpen,
+  ] =
+    useState(
+      false
+    )
+
+
   useEffect(
     () => {
       setEnhanced(
@@ -248,6 +257,116 @@ function GeographicApp() {
         {`
           .mobile-brand-toggle {
             display: none;
+          }
+
+          .about-button {
+            border: 1px solid rgba(0,0,0,0.18);
+            padding: 5px 8px;
+            background: #fff;
+            color: #111;
+            font: inherit;
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            cursor: pointer;
+          }
+
+          .about-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 80;
+            background: rgba(0,0,0,0.28);
+            backdrop-filter: blur(2px);
+          }
+
+          .about-panel {
+            position: fixed;
+            top: 12px;
+            right: 12px;
+            bottom: 12px;
+            z-index: 81;
+            width: min(390px, calc(100vw - 24px));
+            overflow-y: auto;
+            padding: 18px 18px 20px;
+            border: 1px solid rgba(0,0,0,0.18);
+            background: rgba(255,255,255,0.98);
+            color: #111;
+            box-shadow: 0 18px 60px rgba(0,0,0,0.18);
+          }
+
+          .about-panel-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(0,0,0,0.12);
+          }
+
+          .about-panel-kicker {
+            font-size: 7px;
+            font-weight: 700;
+            letter-spacing: 0.16em;
+            opacity: 0.5;
+          }
+
+          .about-panel-title {
+            margin-top: 4px;
+            font-size: 15px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+          }
+
+          .about-close {
+            flex: 0 0 auto;
+            width: 28px;
+            height: 28px;
+            border: 1px solid rgba(0,0,0,0.16);
+            background: #fff;
+            color: #111;
+            font: inherit;
+            font-size: 16px;
+            cursor: pointer;
+          }
+
+          .about-section {
+            padding: 14px 0;
+            border-bottom: 1px solid rgba(0,0,0,0.10);
+          }
+
+          .about-section:last-of-type {
+            border-bottom: 0;
+          }
+
+          .about-section h2 {
+            margin: 0 0 6px;
+            font-size: 8px;
+            letter-spacing: 0.12em;
+          }
+
+          .about-section p {
+            margin: 0;
+            font-size: 10px;
+            line-height: 1.5;
+          }
+
+          .about-section p + p {
+            margin-top: 7px;
+          }
+
+          .about-made-by {
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(0,0,0,0.12);
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: 0.10em;
+          }
+
+          .about-made-by a {
+            color: #111;
+            text-decoration: none;
+            border-bottom: 1px solid rgba(0,0,0,0.35);
           }
 
           @media (max-width: 700px) {
@@ -306,6 +425,33 @@ function GeographicApp() {
               font-size: 6px !important;
               line-height: 1.05 !important;
               letter-spacing: 0.05em !important;
+            }
+
+
+            .about-panel {
+              top: 8px;
+              right: 8px;
+              bottom: 8px;
+              left: 8px;
+              width: auto;
+              padding: 14px 14px 18px;
+            }
+
+            .about-panel-title {
+              font-size: 13px;
+            }
+
+            .about-section {
+              padding: 11px 0;
+            }
+
+            .about-section h2 {
+              font-size: 7px;
+            }
+
+            .about-section p {
+              font-size: 9px;
+              line-height: 1.45;
             }
 
             .mobile-brand-toggle {
@@ -741,6 +887,19 @@ function GeographicApp() {
             >
               NEW
             </button>
+
+
+            <button
+              type="button"
+              className="about-button"
+              onClick={() =>
+                setAboutOpen(
+                  true
+                )
+              }
+            >
+              ABOUT
+            </button>
           </div>
 
 
@@ -927,6 +1086,151 @@ function GeographicApp() {
           </div>
         )}
       </div>
+
+
+      {aboutOpen && (
+        <>
+          <button
+            type="button"
+            className="about-backdrop"
+            aria-label="Close About"
+            onClick={() =>
+              setAboutOpen(
+                false
+              )
+            }
+          />
+
+          <aside
+            className="about-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="About Toronto Geographic"
+          >
+            <div className="about-panel-header">
+              <div>
+                <div className="about-panel-kicker">
+                  TORONTO GEOGRAPHIC
+                </div>
+
+                <div className="about-panel-title">
+                  HOW TO USE THIS MAP
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="about-close"
+                onClick={() =>
+                  setAboutOpen(
+                    false
+                  )
+                }
+                aria-label="Close About"
+              >
+                ×
+              </button>
+            </div>
+
+            <section className="about-section">
+              <h2>
+                ABOUT
+              </h2>
+
+              <p>
+                Toronto Geographic is a living map of Toronto: current news,
+                new places, and historical maps and aerial photography in one
+                place.
+              </p>
+            </section>
+
+            <section className="about-section">
+              <h2>
+                HOW TO USE IT
+              </h2>
+
+              <p>
+                Switch between HISTORIC, NEWS, and NEW at the top. Tap a pin
+                for details. Use search or GPS to find a place, and move
+                through the timeline at the bottom to see Toronto at different
+                points in time.
+              </p>
+            </section>
+
+            <section className="about-section">
+              <h2>
+                MAP RULES
+              </h2>
+
+              <p>
+                Pins mark the best available location. Some are exact
+                addresses, some are intersections, and some are approximate
+                areas.
+              </p>
+
+              <p>
+                Historical maps and aerials are reference material, not exact
+                surveys. Older imagery can be incomplete, misaligned, or
+                approximate.
+              </p>
+            </section>
+
+            <section className="about-section">
+              <h2>
+                NEWS RULES
+              </h2>
+
+              <p>
+                News pins come from public and official sources where
+                available. Fresh and important events are emphasized. Older
+                stories may disappear from the broad city view while still
+                remaining visible when you zoom into the neighbourhood or
+                street.
+              </p>
+
+              <p>
+                Toronto Geographic is informational and is not an emergency
+                alerting service.
+              </p>
+            </section>
+
+            <section className="about-section">
+              <h2>
+                NEW PLACES
+              </h2>
+
+              <p>
+                New businesses are shown when we discover or verify them.
+                “First seen” is not the same as an opening date unless the
+                opening date has been confirmed.
+              </p>
+            </section>
+
+            <section className="about-section">
+              <h2>
+                SOURCES + CORRECTIONS
+              </h2>
+
+              <p>
+                Where a source or story link exists, we link back to it. If
+                something looks wrong, outdated, or misplaced, let us know so
+                the map can be corrected.
+              </p>
+            </section>
+
+            <div className="about-made-by">
+              MADE BY{' '}
+              <a
+                href="https://elppa.engineering"
+                target="_blank"
+                rel="noreferrer"
+              >
+                ELPPA.ENGINEERING ↗
+              </a>
+            </div>
+          </aside>
+        </>
+      )}
 
 
       <div className="timeline-shell">
