@@ -2663,58 +2663,67 @@ function normalizeFireRow(
   }
 
 
-  const descriptionParts =
-    []
+  const dispatchTimeMatch =
+    dispatchTime.match(
+      /(?:T|\s)(\d{1,2}):(\d{2})(?::\d{2})?/
+    )
+
+
+  let dispatchTimeLabel =
+    ''
 
 
   if (
-    dispatchTime
+    dispatchTimeMatch
   ) {
-    descriptionParts.push(
-      'Dispatch ' +
-      dispatchTime
-    )
+    const hour24 =
+      Number(
+        dispatchTimeMatch[1]
+      )
+
+
+    if (
+      Number.isFinite(
+        hour24
+      ) &&
+      hour24 >=
+        0 &&
+      hour24 <=
+        23
+    ) {
+      const hour12 =
+        hour24 %
+          12 ||
+        12
+
+
+      const suffix =
+        hour24 >=
+          12
+          ? 'p.m.'
+          : 'a.m.'
+
+
+      dispatchTimeLabel =
+        (
+          hour12 +
+          ':' +
+          dispatchTimeMatch[2] +
+          ' ' +
+          suffix
+        )
+    }
   }
 
 
-  if (
-    alarmLevel
-  ) {
-    descriptionParts.push(
-      'Alarm ' +
-      alarmLevel
-    )
-  }
-
-
-  if (
-    area
-  ) {
-    descriptionParts.push(
-      'Area ' +
-      area
-    )
-  }
-
-
-  if (
-    dispatchedUnits
-  ) {
-    descriptionParts.push(
-      'Units ' +
-      dispatchedUnits
-    )
-  }
-
-
-  if (
-    incidentNumber
-  ) {
-    descriptionParts.push(
-      'Incident ' +
-      incidentNumber
-    )
-  }
+  const publicDescription =
+    dispatchTimeLabel
+      ? (
+          'Toronto Fire crews were dispatched to this call at ' +
+          dispatchTimeLabel +
+          '.'
+        )
+      : 'Toronto Fire crews were dispatched to this call.'
 
 
   const publishedAt =
@@ -2768,9 +2777,7 @@ function normalizeFireRow(
       ),
 
     description:
-      descriptionParts.join(
-        ' · '
-      ),
+      publicDescription,
 
     location,
 
