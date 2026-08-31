@@ -1605,19 +1605,16 @@ function getNewsroomApproveLabel(
     )
 
 
+  // Official-source UPDATE / RESOLVE cards are audit notices.
+  // The server has already applied the factual change to the public
+  // NEWS record, so Admin only acknowledges that the editor saw it.
   if (
     action ===
-      'resolve'
-  ) {
-    return 'APPROVE CLOSE'
-  }
-
-
-  if (
+      'resolve' ||
     action ===
       'update'
   ) {
-    return 'APPROVE UPDATE'
+    return 'ACKNOWLEDGE'
   }
 
 
@@ -6977,24 +6974,6 @@ function AdminRoom() {
         tab ===
           'news' &&
         sourceReview &&
-        isTpsNewsroomRecord(
-          sourceReview
-        )
-      ) {
-        await approveTpsNewsroomRecord(
-          sourceReview,
-          record
-        )
-
-
-        return
-      }
-
-
-      if (
-        tab ===
-          'news' &&
-        sourceReview &&
         (
           getNewsroomAction(
             sourceReview
@@ -7007,6 +6986,23 @@ function AdminRoom() {
         )
       ) {
         await approveLiveNewsroomRecord(
+          sourceReview
+        )
+
+
+        return
+      }
+
+
+      if (
+        tab ===
+          'news' &&
+        sourceReview &&
+        isTpsNewsroomRecord(
+          sourceReview
+        )
+      ) {
+        await approveTpsNewsroomRecord(
           sourceReview,
           record
         )
@@ -8442,22 +8438,24 @@ function AdminRoom() {
 
 
   // ==========================================================
-  // LIVE NEWSROOM APPROVAL
+  // AUTOMATIC OFFICIAL UPDATE / RESOLVE ACKNOWLEDGEMENT
   // ==========================================================
   //
-  // Handles official-feed UPDATE / RESOLVE cards.
+  // UPDATE / RESOLVE cards are audit notices, not publication gates.
   //
-  // NEW items still use the ordinary approval path below.
+  // The server applies an official factual update immediately to the
+  // canonical public NEWS record, then leaves the corresponding card in
+  // NEWSROOM so the editor can see exactly what changed.
   //
-  // Nothing reaches the public map until this function is called
-  // from an Admin Room approval action.
+  // Acknowledging the card only clears the audit notice. It must never
+  // re-apply, reject, geocode, archive, or otherwise mutate the public pin.
+  //
+  // NEW items still require normal editorial approval.
   //
   // ==========================================================
 
   async function approveLiveNewsroomRecord(
-    reviewRecord,
-    editedRecord =
-      null
+    reviewRecord
   ) {
     const latestReviewItems =
       getNewsReviewItems()
@@ -8495,483 +8493,13 @@ function AdminRoom() {
     }
 
 
-    const targetExternalId =
-      String(
-        latestReviewRecord.targetExternalId ||
-        latestReviewRecord.externalId ||
-        ''
-      )
-        .trim()
-
-
-    if (
-      !targetExternalId
-    ) {
-      window.alert(
-        'This newsroom item has no external ID, so the existing pin cannot be matched safely.'
-      )
-
-
-      return true
-    }
-
-
-    const latestPublishedItems =
-      getNewsItems()
-        .map(
-          normalizePinRecord
-        )
-
-
-    const existingPublished =
-      latestPublishedItems.find(
-        (
-          item
-        ) =>
-          String(
-            item?.externalId ||
-            ''
-          ) ===
-          targetExternalId
-      ) ||
-      null
-
-
-    // --------------------------------------------------------
-    // RESOLVE
-    // --------------------------------------------------------
-
-    if (
-      action ===
-        'resolve'
-    ) {
-      if (
-        existingPublished
-      ) {
-        const archivedRecord =
-          await archiveNewsRecordOnServer(
-            existingPublished,
-            'official-source-resolution'
-          )
-
-
-        if (
-          !archivedRecord
-        ) {
-          return true
-        }
-
-
-        const latestCityRecords =
-          latestPublishedItems.filter(
-            (
-              item
-            ) =>
-              belongsToCity(
-                item,
-                cityKey
-              )
-          )
-
-
-        persistRecords(
-          latestCityRecords.map(
-            (
-              item
-            ) =>
-              String(
-                item?.externalId ||
-                ''
-              ) ===
-                targetExternalId
-                ? archivedRecord
-                : item
-          )
-        )
-      }
-
-
-      const nextCityReview =
-        latestReviewItems
-          .filter(
-            (
-              item
-            ) =>
-              belongsToCity(
-                item,
-                cityKey
-              )
-          )
-          .filter(
-            (
-              item
-            ) =>
-              item.id !==
-              latestReviewRecord.id
-          )
-
-
-      persistReview(
-        nextCityReview
-      )
-
-
-      await acknowledgePersistentNewsroom({
-        record:
-          latestReviewRecord,
-
-        outcome:
-          'resolve-approved',
-      })
-
-
-      if (
-        editingReviewId ===
-        latestReviewRecord.id
-      ) {
-        resetDraft()
-      }
-
-
-      return true
-    }
-
-
-    // --------------------------------------------------------
-    // UPDATE
-    // --------------------------------------------------------
-
-    if (
-      !existingPublished
-    ) {
-      window.alert(
-        'The published pin for this update could not be found. Leave this item in NEWSROOM and review it manually.'
-      )
-
-
-      return true
-    }
-
-
-    let candidate =
-      normalizePinRecord({
-        ...(
-          latestReviewRecord.incomingRecord ||
-          latestReviewRecord
-        ),
-
-        ...(editedRecord ||
-          {}),
-
-        externalId:
-          targetExternalId,
-
-        city:
-          existingPublished.city ||
-          cityKey,
-
-        type:
-          'news',
-
-        active:
-          true,
-      })
-
-
-    const existingLocation =
-      String(
-        existingPublished.intersection ||
-        existingPublished.location ||
-        ''
-      )
-        .trim()
-        .toLowerCase()
-
-
-    const nextLocation =
-      String(
-        candidate.intersection ||
-        candidate.location ||
-        ''
-      )
-        .trim()
-        .toLowerCase()
-
-
-    // Same place + official update omitted coordinates:
-    // keep the exact already-approved pin position.
-    if (
-      existingLocation &&
-      nextLocation &&
-      existingLocation ===
-        nextLocation &&
-      hasRecordCoordinates(
-        existingPublished
-      ) &&
-      !hasRecordCoordinates(
-        candidate
-      )
-    ) {
-      candidate = {
-        ...candidate,
-
-        longitude:
-          existingPublished.longitude,
-
-        latitude:
-          existingPublished.latitude,
-
-        searchedLongitude:
-          existingPublished.searchedLongitude ??
-          existingPublished.longitude,
-
-        searchedLatitude:
-          existingPublished.searchedLatitude ??
-          existingPublished.latitude,
-
-        pinPositionMode:
-          existingPublished.pinPositionMode ||
-          'auto',
-      }
-    }
-
-
-    // Changed location: place the update before publishing it.
-    if (
-      !hasRecordCoordinates(
-        candidate
-      )
-    ) {
-      const searchValue =
-        candidate.intersection ||
-        candidate.location ||
-        ''
-
-
-      if (
-        searchValue
-      ) {
-        try {
-          const locationResults =
-            await searchLocation({
-              value:
-                searchValue,
-
-              city:
-                CITIES[
-                  candidate.city ||
-                  cityKey
-                ] ||
-                city,
-            })
-
-
-          const firstResult =
-            locationResults?.[
-              0
-            ]
-
-
-          if (
-            firstResult &&
-            Number.isFinite(
-              Number(
-                firstResult.longitude
-              )
-            ) &&
-            Number.isFinite(
-              Number(
-                firstResult.latitude
-              )
-            )
-          ) {
-            candidate = {
-              ...candidate,
-
-              location:
-                firstResult.location ||
-                candidate.location,
-
-              intersection:
-                firstResult.intersection ||
-                candidate.intersection ||
-                firstResult.name,
-
-              longitude:
-                Number(
-                  firstResult.longitude
-                ),
-
-              latitude:
-                Number(
-                  firstResult.latitude
-                ),
-
-              searchedLongitude:
-                Number(
-                  firstResult.longitude
-                ),
-
-              searchedLatitude:
-                Number(
-                  firstResult.latitude
-                ),
-
-              pinPositionMode:
-                'auto',
-            }
-          }
-        }
-        catch (
-          error
-        ) {
-          console.warn(
-            'NEWSROOM UPDATE LOCATION SEARCH FAILED:',
-            error
-          )
-        }
-      }
-    }
-
-
-    if (
-      !hasRecordCoordinates(
-        candidate
-      )
-    ) {
-      window.alert(
-        'Could not place this updated item on the map. Click EDIT and choose its location before approving the update.'
-      )
-
-
-      return true
-    }
-
-
-    const approvedAt =
-      new Date()
-        .toISOString()
-
-
-    candidate = {
-      ...candidate,
-
-      firstSeenAt:
-        existingPublished.firstSeenAt ||
-        candidate.firstSeenAt ||
-        approvedAt,
-
-      lastSeenAt:
-        candidate.lastSeenAt ||
-        approvedAt,
-
-      lastCheckedAt:
-        candidate.lastCheckedAt ||
-        approvedAt,
-
-      sourceUpdatedAt:
-        candidate.sourceUpdatedAt ||
-        approvedAt,
-
-      sourceSnapshot:
-        buildNewsroomSourceSnapshot(
-          candidate
-        ),
-
-      sourceFingerprint:
-        getNewsroomSourceFingerprint(
-          candidate
-        ),
-    }
-
-
-    applyNewsItemUpdate({
-      externalId:
-        targetExternalId,
-
-      record: {
-        ...latestReviewRecord,
-
-        incomingRecord:
-          candidate,
-      },
+    // Pull the canonical server state first so the Admin published desk
+    // and browser cache immediately reflect the update / resolution that
+    // was already applied by the official-source pipeline.
+    await refreshPublishedNewsFromServer({
+      allowBootstrap:
+        false,
     })
-
-
-    const updatedPublishedItems =
-      getNewsItems()
-        .map(
-          normalizePinRecord
-        )
-
-
-    const updatedPublished =
-      updatedPublishedItems.find(
-        (
-          item
-        ) =>
-          String(
-            item?.externalId ||
-            ''
-          ) ===
-          targetExternalId
-      ) ||
-      null
-
-
-    if (
-      !updatedPublished
-    ) {
-      window.alert(
-        'The updated pin could not be reloaded after approval. The NEWSROOM item was left in place.'
-      )
-
-
-      return true
-    }
-
-
-    const serverUpdatedRecord =
-      await publishNewsRecordOnServer(
-        updatedPublished
-      )
-
-
-    if (
-      !serverUpdatedRecord
-    ) {
-      return true
-    }
-
-
-    const updatedCityRecords =
-      updatedPublishedItems
-        .filter(
-          (
-            item
-          ) =>
-            belongsToCity(
-              item,
-              cityKey
-            )
-        )
-        .map(
-          (
-            item
-          ) =>
-            String(
-              item?.externalId ||
-              ''
-            ) ===
-              targetExternalId
-              ? serverUpdatedRecord
-              : item
-        )
-
-
-    persistRecords(
-      updatedCityRecords
-    )
 
 
     const nextCityReview =
@@ -8999,12 +8527,30 @@ function AdminRoom() {
     )
 
 
+    if (
+      isTpsNewsroomRecord(
+        latestReviewRecord
+      )
+    ) {
+      markTpsVersionProcessed(
+        latestReviewRecord,
+        action ===
+          'resolve'
+          ? 'resolve-acknowledged'
+          : 'update-acknowledged'
+      )
+    }
+
+
     await acknowledgePersistentNewsroom({
       record:
         latestReviewRecord,
 
       outcome:
-        'update-approved',
+        action ===
+          'resolve'
+          ? 'resolve-acknowledged'
+          : 'update-acknowledged',
     })
 
 
@@ -9030,22 +8576,6 @@ function AdminRoom() {
     if (
       tab ===
         'news' &&
-      isTpsNewsroomRecord(
-        reviewRecord
-      )
-    ) {
-      await approveTpsNewsroomRecord(
-        reviewRecord
-      )
-
-
-      return
-    }
-
-
-    if (
-      tab ===
-        'news' &&
       (
         getNewsroomAction(
           reviewRecord
@@ -9058,6 +8588,22 @@ function AdminRoom() {
       )
     ) {
       await approveLiveNewsroomRecord(
+        reviewRecord
+      )
+
+
+      return
+    }
+
+
+    if (
+      tab ===
+        'news' &&
+      isTpsNewsroomRecord(
+        reviewRecord
+      )
+    ) {
+      await approveTpsNewsroomRecord(
         reviewRecord
       )
 
@@ -9704,7 +9250,7 @@ function AdminRoom() {
         action ===
           'update'
       ) {
-        return 'REVIEW + UPDATE NEWS'
+        return 'OFFICIAL UPDATE · ALREADY APPLIED'
       }
 
 
@@ -9712,7 +9258,7 @@ function AdminRoom() {
         action ===
           'resolve'
       ) {
-        return 'REVIEW + CLOSE NEWS'
+        return 'OFFICIAL RESOLUTION · ALREADY APPLIED'
       }
 
 
@@ -9765,7 +9311,7 @@ function AdminRoom() {
         action ===
           'update'
       ) {
-        return 'APPROVE UPDATE'
+        return 'ACKNOWLEDGE'
       }
 
 
@@ -9773,7 +9319,7 @@ function AdminRoom() {
         action ===
           'resolve'
       ) {
-        return 'APPROVE CLOSE'
+        return 'ACKNOWLEDGE'
       }
 
 
@@ -12185,6 +11731,25 @@ function AdminRoom() {
                             )}
 
 
+                            {tab ===
+                              'news' &&
+                              (
+                                newsroomAction ===
+                                  'update' ||
+                                newsroomAction ===
+                                  'resolve'
+                              ) && (
+                              <div className="admin-record-meta">
+                                AUTOMATIC · {
+                                  newsroomAction ===
+                                    'resolve'
+                                    ? 'PUBLIC PIN ALREADY CLOSED'
+                                    : 'PUBLIC PIN ALREADY UPDATED'
+                                }
+                              </div>
+                            )}
+
+
                             {(displayRecord.source ||
                               record.source) && (
                               <div className="admin-record-meta">
@@ -12243,31 +11808,37 @@ function AdminRoom() {
                               {!(
                                 tab ===
                                   'news' &&
-                                newsroomAction ===
-                                  'resolve'
+                                (
+                                  newsroomAction ===
+                                    'update' ||
+                                  newsroomAction ===
+                                    'resolve'
+                                )
                               ) && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    editReview(
-                                      record
-                                    )
-                                  }
-                                >
-                                  EDIT
-                                </button>
-                              )}
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      editReview(
+                                        record
+                                      )
+                                    }
+                                  >
+                                    EDIT
+                                  </button>
 
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  rejectReview(
-                                    record
-                                  )
-                                }
-                              >
-                                REJECT
-                              </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      rejectReview(
+                                        record
+                                      )
+                                    }
+                                  >
+                                    REJECT
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </article>
                         )

@@ -142,6 +142,23 @@ const MEANINGFUL_FIELDS = [
 ]
 
 
+// Toronto Fire's live CAD constantly changes operational metadata such as
+// alarm level, area and dispatched units. Those are useful source fields,
+// but they are not editorial changes to the public story.
+//
+// A Fire UPDATE should only exist when something a reader would actually
+// see has changed: incident type/title, description, location or source.
+const FIRE_PUBLIC_MEANINGFUL_FIELDS = [
+  'category',
+  'title',
+  'description',
+  'location',
+  'intersection',
+  'sourceUrl',
+  'imageUrl',
+]
+
+
 let storeLoaded =
   false
 
@@ -795,6 +812,64 @@ function normalizeComparable(
 }
 
 
+function isFireSourceRecord(
+  record
+) {
+  const sourceKey =
+    cleanText(
+      record?.sourceKey
+    )
+      .toLowerCase()
+
+
+  const sourceText =
+    [
+      record?.source,
+      record?.scraperSource,
+      record?.newsroomSource,
+      record?.origin,
+    ]
+      .map(
+        cleanText
+      )
+      .join(
+        ' '
+      )
+      .toLowerCase()
+
+
+  return (
+    sourceKey ===
+      'fire' ||
+    cleanText(
+      record?.category
+    )
+      .toLowerCase() ===
+      'fire' ||
+    sourceText.includes(
+      'toronto fire'
+    ) ||
+    sourceText.includes(
+      'fire services'
+    ) ||
+    sourceText.includes(
+      'toronto-fire-active-incidents'
+    )
+  )
+}
+
+
+function meaningfulFieldsForRecord(
+  record
+) {
+  return isFireSourceRecord(
+    record
+  )
+    ? FIRE_PUBLIC_MEANINGFUL_FIELDS
+    : MEANINGFUL_FIELDS
+}
+
+
 function sourceSnapshot(
   record
 ) {
@@ -802,7 +877,9 @@ function sourceSnapshot(
     {}
 
 
-  MEANINGFUL_FIELDS
+  meaningfulFieldsForRecord(
+    record
+  )
     .forEach(
       (
         field
@@ -839,6 +916,19 @@ function changedFields(
   previous,
   incoming
 ) {
+  const fields =
+    Array.from(
+      new Set([
+        ...meaningfulFieldsForRecord(
+          previous
+        ),
+        ...meaningfulFieldsForRecord(
+          incoming
+        ),
+      ])
+    )
+
+
   const before =
     sourceSnapshot(
       previous
@@ -851,7 +941,7 @@ function changedFields(
     )
 
 
-  return MEANINGFUL_FIELDS
+  return fields
     .filter(
       (
         field
@@ -985,6 +1075,8 @@ async function addEvent({
     [],
   resolutionReason =
     '',
+  autoApplied =
+    false,
 }) {
   await ensureLoaded()
 
@@ -1076,6 +1168,19 @@ async function addEvent({
       changes,
 
     resolutionReason,
+
+    // Official-source UPDATE / RESOLVE actions can be applied to the
+    // public map immediately while this newsroom card remains pending
+    // as an editorial/audit item under UPDATES or RESOLVE.
+    autoApplied:
+      Boolean(
+        autoApplied
+      ),
+
+    autoAppliedAt:
+      autoApplied
+        ? now
+        : '',
 
     sourceSnapshot:
       sourceSnapshot(
@@ -1178,6 +1283,26 @@ async function observeRecord({
     null
 
 
+  // The canonical published NEWS store is the final authority on
+  // whether an incident has already been approved. This also repairs
+  // older source-state rows whose `published` flag predates the
+  // server-owned publishedNews dataset.
+  const existingPublishedRecord =
+    findPublishedNewsRecord(
+      record
+    )
+
+
+  const wasPublished =
+    existing?.published ===
+      true ||
+    (
+      existingPublishedRecord &&
+      existingPublishedRecord.active !==
+        false
+    )
+
+
   const currentFingerprint =
     fingerprint(
       record
@@ -1185,8 +1310,11 @@ async function observeRecord({
 
 
   const previousFingerprint =
-    existing?.sourceFingerprint ||
-    ''
+    existing
+      ? fingerprint(
+          existing
+        )
+      : ''
 
 
   let action =
@@ -1200,15 +1328,16 @@ async function observeRecord({
       !existing
     ) {
       action =
-        'new'
+        wasPublished
+          ? 'update'
+          : 'new'
     }
     else if (
       previousFingerprint !==
         currentFingerprint
     ) {
       action =
-        existing.published ===
-          true
+        wasPublished
           ? 'update'
           : 'new'
     }
@@ -1221,6 +1350,7 @@ async function observeRecord({
 
   const firstSeenAt =
     existing?.firstSeenAt ||
+    existingPublishedRecord?.firstSeenAt ||
     record.firstSeenAt ||
     record.publishedAt ||
     now
@@ -1278,7 +1408,7 @@ async function observeRecord({
   }
 
 
-  const observed = {
+  let observed = {
     ...existing,
     ...stableRecord,
 
@@ -1314,8 +1444,7 @@ async function observeRecord({
       0,
 
     published:
-      existing?.published ===
-        true,
+      wasPublished,
 
     resolved:
       action ===
@@ -1332,6 +1461,146 @@ async function observeRecord({
       existing?.expiresAt ||
       record.expiresAt ||
       '',
+  }
+
+
+  let autoApplied =
+    false
+
+
+  if (
+    action ===
+      'update' &&
+    existingPublishedRecord &&
+    existingPublishedRecord.active !==
+      false
+  ) {
+    const mergedPublished =
+      mergeOfficialSourceUpdate({
+        existing:
+          existingPublishedRecord,
+
+        incoming:
+          observed,
+      })
+
+
+    await upsertPublishedNewsRecord({
+      record:
+        mergedPublished,
+    })
+
+
+    observed = {
+      ...observed,
+
+      published:
+        true,
+
+      resolved:
+        false,
+
+      automaticOfficialUpdate:
+        true,
+
+      automaticOfficialUpdateAt:
+        now,
+    }
+
+
+    autoApplied =
+      true
+  }
+
+
+  // TPS LOCATED releases are authoritative resolutions. Remove the
+  // public pin immediately, but leave the RESOLVE newsroom card pending
+  // so the action is still visible/auditable in Admin.
+  if (
+    action ===
+      'resolve' &&
+    sourceKey ===
+      'police' &&
+    existingPublishedRecord &&
+    existingPublishedRecord.active !==
+      false
+  ) {
+    await archivePublishedNewsRecord({
+      id:
+        existingPublishedRecord.id ||
+        '',
+
+      externalId:
+        existingPublishedRecord.externalId ||
+        externalId,
+
+      record: {
+        ...existingPublishedRecord,
+        ...observed,
+
+        longitude:
+          existingPublishedRecord.longitude,
+
+        latitude:
+          existingPublishedRecord.latitude,
+
+        searchedLongitude:
+          existingPublishedRecord.searchedLongitude,
+
+        searchedLatitude:
+          existingPublishedRecord.searchedLatitude,
+
+        pinPositionMode:
+          existingPublishedRecord.pinPositionMode,
+
+        active:
+          false,
+
+        resolved:
+          true,
+
+        resolvedAt:
+          observed.resolvedAt ||
+          now,
+
+        resolutionReason:
+          'official-tps-resolution',
+      },
+
+      reason:
+        'official-tps-resolution',
+    })
+
+
+    observed = {
+      ...observed,
+
+      active:
+        false,
+
+      published:
+        false,
+
+      resolved:
+        true,
+
+      resolvedAt:
+        observed.resolvedAt ||
+        now,
+
+      resolutionReason:
+        'official-tps-resolution',
+
+      automaticOfficialResolution:
+        true,
+
+      automaticOfficialResolutionAt:
+        now,
+    }
+
+
+    autoApplied =
+      true
   }
 
 
@@ -1377,9 +1646,12 @@ async function observeRecord({
         observed,
       changes:
         changedFields(
-          existing,
+          existing ||
+          existingPublishedRecord ||
+          {},
           record
         ),
+      autoApplied,
     })
   }
   else if (
@@ -1393,18 +1665,22 @@ async function observeRecord({
       record:
         observed,
       previousRecord:
-        existing,
+        existing ||
+        existingPublishedRecord,
       incomingRecord:
         observed,
       changes:
         changedFields(
           existing ||
+          existingPublishedRecord ||
           {},
           record
         ),
       resolutionReason:
+        observed.resolutionReason ||
         record.resolutionReason ||
         'official-source-resolution',
+      autoApplied,
     })
   }
   else {
@@ -1414,11 +1690,11 @@ async function observeRecord({
 
   return {
     action,
+    autoApplied,
     record:
       observed,
   }
 }
-
 
 // ============================================================
 // PUBLIC TPS HOOK
@@ -1431,6 +1707,9 @@ export async function queueLiveNewsroomRecord({
   action =
     '',
 }) {
+  await ensureLoaded()
+
+
   const rawAction =
     cleanText(
       action ||
@@ -1449,6 +1728,10 @@ export async function queueLiveNewsroomRecord({
       : ''
 
 
+  // When an older approved TPS case exists in the canonical public
+  // store but its source-state row does not yet say published:true,
+  // observeRecord() now detects that canonical record and treats the
+  // new official release as an UPDATE rather than a duplicate NEW item.
   return observeRecord({
     sourceKey,
     record,
@@ -1456,7 +1739,6 @@ export async function queueLiveNewsroomRecord({
       requestedAction,
   })
 }
-
 
 // ============================================================
 // TTC NORMALIZATION
@@ -2270,141 +2552,6 @@ function parseFireRows(
 }
 
 
-function torontoLocalFireTimeToIso({
-  year,
-  month,
-  day,
-  hour,
-  minute,
-  second,
-}) {
-  const desiredLocalAsUtc =
-    Date.UTC(
-      year,
-      month - 1,
-      day,
-      hour,
-      minute,
-      second
-    )
-
-
-  let instant =
-    desiredLocalAsUtc
-
-
-  const formatter =
-    new Intl.DateTimeFormat(
-      'en-CA',
-      {
-        timeZone:
-          'America/Toronto',
-
-        year:
-          'numeric',
-
-        month:
-          '2-digit',
-
-        day:
-          '2-digit',
-
-        hour:
-          '2-digit',
-
-        minute:
-          '2-digit',
-
-        second:
-          '2-digit',
-
-        hourCycle:
-          'h23',
-      }
-    )
-
-
-  // The Fire CAD feed publishes a local Toronto wall-clock time without
-  // an offset. Resolve that wall-clock time to the real UTC instant so
-  // Railway's server timezone cannot shift it by four/five hours.
-  for (
-    let attempt =
-      0;
-    attempt <
-      3;
-    attempt++
-  ) {
-    const parts =
-      Object.fromEntries(
-        formatter
-          .formatToParts(
-            new Date(
-              instant
-            )
-          )
-          .filter(
-            (part) =>
-              part.type !==
-              'literal'
-          )
-          .map(
-            (part) => [
-              part.type,
-              part.value,
-            ]
-          )
-      )
-
-
-    const representedLocalAsUtc =
-      Date.UTC(
-        Number(
-          parts.year
-        ),
-        Number(
-          parts.month
-        ) -
-          1,
-        Number(
-          parts.day
-        ),
-        Number(
-          parts.hour
-        ),
-        Number(
-          parts.minute
-        ),
-        Number(
-          parts.second
-        )
-      )
-
-
-    const adjustment =
-      desiredLocalAsUtc -
-      representedLocalAsUtc
-
-
-    instant +=
-      adjustment
-
-
-    if (
-      adjustment ===
-        0
-    ) {
-      break
-    }
-  }
-
-
-  return new Date(
-    instant
-  )
-    .toISOString()
-}
-
-
 function parseTorontoFireTime(
   value
 ) {
@@ -2422,78 +2569,7 @@ function parseTorontoFireTime(
   }
 
 
-  // If the source ever begins supplying an explicit timezone, honour it.
-  if (
-    /(?:Z|[+-]\d{2}:?\d{2})$/i.test(
-      clean
-    )
-  ) {
-    const direct =
-      new Date(
-        clean
-      )
-
-
-    if (
-      !Number.isNaN(
-        direct.getTime()
-      )
-    ) {
-      return direct
-        .toISOString()
-    }
-  }
-
-
-  // Toronto Fire LiveCAD uses a Toronto-local timestamp such as:
-  //   YYYY-MM-DD HH:mm:ss
-  // It contains no timezone offset, so never let the Railway host timezone
-  // decide what that value means.
-  const match =
-    clean.match(
-      /(\d{4})-(\d{2})-(\d{2})(?:T|\s)+(\d{1,2}):(\d{2})(?::(\d{2}))?/
-    )
-
-
-  if (
-    match
-  ) {
-    return torontoLocalFireTimeToIso({
-      year:
-        Number(
-          match[1]
-        ),
-
-      month:
-        Number(
-          match[2]
-        ),
-
-      day:
-        Number(
-          match[3]
-        ),
-
-      hour:
-        Number(
-          match[4]
-        ),
-
-      minute:
-        Number(
-          match[5]
-        ),
-
-      second:
-        Number(
-          match[6] ||
-          0
-        ),
-    })
-  }
-
-
-  const fallback =
+  const direct =
     new Date(
       clean
     )
@@ -2501,57 +2577,50 @@ function parseTorontoFireTime(
 
   if (
     !Number.isNaN(
-      fallback.getTime()
+      direct.getTime()
     )
   ) {
-    return fallback
+    return direct
       .toISOString()
+  }
+
+
+  // Common Toronto Fire display: YYYY-MM-DD HH:mm:ss
+  const match =
+    clean.match(
+      /(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/
+    )
+
+
+  if (
+    match
+  ) {
+    const isoLike =
+      (
+        `${match[1]}-${match[2]}-${match[3]}T` +
+        `${match[4].padStart(2, '0')}:${match[5]}:${match[6] || '00'}`
+      )
+
+
+    const parsed =
+      new Date(
+        isoLike
+      )
+
+
+    if (
+      !Number.isNaN(
+        parsed.getTime()
+      )
+    ) {
+      return parsed
+        .toISOString()
+    }
   }
 
 
   return new Date()
     .toISOString()
-}
-
-
-function formatTorontoFireDispatchTime(
-  value
-) {
-  const date =
-    new Date(
-      value
-    )
-
-
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
-    return ''
-  }
-
-
-  return new Intl.DateTimeFormat(
-    'en-CA',
-    {
-      timeZone:
-        'America/Toronto',
-
-      hour:
-        'numeric',
-
-      minute:
-        '2-digit',
-
-      hour12:
-        true,
-    }
-  )
-    .format(
-      date
-    )
-    .toLowerCase()
 }
 
 
@@ -2562,15 +2631,7 @@ function normalizeFireLocationPiece(
     value
   )
     .replace(
-      /\s*,\s*(?:NY|EY|SC|ET|YK|TO|TT)\b.*$/gi,
-      ''
-    )
-    .replace(
-      /\s+(?:NY|EY|SC|ET|YK|TO)_[^,/&]+(?:\s*,.*)?$/gi,
-      ''
-    )
-    .replace(
-      /\s*,\s*$/g,
+      /\s*,\s*(?:NY|EY|SC|ET|YK|TO|TT)\b/gi,
       ''
     )
     .replace(
@@ -2610,7 +2671,7 @@ function fireLocationPieceIsCadNoise(
   }
 
 
-  // CAD routing notes are not public street names.
+  // CAD routing notes are not public cross streets.
   if (
     /^(?:LN\s+[NSEW]\b|[NSEW]\s+OF\b|NB\b|SB\b|EB\b|WB\b)/i.test(
       piece
@@ -2666,7 +2727,6 @@ function getFireCrossStreetCandidates(
       index
   )
 }
-
 
 function fireIncidentShouldBeReviewed({
   incidentType,
@@ -2887,20 +2947,8 @@ function normalizeFireRow(
     )
 
 
-  const dispatchTimeLabel =
-    formatTorontoFireDispatchTime(
-      publishedAt
-    )
-
-
   const publicDescription =
-    dispatchTimeLabel
-      ? (
-          'Toronto Fire crews were dispatched to this call at ' +
-          dispatchTimeLabel +
-          '.'
-        )
-      : 'Toronto Fire crews were dispatched to this call.'
+    'Toronto Fire crews were dispatched to this call.'
 
 
   return {
@@ -3159,10 +3207,102 @@ async function resolveMissing({
     }
 
 
+    let finalResolvedRecord =
+      resolvedRecord
+
+
+    let autoApplied =
+      false
+
+
+    // TTC is feed-controlled. After two successful polls without the
+    // alert, the official source has resolved it. Remove the public pin
+    // immediately, but keep a RESOLVE card in Admin as the audit trail.
+    if (
+      sourceKey ===
+        'ttc'
+    ) {
+      const publishedRecord =
+        findPublishedNewsRecord(
+          resolvedRecord
+        )
+
+
+      if (
+        publishedRecord &&
+        publishedRecord.active !==
+          false
+      ) {
+        await archivePublishedNewsRecord({
+          id:
+            publishedRecord.id ||
+            '',
+
+          externalId:
+            publishedRecord.externalId ||
+            externalId,
+
+          record: {
+            ...publishedRecord,
+            ...resolvedRecord,
+
+            longitude:
+              publishedRecord.longitude,
+
+            latitude:
+              publishedRecord.latitude,
+
+            searchedLongitude:
+              publishedRecord.searchedLongitude,
+
+            searchedLatitude:
+              publishedRecord.searchedLatitude,
+
+            pinPositionMode:
+              publishedRecord.pinPositionMode,
+
+            active:
+              false,
+
+            resolved:
+              true,
+
+            resolutionReason:
+              'missing-from-live-feed',
+          },
+
+          reason:
+            'missing-from-live-feed',
+        })
+
+
+        finalResolvedRecord = {
+          ...resolvedRecord,
+
+          active:
+            false,
+
+          published:
+            false,
+
+          automaticOfficialResolution:
+            true,
+
+          automaticOfficialResolutionAt:
+            resolvedRecord.resolvedAt,
+        }
+
+
+        autoApplied =
+          true
+      }
+    }
+
+
     sourceState[
       externalId
     ] =
-      resolvedRecord
+      finalResolvedRecord
 
 
     await addEvent({
@@ -3170,13 +3310,14 @@ async function resolveMissing({
       action:
         'resolve',
       record:
-        resolvedRecord,
+        finalResolvedRecord,
       previousRecord:
         existing,
       incomingRecord:
-        resolvedRecord,
+        finalResolvedRecord,
       resolutionReason:
         'missing-from-live-feed',
+      autoApplied,
     })
   }
 
@@ -3647,6 +3788,247 @@ export async function syncTorontoLiveNewsroom() {
 // timestamps, and editorial metadata, remains in /data.
 //
 // ============================================================
+
+function policeCaseKeys(
+  record
+) {
+  return [
+    record?.caseNumber,
+    record?.policeCaseNumber,
+    record?.incidentNumber,
+    record?.goNumber,
+  ]
+    .map(
+      cleanText
+    )
+    .filter(
+      Boolean
+    )
+}
+
+
+function findPublishedNewsRecord(
+  record
+) {
+  const externalId =
+    cleanText(
+      record?.externalId
+    )
+
+
+  const records =
+    Object.values(
+      store.publishedNews ||
+      {}
+    )
+
+
+  if (
+    externalId
+  ) {
+    const exact =
+      records.find(
+        (item) =>
+          cleanText(
+            item?.externalId
+          ) ===
+            externalId
+      )
+
+
+    if (
+      exact
+    ) {
+      return exact
+    }
+  }
+
+
+  // TPS releases use Case # / GO number as the stable incident key.
+  // This fallback keeps updates attached to older approved records
+  // even if those records predate the current externalId format.
+  const incomingCaseKeys =
+    new Set(
+      policeCaseKeys(
+        record
+      )
+    )
+
+
+  if (
+    incomingCaseKeys.size ===
+      0
+  ) {
+    return null
+  }
+
+
+  return records.find(
+    (item) =>
+      policeCaseKeys(
+        item
+      )
+        .some(
+          (key) =>
+            incomingCaseKeys.has(
+              key
+            )
+        )
+  ) ||
+    null
+}
+
+
+function hasPublishedValue(
+  value
+) {
+  if (
+    value ===
+      null ||
+    value ===
+      undefined
+  ) {
+    return false
+  }
+
+
+  if (
+    typeof value ===
+      'string'
+  ) {
+    return Boolean(
+      value.trim()
+    )
+  }
+
+
+  return true
+}
+
+
+function mergeOfficialSourceUpdate({
+  existing,
+  incoming,
+}) {
+  const now =
+    new Date()
+      .toISOString()
+
+
+  const merged = {
+    ...existing,
+    ...incoming,
+
+    id:
+      existing?.id ||
+      incoming?.id,
+
+    externalId:
+      existing?.externalId ||
+      incoming?.externalId,
+
+    active:
+      true,
+
+    firstPublishedAt:
+      existing?.firstPublishedAt ||
+      existing?.publishedAt ||
+      incoming?.firstPublishedAt ||
+      incoming?.publishedAt ||
+      now,
+
+    approvedAt:
+      existing?.approvedAt ||
+      incoming?.approvedAt ||
+      now,
+
+    serverPublishedAt:
+      existing?.serverPublishedAt ||
+      incoming?.serverPublishedAt ||
+      now,
+
+    createdAt:
+      existing?.createdAt ||
+      incoming?.createdAt ||
+      now,
+
+    updatedAt:
+      now,
+
+    automaticOfficialUpdate:
+      true,
+
+    automaticOfficialUpdateAt:
+      now,
+  }
+
+
+  // A source update changes the story, not the editor-approved map
+  // placement. Keep the existing coordinates and positioning mode.
+  ;[
+    'longitude',
+    'latitude',
+    'searchedLongitude',
+    'searchedLatitude',
+    'pinPositionMode',
+    'manualLongitude',
+    'manualLatitude',
+  ]
+    .forEach(
+      (field) => {
+        if (
+          hasPublishedValue(
+            existing?.[
+              field
+            ]
+          )
+        ) {
+          merged[
+            field
+          ] =
+            existing[
+              field
+            ]
+        }
+      }
+    )
+
+
+  // Keep existing media unless the official update actually supplies
+  // a replacement value.
+  ;[
+    'imageUrl',
+    'photoUrl',
+    'thumbnailUrl',
+  ]
+    .forEach(
+      (field) => {
+        if (
+          !hasPublishedValue(
+            incoming?.[
+              field
+            ]
+          ) &&
+          hasPublishedValue(
+            existing?.[
+              field
+            ]
+          )
+        ) {
+          merged[
+            field
+          ] =
+            existing[
+              field
+            ]
+        }
+      }
+    )
+
+
+  return merged
+}
+
 
 function publishedNewsIdentity(
   record

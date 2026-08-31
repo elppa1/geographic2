@@ -2066,6 +2066,7 @@ function mergeNewsRecords(
 //   regular stories are strongest while fresh
 //   routine stories are very fresh only
 //   hard cap prevents the whole-city view becoming confetti
+//   active TTC service alerts are exempt and always remain visible
 //
 // NEIGHBOURHOOD:
 //   naturally expired local stories can reappear up to 14 days
@@ -2403,6 +2404,20 @@ function newsPinIsVisibleAtZoom({
     return true
   }
 
+
+  // Active TTC service alerts are live utility information, not
+  // ordinary editorial density. They stay visible at every NEWS zoom.
+  if (
+    isTtcPin(
+      pin
+    ) &&
+    pin?.active !==
+      false
+  ) {
+    return true
+  }
+
+
   const priority =
     getNewsPriority(
       pin
@@ -2535,11 +2550,48 @@ function limitCityNewsPins({
         }
       )
 
-  const limited =
-    sorted.slice(
-      0,
-      NEWS_CITY_MAX_PINS
+  // Active TTC alerts are exempt from the citywide story cap. A user
+  // should never have to zoom in just to discover a current service alert.
+  const activeTtcPins =
+    sorted.filter(
+      (pin) =>
+        isTtcPin(
+          pin
+        ) &&
+        pin?.active !==
+          false
     )
+
+
+  const nonTtcPins =
+    sorted.filter(
+      (pin) =>
+        !(
+          isTtcPin(
+            pin
+          ) &&
+          pin?.active !==
+            false
+        )
+    )
+
+
+  const remainingSlots =
+    Math.max(
+      0,
+      NEWS_CITY_MAX_PINS -
+      activeTtcPins.length
+    )
+
+
+  const limited = [
+    ...activeTtcPins,
+    ...nonTtcPins.slice(
+      0,
+      remainingSlots
+    ),
+  ]
+
 
   if (
     selectedPinId
