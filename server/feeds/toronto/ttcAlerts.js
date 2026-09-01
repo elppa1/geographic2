@@ -69,166 +69,6 @@ function numberOrNull(
 }
 
 
-function parseTorontoLocalDate(
-  value
-) {
-  const clean =
-    cleanText(
-      value
-    )
-
-
-  const match =
-    clean.match(
-      /^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/
-    )
-
-
-  if (
-    !match
-  ) {
-    return null
-  }
-
-
-  const targetWallClockMs =
-    Date.UTC(
-      Number(
-        match[1]
-      ),
-      Number(
-        match[2]
-      ) - 1,
-      Number(
-        match[3]
-      ),
-      Number(
-        match[4]
-      ),
-      Number(
-        match[5]
-      ),
-      Number(
-        match[6] ||
-        0
-      )
-    )
-
-
-  const formatter =
-    new Intl.DateTimeFormat(
-      'en-CA',
-      {
-        timeZone:
-          'America/Toronto',
-
-        year:
-          'numeric',
-
-        month:
-          '2-digit',
-
-        day:
-          '2-digit',
-
-        hour:
-          '2-digit',
-
-        minute:
-          '2-digit',
-
-        second:
-          '2-digit',
-
-        hourCycle:
-          'h23',
-      }
-    )
-
-
-  let candidateMs =
-    targetWallClockMs
-
-
-  for (
-    let attempt =
-      0;
-    attempt <
-      3;
-    attempt++
-  ) {
-    const parts =
-      {}
-
-
-    formatter
-      .formatToParts(
-        new Date(
-          candidateMs
-        )
-      )
-      .forEach(
-        (
-          part
-        ) => {
-          if (
-            part.type !==
-              'literal'
-          ) {
-            parts[
-              part.type
-            ] =
-              Number(
-                part.value
-              )
-          }
-        }
-      )
-
-
-    const observedWallClockMs =
-      Date.UTC(
-        parts.year,
-        parts.month - 1,
-        parts.day,
-        parts.hour,
-        parts.minute,
-        parts.second
-      )
-
-
-    const correctionMs =
-      targetWallClockMs -
-      observedWallClockMs
-
-
-    candidateMs +=
-      correctionMs
-
-
-    if (
-      correctionMs ===
-        0
-    ) {
-      break
-    }
-  }
-
-
-  const parsed =
-    new Date(
-      candidateMs
-    )
-
-
-  return Number.isNaN(
-    parsed.getTime()
-  )
-    ? null
-    : parsed
-}
-
-
 function dateToUnixSeconds(
   value
 ) {
@@ -248,24 +88,13 @@ function dateToUnixSeconds(
   }
 
 
-  const hasExplicitTimezone =
-    /(?:Z|[+-]\d{2}:?\d{2})$/i.test(
+  const parsed =
+    new Date(
       clean
     )
 
 
-  const parsed =
-    hasExplicitTimezone
-      ? new Date(
-          clean
-        )
-      : parseTorontoLocalDate(
-          clean
-        )
-
-
   if (
-    !parsed ||
     Number.isNaN(
       parsed.getTime()
     )
