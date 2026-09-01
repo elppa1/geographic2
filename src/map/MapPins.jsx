@@ -2501,7 +2501,8 @@ function appendEmojiMarkerIcon(
 //
 // NEWS:
 //   - an active TTC alert keeps pulsing while it remains active
-//   - Police and Fire pulse for their first 3 hours
+//   - Police pulse for their first 3 hours
+//   - Fire pulses for its first 8 hours
 //
 // NEW business pins do not pulse.
 //
@@ -2509,8 +2510,15 @@ function appendEmojiMarkerIcon(
 //
 // ============================================================
 
-const URGENT_NEWS_MARKER_WINDOW_MS =
+const POLICE_NEWS_MARKER_WINDOW_MS =
   3 *
+  60 *
+  60 *
+  1000
+
+
+const FIRE_NEWS_MARKER_WINDOW_MS =
+  8 *
   60 *
   60 *
   1000
@@ -2587,6 +2595,14 @@ function getMarkerPulseState({
   }
 
 
+  const markerWindowMs =
+    isTorontoFirePin(
+      pin
+    )
+      ? FIRE_NEWS_MARKER_WINDOW_MS
+      : POLICE_NEWS_MARKER_WINDOW_MS
+
+
   const ageMs =
     Date.now() -
     date.getTime()
@@ -2596,7 +2612,7 @@ function getMarkerPulseState({
     ageMs <
       0 ||
     ageMs >=
-      URGENT_NEWS_MARKER_WINDOW_MS
+      markerWindowMs
   ) {
     return {
       pulse:
@@ -2613,7 +2629,7 @@ function getMarkerPulseState({
       false,
 
     remainingMs:
-      URGENT_NEWS_MARKER_WINDOW_MS -
+      markerWindowMs -
       ageMs,
   }
 }
