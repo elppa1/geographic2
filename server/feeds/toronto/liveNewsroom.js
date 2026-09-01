@@ -614,6 +614,10 @@ async function ensureLoaded() {
   }
 
 
+  storeLoaded =
+    true
+
+
   try {
     const raw =
       await readFile(
@@ -683,10 +687,6 @@ async function ensureLoaded() {
       )
     }
   }
-
-
-  storeLoaded =
-    true
 }
 
 
@@ -1011,188 +1011,6 @@ async function addEvent({
     fingerprint(
       incoming
     )
-
-
-  if (
-    sourceKey ===
-      'fire' &&
-    (
-      action ===
-        'new' ||
-      action ===
-        'update'
-    )
-  ) {
-    const pendingMatches =
-      store.events.filter(
-        (
-          event
-        ) =>
-          event.status ===
-            'pending' &&
-          event.sourceKey ===
-            'fire' &&
-          event.newsroomAction ===
-            action &&
-          event.externalId ===
-            externalId
-      )
-
-
-    if (
-      pendingMatches.length >
-        0
-    ) {
-      const primary =
-        pendingMatches[0]
-
-
-      if (
-        primary.sourceFingerprint ===
-          version &&
-        pendingMatches.length ===
-          1
-      ) {
-        return primary
-      }
-
-
-      const now =
-        new Date()
-          .toISOString()
-
-
-      const refreshed = {
-        ...primary,
-        ...record,
-
-        id:
-          primary.id,
-
-        serverQueueId:
-          primary.serverQueueId ||
-          primary.id,
-
-        sourceKey:
-          'fire',
-
-        newsroomAction:
-          action,
-
-        reviewStatus:
-          'pending',
-
-        active:
-          false,
-
-        status:
-          'pending',
-
-        previousRecord:
-          primary.previousRecord ||
-          previousRecord,
-
-        incomingRecord:
-          incoming,
-
-        changedFields:
-          changes,
-
-        resolutionReason,
-
-        sourceSnapshot:
-          sourceSnapshot(
-            incoming
-          ),
-
-        sourceFingerprint:
-          version,
-
-        receivedAt:
-          primary.receivedAt ||
-          record.receivedAt ||
-          now,
-
-        queuedAt:
-          primary.queuedAt ||
-          now,
-
-        refreshedAt:
-          now,
-      }
-
-
-      const duplicateIds =
-        new Set(
-          pendingMatches
-            .slice(
-              1
-            )
-            .map(
-              (
-                event
-              ) =>
-                event.serverQueueId ||
-                event.id
-            )
-        )
-
-
-      store.events =
-        store.events.map(
-          (
-            event
-          ) => {
-            const queueId =
-              event.serverQueueId ||
-              event.id
-
-
-            if (
-              queueId ===
-                (
-                  primary.serverQueueId ||
-                  primary.id
-                )
-            ) {
-              return refreshed
-            }
-
-
-            if (
-              duplicateIds.has(
-                queueId
-              )
-            ) {
-              return {
-                ...event,
-
-                status:
-                  'acked',
-
-                reviewStatus:
-                  'acked',
-
-                outcome:
-                  'superseded-by-newer-fire-state',
-
-                ackedAt:
-                  now,
-              }
-            }
-
-
-            return event
-          }
-        )
-
-
-      await persistStore()
-
-
-      return refreshed
-    }
-  }
 
 
   const duplicate =
@@ -2557,24 +2375,12 @@ function fireIncidentShouldBeReviewed({
       .toLowerCase()
 
 
-  const alarmText =
-    cleanText(
-      alarmLevel
-    )
-
-
-  const alarmMatch =
-    alarmText.match(
-      /\d+(?:\.\d+)?/
-    )
-
-
   const alarm =
-    alarmMatch
-      ? Number(
-          alarmMatch[0]
-        )
-      : Number.NaN
+    Number(
+      cleanText(
+        alarmLevel
+      )
+    )
 
 
   if (
@@ -2698,6 +2504,24 @@ function normalizeFireRow(
     )
 
 
+  if (
+    !fireIncidentShouldBeReviewed({
+      incidentType,
+      alarmLevel,
+    })
+  ) {
+    return null
+  }
+
+
+  if (
+    !primeStreet &&
+    !crossStreet
+  ) {
+    return null
+  }
+
+
   let location =
     ''
 
@@ -2805,16 +2629,6 @@ function normalizeFireRow(
     )
 
 
-  const fireReviewEligible =
-    Boolean(
-      location
-    ) &&
-    fireIncidentShouldBeReviewed({
-      incidentType,
-      alarmLevel,
-    })
-
-
   return {
     externalId:
       'toronto-fire-' +
@@ -2905,335 +2719,6 @@ function normalizeFireRow(
     dispatchedUnits,
 
     incidentNumber,
-
-    incidentType,
-
-    fireReviewEligible,
-  }
-}
-
-
-
-function collapsePendingFireEvents() {
-  const seen =
-    new Set()
-
-
-  let collapsed =
-    0
-
-
-  const now =
-    new Date()
-      .toISOString()
-
-
-  store.events =
-    store.events.map(
-      (
-        event
-      ) => {
-        if (
-          event.status !==
-            'pending' ||
-          event.sourceKey !==
-            'fire' ||
-          (
-            event.newsroomAction !==
-              'new' &&
-            event.newsroomAction !==
-              'update'
-          )
-        ) {
-          return event
-        }
-
-
-        const key =
-          [
-            event.newsroomAction,
-            event.externalId,
-          ]
-            .join(
-              ':'
-            )
-
-
-        if (
-          !seen.has(
-            key
-          )
-        ) {
-          seen.add(
-            key
-          )
-
-          return event
-        }
-
-
-        collapsed++
-
-
-        return {
-          ...event,
-
-          status:
-            'acked',
-
-          reviewStatus:
-            'acked',
-
-          outcome:
-            'superseded-by-newer-fire-state',
-
-          ackedAt:
-            now,
-        }
-      }
-    )
-
-
-  return collapsed
-}
-
-
-async function observeFireRecord(
-  record
-) {
-  await ensureLoaded()
-
-
-  const externalId =
-    cleanText(
-      record?.externalId
-    )
-
-
-  if (
-    !externalId
-  ) {
-    return {
-      action:
-        'skip',
-    }
-  }
-
-
-  const now =
-    new Date()
-      .toISOString()
-
-
-  const sourceState =
-    store.sources.fire ||
-    {}
-
-
-  const existing =
-    sourceState[
-      externalId
-    ] ||
-    null
-
-
-  const currentFingerprint =
-    fingerprint(
-      record
-    )
-
-
-  const previousFingerprint =
-    existing?.sourceFingerprint ||
-    ''
-
-
-  const reviewEligible =
-    record?.fireReviewEligible ===
-      true
-
-
-  const existingReviewEligible =
-    existing
-      ? (
-          typeof existing.fireReviewEligible ===
-            'boolean'
-            ? existing.fireReviewEligible ===
-                true
-            : true
-        )
-      : false
-
-
-  let action =
-    'seen'
-
-
-  if (
-    reviewEligible
-  ) {
-    if (
-      !existing ||
-      !existingReviewEligible
-    ) {
-      action =
-        'new'
-    }
-    else if (
-      previousFingerprint !==
-        currentFingerprint
-    ) {
-      action =
-        existing.published ===
-          true
-          ? 'update'
-          : 'new'
-    }
-  }
-
-
-  const systemFirstSeenAt =
-    existing?.systemFirstSeenAt ||
-    existing?.firstSeenAt ||
-    now
-
-
-  const firstSeenAt =
-    existing?.firstSeenAt ||
-    record.firstSeenAt ||
-    record.publishedAt ||
-    systemFirstSeenAt
-
-
-  const becameNewsworthyAt =
-    existing?.becameNewsworthyAt ||
-    (
-      reviewEligible
-        ? now
-        : ''
-    )
-
-
-  const observed = {
-    ...existing,
-    ...record,
-
-    externalId,
-
-    firstSeenAt,
-
-    systemFirstSeenAt,
-
-    becameNewsworthyAt,
-
-    lastSeenAt:
-      now,
-
-    lastCheckedAt:
-      now,
-
-    sourceUpdatedAt:
-      previousFingerprint !==
-        currentFingerprint
-        ? now
-        : (
-            existing?.sourceUpdatedAt ||
-            firstSeenAt
-          ),
-
-    sourceSnapshot:
-      sourceSnapshot(
-        record
-      ),
-
-    sourceFingerprint:
-      currentFingerprint,
-
-    missingPolls:
-      0,
-
-    published:
-      existing?.published ===
-        true,
-
-    resolved:
-      false,
-
-    expiresAt:
-      getNewsExpiresAt({
-        ...existing,
-        ...record,
-        firstSeenAt,
-      }) ||
-      existing?.expiresAt ||
-      record.expiresAt ||
-      '',
-  }
-
-
-  sourceState[
-    externalId
-  ] =
-    observed
-
-
-  store.sources.fire =
-    sourceState
-
-
-  if (
-    action ===
-      'new'
-  ) {
-    await addEvent({
-      sourceKey:
-        'fire',
-
-      action:
-        'new',
-
-      record:
-        observed,
-
-      incomingRecord:
-        observed,
-    })
-  }
-  else if (
-    action ===
-      'update'
-  ) {
-    await addEvent({
-      sourceKey:
-        'fire',
-
-      action:
-        'update',
-
-      record:
-        observed,
-
-      previousRecord:
-        existing,
-
-      incomingRecord:
-        observed,
-
-      changes:
-        changedFields(
-          existing ||
-          {},
-          record
-        ),
-    })
-  }
-
-
-  return {
-    action,
-
-    record:
-      observed,
   }
 }
 
@@ -3602,31 +3087,16 @@ async function fetchFireSnapshot() {
     await response.text()
 
 
-  const rows =
+  const records =
     parseFireRows(
       xml
     )
-
-
-  const records =
-    rows
       .map(
         normalizeFireRow
       )
       .filter(
         Boolean
       )
-
-
-  const reviewableEvents =
-    records.filter(
-      (
-        record
-      ) =>
-        record.fireReviewEligible ===
-          true
-    )
-      .length
 
 
   console.log(
@@ -3641,13 +3111,8 @@ async function fetchFireSnapshot() {
           'utf8'
         ),
 
-      rawEvents:
-        rows.length,
-
-      retainedEvents:
+      events:
         records.length,
-
-      reviewableEvents,
     }
   )
 
@@ -3678,12 +3143,6 @@ async function syncFire() {
     seen:
       0,
 
-    hidden:
-      0,
-
-    deduped:
-      0,
-
     resolve:
       0,
   }
@@ -3699,17 +3158,12 @@ async function syncFire() {
 
 
     const result =
-      await observeFireRecord(
-        record
-      )
+      await observeRecord({
+        sourceKey:
+          'fire',
 
-
-    if (
-      record.fireReviewEligible !==
-        true
-    ) {
-      counts.hidden++
-    }
+        record,
+      })
 
 
     if (
@@ -3723,10 +3177,6 @@ async function syncFire() {
       ]++
     }
   }
-
-
-  counts.deduped =
-    collapsePendingFireEvents()
 
 
   const beforeResolveEvents =
