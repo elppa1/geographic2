@@ -2375,24 +2375,12 @@ function fireIncidentShouldBeReviewed({
       .toLowerCase()
 
 
-  const alarmText =
-    cleanText(
-      alarmLevel
-    )
-
-
-  const alarmMatch =
-    alarmText.match(
-      /\d+(?:\.\d+)?/
-    )
-
-
   const alarm =
-    alarmMatch
-      ? Number(
-          alarmMatch[0]
-        )
-      : Number.NaN
+    Number(
+      cleanText(
+        alarmLevel
+      )
+    )
 
 
   if (
@@ -2516,6 +2504,24 @@ function normalizeFireRow(
     )
 
 
+  if (
+    !fireIncidentShouldBeReviewed({
+      incidentType,
+      alarmLevel,
+    })
+  ) {
+    return null
+  }
+
+
+  if (
+    !primeStreet &&
+    !crossStreet
+  ) {
+    return null
+  }
+
+
   let location =
     ''
 
@@ -2623,16 +2629,6 @@ function normalizeFireRow(
     )
 
 
-  const fireReviewEligible =
-    Boolean(
-      location
-    ) &&
-    fireIncidentShouldBeReviewed({
-      incidentType,
-      alarmLevel,
-    })
-
-
   return {
     externalId:
       'toronto-fire-' +
@@ -2723,10 +2719,6 @@ function normalizeFireRow(
     dispatchedUnits,
 
     incidentNumber,
-
-    incidentType,
-
-    fireReviewEligible,
   }
 }
 
@@ -3061,23 +3053,9 @@ async function syncTtc() {
 
 
 async function fetchFireSnapshot() {
-  const requestUrl =
-    new URL(
-      FIRE_UPSTREAM
-    )
-
-
-  requestUrl.searchParams.set(
-    '_elppa',
-    String(
-      Date.now()
-    )
-  )
-
-
   const response =
     await fetch(
-      requestUrl,
+      FIRE_UPSTREAM,
       {
         headers: {
           Accept:
@@ -3085,12 +3063,6 @@ async function fetchFireSnapshot() {
 
           'User-Agent':
             'ELPPA-Geographic/1.0',
-
-          'Cache-Control':
-            'no-cache',
-
-          Pragma:
-            'no-cache',
         },
 
         cache:
@@ -3115,13 +3087,6 @@ async function fetchFireSnapshot() {
     await response.text()
 
 
-  const upstreamUpdatedAt =
-    fireXmlTag(
-      xml,
-      'update_from_db_time'
-    )
-
-
   const rows =
     parseFireRows(
       xml
@@ -3138,15 +3103,66 @@ async function fetchFireSnapshot() {
       )
 
 
-  const reviewableEvents =
-    records.filter(
-      (
-        record
-      ) =>
-        record.fireReviewEligible ===
-          true
+  const upstreamUpdatedAt =
+    fireXmlTag(
+      xml,
+      'update_from_db_time'
     )
-      .length
+
+
+  const alarmIncidents =
+    rows
+      .filter(
+        (
+          cells
+        ) => {
+          const alarm =
+            Number(
+              cleanText(
+                cells?.[5]
+              )
+            )
+
+
+          return (
+            Number.isFinite(
+              alarm
+            ) &&
+            alarm >=
+              1
+          )
+        }
+      )
+      .map(
+        (
+          cells
+        ) => ({
+          incidentNumber:
+            cleanText(
+              cells?.[3]
+            ),
+
+          incidentType:
+            cleanText(
+              cells?.[4]
+            ),
+
+          alarmLevel:
+            cleanText(
+              cells?.[5]
+            ),
+
+          dispatchTime:
+            cleanText(
+              cells?.[2]
+            ),
+
+          primeStreet:
+            cleanText(
+              cells?.[0]
+            ),
+        })
+      )
 
 
   console.log(
@@ -3161,15 +3177,62 @@ async function fetchFireSnapshot() {
           'utf8'
         ),
 
+      xmlHash:
+        smallHash(
+          xml
+        ),
+
       upstreamUpdatedAt,
+
+      responseDate:
+        response.headers.get(
+          'date'
+        ) ||
+        '',
+
+      responseAge:
+        response.headers.get(
+          'age'
+        ) ||
+        '',
+
+      cacheControl:
+        response.headers.get(
+          'cache-control'
+        ) ||
+        '',
+
+      etag:
+        response.headers.get(
+          'etag'
+        ) ||
+        '',
+
+      lastModified:
+        response.headers.get(
+          'last-modified'
+        ) ||
+        '',
+
+      cfCacheStatus:
+        response.headers.get(
+          'cf-cache-status'
+        ) ||
+        '',
+
+      xCache:
+        response.headers.get(
+          'x-cache'
+        ) ||
+        '',
 
       rawEvents:
         rows.length,
 
-      retainedEvents:
+      reviewableEvents:
         records.length,
 
-      reviewableEvents,
+      alarmIncidents,
     }
   )
 
@@ -3214,59 +3277,12 @@ async function syncFire() {
     )
 
 
-    const now =
-      new Date()
-        .toISOString()
-
-
-    const existing =
-      store.sources.fire?.[
-        record.externalId
-      ] ||
-      null
-
-
-    const systemFirstSeenAt =
-      existing?.systemFirstSeenAt ||
-      existing?.firstSeenAt ||
-      now
-
-
-    const becameNewsworthyAt =
-      existing?.becameNewsworthyAt ||
-      (
-        record.fireReviewEligible ===
-          true
-          ? now
-          : ''
-      )
-
-
-    const observedRecord = {
-      ...record,
-
-      firstSeenAt:
-        systemFirstSeenAt,
-
-      systemFirstSeenAt,
-
-      becameNewsworthyAt,
-    }
-
-
     const result =
       await observeRecord({
         sourceKey:
           'fire',
 
-        record:
-          observedRecord,
-
-        forceAction:
-          record.fireReviewEligible ===
-            true
-            ? ''
-            : 'seen',
+        record,
       })
 
 
