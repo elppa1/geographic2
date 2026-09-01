@@ -1943,6 +1943,506 @@ function getNewsroomSourceIcon(
 }
 
 
+// ============================================================
+// TORONTO FIRE CAD DISPLAY TRANSLATION
+// ============================================================
+//
+// Keep the stored Toronto Fire record untouched. Admin Room only
+// translates the raw CAD summary into plain language for display.
+//
+// ============================================================
+
+const TORONTO_FIRE_ALARM_LABELS = {
+  0:
+    'Initial response',
+
+  1:
+    'Support fire response',
+
+  2:
+    '10–14 emergency vehicles',
+
+  3:
+    '15–18 emergency vehicles',
+
+  4:
+    '19–22 emergency vehicles',
+
+  5:
+    '23–28 emergency vehicles',
+
+  6:
+    '29–32 emergency vehicles',
+}
+
+
+const TORONTO_FIRE_UNIT_LABELS = [
+  [
+    'CMD',
+    'Command Vehicle',
+  ],
+
+  [
+    'TRS',
+    'Trench Rescue Support',
+  ],
+
+  [
+    'Box',
+    'Canteen Vehicle',
+  ],
+
+  [
+    'Sup',
+    'Canteen Vehicle',
+  ],
+
+  [
+    'HR',
+    'Highrise',
+  ],
+
+  [
+    'HZ',
+    'HazMat',
+  ],
+
+  [
+    'FB',
+    'Fireboat',
+  ],
+
+  [
+    'LA',
+    'Air Light',
+  ],
+
+  [
+    'WT',
+    'Water Tanker',
+  ],
+
+  [
+    'HS',
+    'Haz Support',
+  ],
+
+  [
+    'DE',
+    'Decon',
+  ],
+
+  [
+    'MP',
+    'Mini Pumper',
+  ],
+
+  [
+    'FI',
+    'Fire Investigator',
+  ],
+
+  [
+    'PL',
+    'Platform',
+  ],
+
+  [
+    'P',
+    'Pumper',
+  ],
+
+  [
+    'R',
+    'Rescue',
+  ],
+
+  [
+    'A',
+    'Aerial',
+  ],
+
+  [
+    'T',
+    'Tower',
+  ],
+
+  [
+    'S',
+    'Squad',
+  ],
+
+  [
+    'C',
+    'Chief',
+  ],
+]
+
+
+function formatTorontoFireDispatchClock(
+  value
+) {
+  const text =
+    String(
+      value ||
+      ''
+    )
+      .trim()
+
+
+  if (
+    !text
+  ) {
+    return ''
+  }
+
+
+  // Toronto Fire's CAD timestamp is a Toronto wall-clock value with
+  // no timezone suffix. Read those clock components directly so the
+  // browser does not shift the time by the UTC offset.
+  const localCadMatch =
+    text.match(
+      /^\d{4}-\d{2}-\d{2}T(\d{2}):(\d{2})(?::\d{2})?$/
+    )
+
+
+  if (
+    localCadMatch
+  ) {
+    const hour24 =
+      Number(
+        localCadMatch[1]
+      )
+
+
+    const minute =
+      localCadMatch[2]
+
+
+    const period =
+      hour24 >=
+        12
+        ? 'PM'
+        : 'AM'
+
+
+    const hour12 =
+      hour24 %
+        12 ||
+      12
+
+
+    return (
+      `${hour12}:${minute} ${period}`
+    )
+  }
+
+
+  const date =
+    new Date(
+      text
+    )
+
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return text
+  }
+
+
+  return date.toLocaleTimeString(
+    'en-CA',
+    {
+      timeZone:
+        'America/Toronto',
+
+      hour:
+        'numeric',
+
+      minute:
+        '2-digit',
+
+      hour12:
+        true,
+    }
+  )
+    .toUpperCase()
+}
+
+
+function translateTorontoFireUnit(
+  value
+) {
+  const code =
+    String(
+      value ||
+      ''
+    )
+      .trim()
+
+
+  if (
+    !code
+  ) {
+    return ''
+  }
+
+
+  const unitMatch =
+    TORONTO_FIRE_UNIT_LABELS.find(
+      ([
+        prefix,
+      ]) =>
+        code
+          .toLowerCase()
+          .startsWith(
+            prefix.toLowerCase()
+          )
+    )
+
+
+  if (
+    !unitMatch
+  ) {
+    return code
+  }
+
+
+  const [
+    prefix,
+    label,
+  ] =
+    unitMatch
+
+
+  const unitNumber =
+    code
+      .slice(
+        prefix.length
+      )
+      .trim()
+
+
+  return (
+    unitNumber
+      ? (
+          `${label} ${unitNumber}` +
+          ` (${code})`
+        )
+      : (
+          `${label} (${code})`
+        )
+  )
+}
+
+
+function getAdminDisplayDescription(
+  record
+) {
+  const description =
+    String(
+      record?.description ||
+      ''
+    )
+      .trim()
+
+
+  if (
+    !description ||
+    getNewsroomSourceKey(
+      record
+    ) !==
+      'fire'
+  ) {
+    return description
+  }
+
+
+  const parts =
+    description
+      .split(
+        /\s*·\s*/
+      )
+      .map(
+        (part) =>
+          part.trim()
+      )
+      .filter(
+        Boolean
+      )
+
+
+  if (
+    parts.length ===
+      0
+  ) {
+    return description
+  }
+
+
+  let translatedAny =
+    false
+
+
+  const translated =
+    parts.map(
+      (part) => {
+        const dispatchMatch =
+          part.match(
+            /^Dispatch\s+(.+)$/i
+          )
+
+
+        if (
+          dispatchMatch
+        ) {
+          translatedAny =
+            true
+
+
+          return (
+            'Dispatched ' +
+            formatTorontoFireDispatchClock(
+              dispatchMatch[1]
+            )
+          )
+        }
+
+
+        const alarmMatch =
+          part.match(
+            /^Alarm\s+(\d+)$/i
+          )
+
+
+        if (
+          alarmMatch
+        ) {
+          translatedAny =
+            true
+
+
+          const alarmLevel =
+            Number(
+              alarmMatch[1]
+            )
+
+
+          const alarmLabel =
+            TORONTO_FIRE_ALARM_LABELS[
+              alarmLevel
+            ]
+
+
+          return (
+            alarmLabel
+              ? (
+                  `Alarm ${alarmLevel} — ` +
+                  alarmLabel
+                )
+              : `Alarm ${alarmLevel}`
+          )
+        }
+
+
+        const areaMatch =
+          part.match(
+            /^Area\s+(.+)$/i
+          )
+
+
+        if (
+          areaMatch
+        ) {
+          translatedAny =
+            true
+
+
+          return (
+            'Nearest fire station ' +
+            areaMatch[1]
+          )
+        }
+
+
+        const unitsMatch =
+          part.match(
+            /^Units?\s+(.+)$/i
+          )
+
+
+        if (
+          unitsMatch
+        ) {
+          translatedAny =
+            true
+
+
+          const units =
+            unitsMatch[1]
+              .split(
+                /\s*,\s*/
+              )
+              .map(
+                translateTorontoFireUnit
+              )
+              .filter(
+                Boolean
+              )
+
+
+          return (
+            units.length >
+              0
+              ? (
+                  'Units: ' +
+                  units.join(
+                    ', '
+                  )
+                )
+              : part
+          )
+        }
+
+
+        const incidentMatch =
+          part.match(
+            /^Incident\s+(.+)$/i
+          )
+
+
+        if (
+          incidentMatch
+        ) {
+          translatedAny =
+            true
+
+
+          return (
+            'Incident ' +
+            incidentMatch[1]
+          )
+        }
+
+
+        return part
+      }
+    )
+
+
+  return (
+    translatedAny
+      ? translated.join(
+          ' · '
+        )
+      : description
+  )
+}
+
+
 function newsroomRecordMatchesSource(
   record,
   filter
@@ -13401,7 +13901,9 @@ function AdminRoom() {
                                     {previousRecord?.description && (
                                       <p>
                                         {
-                                          previousRecord.description
+                                          getAdminDisplayDescription(
+                                            previousRecord
+                                          )
                                         }
                                       </p>
                                     )}
@@ -13440,7 +13942,9 @@ function AdminRoom() {
                                     {incomingRecord.description && (
                                       <p>
                                         {
-                                          incomingRecord.description
+                                          getAdminDisplayDescription(
+                                            incomingRecord
+                                          )
                                         }
                                       </p>
                                     )}
@@ -13505,7 +14009,9 @@ function AdminRoom() {
                                   {displayRecord.description && (
                                     <p>
                                       {
-                                        displayRecord.description
+                                        getAdminDisplayDescription(
+                                          displayRecord
+                                        )
                                       }
                                     </p>
                                   )}
@@ -13560,7 +14066,9 @@ function AdminRoom() {
                                 {record.description && (
                                   <p>
                                     {
-                                      record.description
+                                      getAdminDisplayDescription(
+                                        record
+                                      )
                                     }
                                   </p>
                                 )}
@@ -14260,7 +14768,9 @@ function AdminRoom() {
                   {record.description && (
                     <p>
                       {
-                        record.description
+                        getAdminDisplayDescription(
+                          record
+                        )
                       }
                     </p>
                   )}
