@@ -26,13 +26,6 @@ import {
 } from '../../../src/newsPolicy.js'
 
 
-import {
-  findGeographicPin,
-  getGeographicPins,
-  upsertGeographicPin,
-} from '../../db/geographicPins.js'
-
-
 const __filename =
   fileURLToPath(
     import.meta.url
@@ -149,29 +142,8 @@ const MEANINGFUL_FIELDS = [
 ]
 
 
-// Toronto Fire's live CAD constantly changes operational metadata such as
-// alarm level, area and dispatched units. Those are useful source fields,
-// but they are not editorial changes to the public story.
-//
-// A Fire UPDATE should only exist when something a reader would actually
-// see has changed: incident type/title, description, location or source.
-const FIRE_PUBLIC_MEANINGFUL_FIELDS = [
-  'category',
-  'title',
-  'description',
-  'location',
-  'intersection',
-  'sourceUrl',
-  'imageUrl',
-]
-
-
 let storeLoaded =
   false
-
-
-let storeLoadPromise =
-  null
 
 
 let store = {
@@ -642,120 +614,83 @@ async function ensureLoaded() {
   }
 
 
-  if (
-    storeLoadPromise
-  ) {
-    await storeLoadPromise
-    return
-  }
+  storeLoaded =
+    true
 
 
-  storeLoadPromise =
-    (async () => {
-      try {
-        const raw =
-          await readFile(
-            STORE_PATH,
-            'utf8'
-          )
+  try {
+    const raw =
+      await readFile(
+        STORE_PATH,
+        'utf8'
+      )
 
 
-        const parsed =
-          JSON.parse(
-            raw
-          )
+    const parsed =
+      JSON.parse(
+        raw
+      )
 
 
-        if (
-          !parsed ||
-          typeof parsed !==
-            'object' ||
+    if (
+      parsed &&
+      typeof parsed ===
+        'object'
+    ) {
+      store = {
+        ...store,
+        ...parsed,
+
+        events:
           Array.isArray(
-            parsed
+            parsed.events
           )
-        ) {
-          throw new Error(
-            'LIVE NEWSROOM · STORE FORMAT INVALID'
+            ? parsed.events
+            : [],
+
+        sources: {
+          ttc:
+            parsed.sources?.ttc ||
+            {},
+
+          fire:
+            parsed.sources?.fire ||
+            {},
+
+          police:
+            parsed.sources?.police ||
+            {},
+        },
+
+        publishedNews:
+          parsed.publishedNews &&
+          typeof parsed.publishedNews ===
+            'object' &&
+          !Array.isArray(
+            parsed.publishedNews
           )
-        }
-
-
-        store = {
-          ...store,
-          ...parsed,
-
-          events:
-            Array.isArray(
-              parsed.events
-            )
-              ? parsed.events
-              : [],
-
-          sources: {
-            ttc:
-              parsed.sources?.ttc ||
-              {},
-
-            fire:
-              parsed.sources?.fire ||
-              {},
-
-            police:
-              parsed.sources?.police ||
-              {},
-          },
-
-          publishedNews:
-            parsed.publishedNews &&
-            typeof parsed.publishedNews ===
-              'object' &&
-            !Array.isArray(
-              parsed.publishedNews
-            )
-              ? parsed.publishedNews
-              : {},
-        }
-
-
-        storeLoaded =
-          true
+            ? parsed.publishedNews
+            : {},
       }
-      catch (
+    }
+  }
+  catch (
+    error
+  ) {
+    if (
+      error?.code !==
+        'ENOENT'
+    ) {
+      console.warn(
+        'LIVE NEWSROOM · STORE READ FAILED:',
         error
-      ) {
-        if (
-          error?.code ===
-            'ENOENT'
-        ) {
-          storeLoaded =
-            true
-          return
-        }
-
-
-        console.warn(
-          'LIVE NEWSROOM · STORE READ FAILED:',
-          error
-        )
-
-
-        throw error
-      }
-      finally {
-        storeLoadPromise =
-          null
-      }
-    })()
-
-
-  await storeLoadPromise
+      )
+    }
+  }
 }
 
 
 async function persistStore() {
-  await ensureLoaded()
-
-
   store.updatedAt =
     new Date()
       .toISOString()
@@ -860,64 +795,6 @@ function normalizeComparable(
 }
 
 
-function isFireSourceRecord(
-  record
-) {
-  const sourceKey =
-    cleanText(
-      record?.sourceKey
-    )
-      .toLowerCase()
-
-
-  const sourceText =
-    [
-      record?.source,
-      record?.scraperSource,
-      record?.newsroomSource,
-      record?.origin,
-    ]
-      .map(
-        cleanText
-      )
-      .join(
-        ' '
-      )
-      .toLowerCase()
-
-
-  return (
-    sourceKey ===
-      'fire' ||
-    cleanText(
-      record?.category
-    )
-      .toLowerCase() ===
-      'fire' ||
-    sourceText.includes(
-      'toronto fire'
-    ) ||
-    sourceText.includes(
-      'fire services'
-    ) ||
-    sourceText.includes(
-      'toronto-fire-active-incidents'
-    )
-  )
-}
-
-
-function meaningfulFieldsForRecord(
-  record
-) {
-  return isFireSourceRecord(
-    record
-  )
-    ? FIRE_PUBLIC_MEANINGFUL_FIELDS
-    : MEANINGFUL_FIELDS
-}
-
-
 function sourceSnapshot(
   record
 ) {
@@ -925,9 +802,7 @@ function sourceSnapshot(
     {}
 
 
-  meaningfulFieldsForRecord(
-    record
-  )
+  MEANINGFUL_FIELDS
     .forEach(
       (
         field
@@ -964,19 +839,6 @@ function changedFields(
   previous,
   incoming
 ) {
-  const fields =
-    Array.from(
-      new Set([
-        ...meaningfulFieldsForRecord(
-          previous
-        ),
-        ...meaningfulFieldsForRecord(
-          incoming
-        ),
-      ])
-    )
-
-
   const before =
     sourceSnapshot(
       previous
@@ -989,7 +851,7 @@ function changedFields(
     )
 
 
-  return fields
+  return MEANINGFUL_FIELDS
     .filter(
       (
         field
@@ -1123,8 +985,6 @@ async function addEvent({
     [],
   resolutionReason =
     '',
-  autoApplied =
-    false,
 }) {
   await ensureLoaded()
 
@@ -1216,19 +1076,6 @@ async function addEvent({
       changes,
 
     resolutionReason,
-
-    // Official-source UPDATE / RESOLVE actions can be applied to the
-    // public map immediately while this newsroom card remains pending
-    // as an editorial/audit item under UPDATES or RESOLVE.
-    autoApplied:
-      Boolean(
-        autoApplied
-      ),
-
-    autoAppliedAt:
-      autoApplied
-        ? now
-        : '',
 
     sourceSnapshot:
       sourceSnapshot(
@@ -1331,26 +1178,6 @@ async function observeRecord({
     null
 
 
-  // The canonical published NEWS store is the final authority on
-  // whether an incident has already been approved. This also repairs
-  // older source-state rows whose `published` flag predates the
-  // server-owned publishedNews dataset.
-  const existingPublishedRecord =
-    await findPublishedNewsRecord(
-      record
-    )
-
-
-  const wasPublished =
-    existing?.published ===
-      true ||
-    (
-      existingPublishedRecord &&
-      existingPublishedRecord.active !==
-        false
-    )
-
-
   const currentFingerprint =
     fingerprint(
       record
@@ -1358,11 +1185,8 @@ async function observeRecord({
 
 
   const previousFingerprint =
-    existing
-      ? fingerprint(
-          existing
-        )
-      : ''
+    existing?.sourceFingerprint ||
+    ''
 
 
   let action =
@@ -1376,16 +1200,15 @@ async function observeRecord({
       !existing
     ) {
       action =
-        wasPublished
-          ? 'update'
-          : 'new'
+        'new'
     }
     else if (
       previousFingerprint !==
         currentFingerprint
     ) {
       action =
-        wasPublished
+        existing.published ===
+          true
           ? 'update'
           : 'new'
     }
@@ -1398,7 +1221,6 @@ async function observeRecord({
 
   const firstSeenAt =
     existing?.firstSeenAt ||
-    existingPublishedRecord?.firstSeenAt ||
     record.firstSeenAt ||
     record.publishedAt ||
     now
@@ -1456,7 +1278,7 @@ async function observeRecord({
   }
 
 
-  let observed = {
+  const observed = {
     ...existing,
     ...stableRecord,
 
@@ -1492,7 +1314,8 @@ async function observeRecord({
       0,
 
     published:
-      wasPublished,
+      existing?.published ===
+        true,
 
     resolved:
       action ===
@@ -1509,146 +1332,6 @@ async function observeRecord({
       existing?.expiresAt ||
       record.expiresAt ||
       '',
-  }
-
-
-  let autoApplied =
-    false
-
-
-  if (
-    action ===
-      'update' &&
-    existingPublishedRecord &&
-    existingPublishedRecord.active !==
-      false
-  ) {
-    const mergedPublished =
-      mergeOfficialSourceUpdate({
-        existing:
-          existingPublishedRecord,
-
-        incoming:
-          observed,
-      })
-
-
-    await upsertPublishedNewsRecord({
-      record:
-        mergedPublished,
-    })
-
-
-    observed = {
-      ...observed,
-
-      published:
-        true,
-
-      resolved:
-        false,
-
-      automaticOfficialUpdate:
-        true,
-
-      automaticOfficialUpdateAt:
-        now,
-    }
-
-
-    autoApplied =
-      true
-  }
-
-
-  // TPS LOCATED releases are authoritative resolutions. Remove the
-  // public pin immediately, but leave the RESOLVE newsroom card pending
-  // so the action is still visible/auditable in Admin.
-  if (
-    action ===
-      'resolve' &&
-    sourceKey ===
-      'police' &&
-    existingPublishedRecord &&
-    existingPublishedRecord.active !==
-      false
-  ) {
-    await archivePublishedNewsRecord({
-      id:
-        existingPublishedRecord.id ||
-        '',
-
-      externalId:
-        existingPublishedRecord.externalId ||
-        externalId,
-
-      record: {
-        ...existingPublishedRecord,
-        ...observed,
-
-        longitude:
-          existingPublishedRecord.longitude,
-
-        latitude:
-          existingPublishedRecord.latitude,
-
-        searchedLongitude:
-          existingPublishedRecord.searchedLongitude,
-
-        searchedLatitude:
-          existingPublishedRecord.searchedLatitude,
-
-        pinPositionMode:
-          existingPublishedRecord.pinPositionMode,
-
-        active:
-          false,
-
-        resolved:
-          true,
-
-        resolvedAt:
-          observed.resolvedAt ||
-          now,
-
-        resolutionReason:
-          'official-tps-resolution',
-      },
-
-      reason:
-        'official-tps-resolution',
-    })
-
-
-    observed = {
-      ...observed,
-
-      active:
-        false,
-
-      published:
-        false,
-
-      resolved:
-        true,
-
-      resolvedAt:
-        observed.resolvedAt ||
-        now,
-
-      resolutionReason:
-        'official-tps-resolution',
-
-      automaticOfficialResolution:
-        true,
-
-      automaticOfficialResolutionAt:
-        now,
-    }
-
-
-    autoApplied =
-      true
   }
 
 
@@ -1694,12 +1377,9 @@ async function observeRecord({
         observed,
       changes:
         changedFields(
-          existing ||
-          existingPublishedRecord ||
-          {},
+          existing,
           record
         ),
-      autoApplied,
     })
   }
   else if (
@@ -1713,22 +1393,18 @@ async function observeRecord({
       record:
         observed,
       previousRecord:
-        existing ||
-        existingPublishedRecord,
+        existing,
       incomingRecord:
         observed,
       changes:
         changedFields(
           existing ||
-          existingPublishedRecord ||
           {},
           record
         ),
       resolutionReason:
-        observed.resolutionReason ||
         record.resolutionReason ||
         'official-source-resolution',
-      autoApplied,
     })
   }
   else {
@@ -1738,11 +1414,11 @@ async function observeRecord({
 
   return {
     action,
-    autoApplied,
     record:
       observed,
   }
 }
+
 
 // ============================================================
 // PUBLIC TPS HOOK
@@ -1755,9 +1431,6 @@ export async function queueLiveNewsroomRecord({
   action =
     '',
 }) {
-  await ensureLoaded()
-
-
   const rawAction =
     cleanText(
       action ||
@@ -1776,10 +1449,6 @@ export async function queueLiveNewsroomRecord({
       : ''
 
 
-  // When an older approved TPS case exists in the canonical public
-  // store but its source-state row does not yet say published:true,
-  // observeRecord() now detects that canonical record and treats the
-  // new official release as an UPDATE rather than a duplicate NEW item.
   return observeRecord({
     sourceKey,
     record,
@@ -1787,6 +1456,7 @@ export async function queueLiveNewsroomRecord({
       requestedAction,
   })
 }
+
 
 // ============================================================
 // TTC NORMALIZATION
@@ -2679,7 +2349,7 @@ function normalizeFireLocationPiece(
     value
   )
     .replace(
-      /\s*,\s*(?:NY|EY|SC|ET|YK|TO|TT)\b/gi,
+      /\s*,\s*(?:NY|EY|SC|ET|YK|TO)\b/gi,
       ''
     )
     .replace(
@@ -2694,173 +2364,22 @@ function normalizeFireLocationPiece(
 }
 
 
-function fireLocationPieceIsCadNoise(
-  value
-) {
-  const piece =
-    normalizeFireLocationPiece(
-      value
-    )
-
-
-  if (
-    !piece
-  ) {
-    return true
-  }
-
-
-  if (
-    /^(?:TT|NY|EY|SC|ET|YK|TO|TTC)$/i.test(
-      piece
-    )
-  ) {
-    return true
-  }
-
-
-  // CAD routing notes are not public cross streets.
-  if (
-    /^(?:LN\s+[NSEW]\b|[NSEW]\s+OF\b|NB\b|SB\b|EB\b|WB\b)/i.test(
-      piece
-    )
-  ) {
-    return true
-  }
-
-
-  return false
-}
-
-
-function getFireCrossStreetCandidates(
-  value
-) {
-  const normalized =
-    normalizeFireLocationPiece(
-      value
-    )
-
-
-  if (
-    !normalized
-  ) {
-    return []
-  }
-
-
-  const candidates =
-    normalized
-      .split(
-        /\s*\/\s*|\s*&\s*/
-      )
-      .map(
-        normalizeFireLocationPiece
-      )
-      .filter(
-        (piece) =>
-          !fireLocationPieceIsCadNoise(
-            piece
-          )
-      )
-
-
-  return candidates.filter(
-    (piece, index) =>
-      candidates.findIndex(
-        (candidate) =>
-          candidate.toLowerCase() ===
-          piece.toLowerCase()
-      ) ===
-      index
-  )
-}
-
 function fireIncidentShouldBeReviewed({
   incidentType,
-  alarmLevel,
 }) {
   const type =
     cleanText(
       incidentType
     )
-      .toLowerCase()
 
 
-  const alarm =
-    Number(
-      cleanText(
-        alarmLevel
-      )
+  return !(
+    /^medical\b/i.test(
+      type
+    ) ||
+    /^alarm single source\b/i.test(
+      type
     )
-
-
-  if (
-    Number.isFinite(
-      alarm
-    ) &&
-    alarm >=
-      1
-  ) {
-    return true
-  }
-
-
-  const blockedPatterns = [
-    /^medical\b/i,
-    /^alarm single source\b/i,
-    /^check call\b/i,
-    /^rescue - elevator\b/i,
-    /^water problem\b/i,
-    /^public assist\b/i,
-    /^assist - /i,
-    /^alarm - /i,
-  ]
-
-
-  if (
-    blockedPatterns.some(
-      (
-        pattern
-      ) =>
-        pattern.test(
-          type
-        )
-    )
-  ) {
-    return false
-  }
-
-
-  const reviewPatterns = [
-    /\bfire\b/i,
-    /\bsmoke\b/i,
-    /\bexplosion\b/i,
-    /\bhazmat\b/i,
-    /\bhazardous\b/i,
-    /\bvehicle accident\b/i,
-    /\btrapped\b/i,
-    /\bextrication\b/i,
-    /\bwater rescue\b/i,
-    /\bmarine rescue\b/i,
-    /\btechnical rescue\b/i,
-    /\bconfined space\b/i,
-    /\btrench\b/i,
-    /\bhigh angle\b/i,
-    /\bstructural collapse\b/i,
-    /\bgas leak\b/i,
-    /\bcarbon monoxide\b/i,
-    /\bchemical\b/i,
-  ]
-
-
-  return reviewPatterns.some(
-    (
-      pattern
-    ) =>
-      pattern.test(
-        type
-      )
   )
 }
 
@@ -2874,25 +2393,10 @@ function normalizeFireRow(
     )
 
 
-  const crossStreetSource =
+  const crossStreet =
     normalizeFireLocationPiece(
       cells[1]
     )
-
-
-  const crossStreetCandidates =
-    getFireCrossStreetCandidates(
-      crossStreetSource
-    )
-
-
-  const crossStreet =
-    crossStreetCandidates.find(
-      (candidate) =>
-        candidate.toLowerCase() !==
-        primeStreet.toLowerCase()
-    ) ||
-    ''
 
 
   const dispatchTime =
@@ -2943,8 +2447,7 @@ function normalizeFireRow(
 
   if (
     !primeStreet &&
-    crossStreetCandidates.length ===
-      0
+    !crossStreet
   ) {
     return null
   }
@@ -2971,21 +2474,83 @@ function normalizeFireRow(
     location =
       primeStreet
   }
-  else if (
-    crossStreetCandidates.length >=
-      2
-  ) {
-    location =
-      (
-        crossStreetCandidates[0] +
-        ' & ' +
-        crossStreetCandidates[1]
-      )
-  }
   else {
+    const crossPieces =
+      crossStreet
+        .split(
+          /\s*\/\s*/
+        )
+        .map(
+          normalizeFireLocationPiece
+        )
+        .filter(
+          Boolean
+        )
+
+
     location =
-      crossStreetCandidates[0] ||
-      ''
+      crossPieces.length >=
+        2
+        ? (
+            crossPieces[0] +
+            ' & ' +
+            crossPieces[1]
+          )
+        : crossStreet
+  }
+
+
+  const descriptionParts =
+    []
+
+
+  if (
+    dispatchTime
+  ) {
+    descriptionParts.push(
+      'Dispatch ' +
+      dispatchTime
+    )
+  }
+
+
+  if (
+    alarmLevel
+  ) {
+    descriptionParts.push(
+      'Alarm ' +
+      alarmLevel
+    )
+  }
+
+
+  if (
+    area
+  ) {
+    descriptionParts.push(
+      'Area ' +
+      area
+    )
+  }
+
+
+  if (
+    dispatchedUnits
+  ) {
+    descriptionParts.push(
+      'Units ' +
+      dispatchedUnits
+    )
+  }
+
+
+  if (
+    incidentNumber
+  ) {
+    descriptionParts.push(
+      'Incident ' +
+      incidentNumber
+    )
   }
 
 
@@ -2995,10 +2560,6 @@ function normalizeFireRow(
     )
 
 
-  const publicDescription =
-    'Toronto Fire crews were dispatched to this call.'
-
-
   return {
     externalId:
       'toronto-fire-' +
@@ -3006,7 +2567,7 @@ function normalizeFireRow(
         incidentNumber ||
         [
           primeStreet,
-          crossStreetSource,
+          crossStreet,
           dispatchTime,
           incidentType,
         ]
@@ -3044,7 +2605,9 @@ function normalizeFireRow(
       ),
 
     description:
-      publicDescription,
+      descriptionParts.join(
+        ' · '
+      ),
 
     location,
 
@@ -3255,102 +2818,10 @@ async function resolveMissing({
     }
 
 
-    let finalResolvedRecord =
-      resolvedRecord
-
-
-    let autoApplied =
-      false
-
-
-    // TTC is feed-controlled. After two successful polls without the
-    // alert, the official source has resolved it. Remove the public pin
-    // immediately, but keep a RESOLVE card in Admin as the audit trail.
-    if (
-      sourceKey ===
-        'ttc'
-    ) {
-      const publishedRecord =
-        await findPublishedNewsRecord(
-          resolvedRecord
-        )
-
-
-      if (
-        publishedRecord &&
-        publishedRecord.active !==
-          false
-      ) {
-        await archivePublishedNewsRecord({
-          id:
-            publishedRecord.id ||
-            '',
-
-          externalId:
-            publishedRecord.externalId ||
-            externalId,
-
-          record: {
-            ...publishedRecord,
-            ...resolvedRecord,
-
-            longitude:
-              publishedRecord.longitude,
-
-            latitude:
-              publishedRecord.latitude,
-
-            searchedLongitude:
-              publishedRecord.searchedLongitude,
-
-            searchedLatitude:
-              publishedRecord.searchedLatitude,
-
-            pinPositionMode:
-              publishedRecord.pinPositionMode,
-
-            active:
-              false,
-
-            resolved:
-              true,
-
-            resolutionReason:
-              'missing-from-live-feed',
-          },
-
-          reason:
-            'missing-from-live-feed',
-        })
-
-
-        finalResolvedRecord = {
-          ...resolvedRecord,
-
-          active:
-            false,
-
-          published:
-            false,
-
-          automaticOfficialResolution:
-            true,
-
-          automaticOfficialResolutionAt:
-            resolvedRecord.resolvedAt,
-        }
-
-
-        autoApplied =
-          true
-      }
-    }
-
-
     sourceState[
       externalId
     ] =
-      finalResolvedRecord
+      resolvedRecord
 
 
     await addEvent({
@@ -3358,14 +2829,13 @@ async function resolveMissing({
       action:
         'resolve',
       record:
-        finalResolvedRecord,
+        resolvedRecord,
       previousRecord:
         existing,
       incomingRecord:
-        finalResolvedRecord,
+        resolvedRecord,
       resolutionReason:
         'missing-from-live-feed',
-      autoApplied,
     })
   }
 
@@ -3837,211 +3307,6 @@ export async function syncTorontoLiveNewsroom() {
 //
 // ============================================================
 
-function policeCaseKeys(
-  record
-) {
-  return [
-    record?.caseNumber,
-    record?.policeCaseNumber,
-    record?.incidentNumber,
-    record?.goNumber,
-  ]
-    .map(
-      cleanText
-    )
-    .filter(
-      Boolean
-    )
-}
-
-
-async function findPublishedNewsRecord(
-  record
-) {
-  return findGeographicPin({
-    city:
-      'toronto',
-
-    type:
-      'news',
-
-    subtype:
-      '',
-
-    identity:
-      publishedNewsIdentity(
-        record
-      ),
-
-    externalId:
-      cleanText(
-        record?.externalId
-      ),
-
-    id:
-      cleanText(
-        record?.id
-      ),
-
-    caseKeys:
-      policeCaseKeys(
-        record
-      ),
-  })
-}
-
-
-function hasPublishedValue(
-  value
-) {
-  if (
-    value ===
-      null ||
-    value ===
-      undefined
-  ) {
-    return false
-  }
-
-
-  if (
-    typeof value ===
-      'string'
-  ) {
-    return Boolean(
-      value.trim()
-    )
-  }
-
-
-  return true
-}
-
-
-function mergeOfficialSourceUpdate({
-  existing,
-  incoming,
-}) {
-  const now =
-    new Date()
-      .toISOString()
-
-
-  const merged = {
-    ...existing,
-    ...incoming,
-
-    id:
-      existing?.id ||
-      incoming?.id,
-
-    externalId:
-      existing?.externalId ||
-      incoming?.externalId,
-
-    active:
-      true,
-
-    firstPublishedAt:
-      existing?.firstPublishedAt ||
-      existing?.publishedAt ||
-      incoming?.firstPublishedAt ||
-      incoming?.publishedAt ||
-      now,
-
-    approvedAt:
-      existing?.approvedAt ||
-      incoming?.approvedAt ||
-      now,
-
-    serverPublishedAt:
-      existing?.serverPublishedAt ||
-      incoming?.serverPublishedAt ||
-      now,
-
-    createdAt:
-      existing?.createdAt ||
-      incoming?.createdAt ||
-      now,
-
-    updatedAt:
-      now,
-
-    automaticOfficialUpdate:
-      true,
-
-    automaticOfficialUpdateAt:
-      now,
-  }
-
-
-  // A source update changes the story, not the editor-approved map
-  // placement. Keep the existing coordinates and positioning mode.
-  ;[
-    'longitude',
-    'latitude',
-    'searchedLongitude',
-    'searchedLatitude',
-    'pinPositionMode',
-    'manualLongitude',
-    'manualLatitude',
-  ]
-    .forEach(
-      (field) => {
-        if (
-          hasPublishedValue(
-            existing?.[
-              field
-            ]
-          )
-        ) {
-          merged[
-            field
-          ] =
-            existing[
-              field
-            ]
-        }
-      }
-    )
-
-
-  // Keep existing media unless the official update actually supplies
-  // a replacement value.
-  ;[
-    'imageUrl',
-    'photoUrl',
-    'thumbnailUrl',
-  ]
-    .forEach(
-      (field) => {
-        if (
-          !hasPublishedValue(
-            incoming?.[
-              field
-            ]
-          ) &&
-          hasPublishedValue(
-            existing?.[
-              field
-            ]
-          )
-        ) {
-          merged[
-            field
-          ] =
-            existing[
-              field
-            ]
-        }
-      }
-    )
-
-
-  return merged
-}
-
-
 function publishedNewsIdentity(
   record
 ) {
@@ -4302,10 +3567,21 @@ async function upsertPublishedNewsRecord({
   await ensureLoaded()
 
 
-  const existing =
-    await findPublishedNewsRecord(
+  const identity =
+    publishedNewsIdentity(
       record
     )
+
+
+  const existing =
+    identity
+      ? (
+          store.publishedNews[
+            identity
+          ] ||
+          null
+        )
+      : null
 
 
   const normalized =
@@ -4323,45 +3599,32 @@ async function upsertPublishedNewsRecord({
     })
 
 
-  const previousIdentity =
-    existing
-      ? publishedNewsIdentity(
-          existing
-        )
-      : ''
+  const previous =
+    store.publishedNews[
+      normalized.identity
+    ] ||
+    null
 
 
-  const savedRecord =
-    await upsertGeographicPin({
-      city:
-        'toronto',
+  store.publishedNews[
+    normalized.identity
+  ] =
+    normalized.record
 
-      type:
-        'news',
 
-      subtype:
-        '',
-
-      identity:
-        normalized.identity,
-
-      previousIdentity,
-
-      record:
-        normalized.record,
-    })
+  await persistStore()
 
 
   let eventType =
-    existing
+    previous
       ? 'published-news-updated'
       : 'published-news-created'
 
 
   if (
-    existing?.active ===
+    previous?.active ===
       false &&
-    savedRecord.active ===
+    normalized.record.active ===
       true
   ) {
     eventType =
@@ -4370,7 +3633,7 @@ async function upsertPublishedNewsRecord({
 
 
   if (
-    savedRecord.active ===
+    normalized.record.active ===
       false
   ) {
     eventType =
@@ -4382,16 +3645,16 @@ async function upsertPublishedNewsRecord({
     eventType,
 
     outcome:
-      savedRecord.active
+      normalized.record.active
         ? 'published'
-        : savedRecord.archiveReason,
+        : normalized.record.archiveReason,
 
     record:
-      savedRecord,
+      normalized.record,
   })
 
 
-  return savedRecord
+  return normalized.record
 }
 
 
@@ -4408,26 +3671,85 @@ async function archivePublishedNewsRecord({
   await ensureLoaded()
 
 
-  const candidate = {
-    ...(record ||
-      {}),
+  const requestedIdentity =
+    publishedNewsIdentity({
+      id,
+      externalId,
+    })
 
-    id:
-      id ||
-      record?.id ||
-      '',
 
-    externalId:
-      externalId ||
-      record?.externalId ||
-      '',
+  let identity =
+    requestedIdentity
+
+
+  if (
+    !identity &&
+    record
+  ) {
+    identity =
+      publishedNewsIdentity(
+        record
+      )
   }
 
 
-  const existing =
-    await findPublishedNewsRecord(
-      candidate
-    )
+  let existing =
+    identity
+      ? (
+          store.publishedNews[
+            identity
+          ] ||
+          null
+        )
+      : null
+
+
+  // If the caller only has one identifier but the record was originally
+  // keyed by the other, find it without deleting or re-keying history.
+  if (
+    !existing
+  ) {
+    const values =
+      Object.values(
+        store.publishedNews ||
+        {}
+      )
+
+
+    existing =
+      values.find(
+        (item) =>
+          (
+            externalId &&
+            cleanText(
+              item?.externalId
+            ) ===
+              cleanText(
+                externalId
+              )
+          ) ||
+          (
+            id &&
+            cleanText(
+              item?.id
+            ) ===
+              cleanText(
+                id
+              )
+          )
+      ) ||
+      null
+
+
+    if (
+      existing
+    ) {
+      identity =
+        publishedNewsIdentity(
+          existing
+        )
+    }
+  }
 
 
   if (
@@ -4438,13 +3760,14 @@ async function archivePublishedNewsRecord({
   }
 
 
-  const source = {
-    ...existing,
-    ...(record ||
-      {}),
-    active:
-      false,
-  }
+  const source =
+    {
+      ...existing,
+      ...(record ||
+        {}),
+      active:
+        false,
+    }
 
 
   const normalized =
@@ -4462,30 +3785,18 @@ async function archivePublishedNewsRecord({
     })
 
 
-  const savedRecord =
-    await upsertGeographicPin({
-      city:
-        'toronto',
+  const finalIdentity =
+    identity ||
+    normalized.identity
 
-      type:
-        'news',
 
-      subtype:
-        '',
+  store.publishedNews[
+    finalIdentity
+  ] =
+    normalized.record
 
-      identity:
-        normalized.identity,
 
-      previousIdentity:
-        existing
-          ? publishedNewsIdentity(
-              existing
-            )
-          : '',
-
-      record:
-        normalized.record,
-    })
+  await persistStore()
 
 
   await appendLedgerEvent({
@@ -4493,14 +3804,14 @@ async function archivePublishedNewsRecord({
       'published-news-archived',
 
     outcome:
-      savedRecord.archiveReason,
+      normalized.record.archiveReason,
 
     record:
-      savedRecord,
+      normalized.record,
   })
 
 
-  return savedRecord
+  return normalized.record
 }
 
 
@@ -4513,29 +3824,19 @@ async function expirePublishedNewsShelfLife() {
       .toISOString()
 
 
-  const allRecords =
-    await getGeographicPins({
-      city:
-        'toronto',
-
-      type:
-        'news',
-
-      subtype:
-        '',
-
-      status:
-        'all',
-    })
-
-
   const expiredRecords =
     []
 
 
   for (
-    const record
-    of allRecords
+    const [
+      identity,
+      record,
+    ]
+    of Object.entries(
+      store.publishedNews ||
+      {}
+    )
   ) {
     if (
       record?.active ===
@@ -4577,36 +3878,27 @@ async function expirePublishedNewsShelfLife() {
     }
 
 
-    const savedRecord =
-      await upsertGeographicPin({
-        city:
-          'toronto',
-
-        type:
-          'news',
-
-        subtype:
-          '',
-
-        identity:
-          publishedNewsIdentity(
-            archivedRecord
-          ),
-
-        previousIdentity:
-          publishedNewsIdentity(
-            record
-          ),
-
-        record:
-          archivedRecord,
-      })
+    store.publishedNews[
+      identity
+    ] =
+      archivedRecord
 
 
     expiredRecords.push(
-      savedRecord
+      archivedRecord
     )
   }
+
+
+  if (
+    expiredRecords.length ===
+      0
+  ) {
+    return 0
+  }
+
+
+  await persistStore()
 
 
   for (
@@ -4646,20 +3938,37 @@ async function getPublishedNewsRecords({
       .toLowerCase()
 
 
-  const records =
-    await getGeographicPins({
-      city:
-        'toronto',
+  let records =
+    Object.values(
+      store.publishedNews ||
+      {}
+    )
 
-      type:
-        'news',
 
-      subtype:
-        '',
-
-      status:
-        normalizedStatus,
-    })
+  if (
+    normalizedStatus ===
+      'live'
+  ) {
+    records =
+      records.filter(
+        (record) =>
+          record.active !==
+            false
+      )
+  }
+  else if (
+    normalizedStatus ===
+      'archive' ||
+    normalizedStatus ===
+      'archived'
+  ) {
+    records =
+      records.filter(
+        (record) =>
+          record.active ===
+            false
+      )
+  }
 
 
   return records.sort(
