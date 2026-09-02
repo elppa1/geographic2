@@ -11961,15 +11961,7 @@ function AdminRoom() {
                   Boolean(
                     editingReviewId &&
                     draft.location &&
-                    !hasPinLocation &&
-                    getNewsroomSourceKey(
-                      draft
-                    ) !==
-                      'fire' &&
-                    getNewsroomSourceKey(
-                      draft
-                    ) !==
-                      'transit'
+                    !hasPinLocation
                   )
                 }
                 onChange={
@@ -14339,8 +14331,15 @@ function AdminRoom() {
                                   ? (
                                       <a
                                         href={
-                                          displayRecord.sourceUrl ||
-                                          record.sourceUrl
+                                          getNewsroomSourceKey(
+                                            record
+                                          ) ===
+                                            'transit'
+                                            ? 'https://www.ttc.ca/service-alerts'
+                                            : (
+                                                displayRecord.sourceUrl ||
+                                                record.sourceUrl
+                                              )
                                         }
                                         target="_blank"
                                         rel="noreferrer"
