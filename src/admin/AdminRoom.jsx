@@ -11961,7 +11961,15 @@ function AdminRoom() {
                   Boolean(
                     editingReviewId &&
                     draft.location &&
-                    !hasPinLocation
+                    !hasPinLocation &&
+                    getNewsroomSourceKey(
+                      draft
+                    ) !==
+                      'fire' &&
+                    getNewsroomSourceKey(
+                      draft
+                    ) !==
+                      'transit'
                   )
                 }
                 onChange={
