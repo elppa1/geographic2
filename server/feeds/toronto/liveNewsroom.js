@@ -2850,6 +2850,106 @@ async function resolveMissing({
 }
 
 
+function publishedRecordIsTtc(
+  record
+) {
+  const externalId =
+    cleanText(
+      record?.externalId
+    )
+      .toLowerCase()
+
+
+  return externalId.startsWith(
+    'ttc-alert-'
+  )
+}
+
+
+async function reconcilePublishedTtcPins(
+  seenIds
+) {
+  await ensureLoaded()
+
+
+  let archived =
+    0
+
+
+  const publishedRecords =
+    Object.values(
+      store.publishedNews ||
+      {}
+    )
+
+
+  for (
+    const record
+    of publishedRecords
+  ) {
+    if (
+      record?.active ===
+        false ||
+      !publishedRecordIsTtc(
+        record
+      )
+    ) {
+      continue
+    }
+
+
+    const externalId =
+      cleanText(
+        record?.externalId
+      )
+
+
+    if (
+      !externalId ||
+      seenIds.has(
+        externalId
+      )
+    ) {
+      continue
+    }
+
+
+    const resolvedAt =
+      new Date()
+        .toISOString()
+
+
+    await archivePublishedNewsRecord({
+      externalId,
+
+      record: {
+        ...record,
+
+        active:
+          false,
+
+        resolved:
+          true,
+
+        resolvedAt,
+
+        resolutionReason:
+          'missing-from-live-feed',
+      },
+
+      reason:
+        'missing-from-live-feed',
+    })
+
+
+    archived++
+  }
+
+
+  return archived
+}
+
+
 async function syncTtc() {
   const payload =
     await getTtcAlertsSnapshot()
@@ -2881,7 +2981,22 @@ async function syncTtc() {
 
 
   const seenIds =
-    new Set()
+    new Set(
+      records.map(
+        (
+          record
+        ) =>
+          record.externalId
+      )
+    )
+
+
+  // The normalized TTC snapshot is authoritative for public TTC pins.
+  // Reconcile immediately after a successful snapshot so one bad current
+  // alert cannot prevent stale public pins from leaving the map.
+  await reconcilePublishedTtcPins(
+    seenIds
+  )
 
 
   const counts = {
@@ -2906,11 +3021,6 @@ async function syncTtc() {
     const record
     of records
   ) {
-    seenIds.add(
-      record.externalId
-    )
-
-
     const result =
       await observeRecord({
         sourceKey:
