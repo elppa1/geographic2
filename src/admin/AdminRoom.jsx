@@ -1482,6 +1482,9 @@ function makeDefaultHistoricIssue() {
     publicationDate:
       '',
 
+    atmosphere:
+      'halloween',
+
     status:
       'draft',
 
@@ -1522,6 +1525,9 @@ function makeHistoricIssueDraft(
 
     publicationDate:
       '',
+
+    atmosphere:
+      'none',
 
     status:
       'draft',
@@ -1609,6 +1615,15 @@ const EMPTY_HISTORIC = {
 
   pinIcon:
     'map-pin',
+
+  eventDate:
+    '',
+
+  sources:
+    [],
+
+  seeItThenZoom:
+    '16',
 
   year:
     '',
@@ -3968,6 +3983,96 @@ function normalizePinRecord(
 
 
 // ============================================================
+// NORMALIZE HISTORIC SOURCES
+// ============================================================
+
+function normalizeHistoricSources(
+  record
+) {
+  const explicitSources =
+    Array.isArray(
+      record?.sources
+    )
+      ? record.sources
+      : []
+
+
+  const normalizedSources =
+    explicitSources
+      .map(
+        (
+          source
+        ) => ({
+          name:
+            String(
+              source?.name ||
+              source?.label ||
+              ''
+            )
+              .trim(),
+
+          url:
+            normalizeSourceUrl(
+              source?.url ||
+              source?.sourceUrl ||
+              ''
+            ),
+        })
+      )
+      .filter(
+        (
+          source
+        ) =>
+          Boolean(
+            source.name ||
+            source.url
+          )
+      )
+
+
+  if (
+    normalizedSources.length >
+      0
+  ) {
+    return normalizedSources
+  }
+
+
+  const legacyName =
+    String(
+      record?.source ||
+      ''
+    )
+      .trim()
+
+
+  const legacyUrl =
+    normalizeSourceUrl(
+      record?.sourceUrl
+    )
+
+
+  if (
+    !legacyName &&
+    !legacyUrl
+  ) {
+    return []
+  }
+
+
+  return [
+    {
+      name:
+        legacyName,
+
+      url:
+        legacyUrl,
+    },
+  ]
+}
+
+
+// ============================================================
 // NORMALIZE HISTORIC
 // ============================================================
 
@@ -4047,6 +4152,24 @@ function normalizeHistoricRecord(
       getHistoricPinIcon(
         pinRecord.pinIcon
       ).id,
+
+    eventDate:
+      String(
+        pinRecord.eventDate ||
+        ''
+      )
+        .trim(),
+
+    sources:
+      normalizeHistoricSources(
+        pinRecord
+      ),
+
+    seeItThenZoom:
+      String(
+        pinRecord.seeItThenZoom ||
+        '16'
+      ),
 
     pinPositionMode:
       pinRecord.pinPositionMode ||
@@ -8699,6 +8822,164 @@ function AdminRoom() {
   }
 
 
+  function updateHistoricEventDate(
+    value
+  ) {
+    setDraft(
+      (
+        current
+      ) => {
+        const yearMatch =
+          String(
+            value ||
+            ''
+          )
+            .match(
+              /^(\d{4})-\d{2}-\d{2}$/
+            )
+
+
+        return {
+          ...current,
+
+          eventDate:
+            value,
+
+          year:
+            yearMatch &&
+            current.timeMode ===
+              'event'
+              ? yearMatch[1]
+              : current.year,
+        }
+      }
+    )
+  }
+
+
+  function addHistoricSource() {
+    setDraft(
+      (
+        current
+      ) => {
+        const existingSources =
+          Array.isArray(
+            current.sources
+          ) &&
+          current.sources.length >
+            0
+            ? current.sources
+            : [
+                {
+                  name:
+                    '',
+
+                  url:
+                    '',
+                },
+              ]
+
+
+        return {
+          ...current,
+
+          sources: [
+            ...existingSources,
+
+            {
+              name:
+                '',
+
+              url:
+                '',
+            },
+          ],
+        }
+      }
+    )
+  }
+
+
+  function updateHistoricSource(
+    index,
+    field,
+    value
+  ) {
+    setDraft(
+      (
+        current
+      ) => {
+        const sources =
+          normalizeHistoricSources(
+            current
+          )
+
+
+        while (
+          sources.length <=
+          index
+        ) {
+          sources.push({
+            name:
+              '',
+
+            url:
+              '',
+          })
+        }
+
+
+        return {
+          ...current,
+
+          sources:
+            sources.map(
+              (
+                source,
+                sourceIndex
+              ) =>
+                sourceIndex ===
+                  index
+                  ? {
+                      ...source,
+
+                      [field]:
+                        value,
+                    }
+                  : source
+            ),
+        }
+      }
+    )
+  }
+
+
+  function removeHistoricSource(
+    index
+  ) {
+    setDraft(
+      (
+        current
+      ) => ({
+        ...current,
+
+        sources:
+          normalizeHistoricSources(
+            current
+          )
+            .filter(
+              (
+                source,
+                sourceIndex
+              ) =>
+                sourceIndex !==
+                index
+            ),
+      })
+    )
+  }
+
+
   function resetDraft() {
     setEditingId(
       null
@@ -8789,6 +9070,15 @@ function AdminRoom() {
 
       city:
         cityKey,
+
+      atmosphere:
+        selectedHistoricIssue.atmosphere ||
+        (
+          selectedHistoricIssue.id ===
+            'historic-issue-001'
+            ? 'halloween'
+            : 'none'
+        ),
     })
 
 
@@ -9004,6 +9294,20 @@ function AdminRoom() {
           ''
         )
           .trim(),
+
+      atmosphere:
+        [
+          'none',
+          'halloween',
+          'night',
+          'winter',
+          'rain',
+          'archival',
+        ].includes(
+          historicIssueDraft.atmosphere
+        )
+          ? historicIssueDraft.atmosphere
+          : 'none',
 
       status,
 
@@ -9686,9 +9990,32 @@ function AdminRoom() {
   function changeHistoricEventYear(
     value
   ) {
-    updateDraft(
-      'year',
-      value
+    setDraft(
+      (
+        current
+      ) => {
+        const eventDate =
+          String(
+            current.eventDate ||
+            ''
+          )
+
+
+        return {
+          ...current,
+
+          year:
+            value,
+
+          eventDate:
+            eventDate &&
+            !eventDate.startsWith(
+              `${value}-`
+            )
+              ? ''
+              : eventDate,
+        }
+      }
     )
   }
 
@@ -10294,6 +10621,35 @@ function AdminRoom() {
       tab ===
       'historic'
     ) {
+      const historicSources =
+        normalizeHistoricSources(
+          record
+        )
+
+
+      const eventDate =
+        String(
+          record.eventDate ||
+          ''
+        )
+          .trim()
+
+
+      if (
+        record.timeMode ===
+          'event' &&
+        /^\d{4}-\d{2}-\d{2}$/.test(
+          eventDate
+        )
+      ) {
+        record.year =
+          eventDate.slice(
+            0,
+            4
+          )
+      }
+
+
       const automaticLayers =
         getAutomaticHistoricLayers({
           city,
@@ -10303,6 +10659,25 @@ function AdminRoom() {
 
       record = {
         ...record,
+
+        eventDate,
+
+        sources:
+          historicSources,
+
+        source:
+          historicSources[0]?.name ||
+          '',
+
+        sourceUrl:
+          historicSources[0]?.url ||
+          '',
+
+        seeItThenZoom:
+          String(
+            record.seeItThenZoom ||
+            '16'
+          ),
 
         issueIds:
           Array.isArray(
@@ -13072,6 +13447,39 @@ function AdminRoom() {
     }
 
 
+    if (
+      normalized.eventDate
+    ) {
+      const date =
+        new Date(
+          `${normalized.eventDate}T12:00:00`
+        )
+
+
+      if (
+        !Number.isNaN(
+          date.getTime()
+        )
+      ) {
+        return date
+          .toLocaleDateString(
+            'en-CA',
+            {
+              year:
+                'numeric',
+
+              month:
+                'long',
+
+              day:
+                'numeric',
+            }
+          )
+          .toUpperCase()
+      }
+    }
+
+
     return (
       normalized.year ||
       '?'
@@ -14249,6 +14657,51 @@ function AdminRoom() {
                     </label>
 
 
+                    <label className="admin-field">
+                      <span>
+                        ISSUE ATMOSPHERE
+                      </span>
+
+                      <select
+                        value={
+                          historicIssueDraft.atmosphere ||
+                          'none'
+                        }
+                        onChange={
+                          (event) =>
+                            updateHistoricIssueDraft(
+                              'atmosphere',
+                              event.target.value
+                            )
+                        }
+                      >
+                        <option value="none">
+                          NONE
+                        </option>
+
+                        <option value="halloween">
+                          HALLOWEEN · FOG
+                        </option>
+
+                        <option value="night">
+                          NIGHT
+                        </option>
+
+                        <option value="winter">
+                          WINTER
+                        </option>
+
+                        <option value="rain">
+                          RAIN
+                        </option>
+
+                        <option value="archival">
+                          ARCHIVAL / FILM
+                        </option>
+                      </select>
+                    </label>
+
+
                     <div
                       className="admin-form-actions"
                       style={{
@@ -14664,6 +15117,27 @@ function AdminRoom() {
                 </div>
 
 
+                <label className="admin-field">
+                  <span>
+                    EXACT DATE
+                  </span>
+
+                  <input
+                    type="date"
+                    value={
+                      draft.eventDate ||
+                      ''
+                    }
+                    onChange={
+                      (event) =>
+                        updateHistoricEventDate(
+                          event.target.value
+                        )
+                    }
+                  />
+                </label>
+
+
                 {draft.timeMode ===
                   'event' && (
                   <label className="admin-field">
@@ -14938,51 +15412,277 @@ function AdminRoom() {
                     )}
                   </div>
                 </div>
+
+
+                <label className="admin-field">
+                  <span>
+                    SEE IT THEN ZOOM
+                  </span>
+
+                  <select
+                    value={
+                      String(
+                        draft.seeItThenZoom ||
+                        '16'
+                      )
+                    }
+                    onChange={
+                      (event) =>
+                        updateDraft(
+                          'seeItThenZoom',
+                          event.target.value
+                        )
+                    }
+                  >
+                    <option value="14">
+                      NEIGHBOURHOOD
+                    </option>
+
+                    <option value="16">
+                      STREET
+                    </option>
+
+                    <option value="18">
+                      CLOSE
+                    </option>
+                  </select>
+                </label>
               </>
             )}
 
 
-            <label className="admin-field">
-              <span>
-                SOURCE
-              </span>
+            {tab !==
+              'historic' && (
+              <>
+                <label className="admin-field">
+                  <span>
+                    SOURCE
+                  </span>
 
-              <input
-                value={
-                  draft.source
-                }
-                onChange={
-                  (event) =>
-                    updateDraft(
-                      'source',
-                      event.target.value
+                  <input
+                    value={
+                      draft.source
+                    }
+                    onChange={
+                      (event) =>
+                        updateDraft(
+                          'source',
+                          event.target.value
+                        )
+                    }
+                    placeholder="Source name"
+                  />
+                </label>
+
+
+                <label className="admin-field">
+                  <span>
+                    SOURCE URL
+                  </span>
+
+                  <input
+                    type="url"
+                    value={
+                      draft.sourceUrl
+                    }
+                    onChange={
+                      (event) =>
+                        updateDraft(
+                          'sourceUrl',
+                          event.target.value
+                        )
+                    }
+                    placeholder="https://..."
+                  />
+                </label>
+              </>
+            )}
+
+
+            {tab ===
+              'historic' && (
+              <>
+                <div className="admin-field admin-field-wide">
+                  <span>
+                    SOURCES
+                  </span>
+
+                  {(
+                    Array.isArray(
+                      draft.sources
+                    ) &&
+                    draft.sources.length >
+                      0
+                      ? draft.sources
+                      : [
+                          {
+                            name:
+                              '',
+
+                            url:
+                              '',
+                          },
+                        ]
+                  ).map(
+                    (
+                      source,
+                      index
+                    ) => (
+                      <div
+                        key={
+                          `historic-source-${index}`
+                        }
+                        style={{
+                          display:
+                            'grid',
+
+                          gridTemplateColumns:
+                            'minmax(140px, 0.8fr) minmax(220px, 1.6fr) auto',
+
+                          gap:
+                            '8px',
+
+                          alignItems:
+                            'center',
+
+                          marginTop:
+                            index ===
+                              0
+                              ? '8px'
+                              : '6px',
+                        }}
+                      >
+                        <input
+                          value={
+                            source?.name ||
+                            ''
+                          }
+                          onChange={
+                            (event) =>
+                              updateHistoricSource(
+                                index,
+                                'name',
+                                event.target.value
+                              )
+                          }
+                          placeholder="Source name"
+                        />
+
+                        <input
+                          type="url"
+                          value={
+                            source?.url ||
+                            ''
+                          }
+                          onChange={
+                            (event) =>
+                              updateHistoricSource(
+                                index,
+                                'url',
+                                event.target.value
+                              )
+                          }
+                          placeholder="https://..."
+                        />
+
+                        <button
+                          type="button"
+                          className="admin-cancel"
+                          onClick={() =>
+                            removeHistoricSource(
+                              index
+                            )
+                          }
+                        >
+                          REMOVE
+                        </button>
+                      </div>
                     )
-                }
-                placeholder="Source name"
-              />
-            </label>
+                  )}
 
 
-            <label className="admin-field">
-              <span>
-                SOURCE URL
-              </span>
+                  <button
+                    type="button"
+                    className="admin-cancel"
+                    onClick={
+                      addHistoricSource
+                    }
+                    style={{
+                      marginTop:
+                        '8px',
+                    }}
+                  >
+                    + ADD SOURCE
+                  </button>
+                </div>
 
-              <input
-                type="url"
-                value={
-                  draft.sourceUrl
-                }
-                onChange={
-                  (event) =>
-                    updateDraft(
-                      'sourceUrl',
-                      event.target.value
-                    )
-                }
-                placeholder="https://..."
-              />
-            </label>
+
+                <div className="admin-field admin-field-wide">
+                  <span>
+                    IMAGE URL
+                  </span>
+
+                  <input
+                    type="url"
+                    value={
+                      draft.imageUrl ||
+                      ''
+                    }
+                    onChange={
+                      (event) =>
+                        updateDraft(
+                          'imageUrl',
+                          event.target.value
+                        )
+                    }
+                    placeholder="Paste direct image URL"
+                  />
+
+                  {draft.imageUrl && (
+                    <img
+                      key={
+                        draft.imageUrl
+                      }
+                      src={
+                        normalizeSourceUrl(
+                          draft.imageUrl
+                        )
+                      }
+                      alt="Historic preview"
+                      loading="lazy"
+                      onError={
+                        (event) => {
+                          event.currentTarget.style.display =
+                            'none'
+                        }
+                      }
+                      style={{
+                        display:
+                          'block',
+
+                        width:
+                          '100%',
+
+                        maxWidth:
+                          '420px',
+
+                        maxHeight:
+                          '260px',
+
+                        objectFit:
+                          'cover',
+
+                        margin:
+                          '12px 0 0',
+
+                        borderRadius:
+                          '4px',
+                      }}
+                    />
+                  )}
+                </div>
+              </>
+            )}
 
 
             {tab ===

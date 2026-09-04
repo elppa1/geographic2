@@ -20,6 +20,162 @@ import {
 } from './cities/index.js'
 
 
+const WEATHER_REFRESH_MS =
+  15 * 60 * 1000
+
+
+function getWeatherAtmosphere(
+  current
+) {
+  const code =
+    Number(
+      current?.weather_code
+    )
+
+
+  const cloudCover =
+    Number(
+      current?.cloud_cover ||
+      0
+    )
+
+
+  if (
+    [
+      95,
+      96,
+      99,
+    ].includes(
+      code
+    )
+  ) {
+    return 'storm'
+  }
+
+
+  if (
+    [
+      71,
+      73,
+      75,
+      77,
+      85,
+      86,
+    ].includes(
+      code
+    ) ||
+    Number(
+      current?.snowfall ||
+      0
+    ) >
+      0
+  ) {
+    return 'snow'
+  }
+
+
+  if (
+    [
+      45,
+      48,
+    ].includes(
+      code
+    )
+  ) {
+    return 'fog'
+  }
+
+
+  if (
+    [
+      51,
+      53,
+      55,
+      56,
+      57,
+      61,
+      63,
+      65,
+      66,
+      67,
+      80,
+      81,
+      82,
+    ].includes(
+      code
+    ) ||
+    Number(
+      current?.rain ||
+      0
+    ) >
+      0 ||
+    Number(
+      current?.precipitation ||
+      0
+    ) >
+      0
+  ) {
+    return 'rain'
+  }
+
+
+  if (
+    [
+      1,
+      2,
+      3,
+    ].includes(
+      code
+    ) ||
+    cloudCover >=
+      35
+  ) {
+    return 'cloudy'
+  }
+
+
+  return 'clear'
+}
+
+
+function getIssueAtmosphere(
+  issue
+) {
+  if (
+    !issue
+  ) {
+    return 'none'
+  }
+
+
+  const stored =
+    String(
+      issue.atmosphere ||
+      ''
+    )
+      .trim()
+      .toLowerCase()
+
+
+  if (
+    stored
+  ) {
+    return stored
+  }
+
+
+  if (
+    issue.id ===
+      'historic-issue-001'
+  ) {
+    return 'halloween'
+  }
+
+
+  return 'none'
+}
+
+
 const NEWS_HISTORY_STEPS = [
   {
     value:
@@ -307,6 +463,65 @@ function GeographicApp() {
     )
 
 
+  const activeHistoricIssue =
+    useMemo(
+      () =>
+        historicIssueFilter ===
+          'all'
+          ? null
+          : (
+              publishedHistoricIssues.find(
+                (
+                  issue
+                ) =>
+                  issue.id ===
+                    historicIssueFilter
+              ) ||
+              null
+            ),
+      [
+        historicIssueFilter,
+        publishedHistoricIssues,
+      ]
+    )
+
+
+  const [
+    atmosphereEnabled,
+    setAtmosphereEnabled,
+  ] =
+    useState(
+      true
+    )
+
+
+  const [
+    weatherAtmosphere,
+    setWeatherAtmosphere,
+  ] =
+    useState(
+      'clear'
+    )
+
+
+  const [
+    weatherIsNight,
+    setWeatherIsNight,
+  ] =
+    useState(
+      false
+    )
+
+
+  const issueAtmosphere =
+    activePinFilter ===
+      'historic'
+      ? getIssueAtmosphere(
+          activeHistoricIssue
+        )
+      : 'none'
+
+
   const [
     newsRangeFilter,
     setNewsRangeFilter,
@@ -452,6 +667,143 @@ function GeographicApp() {
     [
       historicIssueFilter,
       publishedHistoricIssues,
+    ]
+  )
+
+
+  useEffect(
+    () => {
+      let cancelled =
+        false
+
+
+      const center =
+        Array.isArray(
+          city?.center
+        )
+          ? city.center
+          : []
+
+
+      const longitude =
+        Number(
+          center[0]
+        )
+
+
+      const latitude =
+        Number(
+          center[1]
+        )
+
+
+      if (
+        !Number.isFinite(
+          longitude
+        ) ||
+        !Number.isFinite(
+          latitude
+        )
+      ) {
+        return undefined
+      }
+
+
+      async function refreshWeather() {
+        try {
+          const params =
+            new URLSearchParams({
+              latitude:
+                String(
+                  latitude
+                ),
+
+              longitude:
+                String(
+                  longitude
+                ),
+
+              current:
+                'weather_code,is_day,precipitation,rain,snowfall,cloud_cover',
+
+              timezone:
+                'America/Toronto',
+            })
+
+
+          const response =
+            await fetch(
+              `https://api.open-meteo.com/v1/forecast?${params.toString()}`
+            )
+
+
+          if (
+            !response.ok
+          ) {
+            throw new Error(
+              `Weather unavailable: ${response.status}`
+            )
+          }
+
+
+          const payload =
+            await response.json()
+
+
+          if (
+            cancelled
+          ) {
+            return
+          }
+
+
+          setWeatherAtmosphere(
+            getWeatherAtmosphere(
+              payload?.current
+            )
+          )
+
+
+          setWeatherIsNight(
+            Number(
+              payload?.current?.is_day
+            ) ===
+              0
+          )
+        }
+        catch (
+          error
+        ) {
+          console.warn(
+            'ATMOSPHERE WEATHER ERROR:',
+            error
+          )
+        }
+      }
+
+
+      refreshWeather()
+
+
+      const timer =
+        window.setInterval(
+          refreshWeather,
+          WEATHER_REFRESH_MS
+        )
+
+
+      return () => {
+        cancelled =
+          true
+
+
+        window.clearInterval(
+          timer
+        )
+      }
+    },
+    [
+      city,
     ]
   )
 
@@ -699,6 +1051,240 @@ function GeographicApp() {
             cursor: pointer;
           }
 
+          .atmosphere-control {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+          }
+
+          .atmosphere-toggle {
+            border: 1px solid rgba(0,0,0,0.14);
+            padding: 4px 7px;
+            background: #fff;
+            color: #111;
+            font: inherit;
+            font-size: 7px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            cursor: pointer;
+          }
+
+          .atmosphere-toggle-active {
+            background: #111;
+            color: #fff;
+          }
+
+          .map {
+            isolation: isolate;
+          }
+
+          .map::before,
+          .map::after {
+            content: '';
+            position: absolute;
+            pointer-events: none;
+            display: none;
+          }
+
+          .map::before {
+            inset: -18%;
+            z-index: 2;
+          }
+
+          .map::after {
+            inset: -12%;
+            z-index: 3;
+          }
+
+          .map .maplibregl-canvas-container {
+            z-index: 0;
+          }
+
+          .map .maplibregl-marker {
+            z-index: 10;
+          }
+
+          .map .maplibregl-popup {
+            z-index: 20;
+          }
+
+          .map.issue-atmosphere-halloween::before {
+            display: block;
+            opacity: 0.72;
+            background:
+              radial-gradient(
+                ellipse at 18% 32%,
+                rgba(225,230,225,0.30) 0%,
+                rgba(225,230,225,0.10) 24%,
+                transparent 48%
+              ),
+              radial-gradient(
+                ellipse at 76% 55%,
+                rgba(210,218,214,0.25) 0%,
+                rgba(210,218,214,0.08) 26%,
+                transparent 52%
+              ),
+              radial-gradient(
+                ellipse at 48% 82%,
+                rgba(230,232,228,0.18) 0%,
+                transparent 42%
+              ),
+              radial-gradient(
+                circle at center,
+                transparent 36%,
+                rgba(0,0,0,0.38) 100%
+              );
+            filter: blur(22px);
+            animation: historicHalloweenFog 38s ease-in-out infinite alternate;
+          }
+
+          .map.issue-atmosphere-night::before {
+            display: block;
+            inset: 0;
+            background: rgba(5,8,14,0.20);
+          }
+
+          .map.issue-atmosphere-winter::before {
+            display: block;
+            opacity: 0.34;
+            background-image:
+              radial-gradient(circle, rgba(255,255,255,0.72) 0 1px, transparent 1.4px),
+              radial-gradient(circle, rgba(255,255,255,0.42) 0 1px, transparent 1.3px);
+            background-size: 58px 58px, 82px 82px;
+            background-position: 0 0, 24px 18px;
+            animation: liveWeatherSnow 12s linear infinite;
+          }
+
+          .map.issue-atmosphere-rain::before {
+            display: block;
+            opacity: 0.20;
+            background-image:
+              repeating-linear-gradient(
+                112deg,
+                transparent 0px,
+                transparent 19px,
+                rgba(240,245,250,0.38) 20px,
+                transparent 22px
+              );
+            background-size: 34px 34px;
+            animation: liveWeatherRain 1.35s linear infinite;
+          }
+
+          .map.issue-atmosphere-archival::before {
+            display: block;
+            inset: 0;
+            opacity: 0.18;
+            background-image:
+              repeating-linear-gradient(
+                0deg,
+                rgba(255,255,255,0.08) 0px,
+                rgba(255,255,255,0.08) 1px,
+                transparent 1px,
+                transparent 4px
+              );
+          }
+
+          .map.weather-atmosphere-cloudy::after,
+          .map.weather-atmosphere-fog::after {
+            display: block;
+            opacity: 0.34;
+            background:
+              radial-gradient(
+                ellipse at 24% 45%,
+                rgba(245,247,248,0.34) 0%,
+                transparent 44%
+              ),
+              radial-gradient(
+                ellipse at 72% 58%,
+                rgba(240,243,245,0.28) 0%,
+                transparent 48%
+              );
+            filter: blur(28px);
+            animation: liveWeatherClouds 52s ease-in-out infinite alternate;
+          }
+
+          .map.weather-atmosphere-fog::after {
+            opacity: 0.52;
+          }
+
+          .map.weather-atmosphere-rain::after,
+          .map.weather-atmosphere-storm::after {
+            display: block;
+            opacity: 0.22;
+            background-image:
+              repeating-linear-gradient(
+                112deg,
+                transparent 0px,
+                transparent 19px,
+                rgba(240,245,250,0.42) 20px,
+                transparent 22px
+              );
+            background-size: 34px 34px;
+            animation: liveWeatherRain 1.15s linear infinite;
+          }
+
+          .map.weather-atmosphere-storm::after {
+            opacity: 0.34;
+          }
+
+          .map.weather-atmosphere-snow::after {
+            display: block;
+            opacity: 0.46;
+            background-image:
+              radial-gradient(circle, rgba(255,255,255,0.80) 0 1.2px, transparent 1.5px),
+              radial-gradient(circle, rgba(255,255,255,0.55) 0 1px, transparent 1.3px);
+            background-size: 46px 46px, 68px 68px;
+            background-position: 0 0, 20px 10px;
+            animation: liveWeatherSnow 9s linear infinite;
+          }
+
+          @keyframes historicHalloweenFog {
+            from {
+              transform: translate3d(-4%, -1%, 0) scale(1.02);
+            }
+
+            to {
+              transform: translate3d(5%, 2%, 0) scale(1.08);
+            }
+          }
+
+          @keyframes liveWeatherClouds {
+            from {
+              transform: translate3d(-5%, 0, 0) scale(1.03);
+            }
+
+            to {
+              transform: translate3d(5%, 1%, 0) scale(1.08);
+            }
+          }
+
+          @keyframes liveWeatherRain {
+            from {
+              transform: translate3d(-20px, -34px, 0);
+            }
+
+            to {
+              transform: translate3d(20px, 34px, 0);
+            }
+          }
+
+          @keyframes liveWeatherSnow {
+            from {
+              transform: translate3d(0, -50px, 0);
+            }
+
+            to {
+              transform: translate3d(18px, 50px, 0);
+            }
+          }
+
+          @media (prefers-reduced-motion: reduce) {
+            .map::before,
+            .map::after {
+              animation: none !important;
+            }
+          }
+
           @media (max-width: 700px) {
             .news-history-control {
               gap: 4px;
@@ -940,6 +1526,27 @@ function GeographicApp() {
 
         historicIssueFilter={
           historicIssueFilter
+        }
+
+        issueAtmosphere={
+          atmosphereEnabled
+            ? issueAtmosphere
+            : 'none'
+        }
+
+        weatherAtmosphere={
+          atmosphereEnabled
+            ? weatherAtmosphere
+            : 'clear'
+        }
+
+        weatherIsNight={
+          atmosphereEnabled &&
+          weatherIsNight
+        }
+
+        atmosphereEnabled={
+          atmosphereEnabled
         }
 
         onSelectHistoricalLayer={
@@ -1414,6 +2021,40 @@ function GeographicApp() {
         )}
 
 
+        <div className="atmosphere-control">
+          <button
+            type="button"
+            className={
+              atmosphereEnabled
+                ? 'atmosphere-toggle atmosphere-toggle-active'
+                : 'atmosphere-toggle'
+            }
+            onClick={() =>
+              setAtmosphereEnabled(
+                (
+                  current
+                ) =>
+                  !current
+              )
+            }
+            title="Live Toronto weather and issue atmosphere"
+          >
+            ATMOSPHERE {
+              atmosphereEnabled
+                ? 'ON'
+                : 'OFF'
+            }
+            {atmosphereEnabled &&
+            weatherAtmosphere !==
+              'clear'
+              ? (
+                  ` · ${weatherAtmosphere.toUpperCase()}`
+                )
+              : ''}
+          </button>
+        </div>
+
+
         {activePinFilter ===
           'news' && (
           <div className="news-history-control">
@@ -1842,6 +2483,114 @@ function GeographicApp() {
 
 
       <div className="timeline-shell">
+        <div
+          style={{
+            display:
+              'flex',
+
+            alignItems:
+              'center',
+
+            justifyContent:
+              'space-between',
+
+            gap:
+              '8px',
+
+            marginBottom:
+              '5px',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() =>
+              setSelectedLayer(
+                defaultLayer
+              )
+            }
+            style={{
+              border:
+                selectedLayer?.year ===
+                  defaultLayer?.year &&
+                selectedLayer?.layerType ===
+                  defaultLayer?.layerType
+                  ? '1px solid #fff'
+                  : '1px solid rgba(255,255,255,0.35)',
+
+              padding:
+                '4px 8px',
+
+              background:
+                selectedLayer?.year ===
+                  defaultLayer?.year &&
+                selectedLayer?.layerType ===
+                  defaultLayer?.layerType
+                  ? '#fff'
+                  : 'transparent',
+
+              color:
+                selectedLayer?.year ===
+                  defaultLayer?.year &&
+                selectedLayer?.layerType ===
+                  defaultLayer?.layerType
+                  ? '#111'
+                  : '#fff',
+
+              font:
+                'inherit',
+
+              fontSize:
+                '7px',
+
+              fontWeight:
+                800,
+
+              letterSpacing:
+                '0.10em',
+
+              cursor:
+                'pointer',
+            }}
+          >
+            HOME
+          </button>
+
+          {activePinFilter ===
+            'historic' &&
+          activeHistoricIssue && (
+            <span
+              style={{
+                overflow:
+                  'hidden',
+
+                textOverflow:
+                  'ellipsis',
+
+                whiteSpace:
+                  'nowrap',
+
+                fontSize:
+                  '6px',
+
+                fontWeight:
+                  700,
+
+                letterSpacing:
+                  '0.08em',
+
+                opacity:
+                  0.72,
+              }}
+            >
+              ISSUE {
+                activeHistoricIssue.number ||
+                ''
+              } STAYS ON
+            </span>
+          )}
+        </div>
+
+
         <TimeMachine
           layers={
             timelineLayers

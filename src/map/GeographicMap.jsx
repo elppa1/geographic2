@@ -387,6 +387,18 @@ const GeographicMap =
         historicIssueFilter =
           'all',
 
+        issueAtmosphere =
+          'none',
+
+        weatherAtmosphere =
+          'clear',
+
+        weatherIsNight =
+          false,
+
+        atmosphereEnabled =
+          true,
+
         onSelectHistoricalLayer,
 
         newsRangeFilter =
@@ -716,6 +728,208 @@ const GeographicMap =
         layersReady,
         selectedLayer,
         opacity,
+      ])
+
+
+      // ========================================================
+      // ATMOSPHERE
+      // ========================================================
+
+      useEffect(() => {
+        const map =
+          mapRef.current
+
+
+        if (
+          !map ||
+          !mapReady
+        ) {
+          return
+        }
+
+
+        const canvas =
+          map.getCanvas()
+
+
+        if (
+          !canvas
+        ) {
+          return
+        }
+
+
+        canvas.style.transition =
+          'filter 800ms ease'
+
+
+        if (
+          !atmosphereEnabled
+        ) {
+          canvas.style.filter =
+            ''
+
+
+          return
+        }
+
+
+        let brightness =
+          1
+
+        let saturation =
+          1
+
+        let contrast =
+          1
+
+
+        if (
+          issueAtmosphere ===
+            'halloween'
+        ) {
+          brightness *=
+            0.76
+
+          saturation *=
+            0.72
+
+          contrast *=
+            1.06
+        }
+
+
+        if (
+          issueAtmosphere ===
+            'night'
+        ) {
+          brightness *=
+            0.74
+
+          saturation *=
+            0.78
+        }
+
+
+        if (
+          issueAtmosphere ===
+            'winter'
+        ) {
+          saturation *=
+            0.82
+
+          contrast *=
+            1.03
+        }
+
+
+        if (
+          issueAtmosphere ===
+            'rain'
+        ) {
+          brightness *=
+            0.88
+
+          saturation *=
+            0.90
+        }
+
+
+        if (
+          issueAtmosphere ===
+            'archival'
+        ) {
+          saturation *=
+            0.68
+
+          contrast *=
+            1.05
+        }
+
+
+        if (
+          weatherAtmosphere ===
+            'cloudy'
+        ) {
+          brightness *=
+            0.94
+        }
+
+
+        if (
+          weatherAtmosphere ===
+            'fog'
+        ) {
+          brightness *=
+            0.90
+
+          saturation *=
+            0.90
+        }
+
+
+        if (
+          weatherAtmosphere ===
+            'rain'
+        ) {
+          brightness *=
+            0.88
+
+          saturation *=
+            0.90
+        }
+
+
+        if (
+          weatherAtmosphere ===
+            'snow'
+        ) {
+          brightness *=
+            0.96
+
+          saturation *=
+            0.86
+        }
+
+
+        if (
+          weatherAtmosphere ===
+            'storm'
+        ) {
+          brightness *=
+            0.78
+
+          saturation *=
+            0.82
+
+          contrast *=
+            1.06
+        }
+
+
+        if (
+          weatherIsNight
+        ) {
+          brightness *=
+            0.82
+
+          saturation *=
+            0.88
+        }
+
+
+        canvas.style.filter =
+          (
+            `brightness(${brightness.toFixed(2)}) ` +
+            `saturate(${saturation.toFixed(2)}) ` +
+            `contrast(${contrast.toFixed(2)})`
+          )
+      }, [
+        mapReady,
+        atmosphereEnabled,
+        issueAtmosphere,
+        weatherAtmosphere,
+        weatherIsNight,
       ])
 
 
@@ -1764,13 +1978,46 @@ const GeographicMap =
       }
 
 
+      const mapClassName =
+        [
+          'map',
+
+          atmosphereEnabled &&
+          issueAtmosphere &&
+          issueAtmosphere !==
+            'none'
+            ? `issue-atmosphere-${issueAtmosphere}`
+            : '',
+
+          atmosphereEnabled &&
+          weatherAtmosphere &&
+          weatherAtmosphere !==
+            'clear'
+            ? `weather-atmosphere-${weatherAtmosphere}`
+            : '',
+
+          atmosphereEnabled &&
+          weatherIsNight
+            ? 'weather-atmosphere-night'
+            : '',
+        ]
+          .filter(
+            Boolean
+          )
+          .join(
+            ' '
+          )
+
+
       return (
         <>
           <div
             ref={
               mapContainerRef
             }
-            className="map"
+            className={
+              mapClassName
+            }
           />
 
 

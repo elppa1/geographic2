@@ -1173,6 +1173,120 @@ function historicPinIsVisible({
 
 
 // ============================================================
+// HISTORIC ISSUE · ACTIVE LAYER PULSE
+// ============================================================
+
+function applyHistoricLayerPulse({
+  element,
+  active,
+}) {
+  if (
+    !active ||
+    !element
+  ) {
+    return
+  }
+
+
+  element.style.filter =
+    'drop-shadow(0 0 6px rgba(255,255,255,0.96))'
+
+
+  if (
+    typeof window !==
+      'undefined' &&
+    window.matchMedia?.(
+      '(prefers-reduced-motion: reduce)'
+    )
+      .matches
+  ) {
+    return
+  }
+
+
+  if (
+    typeof element.animate !==
+      'function'
+  ) {
+    return
+  }
+
+
+  element.animate(
+    [
+      {
+        transform:
+          'scale(1)',
+
+        opacity:
+          1,
+      },
+      {
+        transform:
+          'scale(1.18)',
+
+        opacity:
+          0.74,
+      },
+      {
+        transform:
+          'scale(1)',
+
+        opacity:
+          1,
+      },
+    ],
+    {
+      duration:
+        1300,
+
+      iterations:
+        Infinity,
+
+      easing:
+        'ease-in-out',
+    }
+  )
+}
+
+
+function getHistoricStoryLayer({
+  pin,
+  city,
+}) {
+  if (
+    pin?.layerPlacementMode ===
+      'manual' &&
+    Number.isFinite(
+      Number(
+        pin?.layerOverrideYear
+      )
+    ) &&
+    pin?.layerOverrideType
+  ) {
+    return {
+      year:
+        Number(
+          pin.layerOverrideYear
+        ),
+
+      layerType:
+        pin.layerOverrideType,
+    }
+  }
+
+
+  return getClosestEventLayer({
+    city,
+
+    year:
+      pin?.year ||
+      pin?.startYear,
+  })
+}
+
+
+// ============================================================
 // CURRENT CONTENT
 // ============================================================
 
@@ -1936,6 +2050,8 @@ function appendMobileBusinessLink({
 function appendSeeItThenAction({
   popupContent,
   pin,
+  city,
+  selectedLayer,
   onSeeItThen,
 }) {
   if (
@@ -1966,8 +2082,35 @@ function appendSeeItThenAction({
   button.className =
     'geographic-route-action'
 
+  const targetLayer =
+    getHistoricStoryLayer({
+      pin,
+      city,
+    })
+
+
+  const alreadyOnLayer =
+    Boolean(
+      targetLayer &&
+      Number(
+        selectedLayer?.year
+      ) ===
+        Number(
+          targetLayer.year
+        ) &&
+      selectedLayer?.layerType ===
+        targetLayer.layerType
+    )
+
+
   button.textContent =
-    'SEE IT THEN →'
+    targetLayer?.year
+      ? (
+          alreadyOnLayer
+            ? `ZOOM HERE · ${targetLayer.year} →`
+            : `SEE IT IN ${targetLayer.year} →`
+        )
+      : 'SEE IT THEN →'
 
 
   button.addEventListener(
@@ -3301,6 +3444,10 @@ function createMarker({
   map,
   pin,
   pinType,
+  historicLayerMatch =
+    false,
+  selectedLayer,
+  city,
   markerOffset =
     [0, 0],
   onDirections,
@@ -3421,6 +3568,13 @@ function createMarker({
       element,
       historicIcon.emoji
     )
+
+
+    applyHistoricLayerPulse({
+      element,
+      active:
+        historicLayerMatch,
+    })
   }
   else if (
     newsEmoji
@@ -3925,6 +4079,8 @@ function createMarker({
       appendSeeItThenAction({
         popupContent,
         pin,
+        city,
+        selectedLayer,
         onSeeItThen,
       })
     }
@@ -5582,6 +5738,11 @@ function MapPins({
           selectedLayer,
         })
 
+      const issueMode =
+        historicIssueFilter !==
+          'all'
+
+
       visiblePins =
         getHistoricItems()
           .filter(
@@ -5595,8 +5756,7 @@ function MapPins({
           )
           .filter(
             (pin) =>
-              historicIssueFilter ===
-                'all' ||
+              !issueMode ||
               (
                 Array.isArray(
                   pin.issueIds
@@ -5609,10 +5769,12 @@ function MapPins({
           .filter(
             (pin) => {
               if (
+                issueMode ||
                 landingLayer
               ) {
                 return true
               }
+
 
               return historicPinIsVisible({
                 pin,
@@ -5627,6 +5789,15 @@ function MapPins({
 
               pinType:
                 'historic',
+
+              historicLayerMatch:
+                issueMode &&
+                !landingLayer &&
+                historicPinIsVisible({
+                  pin,
+                  city,
+                  selectedLayer,
+                }),
             })
           )
     }
@@ -5784,6 +5955,7 @@ function MapPins({
       ({
         pin,
         pinType,
+        historicLayerMatch,
         markerOffset,
       }) => {
         const marker =
@@ -5791,6 +5963,9 @@ function MapPins({
             map,
             pin,
             pinType,
+            historicLayerMatch,
+            selectedLayer,
+            city,
             markerOffset,
             onDirections,
             onSeeItThen,
