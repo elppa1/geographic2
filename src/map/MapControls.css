@@ -1282,53 +1282,53 @@
 }
 
 .geographic-atmosphere-rain-back {
-  opacity: 0.22;
+  opacity: 0.07;
   background-image:
     repeating-linear-gradient(
       100deg,
-      transparent 0 20px,
-      rgba(222, 235, 246, 0.48) 21px 22px,
-      transparent 23px 44px
+      transparent 0 34px,
+      rgba(222, 235, 246, 0.30) 35px,
+      transparent 36px 74px
     );
   background-size:
-    48px 105px;
+    76px 48px;
   animation:
     geographic-rain-back
-    1.05s linear infinite;
+    1.15s linear infinite;
 }
 
 .geographic-atmosphere-rain-mid {
-  opacity: 0.38;
+  opacity: 0.12;
   background-image:
     repeating-linear-gradient(
       100deg,
-      transparent 0 12px,
-      rgba(235, 244, 250, 0.62) 13px 14px,
-      transparent 15px 31px
+      transparent 0 26px,
+      rgba(235, 244, 250, 0.38) 27px,
+      transparent 28px 61px
     );
   background-size:
-    36px 82px;
+    64px 58px;
   animation:
     geographic-rain-mid
-    0.66s linear infinite;
+    0.76s linear infinite;
 }
 
 .geographic-atmosphere-rain-front {
-  opacity: 0.52;
+  opacity: 0.16;
   filter:
-    blur(0.25px);
+    blur(0.35px);
   background-image:
     repeating-linear-gradient(
       100deg,
-      transparent 0 24px,
-      rgba(248, 251, 253, 0.78) 25px 27px,
-      transparent 28px 57px
+      transparent 0 46px,
+      rgba(248, 251, 253, 0.48) 47px,
+      transparent 48px 96px
     );
   background-size:
-    62px 128px;
+    98px 72px;
   animation:
     geographic-rain-front
-    0.43s linear infinite;
+    0.52s linear infinite;
 }
 
 .geographic-atmosphere-rain-mist {
@@ -1337,7 +1337,7 @@
   right: -10%;
   bottom: -8%;
   height: 42%;
-  opacity: 0.52;
+  opacity: 0.40;
   background:
     linear-gradient(
       0deg,
@@ -1461,12 +1461,12 @@
 
 .geographic-atmosphere-storm
 .geographic-atmosphere-rain-front {
-  opacity: 0.72;
+  opacity: 0.28;
 }
 
 .geographic-atmosphere-storm
 .geographic-atmosphere-rain-mid {
-  opacity: 0.56;
+  opacity: 0.22;
 }
 
 .geographic-atmosphere-lightning {
@@ -1515,36 +1515,36 @@
 @keyframes geographic-rain-back {
   from {
     background-position:
-      0 -105px;
+      0 -48px;
   }
 
   to {
     background-position:
-      20px 105px;
+      12px 48px;
   }
 }
 
 @keyframes geographic-rain-mid {
   from {
     background-position:
-      0 -82px;
+      0 -58px;
   }
 
   to {
     background-position:
-      26px 82px;
+      16px 58px;
   }
 }
 
 @keyframes geographic-rain-front {
   from {
     background-position:
-      0 -128px;
+      0 -72px;
   }
 
   to {
     background-position:
-      34px 128px;
+      20px 72px;
   }
 }
 
