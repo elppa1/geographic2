@@ -789,13 +789,13 @@ const GeographicMap =
             'halloween'
         ) {
           brightness *=
-            0.76
+            0.66
 
           saturation *=
-            0.72
+            0.62
 
           contrast *=
-            1.06
+            1.10
         }
 
 
@@ -852,7 +852,13 @@ const GeographicMap =
             'cloudy'
         ) {
           brightness *=
-            0.94
+            0.89
+
+          saturation *=
+            0.92
+
+          contrast *=
+            1.02
         }
 
 
@@ -861,10 +867,13 @@ const GeographicMap =
             'fog'
         ) {
           brightness *=
-            0.90
+            0.93
 
           saturation *=
-            0.90
+            0.80
+
+          contrast *=
+            0.94
         }
 
 
@@ -885,10 +894,13 @@ const GeographicMap =
             'snow'
         ) {
           brightness *=
-            0.96
+            0.98
 
           saturation *=
-            0.86
+            0.78
+
+          contrast *=
+            1.03
         }
 
 
