@@ -127,6 +127,30 @@ const PUBLISHED_NEW_DEVELOPMENT_ARCHIVE_ENDPOINT =
   '/api/geographic/toronto/new/development/published/archive'
 
 
+const PUBLISHED_NEW_EVENTS_ENDPOINT =
+  '/api/geographic/toronto/new/events/published'
+
+
+const PUBLISHED_NEW_EVENTS_UPSERT_ENDPOINT =
+  '/api/geographic/toronto/new/events/published/upsert'
+
+
+const PUBLISHED_NEW_EVENTS_ARCHIVE_ENDPOINT =
+  '/api/geographic/toronto/new/events/published/archive'
+
+
+const PUBLISHED_NEW_SPORTS_ENDPOINT =
+  '/api/geographic/toronto/new/sports/published'
+
+
+const PUBLISHED_NEW_SPORTS_UPSERT_ENDPOINT =
+  '/api/geographic/toronto/new/sports/published/upsert'
+
+
+const PUBLISHED_NEW_SPORTS_ARCHIVE_ENDPOINT =
+  '/api/geographic/toronto/new/sports/published/archive'
+
+
 const TORONTO_NEW_SERVER_MIGRATION_KEY =
   'elppa-geographic-toronto-new-server-migrated-v1'
 
@@ -980,6 +1004,18 @@ const EMPTY_NEW = {
 
   expectedAt:
     '',
+
+  eventDate:
+    '',
+
+  startTime:
+    '',
+
+  endTime:
+    '',
+
+  venue:
+    '',
 }
 
 
@@ -996,6 +1032,26 @@ const NEW_DEVELOPMENT_CATEGORIES = [
   'housing',
   'transit',
   'public-space',
+]
+
+
+const NEW_EVENT_CATEGORIES = [
+  'event',
+  'theatre',
+  'comedy',
+  'concert',
+  'festival',
+  'exhibition',
+  'talk',
+  'screening',
+  'community-event',
+]
+
+
+const NEW_SPORTS_CATEGORIES = [
+  'sports',
+  'game',
+  'match',
 ]
 
 
@@ -1257,7 +1313,11 @@ function getNewServerSubtype(
     explicitType ===
       'business' ||
     explicitType ===
-      'development'
+      'development' ||
+    explicitType ===
+      'events' ||
+    explicitType ===
+      'sports'
   ) {
     return explicitType
   }
@@ -1287,6 +1347,24 @@ function getNewServerSubtype(
     )
   ) {
     return 'development'
+  }
+
+
+  if (
+    NEW_EVENT_CATEGORIES.includes(
+      category
+    )
+  ) {
+    return 'events'
+  }
+
+
+  if (
+    NEW_SPORTS_CATEGORIES.includes(
+      category
+    )
+  ) {
+    return 'sports'
   }
 
 
@@ -2183,24 +2261,32 @@ function newRecordMatchesType(
       .toLowerCase()
 
 
-  const businessCategories = [
-    'store',
-    'restaurant',
-    'business',
-  ]
-
-
-  const isBusiness =
-    businessCategories.includes(
-      category
+  const explicitType =
+    String(
+      record.newType ||
+      ''
     )
+      .trim()
+      .toLowerCase()
+
+
+  if (
+    explicitType
+  ) {
+    return (
+      explicitType ===
+      filter
+    )
+  }
 
 
   if (
     filter ===
     'business'
   ) {
-    return isBusiness
+    return NEW_BUSINESS_CATEGORIES.includes(
+      category
+    )
   }
 
 
@@ -2208,7 +2294,29 @@ function newRecordMatchesType(
     filter ===
     'development'
   ) {
-    return !isBusiness
+    return NEW_DEVELOPMENT_CATEGORIES.includes(
+      category
+    )
+  }
+
+
+  if (
+    filter ===
+    'events'
+  ) {
+    return NEW_EVENT_CATEGORIES.includes(
+      category
+    )
+  }
+
+
+  if (
+    filter ===
+    'sports'
+  ) {
+    return NEW_SPORTS_CATEGORIES.includes(
+      category
+    )
   }
 
 
@@ -5786,6 +5894,12 @@ function AdminRoom() {
 
             business:
               0,
+
+            events:
+              0,
+
+            sports:
+              0,
           }
         }
 
@@ -5826,6 +5940,28 @@ function AdminRoom() {
             .length
 
 
+        const events =
+          dateFiltered.filter(
+            (record) =>
+              newRecordMatchesType(
+                record,
+                'events'
+              )
+          )
+            .length
+
+
+        const sports =
+          dateFiltered.filter(
+            (record) =>
+              newRecordMatchesType(
+                record,
+                'sports'
+              )
+          )
+            .length
+
+
         return {
           all:
             dateFiltered.length,
@@ -5833,6 +5969,10 @@ function AdminRoom() {
           development,
 
           business,
+
+          events,
+
+          sports,
         }
       },
       [
@@ -7155,6 +7295,8 @@ function AdminRoom() {
   // Toronto NEW is split into:
   //   /new/business
   //   /new/development
+  //   /new/events
+  //   /new/sports
   //
   // Existing browser pins are migrated once, idempotently, into the
   // matching server store. Browser data remains as a fallback while the
@@ -7195,6 +7337,40 @@ function AdminRoom() {
 
         archive:
           PUBLISHED_NEW_DEVELOPMENT_ARCHIVE_ENDPOINT,
+      }
+    }
+
+
+    if (
+      subtype ===
+        'events'
+    ) {
+      return {
+        published:
+          PUBLISHED_NEW_EVENTS_ENDPOINT,
+
+        upsert:
+          PUBLISHED_NEW_EVENTS_UPSERT_ENDPOINT,
+
+        archive:
+          PUBLISHED_NEW_EVENTS_ARCHIVE_ENDPOINT,
+      }
+    }
+
+
+    if (
+      subtype ===
+        'sports'
+    ) {
+      return {
+        published:
+          PUBLISHED_NEW_SPORTS_ENDPOINT,
+
+        upsert:
+          PUBLISHED_NEW_SPORTS_UPSERT_ENDPOINT,
+
+        archive:
+          PUBLISHED_NEW_SPORTS_ARCHIVE_ENDPOINT,
       }
     }
 
@@ -7801,6 +7977,8 @@ function AdminRoom() {
       let [
         serverBusiness,
         serverDevelopment,
+        serverEvents,
+        serverSports,
         legacyPublishedNew,
       ] =
         await Promise.all([
@@ -7810,6 +7988,14 @@ function AdminRoom() {
 
           fetchPublishedNewSubtype(
             'development'
+          ),
+
+          fetchPublishedNewSubtype(
+            'events'
+          ),
+
+          fetchPublishedNewSubtype(
+            'sports'
           ),
 
           fetchLegacyPublishedNew(),
@@ -7881,6 +8067,12 @@ function AdminRoom() {
 
         development:
           serverDevelopment,
+
+        events:
+          serverEvents,
+
+        sports:
+          serverSports,
       }
 
 
@@ -7892,6 +8084,8 @@ function AdminRoom() {
         const subtype of [
           'business',
           'development',
+          'events',
+          'sports',
         ]
       ) {
         const localSubtype =
@@ -14260,6 +14454,54 @@ function AdminRoom() {
                       HOUSING
                     </option>
 
+                    <option value="event">
+                      EVENT
+                    </option>
+
+                    <option value="theatre">
+                      THEATRE / PLAY
+                    </option>
+
+                    <option value="comedy">
+                      COMEDY
+                    </option>
+
+                    <option value="concert">
+                      CONCERT
+                    </option>
+
+                    <option value="festival">
+                      FESTIVAL
+                    </option>
+
+                    <option value="exhibition">
+                      EXHIBITION
+                    </option>
+
+                    <option value="talk">
+                      TALK
+                    </option>
+
+                    <option value="screening">
+                      SCREENING
+                    </option>
+
+                    <option value="community-event">
+                      COMMUNITY EVENT
+                    </option>
+
+                    <option value="sports">
+                      SPORTS
+                    </option>
+
+                    <option value="game">
+                      SPORTS GAME
+                    </option>
+
+                    <option value="match">
+                      SPORTS MATCH
+                    </option>
+
                     <option value="other">
                       OTHER
                     </option>
@@ -14338,6 +14580,105 @@ function AdminRoom() {
                       )}
                     </select>
                   </label>
+                )}
+
+
+                {(getNewServerSubtype(
+                  draft
+                ) ===
+                  'events' ||
+                  getNewServerSubtype(
+                    draft
+                  ) ===
+                  'sports') && (
+                  <>
+                    <label className="admin-field">
+                      <span>
+                        VENUE
+                      </span>
+
+                      <input
+                        value={
+                          draft.venue ||
+                          ''
+                        }
+                        onChange={
+                          (event) =>
+                            updateDraft(
+                              'venue',
+                              event.target.value
+                            )
+                        }
+                        placeholder="Massey Hall"
+                      />
+                    </label>
+
+
+                    <label className="admin-field">
+                      <span>
+                        EVENT DATE
+                      </span>
+
+                      <input
+                        type="date"
+                        value={
+                          draft.eventDate ||
+                          ''
+                        }
+                        onChange={
+                          (event) =>
+                            updateDraft(
+                              'eventDate',
+                              event.target.value
+                            )
+                        }
+                      />
+                    </label>
+
+
+                    <label className="admin-field">
+                      <span>
+                        START TIME
+                      </span>
+
+                      <input
+                        type="time"
+                        value={
+                          draft.startTime ||
+                          ''
+                        }
+                        onChange={
+                          (event) =>
+                            updateDraft(
+                              'startTime',
+                              event.target.value
+                            )
+                        }
+                      />
+                    </label>
+
+
+                    <label className="admin-field">
+                      <span>
+                        END TIME
+                      </span>
+
+                      <input
+                        type="time"
+                        value={
+                          draft.endTime ||
+                          ''
+                        }
+                        onChange={
+                          (event) =>
+                            updateDraft(
+                              'endTime',
+                              event.target.value
+                            )
+                        }
+                      />
+                    </label>
+                  </>
                 )}
 
 
@@ -16436,6 +16777,52 @@ function AdminRoom() {
                     <span>
                       {
                         newTypeCounts.business
+                      }
+                    </span>
+                  </button>
+
+
+                  <button
+                    type="button"
+                    className={
+                      newTypeFilter ===
+                      'events'
+                        ? 'admin-review-type-filter admin-review-type-filter-active'
+                        : 'admin-review-type-filter'
+                    }
+                    onClick={() =>
+                      setNewTypeFilter(
+                        'events'
+                      )
+                    }
+                  >
+                    EVENTS
+                    <span>
+                      {
+                        newTypeCounts.events
+                      }
+                    </span>
+                  </button>
+
+
+                  <button
+                    type="button"
+                    className={
+                      newTypeFilter ===
+                      'sports'
+                        ? 'admin-review-type-filter admin-review-type-filter-active'
+                        : 'admin-review-type-filter'
+                    }
+                    onClick={() =>
+                      setNewTypeFilter(
+                        'sports'
+                      )
+                    }
+                  >
+                    SPORTS
+                    <span>
+                      {
+                        newTypeCounts.sports
                       }
                     </span>
                   </button>
