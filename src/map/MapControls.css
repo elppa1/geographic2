@@ -1282,53 +1282,53 @@
 }
 
 .geographic-atmosphere-rain-back {
-  opacity: 0.07;
+  opacity: 0.13;
   background-image:
     repeating-linear-gradient(
       100deg,
-      transparent 0 34px,
-      rgba(222, 235, 246, 0.30) 35px,
-      transparent 36px 74px
+      transparent 0 28px,
+      rgba(222, 235, 246, 0.38) 29px,
+      transparent 30px 60px
     );
   background-size:
-    76px 48px;
+    62px 68px;
   animation:
     geographic-rain-back
-    1.15s linear infinite;
+    1.05s linear infinite;
 }
 
 .geographic-atmosphere-rain-mid {
-  opacity: 0.12;
+  opacity: 0.22;
   background-image:
     repeating-linear-gradient(
       100deg,
-      transparent 0 26px,
-      rgba(235, 244, 250, 0.38) 27px,
-      transparent 28px 61px
+      transparent 0 20px,
+      rgba(235, 244, 250, 0.48) 21px,
+      transparent 22px 46px
     );
   background-size:
-    64px 58px;
+    50px 62px;
   animation:
     geographic-rain-mid
-    0.76s linear infinite;
+    0.66s linear infinite;
 }
 
 .geographic-atmosphere-rain-front {
-  opacity: 0.16;
+  opacity: 0.30;
   filter:
-    blur(0.35px);
+    blur(0.3px);
   background-image:
     repeating-linear-gradient(
       100deg,
-      transparent 0 46px,
-      rgba(248, 251, 253, 0.48) 47px,
-      transparent 48px 96px
+      transparent 0 36px,
+      rgba(248, 251, 253, 0.58) 37px 38px,
+      transparent 39px 78px
     );
   background-size:
-    98px 72px;
+    82px 78px;
   animation:
     geographic-rain-front
-    0.52s linear infinite;
+    0.43s linear infinite;
 }
 
 .geographic-atmosphere-rain-mist {
@@ -1369,7 +1369,7 @@
 }
 
 .geographic-atmosphere-snow-back {
-  opacity: 0.52;
+  opacity: 0.42;
   filter:
     blur(0.2px);
 }
@@ -1389,7 +1389,7 @@
 }
 
 .geographic-atmosphere-snow-mid {
-  opacity: 0.78;
+  opacity: 0.62;
 }
 
 .geographic-atmosphere-snow-mid span {
@@ -1410,11 +1410,11 @@
 
 .geographic-atmosphere-snow-front {
   z-index: 10;
-  opacity: 0.92;
+  opacity: 0.72;
   filter:
     drop-shadow(
       0 1px 2px
-      rgba(255, 255, 255, 0.24)
+      rgba(255, 255, 255, 0.20)
     );
 }
 
@@ -1422,12 +1422,12 @@
   background-image:
     radial-gradient(
       circle,
-      rgba(255, 255, 255, 0.98) 0 3px,
-      rgba(255, 255, 255, 0.52) 3.4px,
-      transparent 4.4px
+      rgba(255, 255, 255, 0.90) 0 2.4px,
+      rgba(255, 255, 255, 0.40) 2.8px,
+      transparent 3.7px
     );
   background-size:
-    103px 92px;
+    116px 104px;
   background-position:
     38px 12px;
   animation:
@@ -1442,11 +1442,11 @@
   background-image:
     radial-gradient(
       ellipse,
-      rgba(255, 255, 255, 0.84) 0 1.4px,
+      rgba(255, 255, 255, 0.66) 0 1.2px,
       transparent 2px
     );
   background-size:
-    34px 29px;
+    42px 36px;
   filter:
     blur(0.4px);
   transform:
@@ -1700,7 +1700,7 @@
   }
 
   68% {
-    opacity: 0.74;
+    opacity: 0.46;
     transform:
       translate3d(
         18%,
