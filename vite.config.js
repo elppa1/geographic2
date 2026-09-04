@@ -34,6 +34,10 @@ import {
 } from './server/feeds/toronto/liveNewsroom.js'
 
 import {
+  locationSearchApi as serverLocationSearchApi,
+} from './server/locationSearch.js'
+
+import {
   nowServingFeed,
 } from './server/feeds/toronto/nowServing.js'
 
@@ -1272,7 +1276,7 @@ export default defineConfig(
         adminAuth(
           env
         ),
-        locationSearchApi(),
+        serverLocationSearchApi(),
         react(),
         cleanToronto1995Tiles(),
         enhanceHistoricalTiles(),

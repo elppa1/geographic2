@@ -17,10 +17,11 @@ export function parseIntersection(
 
 
   const patterns = [
-    /\s+and\s+/i,
     /\s*&\s*/i,
-    /\s+@\s+/i,
-    /\s+\/\s+/i,
+    /\s*\band\b\s*/i,
+    /\s*\bat\b\s*/i,
+    /\s*@\s*/i,
+    /\s*\/\s*/i,
   ]
 
 
@@ -356,6 +357,7 @@ export function getSearchConfig(
 export async function searchIntersection({
   intersection,
   city,
+  signal,
 }) {
   const config =
     getSearchConfig(
@@ -379,15 +381,11 @@ export async function searchIntersection({
 
 
   const streetA =
-    makeStreetRegex(
-      intersection.streetA
-    )
+    intersection.streetA
 
 
   const streetB =
-    makeStreetRegex(
-      intersection.streetB
-    )
+    intersection.streetB
 
 
   const params =
@@ -419,7 +417,10 @@ export async function searchIntersection({
 
   const response =
     await fetch(
-      `/api/geographic/location-search/intersection?${params.toString()}`
+      `/api/geographic/location-search/intersection?${params.toString()}`,
+      {
+        signal,
+      }
     )
 
 
@@ -512,6 +513,7 @@ export async function searchIntersection({
 export async function searchPlaces({
   query,
   city,
+  signal,
 }) {
   const config =
     getSearchConfig(
@@ -575,7 +577,10 @@ export async function searchPlaces({
 
   const response =
     await fetch(
-      `/api/geographic/location-search/place?${params.toString()}`
+      `/api/geographic/location-search/place?${params.toString()}`,
+      {
+        signal,
+      }
     )
 
 
@@ -712,6 +717,7 @@ export async function searchPlaces({
 export async function searchLocation({
   value,
   city,
+  signal,
 }) {
   const clean =
     String(
@@ -735,44 +741,22 @@ export async function searchLocation({
     )
 
 
-  let results =
-    []
-
-
   if (
     intersection
   ) {
-    try {
-      results =
-        await searchIntersection({
-          intersection,
-          city,
-        })
-    }
-    catch (
-      error
-    ) {
-      console.warn(
-        'DIRECT INTERSECTION SEARCH FAILED:',
-        error
-      )
-    }
+    return searchIntersection({
+      intersection,
+      city,
+      signal,
+    })
   }
 
 
-  if (
-    results.length ===
-      0
-  ) {
-    results =
-      await searchPlaces({
-        query:
-          clean,
+  return searchPlaces({
+    query:
+      clean,
 
-        city,
-      })
-  }
-
-
-  return results
+    city,
+    signal,
+  })
 }

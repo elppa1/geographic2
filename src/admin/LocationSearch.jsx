@@ -4,6 +4,10 @@ import {
   useState,
 } from 'react'
 
+import {
+  searchLocation,
+} from './locationSearchUtils.js'
+
 
 // ============================================================
 // INTERSECTION PARSER
@@ -762,6 +766,16 @@ function LocationSearch({
     useRef('')
 
 
+  const searchRequestRef =
+    useRef({
+      controller:
+        null,
+
+      id:
+        0,
+    })
+
+
   // ==========================================================
   // SEARCH
   // ==========================================================
@@ -796,6 +810,26 @@ function LocationSearch({
     }
 
 
+    searchRequestRef.current.controller
+      ?.abort()
+
+
+    const controller =
+      new AbortController()
+
+
+    const requestId =
+      searchRequestRef.current.id +
+      1
+
+
+    searchRequestRef.current = {
+      controller,
+      id:
+        requestId,
+    }
+
+
     setSearching(
       true
     )
@@ -812,54 +846,23 @@ function LocationSearch({
 
 
     try {
-      const intersection =
-        parseIntersection(
-          clean
-        )
+      const nextResults =
+        await searchLocation({
+          value:
+            clean,
 
+          city,
 
-      let nextResults =
-        []
+          signal:
+            controller.signal,
+        })
 
-
-      // ======================================================
-      // TRY INTERSECTION
-      // ======================================================
 
       if (
-        intersection
+        searchRequestRef.current.id !==
+          requestId
       ) {
-        try {
-          nextResults =
-            await searchIntersection({
-              intersection,
-              city,
-            })
-        } catch (
-          error
-        ) {
-          console.warn(
-            'DIRECT INTERSECTION SEARCH FAILED:',
-            error
-          )
-        }
-      }
-
-
-      // ======================================================
-      // FALL BACK TO PLACE SEARCH
-      // ======================================================
-
-      if (
-        nextResults.length === 0
-      ) {
-        nextResults =
-          await searchPlaces({
-            query:
-              clean,
-
-            city,
-          })
+        return
       }
 
 
@@ -893,6 +896,16 @@ function LocationSearch({
     } catch (
       error
     ) {
+      if (
+        error?.name ===
+          'AbortError' ||
+        searchRequestRef.current.id !==
+          requestId
+      ) {
+        return
+      }
+
+
       console.error(
         'ADMIN LOCATION SEARCH ERROR:',
         error
@@ -903,9 +916,14 @@ function LocationSearch({
         'LOCATION SEARCH UNAVAILABLE'
       )
     } finally {
-      setSearching(
-        false
-      )
+      if (
+        searchRequestRef.current.id ===
+          requestId
+      ) {
+        setSearching(
+          false
+        )
+      }
     }
   }
 
@@ -1022,6 +1040,12 @@ function LocationSearch({
         autoSelectFirst:
           true,
       })
+
+
+      return () => {
+        searchRequestRef.current.controller
+          ?.abort()
+      }
     },
     [
       autoSearch,
@@ -1044,10 +1068,30 @@ function LocationSearch({
             value
           }
           onChange={
-            (event) =>
+            (event) => {
+              searchRequestRef.current.controller
+                ?.abort()
+
+
+              searchRequestRef.current = {
+                controller:
+                  null,
+
+                id:
+                  searchRequestRef.current.id +
+                  1,
+              }
+
+
+              setSearching(
+                false
+              )
+
+
               onChange?.(
                 event.target.value
               )
+            }
           }
           onKeyDown={
             (event) => {

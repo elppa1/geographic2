@@ -26,6 +26,12 @@ const LOCATION_CACHE_MAX =
 const NOMINATIM_MIN_INTERVAL_MS =
   1100
 
+const INTERSECTION_TIME_BUDGET_MS =
+  9000
+
+const OVERPASS_ATTEMPT_MAX_MS =
+  3500
+
 const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
@@ -147,7 +153,12 @@ function setLocationCache(
 
 
 async function fetchNominatim(
-  params
+  params,
+  {
+    deadline =
+      null,
+  } =
+    {}
 ) {
   const cacheKey =
     params.toString()
@@ -187,6 +198,19 @@ async function fetchNominatim(
       )
       .then(
         async () => {
+          if (
+            remainingTime(
+              deadline,
+              1
+            ) <=
+              0
+          ) {
+            throw new Error(
+              'INTERSECTION SEARCH TIME BUDGET EXCEEDED'
+            )
+          }
+
+
           const elapsed =
             Date.now() -
             lastNominatimRequestAt
@@ -228,7 +252,16 @@ async function fetchNominatim(
 
             signal:
               AbortSignal.timeout(
-                15000
+                Math.max(
+                  1,
+                  Math.min(
+                    15000,
+                    remainingTime(
+                      deadline,
+                      15000
+                    )
+                  )
+                )
               ),
           }
 
@@ -266,6 +299,20 @@ async function fetchNominatim(
                 : 3000
 
 
+            if (
+              remainingTime(
+                deadline,
+                retryDelay +
+                  1
+              ) <=
+                retryDelay
+            ) {
+              throw new Error(
+                'INTERSECTION SEARCH TIME BUDGET EXCEEDED'
+              )
+            }
+
+
             await sleep(
               retryDelay
             )
@@ -278,7 +325,23 @@ async function fetchNominatim(
             response =
               await fetch(
                 requestUrl,
-                requestOptions
+                {
+                  ...requestOptions,
+
+                  signal:
+                    AbortSignal.timeout(
+                      Math.max(
+                        1,
+                        Math.min(
+                          15000,
+                          remainingTime(
+                            deadline,
+                            15000
+                          )
+                        )
+                      )
+                    ),
+                }
               )
           }
 
@@ -655,7 +718,12 @@ function escapeOverpassString(
 
 
 async function fetchOverpass(
-  query
+  query,
+  {
+    deadline =
+      null,
+  } =
+    {}
 ) {
   const cacheKey =
     (
@@ -703,6 +771,24 @@ async function fetchOverpass(
           of OVERPASS_ENDPOINTS
         ) {
           try {
+            const attemptTimeout =
+              Math.min(
+                OVERPASS_ATTEMPT_MAX_MS,
+                remainingTime(
+                  deadline,
+                  OVERPASS_ATTEMPT_MAX_MS
+                )
+              )
+
+
+            if (
+              attemptTimeout <=
+                0
+            ) {
+              break
+            }
+
+
             const response =
               await fetch(
                 endpoint,
@@ -730,7 +816,10 @@ async function fetchOverpass(
 
                   signal:
                     AbortSignal.timeout(
-                      15000
+                      Math.max(
+                        1,
+                        attemptTimeout
+                      )
                     ),
                 }
               )
@@ -1107,6 +1196,7 @@ async function searchOverpassIntersection({
   north,
   east,
   south,
+  deadline,
 }) {
   const bounds = {
     west:
@@ -1155,7 +1245,7 @@ async function searchOverpassIntersection({
 
   const query =
     `
-[out:json][timeout:15];
+[out:json][timeout:4];
 
 (
   way
@@ -1175,7 +1265,10 @@ out tags geom;
 
   const data =
     await fetchOverpass(
-      query
+      query,
+      {
+        deadline,
+      }
     )
 
 
@@ -1625,6 +1718,35 @@ export function locationSearchApi() {
             url.pathname ===
             '/api/geographic/location-search/intersection'
           ) {
+            const deadline =
+              Date.now() +
+              INTERSECTION_TIME_BUDGET_MS
+
+
+            const requestController =
+              new AbortController()
+
+
+            const cancelRequest = () =>
+              requestController.abort()
+
+
+            req.once(
+              'aborted',
+              cancelRequest
+            )
+
+
+            res.once(
+              'finish',
+              () =>
+                req.off(
+                  'aborted',
+                  cancelRequest
+                )
+            )
+
+
             try {
               const streetA =
                 cleanIntersectionStreet(
@@ -1711,21 +1833,31 @@ export function locationSearchApi() {
 
               try {
                 elements =
-                  await searchOverpassIntersection({
-                    streetA,
-                    streetB,
+                  await waitForSearch({
+                    promise:
+                      searchOverpassIntersection({
+                        streetA,
+                        streetB,
 
-                    west:
-                      searchOptions.west,
+                        west:
+                          searchOptions.west,
 
-                    north:
-                      searchOptions.north,
+                        north:
+                          searchOptions.north,
 
-                    east:
-                      searchOptions.east,
+                        east:
+                          searchOptions.east,
 
-                    south:
-                      searchOptions.south,
+                        south:
+                          searchOptions.south,
+
+                        deadline,
+                      }),
+
+                    deadline,
+
+                    signal:
+                      requestController.signal,
                   })
               }
               catch (
@@ -1755,9 +1887,20 @@ export function locationSearchApi() {
 
 
                 let results =
-                  await fetchNominatim(
-                    ampersandParams
-                  )
+                  await waitForSearch({
+                    promise:
+                      fetchNominatim(
+                        ampersandParams,
+                        {
+                          deadline,
+                        }
+                      ),
+
+                    deadline,
+
+                    signal:
+                      requestController.signal,
+                  })
 
 
                 if (
@@ -1774,9 +1917,20 @@ export function locationSearchApi() {
 
 
                   results =
-                    await fetchNominatim(
-                      andParams
-                    )
+                    await waitForSearch({
+                      promise:
+                        fetchNominatim(
+                          andParams,
+                          {
+                            deadline,
+                          }
+                        ),
+
+                      deadline,
+
+                      signal:
+                        requestController.signal,
+                    })
                 }
 
 
@@ -1845,6 +1999,13 @@ export function locationSearchApi() {
             catch (
               error
             ) {
+              if (
+                requestController.signal.aborted
+              ) {
+                return
+              }
+
+
               console.error(
                 'LOCATION SEARCH · INTERSECTION FAILED:',
                 error
@@ -1877,4 +2038,140 @@ export function locationSearchApi() {
       )
     },
   }
+}
+
+
+function remainingTime(
+  deadline,
+  fallback
+) {
+  return Number.isFinite(
+    deadline
+  )
+    ? Math.max(
+        0,
+        deadline -
+          Date.now()
+      )
+    : fallback
+}
+
+
+function waitForSearch({
+  promise,
+  deadline,
+  signal,
+}) {
+  return new Promise(
+    (
+      resolve,
+      reject
+    ) => {
+      let settled =
+        false
+
+
+      const finish = (
+        callback,
+        value
+      ) => {
+        if (
+          settled
+        ) {
+          return
+        }
+
+
+        settled =
+          true
+
+
+        clearTimeout(
+          timeoutId
+        )
+
+
+        signal?.removeEventListener(
+          'abort',
+          abort
+        )
+
+
+        callback(
+          value
+        )
+      }
+
+
+      const abort = () => {
+        const error =
+          new Error(
+            'LOCATION SEARCH CANCELLED'
+          )
+
+
+        error.name =
+          'AbortError'
+
+
+        finish(
+          reject,
+          error
+        )
+      }
+
+
+      const timeoutId =
+        setTimeout(
+          () => {
+            finish(
+              reject,
+              new Error(
+                'INTERSECTION SEARCH TIME BUDGET EXCEEDED'
+              )
+            )
+          },
+          Math.max(
+            1,
+            remainingTime(
+              deadline,
+              INTERSECTION_TIME_BUDGET_MS
+            )
+          )
+        )
+
+
+      if (
+        signal?.aborted
+      ) {
+        abort()
+
+        return
+      }
+
+
+      signal?.addEventListener(
+        'abort',
+        abort,
+        {
+          once:
+            true,
+        }
+      )
+
+
+      promise.then(
+        (value) =>
+          finish(
+            resolve,
+            value
+          ),
+        (error) =>
+          finish(
+            reject,
+            error
+          )
+      )
+    }
+  )
 }
