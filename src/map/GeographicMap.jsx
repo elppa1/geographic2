@@ -306,6 +306,36 @@ function AtmosphereLayer({
 }
 
 
+function HalloweenHistoricLayer({
+  active,
+}) {
+  if (
+    !active
+  ) {
+    return null
+  }
+
+  return (
+    <div
+      className="halloween-historic-atmosphere"
+      aria-hidden="true"
+    >
+      <div className="halloween-historic-cold-shade" />
+
+      <div className="halloween-historic-fog halloween-historic-fog-one" />
+      <div className="halloween-historic-fog halloween-historic-fog-two" />
+      <div className="halloween-historic-fog halloween-historic-fog-three" />
+
+      <div className="halloween-historic-wind halloween-historic-wind-one" />
+      <div className="halloween-historic-wind halloween-historic-wind-two" />
+
+      <div className="halloween-historic-blue-lightning halloween-historic-blue-lightning-one" />
+      <div className="halloween-historic-blue-lightning halloween-historic-blue-lightning-two" />
+    </div>
+  )
+}
+
+
 const ROUTE_SOURCE_ID =
   'geographic-route'
 
@@ -919,6 +949,7 @@ const GeographicMap =
           'fog',
           'storm',
           'night',
+          'halloween',
         ]
 
         if (
@@ -927,7 +958,7 @@ const GeographicMap =
           )
         ) {
           console.warn(
-            'ATMOSPHERE TEST: use live, snow, rain, fog, storm, or night'
+            'ATMOSPHERE TEST: use live, snow, rain, fog, storm, night, or halloween'
           )
 
           return
@@ -950,8 +981,11 @@ const GeographicMap =
 
   const displayedAtmosphere =
     atmosphereTest ===
-      'live'
-      ? atmosphere
+      'halloween'
+      ? null
+      : atmosphereTest ===
+          'live'
+        ? atmosphere
       : atmosphereTest ===
           'snow'
         ? {
@@ -2360,6 +2394,14 @@ const GeographicMap =
           <AtmosphereLayer
             atmosphere={
               displayedAtmosphere
+            }
+          />
+
+
+          <HalloweenHistoricLayer
+            active={
+              atmosphereTest ===
+                'halloween'
             }
           />
 
