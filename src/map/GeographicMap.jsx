@@ -47,6 +47,234 @@ setWorkerUrl(
 )
 
 
+const TORONTO_WEATHER_URL =
+  'https://api.open-meteo.com/v1/forecast?latitude=43.6532&longitude=-79.3832&current=temperature_2m,is_day,precipitation,rain,snowfall,weather_code,cloud_cover&daily=sunrise,sunset&timezone=America%2FToronto&forecast_days=1'
+
+
+function clamp01(
+  value
+) {
+  return Math.max(
+    0,
+    Math.min(
+      1,
+      value
+    )
+  )
+}
+
+
+function getAtmosphere(
+  weather
+) {
+  const now =
+    Date.now()
+
+  const sunrise =
+    weather?.daily
+      ?.sunrise?.[0]
+      ? new Date(
+          weather.daily
+            .sunrise[0]
+        ).getTime()
+      : null
+
+  const sunset =
+    weather?.daily
+      ?.sunset?.[0]
+      ? new Date(
+          weather.daily
+            .sunset[0]
+        ).getTime()
+      : null
+
+  let night =
+    weather?.current
+      ?.is_day === 0
+      ? 1
+      : 0
+
+  if (
+    sunrise &&
+    sunset
+  ) {
+    const dawnStart =
+      sunrise -
+      45 * 60 * 1000
+
+    const dawnEnd =
+      sunrise +
+      35 * 60 * 1000
+
+    const duskStart =
+      sunset -
+      60 * 60 * 1000
+
+    const duskEnd =
+      sunset +
+      50 * 60 * 1000
+
+    if (
+      now <
+      dawnStart
+    ) {
+      night = 1
+    } else if (
+      now <
+      dawnEnd
+    ) {
+      night =
+        1 -
+        clamp01(
+          (
+            now -
+            dawnStart
+          ) /
+          (
+            dawnEnd -
+            dawnStart
+          )
+        )
+    } else if (
+      now <
+      duskStart
+    ) {
+      night = 0
+    } else if (
+      now <
+      duskEnd
+    ) {
+      night =
+        clamp01(
+          (
+            now -
+            duskStart
+          ) /
+          (
+            duskEnd -
+            duskStart
+          )
+        )
+    } else {
+      night = 1
+    }
+  }
+
+  const cloud =
+    clamp01(
+      (
+        weather?.current
+          ?.cloud_cover ||
+        0
+      ) /
+      100
+    )
+
+  const rain =
+    Number(
+      weather?.current
+        ?.rain ||
+      0
+    )
+
+  const precipitation =
+    Number(
+      weather?.current
+        ?.precipitation ||
+      0
+    )
+
+  const snowfall =
+    Number(
+      weather?.current
+        ?.snowfall ||
+      0
+    )
+
+  const code =
+    Number(
+      weather?.current
+        ?.weather_code ||
+      0
+    )
+
+  const fog =
+    [
+      45,
+      48,
+    ].includes(
+      code
+    )
+
+  const darkness =
+    clamp01(
+      night * 0.56 +
+      cloud * 0.12
+    )
+
+  return {
+    darkness,
+    cloud,
+    fog,
+    rain:
+      rain > 0 ||
+      (
+        precipitation >
+          0 &&
+        snowfall <=
+          0
+      ),
+    snow:
+      snowfall >
+      0,
+  }
+}
+
+
+function AtmosphereLayer({
+  atmosphere,
+}) {
+  if (
+    !atmosphere
+  ) {
+    return null
+  }
+
+  const style = {
+    '--atmosphere-darkness':
+      atmosphere.darkness,
+    '--atmosphere-cloud':
+      atmosphere.cloud,
+  }
+
+  return (
+    <div
+      className="geographic-atmosphere"
+      style={style}
+      aria-hidden="true"
+    >
+      <div className="geographic-atmosphere-shade" />
+
+      {atmosphere.fog && (
+        <div className="geographic-atmosphere-fog" />
+      )}
+
+      {atmosphere.rain && (
+        <div className="geographic-atmosphere-rain" />
+      )}
+
+      {atmosphere.snow && (
+        <div className="geographic-atmosphere-snow">
+          <span />
+          <span />
+          <span />
+        </div>
+      )}
+    </div>
+  )
+}
+
+
 const ROUTE_SOURCE_ID =
   'geographic-route'
 
@@ -537,7 +765,102 @@ const GeographicMap =
       // CREATE MAP
       // ========================================================
 
-      useEffect(() => {
+      const [
+    atmosphere,
+    setAtmosphere,
+  ] =
+    useState(null)
+
+
+  useEffect(() => {
+    let cancelled =
+      false
+
+    let weatherData =
+      null
+
+    async function refreshWeather() {
+      try {
+        const response =
+          await fetch(
+            TORONTO_WEATHER_URL,
+            {
+              cache:
+                'no-store',
+            }
+          )
+
+        if (
+          !response.ok
+        ) {
+          throw new Error(
+            `Weather request failed: ${response.status}`
+          )
+        }
+
+        weatherData =
+          await response.json()
+
+        if (
+          !cancelled
+        ) {
+          setAtmosphere(
+            getAtmosphere(
+              weatherData
+            )
+          )
+        }
+      } catch (
+        error
+      ) {
+        console.warn(
+          'ATMOSPHERE WEATHER:',
+          error
+        )
+      }
+    }
+
+    refreshWeather()
+
+    const weatherTimer =
+      window.setInterval(
+        refreshWeather,
+        15 * 60 * 1000
+      )
+
+    const lightTimer =
+      window.setInterval(
+        () => {
+          if (
+            weatherData &&
+            !cancelled
+          ) {
+            setAtmosphere(
+              getAtmosphere(
+                weatherData
+              )
+            )
+          }
+        },
+        60 * 1000
+      )
+
+    return () => {
+      cancelled =
+        true
+
+      window.clearInterval(
+        weatherTimer
+      )
+
+      window.clearInterval(
+        lightTimer
+      )
+    }
+  }, [])
+
+
+  useEffect(() => {
         if (
           !mapContainerRef.current ||
           mapRef.current ||
@@ -1834,6 +2157,13 @@ const GeographicMap =
               mapContainerRef
             }
             className="map"
+          />
+
+
+          <AtmosphereLayer
+            atmosphere={
+              atmosphere
+            }
           />
 
 
