@@ -1267,13 +1267,11 @@
 }
 
 
-/* RAIN · three depths */
+/* RAIN · broken, irregular three-depth field */
 
 .geographic-atmosphere-rain {
   z-index: 7;
   inset: -45% -30%;
-  transform:
-    rotate(10deg);
   transform-origin:
     center;
   will-change:
@@ -1281,54 +1279,122 @@
     transform;
 }
 
+/*
+ * Each depth uses a different spacing, angle, speed and chopped mask.
+ * The masks break the old continuous diagonal bands into short,
+ * uneven rain strokes with large transparent gaps.
+ */
+
 .geographic-atmosphere-rain-back {
-  opacity: 0.13;
+  opacity: 0.15;
+  transform:
+    rotate(6deg);
   background-image:
     repeating-linear-gradient(
-      100deg,
-      transparent 0 28px,
-      rgba(222, 235, 246, 0.38) 29px,
-      transparent 30px 60px
+      101deg,
+      transparent 0 37px,
+      rgba(220, 234, 244, 0.46) 38px,
+      transparent 39px 91px
     );
   background-size:
-    62px 68px;
+    94px 73px;
+  -webkit-mask-image:
+    repeating-linear-gradient(
+      to bottom,
+      #000 0 5px,
+      transparent 5px 31px,
+      #000 31px 38px,
+      transparent 38px 86px
+    );
+  mask-image:
+    repeating-linear-gradient(
+      to bottom,
+      #000 0 5px,
+      transparent 5px 31px,
+      #000 31px 38px,
+      transparent 38px 86px
+    );
   animation:
     geographic-rain-back
-    1.05s linear infinite;
+    1.18s linear infinite;
 }
 
 .geographic-atmosphere-rain-mid {
   opacity: 0.22;
+  transform:
+    rotate(9deg);
   background-image:
     repeating-linear-gradient(
-      100deg,
-      transparent 0 20px,
-      rgba(235, 244, 250, 0.48) 21px,
-      transparent 22px 46px
+      99deg,
+      transparent 0 24px,
+      rgba(232, 242, 248, 0.52) 25px,
+      transparent 26px 67px
     );
   background-size:
-    50px 62px;
+    71px 89px;
+  background-position:
+    19px 7px;
+  -webkit-mask-image:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0 11px,
+      #000 11px 20px,
+      transparent 20px 54px,
+      #000 54px 65px,
+      transparent 65px 103px
+    );
+  mask-image:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0 11px,
+      #000 11px 20px,
+      transparent 20px 54px,
+      #000 54px 65px,
+      transparent 65px 103px
+    );
   animation:
     geographic-rain-mid
-    0.66s linear infinite;
+    0.79s linear infinite;
 }
 
 .geographic-atmosphere-rain-front {
-  opacity: 0.30;
+  opacity: 0.27;
+  transform:
+    rotate(12deg);
   filter:
-    blur(0.3px);
+    blur(0.25px);
   background-image:
     repeating-linear-gradient(
-      100deg,
-      transparent 0 36px,
-      rgba(248, 251, 253, 0.58) 37px 38px,
-      transparent 39px 78px
+      102deg,
+      transparent 0 48px,
+      rgba(246, 250, 252, 0.60) 49px 50px,
+      transparent 51px 119px
     );
   background-size:
-    82px 78px;
+    121px 107px;
+  background-position:
+    43px 23px;
+  -webkit-mask-image:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0 18px,
+      #000 18px 31px,
+      transparent 31px 76px,
+      #000 76px 93px,
+      transparent 93px 147px
+    );
+  mask-image:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0 18px,
+      #000 18px 31px,
+      transparent 31px 76px,
+      #000 76px 93px,
+      transparent 93px 147px
+    );
   animation:
     geographic-rain-front
-    0.43s linear infinite;
+    0.56s linear infinite;
 }
 
 .geographic-atmosphere-rain-mist {
@@ -1337,12 +1403,12 @@
   right: -10%;
   bottom: -8%;
   height: 42%;
-  opacity: 0.40;
+  opacity: 0.36;
   background:
     linear-gradient(
       0deg,
-      rgba(211, 222, 229, 0.22),
-      rgba(218, 228, 234, 0.09) 45%,
+      rgba(211, 222, 229, 0.20),
+      rgba(218, 228, 234, 0.08) 45%,
       transparent
     );
   filter:
