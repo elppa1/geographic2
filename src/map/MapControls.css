@@ -1885,3 +1885,355 @@
     animation: none;
   }
 }
+
+
+/* =========================================================
+   HALLOWEEN HISTORIC ATMOSPHERE
+   Isolated visual test layer. No map/pin interaction.
+   ========================================================= */
+
+.halloween-historic-atmosphere {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow: hidden;
+  pointer-events: none;
+  isolation: isolate;
+}
+
+.halloween-historic-cold-shade,
+.halloween-historic-fog,
+.halloween-historic-wind,
+.halloween-historic-blue-lightning {
+  position: absolute;
+  pointer-events: none;
+}
+
+.halloween-historic-cold-shade {
+  inset: 0;
+  z-index: 1;
+  background:
+    radial-gradient(
+      ellipse at 48% 42%,
+      rgba(13, 28, 52, 0.08),
+      rgba(3, 8, 18, 0.34) 72%,
+      rgba(1, 4, 11, 0.48)
+    ),
+    linear-gradient(
+      180deg,
+      rgba(7, 18, 35, 0.18),
+      rgba(2, 7, 18, 0.38)
+    );
+  box-shadow:
+    inset 0 0 190px rgba(0, 8, 28, 0.38);
+}
+
+/* Wide fog banks cross at different heights and speeds. */
+.halloween-historic-fog {
+  z-index: 3;
+  left: -55%;
+  width: 165%;
+  border-radius: 50%;
+  filter: blur(24px);
+  mix-blend-mode: screen;
+  will-change: transform, opacity;
+}
+
+.halloween-historic-fog-one {
+  top: 3%;
+  height: 34%;
+  opacity: 0.46;
+  background:
+    radial-gradient(
+      ellipse at 25% 50%,
+      rgba(183, 207, 225, 0.26),
+      transparent 38%
+    ),
+    radial-gradient(
+      ellipse at 68% 44%,
+      rgba(148, 178, 205, 0.20),
+      transparent 34%
+    );
+  animation:
+    halloween-fog-one
+    18s ease-in-out infinite alternate;
+}
+
+.halloween-historic-fog-two {
+  top: 31%;
+  height: 42%;
+  opacity: 0.38;
+  background:
+    radial-gradient(
+      ellipse at 18% 55%,
+      rgba(168, 194, 215, 0.22),
+      transparent 34%
+    ),
+    radial-gradient(
+      ellipse at 52% 42%,
+      rgba(194, 213, 228, 0.22),
+      transparent 37%
+    ),
+    radial-gradient(
+      ellipse at 84% 57%,
+      rgba(132, 166, 196, 0.18),
+      transparent 31%
+    );
+  animation:
+    halloween-fog-two
+    25s ease-in-out infinite alternate;
+}
+
+.halloween-historic-fog-three {
+  bottom: -8%;
+  height: 38%;
+  opacity: 0.34;
+  background:
+    radial-gradient(
+      ellipse at 31% 48%,
+      rgba(194, 211, 224, 0.22),
+      transparent 36%
+    ),
+    radial-gradient(
+      ellipse at 76% 51%,
+      rgba(143, 173, 199, 0.18),
+      transparent 35%
+    );
+  animation:
+    halloween-fog-three
+    31s ease-in-out infinite alternate;
+}
+
+/* Thin ghostly wind curls: intermittent rather than a screen-wide pattern. */
+.halloween-historic-wind {
+  z-index: 4;
+  width: 54%;
+  height: 20%;
+  left: -62%;
+  opacity: 0;
+  border-top:
+    2px solid rgba(174, 214, 255, 0.18);
+  border-radius: 50%;
+  filter:
+    blur(1px)
+    drop-shadow(
+      0 0 7px
+      rgba(83, 155, 255, 0.16)
+    );
+  will-change: transform, opacity;
+}
+
+.halloween-historic-wind-one {
+  top: 27%;
+  transform: rotate(-7deg);
+  animation:
+    halloween-wind-one
+    11s ease-in-out infinite;
+}
+
+.halloween-historic-wind-two {
+  top: 63%;
+  width: 43%;
+  transform: rotate(5deg);
+  animation:
+    halloween-wind-two
+    15s ease-in-out 4s infinite;
+}
+
+/* Cold blue sheet-lightning. Two sources flash on different rhythms. */
+.halloween-historic-blue-lightning {
+  z-index: 8;
+  inset: 0;
+  opacity: 0;
+  mix-blend-mode: screen;
+  will-change: opacity;
+}
+
+.halloween-historic-blue-lightning-one {
+  background:
+    radial-gradient(
+      circle at 72% 14%,
+      rgba(169, 213, 255, 0.72),
+      rgba(61, 133, 255, 0.28) 20%,
+      transparent 51%
+    );
+  animation:
+    halloween-blue-lightning-one
+    10.7s linear infinite;
+}
+
+.halloween-historic-blue-lightning-two {
+  background:
+    radial-gradient(
+      circle at 22% 31%,
+      rgba(194, 225, 255, 0.62),
+      rgba(63, 121, 255, 0.20) 18%,
+      transparent 46%
+    );
+  animation:
+    halloween-blue-lightning-two
+    16.3s linear 3.2s infinite;
+}
+
+@keyframes halloween-fog-one {
+  0% {
+    transform:
+      translate3d(-7%, -2%, 0)
+      scale(0.96);
+  }
+
+  48% {
+    transform:
+      translate3d(20%, 5%, 0)
+      scale(1.08);
+  }
+
+  100% {
+    transform:
+      translate3d(43%, -1%, 0)
+      scale(1.02);
+  }
+}
+
+@keyframes halloween-fog-two {
+  0% {
+    transform:
+      translate3d(36%, 4%, 0)
+      scale(1.04);
+  }
+
+  52% {
+    transform:
+      translate3d(7%, -5%, 0)
+      scale(0.96);
+  }
+
+  100% {
+    transform:
+      translate3d(-18%, 3%, 0)
+      scale(1.09);
+  }
+}
+
+@keyframes halloween-fog-three {
+  0% {
+    transform:
+      translate3d(-12%, 2%, 0)
+      scale(1);
+  }
+
+  55% {
+    transform:
+      translate3d(14%, -5%, 0)
+      scale(1.12);
+  }
+
+  100% {
+    transform:
+      translate3d(38%, 4%, 0)
+      scale(0.98);
+  }
+}
+
+@keyframes halloween-wind-one {
+  0%,
+  9% {
+    left: -62%;
+    opacity: 0;
+  }
+
+  18% {
+    opacity: 0.42;
+  }
+
+  58% {
+    opacity: 0.20;
+  }
+
+  76% {
+    left: 112%;
+    opacity: 0;
+  }
+
+  100% {
+    left: 112%;
+    opacity: 0;
+  }
+}
+
+@keyframes halloween-wind-two {
+  0%,
+  18% {
+    left: -54%;
+    opacity: 0;
+  }
+
+  27% {
+    opacity: 0.30;
+  }
+
+  63% {
+    opacity: 0.16;
+  }
+
+  78% {
+    left: 108%;
+    opacity: 0;
+  }
+
+  100% {
+    left: 108%;
+    opacity: 0;
+  }
+}
+
+@keyframes halloween-blue-lightning-one {
+  0%,
+  67%,
+  69%,
+  71%,
+  100% {
+    opacity: 0;
+  }
+
+  68% {
+    opacity: 0.72;
+  }
+
+  70% {
+    opacity: 0.20;
+  }
+
+  70.45% {
+    opacity: 0.88;
+  }
+}
+
+@keyframes halloween-blue-lightning-two {
+  0%,
+  42%,
+  44%,
+  100% {
+    opacity: 0;
+  }
+
+  43% {
+    opacity: 0.52;
+  }
+
+  43.45% {
+    opacity: 0.12;
+  }
+
+  43.8% {
+    opacity: 0.66;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .halloween-historic-fog,
+  .halloween-historic-wind,
+  .halloween-historic-blue-lightning {
+    animation: none;
+  }
+}
