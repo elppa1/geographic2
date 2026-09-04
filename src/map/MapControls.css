@@ -176,9 +176,10 @@
    ============================================================ */
 
 .content-subfilters {
-  display: grid;
+  display: flex;
 
-  gap: 1px;
+  align-items: stretch;
+  gap: 4px;
 
   padding:
     7px;
@@ -192,28 +193,30 @@
 
 
 .content-subfilter {
-  width: 100%;
+  flex: 0 0 auto;
+  width: auto;
 
-  border: 0;
+  border:
+    1px solid rgba(0, 0, 0, 0.14);
 
   background:
-    transparent;
+    rgba(255, 255, 255, 0.72);
 
   color:
-    rgba(0, 0, 0, 0.48);
+    rgba(0, 0, 0, 0.72);
 
   padding:
     7px
-    8px;
+    10px;
 
   font-family: inherit;
   font-size: 7px;
   font-weight: 700;
 
   letter-spacing:
-    0.1em;
+    0.08em;
 
-  text-align: left;
+  text-align: center;
 
   cursor: pointer;
 }
