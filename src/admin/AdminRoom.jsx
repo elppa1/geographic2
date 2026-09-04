@@ -1456,6 +1456,31 @@ function markTorontoNewMigrationComplete() {
 }
 
 
+const DEFAULT_HISTORIC_ISSUE_SECTIONS = [
+  {
+    id:
+      'murder',
+
+    title:
+      'MURDER',
+  },
+  {
+    id:
+      'mystery',
+
+    title:
+      'MYSTERY',
+  },
+  {
+    id:
+      'missing',
+
+    title:
+      'MISSING',
+  },
+]
+
+
 function makeDefaultHistoricIssue() {
   return {
     id:
@@ -1475,6 +1500,13 @@ function makeDefaultHistoricIssue() {
 
     description:
       '',
+
+    sections:
+      DEFAULT_HISTORIC_ISSUE_SECTIONS.map(
+        (section) => ({
+          ...section,
+        })
+      ),
 
     coverImageUrl:
       '',
@@ -1517,6 +1549,9 @@ function makeHistoricIssueDraft(
     description:
       '',
 
+    sections:
+      [],
+
     coverImageUrl:
       '',
 
@@ -1532,6 +1567,261 @@ function makeHistoricIssueDraft(
     updatedAt:
       '',
   }
+}
+
+
+function normalizeHistoricIssueSections(
+  sections
+) {
+  const source =
+    Array.isArray(
+      sections
+    )
+      ? sections
+      : []
+
+
+  const seen =
+    new Set()
+
+
+  return source
+    .map(
+      (
+        section
+      ) => {
+        if (
+          typeof section ===
+            'string'
+        ) {
+          const id =
+            section
+              .trim()
+              .toLowerCase()
+              .replace(
+                /[^a-z0-9]+/g,
+                '-'
+              )
+              .replace(
+                /^-+|-+$/g,
+                ''
+              )
+
+
+          return {
+            id,
+
+            title:
+              section.trim(),
+          }
+        }
+
+
+        return {
+          id:
+            String(
+              section?.id ||
+              ''
+            )
+              .trim(),
+
+          title:
+            String(
+              section?.title ||
+              section?.label ||
+              ''
+            )
+              .trim(),
+        }
+      }
+    )
+    .filter(
+      (
+        section
+      ) => {
+        if (
+          !section.id ||
+          !section.title ||
+          seen.has(
+            section.id
+          )
+        ) {
+          return false
+        }
+
+
+        seen.add(
+          section.id
+        )
+
+
+        return true
+      }
+    )
+}
+
+
+function formatHistoricSectionFallbackTitle(
+  value
+) {
+  return String(
+    value ||
+    ''
+  )
+    .replace(
+      /-/g,
+      ' '
+    )
+    .trim()
+    .toUpperCase()
+}
+
+
+function getHistoricIssueSections({
+  issue,
+  records =
+    [],
+}) {
+  const storedSections =
+    normalizeHistoricIssueSections(
+      issue?.sections
+    )
+
+
+  if (
+    storedSections.length >
+      0
+  ) {
+    return storedSections
+  }
+
+
+  const recordSections =
+    Array.from(
+      new Set(
+        (
+          Array.isArray(
+            records
+          )
+            ? records
+            : []
+        )
+          .map(
+            (
+              record
+            ) =>
+              String(
+                record?.issueSection ||
+                ''
+              )
+                .trim()
+          )
+          .filter(
+            Boolean
+          )
+      )
+    )
+      .map(
+        (
+          id
+        ) => ({
+          id,
+
+          title:
+            formatHistoricSectionFallbackTitle(
+              id
+            ),
+        })
+      )
+
+
+  if (
+    recordSections.length >
+      0
+  ) {
+    return recordSections
+  }
+
+
+  if (
+    issue?.id ===
+      'historic-issue-001' ||
+    String(
+      issue?.number ||
+      ''
+    ) ===
+      '001'
+  ) {
+    return DEFAULT_HISTORIC_ISSUE_SECTIONS.map(
+      (section) => ({
+        ...section,
+      })
+    )
+  }
+
+
+  return []
+}
+
+
+function createHistoricIssueSectionId({
+  title,
+  sections,
+}) {
+  const base =
+    String(
+      title ||
+      'section'
+    )
+      .trim()
+      .toLowerCase()
+      .replace(
+        /[^a-z0-9]+/g,
+        '-'
+      )
+      .replace(
+        /^-+|-+$/g,
+        ''
+      ) ||
+    'section'
+
+
+  const used =
+    new Set(
+      normalizeHistoricIssueSections(
+        sections
+      )
+        .map(
+          (section) =>
+            section.id
+        )
+    )
+
+
+  if (
+    !used.has(
+      base
+    )
+  ) {
+    return base
+  }
+
+
+  let suffix =
+    2
+
+
+  while (
+    used.has(
+      `${base}-${suffix}`
+    )
+  ) {
+    suffix +=
+      1
+  }
+
+
+  return `${base}-${suffix}`
 }
 
 
@@ -1602,7 +1892,7 @@ const EMPTY_HISTORIC = {
     [],
 
   issueSection:
-    'murder',
+    '',
 
   editorialStatus:
     'researching',
@@ -4037,7 +4327,7 @@ function normalizeHistoricRecord(
 
     issueSection:
       pinRecord.issueSection ||
-      'murder',
+      '',
 
     editorialStatus:
       pinRecord.editorialStatus ||
@@ -4309,6 +4599,13 @@ function AdminRoom() {
 
 
   const [
+    historicIssueNewSectionTitle,
+    setHistoricIssueNewSectionTitle,
+  ] =
+    useState('')
+
+
+  const [
     historicPinIconSearch,
     setHistoricPinIconSearch,
   ] =
@@ -4442,6 +4739,16 @@ function AdminRoom() {
         false
     )
       .length
+
+
+  const selectedHistoricIssueSections =
+    getHistoricIssueSections({
+      issue:
+        selectedHistoricIssue,
+
+      records:
+        selectedHistoricIssueRecords,
+    })
 
 
   const historicPublishedCount =
@@ -8746,6 +9053,11 @@ function AdminRoom() {
     )
 
 
+    setHistoricIssueNewSectionTitle(
+      ''
+    )
+
+
     setHistoricIssueDraft({
       ...makeHistoricIssueDraft(
         cityKey
@@ -8780,6 +9092,11 @@ function AdminRoom() {
     )
 
 
+    setHistoricIssueNewSectionTitle(
+      ''
+    )
+
+
     setHistoricIssueDraft({
       ...makeHistoricIssueDraft(
         cityKey
@@ -8789,6 +9106,15 @@ function AdminRoom() {
 
       city:
         cityKey,
+
+      sections:
+        getHistoricIssueSections({
+          issue:
+            selectedHistoricIssue,
+
+          records:
+            selectedHistoricIssueRecords,
+        }),
     })
 
 
@@ -8809,10 +9135,227 @@ function AdminRoom() {
     )
 
 
+    setHistoricIssueNewSectionTitle(
+      ''
+    )
+
+
     setHistoricIssueDraft(
       makeHistoricIssueDraft(
         cityKey
       )
+    )
+  }
+
+
+  function addHistoricIssueSection() {
+    const title =
+      String(
+        historicIssueNewSectionTitle ||
+        ''
+      )
+        .trim()
+
+
+    if (
+      !title
+    ) {
+      return
+    }
+
+
+    setHistoricIssueDraft(
+      (
+        current
+      ) => {
+        const sections =
+          normalizeHistoricIssueSections(
+            current.sections
+          )
+
+
+        return {
+          ...current,
+
+          sections: [
+            ...sections,
+            {
+              id:
+                createHistoricIssueSectionId({
+                  title,
+                  sections,
+                }),
+
+              title,
+            },
+          ],
+        }
+      }
+    )
+
+
+    setHistoricIssueNewSectionTitle(
+      ''
+    )
+  }
+
+
+  function updateHistoricIssueSectionTitle(
+    sectionId,
+    title
+  ) {
+    setHistoricIssueDraft(
+      (
+        current
+      ) => ({
+        ...current,
+
+        sections:
+          normalizeHistoricIssueSections(
+            current.sections
+          )
+            .map(
+              (
+                section
+              ) =>
+                section.id ===
+                  sectionId
+                  ? {
+                      ...section,
+
+                      title,
+                    }
+                  : section
+            ),
+      })
+    )
+  }
+
+
+  function moveHistoricIssueSection(
+    sectionId,
+    direction
+  ) {
+    setHistoricIssueDraft(
+      (
+        current
+      ) => {
+        const sections =
+          normalizeHistoricIssueSections(
+            current.sections
+          )
+
+
+        const index =
+          sections.findIndex(
+            (section) =>
+              section.id ===
+              sectionId
+          )
+
+
+        const nextIndex =
+          index +
+          direction
+
+
+        if (
+          index <
+            0 ||
+          nextIndex <
+            0 ||
+          nextIndex >=
+            sections.length
+        ) {
+          return current
+        }
+
+
+        const nextSections =
+          [
+            ...sections,
+          ]
+
+
+        const [
+          moved,
+        ] =
+          nextSections.splice(
+            index,
+            1
+          )
+
+
+        nextSections.splice(
+          nextIndex,
+          0,
+          moved
+        )
+
+
+        return {
+          ...current,
+
+          sections:
+            nextSections,
+        }
+      }
+    )
+  }
+
+
+  function removeHistoricIssueSection(
+    sectionId
+  ) {
+    const assignedCount =
+      historicIssueEditingId
+        ? selectedHistoricIssueRecords.filter(
+            (record) =>
+              record.issueSection ===
+              sectionId
+          )
+            .length
+        : 0
+
+
+    if (
+      assignedCount >
+        0
+    ) {
+      window.alert(
+        (
+          `${assignedCount} ` +
+          (
+            assignedCount ===
+              1
+              ? 'story is'
+              : 'stories are'
+          ) +
+          ' assigned to this section. Move them to another section first.'
+        )
+      )
+
+
+      return
+    }
+
+
+    setHistoricIssueDraft(
+      (
+        current
+      ) => ({
+        ...current,
+
+        sections:
+          normalizeHistoricIssueSections(
+            current.sections
+          )
+            .filter(
+              (section) =>
+                section.id !==
+                sectionId
+            ),
+      })
     )
   }
 
@@ -8992,6 +9535,11 @@ function AdminRoom() {
           ''
         )
           .trim(),
+
+      sections:
+        normalizeHistoricIssueSections(
+          historicIssueDraft.sections
+        ),
 
       coverImageUrl:
         normalizeSourceUrl(
@@ -10327,7 +10875,8 @@ function AdminRoom() {
 
         issueSection:
           record.issueSection ||
-          'murder',
+          selectedHistoricIssueSections[0]?.id ||
+          '',
 
         editorialStatus:
           record.editorialStatus ||
@@ -14207,6 +14756,186 @@ function AdminRoom() {
                     </label>
 
 
+                    <div className="admin-field admin-field-wide">
+                      <span>
+                        ISSUE SECTIONS
+                      </span>
+
+
+                      <div
+                        style={{
+                          border:
+                            '1px solid rgba(0,0,0,0.18)',
+
+                          padding:
+                            '12px',
+                        }}
+                      >
+                        {normalizeHistoricIssueSections(
+                          historicIssueDraft.sections
+                        )
+                          .map(
+                            (
+                              section,
+                              index
+                            ) => (
+                              <div
+                                key={
+                                  section.id
+                                }
+                                style={{
+                                  display:
+                                    'grid',
+
+                                  gridTemplateColumns:
+                                    'minmax(0, 1fr) auto auto auto',
+
+                                  gap:
+                                    '6px',
+
+                                  alignItems:
+                                    'center',
+
+                                  marginTop:
+                                    index ===
+                                      0
+                                      ? '0'
+                                      : '6px',
+                                }}
+                              >
+                                <input
+                                  value={
+                                    section.title
+                                  }
+                                  onChange={
+                                    (event) =>
+                                      updateHistoricIssueSectionTitle(
+                                        section.id,
+                                        event.target.value
+                                      )
+                                  }
+                                  aria-label="Historic issue section title"
+                                />
+
+                                <button
+                                  type="button"
+                                  className="admin-cancel"
+                                  disabled={
+                                    index ===
+                                    0
+                                  }
+                                  onClick={() =>
+                                    moveHistoricIssueSection(
+                                      section.id,
+                                      -1
+                                    )
+                                  }
+                                  title="Move section up"
+                                >
+                                  ↑
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="admin-cancel"
+                                  disabled={
+                                    index ===
+                                    normalizeHistoricIssueSections(
+                                      historicIssueDraft.sections
+                                    ).length -
+                                      1
+                                  }
+                                  onClick={() =>
+                                    moveHistoricIssueSection(
+                                      section.id,
+                                      1
+                                    )
+                                  }
+                                  title="Move section down"
+                                >
+                                  ↓
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="admin-cancel"
+                                  onClick={() =>
+                                    removeHistoricIssueSection(
+                                      section.id
+                                    )
+                                  }
+                                >
+                                  REMOVE
+                                </button>
+                              </div>
+                            )
+                          )}
+
+
+                        {normalizeHistoricIssueSections(
+                          historicIssueDraft.sections
+                        ).length ===
+                          0 && (
+                          <div className="admin-record-meta">
+                            NO SECTIONS YET
+                          </div>
+                        )}
+
+
+                        <div
+                          style={{
+                            display:
+                              'grid',
+
+                            gridTemplateColumns:
+                              'minmax(0, 1fr) auto',
+
+                            gap:
+                              '6px',
+
+                            marginTop:
+                              '10px',
+                          }}
+                        >
+                          <input
+                            value={
+                              historicIssueNewSectionTitle
+                            }
+                            onChange={
+                              (event) =>
+                                setHistoricIssueNewSectionTitle(
+                                  event.target.value
+                                )
+                            }
+                            onKeyDown={
+                              (event) => {
+                                if (
+                                  event.key ===
+                                  'Enter'
+                                ) {
+                                  event.preventDefault()
+
+                                  addHistoricIssueSection()
+                                }
+                              }
+                            }
+                            placeholder="e.g. GHOSTS & HAUNTINGS"
+                          />
+
+                          <button
+                            type="button"
+                            className="admin-save"
+                            onClick={
+                              addHistoricIssueSection
+                            }
+                          >
+                            + ADD SECTION
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+
                     <label className="admin-field admin-field-wide">
                       <span>
                         COVER IMAGE URL
@@ -14311,6 +15040,39 @@ function AdminRoom() {
                           event.target.value
 
 
+                        const nextIssue =
+                          cityHistoricIssues.find(
+                            (issue) =>
+                              issue.id ===
+                              issueId
+                          ) ||
+                          null
+
+
+                        const nextIssueRecords =
+                          nextIssue
+                            ? historicItems.filter(
+                                (record) =>
+                                  Array.isArray(
+                                    record.issueIds
+                                  ) &&
+                                  record.issueIds.includes(
+                                    nextIssue.id
+                                  )
+                              )
+                            : []
+
+
+                        const nextSections =
+                          getHistoricIssueSections({
+                            issue:
+                              nextIssue,
+
+                            records:
+                              nextIssueRecords,
+                          })
+
+
                         setSelectedHistoricIssueId(
                           issueId
                         )
@@ -14323,6 +15085,21 @@ function AdminRoom() {
                                 issueId,
                               ]
                             : []
+                        )
+
+
+                        updateDraft(
+                          'issueSection',
+                          nextSections.some(
+                            (section) =>
+                              section.id ===
+                              draft.issueSection
+                          )
+                            ? draft.issueSection
+                            : (
+                                nextSections[0]?.id ||
+                                ''
+                              )
                         )
                       }
                     }
@@ -14359,7 +15136,8 @@ function AdminRoom() {
                   <select
                     value={
                       draft.issueSection ||
-                      'murder'
+                      selectedHistoricIssueSections[0]?.id ||
+                      ''
                     }
                     onChange={
                       (event) =>
@@ -14369,17 +15147,28 @@ function AdminRoom() {
                         )
                     }
                   >
-                    <option value="murder">
-                      MURDER
-                    </option>
+                    {selectedHistoricIssueSections.length ===
+                      0 && (
+                      <option value="">
+                        NO SECTIONS · EDIT ISSUE TO ADD
+                      </option>
+                    )}
 
-                    <option value="mystery">
-                      MYSTERY
-                    </option>
 
-                    <option value="missing">
-                      MISSING
-                    </option>
+                    {selectedHistoricIssueSections.map(
+                      (section) => (
+                        <option
+                          key={
+                            section.id
+                          }
+                          value={
+                            section.id
+                          }
+                        >
+                          {section.title}
+                        </option>
+                      )
+                    )}
                   </select>
                 </label>
 

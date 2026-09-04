@@ -1042,6 +1042,169 @@ function getClosestEventLayer({
 
 
 // ============================================================
+// HISTORIC STORY LAYER
+// ============================================================
+
+function getHistoricLayerFromCity({
+  city,
+  layerType,
+  year,
+}) {
+  const numericYear =
+    Number(
+      year
+    )
+
+
+  if (
+    !city ||
+    !Number.isFinite(
+      numericYear
+    )
+  ) {
+    return null
+  }
+
+
+  const collection =
+    layerType ===
+      'map'
+      ? city.maps
+      : layerType ===
+          'aerial'
+        ? city.aerials
+        : null
+
+
+  const item =
+    collection?.[
+      numericYear
+    ]
+
+
+  if (
+    !item?.url
+  ) {
+    return null
+  }
+
+
+  return {
+    year:
+      numericYear,
+
+    layerType,
+
+    ...item,
+  }
+}
+
+
+function getHistoricStoryLayer({
+  pin,
+  city,
+}) {
+  if (
+    pin?.layerPlacementMode ===
+      'manual'
+  ) {
+    const manualLayer =
+      getHistoricLayerFromCity({
+        city,
+
+        layerType:
+          pin.layerOverrideType,
+
+        year:
+          pin.layerOverrideYear,
+      })
+
+
+    if (
+      manualLayer
+    ) {
+      return manualLayer
+    }
+  }
+
+
+  const storedAutoLayer =
+    Array.isArray(
+      pin?.autoLayers
+    )
+      ? pin.autoLayers[0]
+      : null
+
+
+  if (
+    storedAutoLayer
+  ) {
+    const autoLayer =
+      getHistoricLayerFromCity({
+        city,
+
+        layerType:
+          storedAutoLayer.layerType,
+
+        year:
+          storedAutoLayer.year,
+      })
+
+
+    if (
+      autoLayer
+    ) {
+      return autoLayer
+    }
+  }
+
+
+  const eventYear =
+    String(
+      pin?.eventDate ||
+      ''
+    )
+      .match(
+        /^(\d{4})-/
+      )?.[1] ||
+    pin?.year ||
+    pin?.startYear
+
+
+  return getClosestEventLayer({
+    city,
+    year:
+      eventYear,
+  })
+}
+
+
+function historicLayerMatchesSelected({
+  layer,
+  selectedLayer,
+}) {
+  if (
+    !layer ||
+    !selectedLayer
+  ) {
+    return false
+  }
+
+
+  return (
+    Number(
+      layer.year
+    ) ===
+      Number(
+        selectedLayer.year
+      ) &&
+    layer.layerType ===
+      selectedLayer.layerType
+  )
+}
+
+
+// ============================================================
 // HISTORIC VISIBILITY
 // ============================================================
 
@@ -1936,9 +2099,56 @@ function appendMobileBusinessLink({
 function appendSeeItThenAction({
   popupContent,
   pin,
+  city,
+  selectedLayer,
+  homeLayer,
+  historicIssueFilter,
   onSeeItThen,
+  onReturnToHistoricIssueHome,
 }) {
+  const storyLayer =
+    getHistoricStoryLayer({
+      pin,
+      city,
+    })
+
+
+  const insideIssue =
+    Boolean(
+      historicIssueFilter &&
+      historicIssueFilter !==
+        'all'
+    )
+
+
+  const atStoryLayer =
+    historicLayerMatchesSelected({
+      layer:
+        storyLayer,
+
+      selectedLayer,
+    })
+
+
+  const atHomeLayer =
+    historicLayerMatchesSelected({
+      layer:
+        homeLayer,
+
+      selectedLayer,
+    })
+
+
+  const returnToIssueHome =
+    insideIssue &&
+    atStoryLayer &&
+    !atHomeLayer &&
+    typeof onReturnToHistoricIssueHome ===
+      'function'
+
+
   if (
+    !returnToIssueHome &&
     typeof onSeeItThen !==
       'function'
   ) {
@@ -1967,7 +2177,11 @@ function appendSeeItThenAction({
     'geographic-route-action'
 
   button.textContent =
-    'SEE IT THEN →'
+    returnToIssueHome
+      ? '← RETURN TO MAIN PAGE OF ISSUE'
+      : storyLayer?.year
+        ? `SEE IT IN ${storyLayer.year} →`
+        : 'SEE IT THEN →'
 
 
   button.addEventListener(
@@ -1977,7 +2191,17 @@ function appendSeeItThenAction({
     ) => {
       event.stopPropagation()
 
-      onSeeItThen(
+
+      if (
+        returnToIssueHome
+      ) {
+        onReturnToHistoricIssueHome()
+
+        return
+      }
+
+
+      onSeeItThen?.(
         pin
       )
     }
@@ -3303,8 +3527,13 @@ function createMarker({
   pinType,
   markerOffset =
     [0, 0],
+  city,
+  selectedLayer,
+  homeLayer,
+  historicIssueFilter,
   onDirections,
   onSeeItThen,
+  onReturnToHistoricIssueHome,
 }) {
   const longitude =
     Number(
@@ -3925,7 +4154,12 @@ function createMarker({
       appendSeeItThenAction({
         popupContent,
         pin,
+        city,
+        selectedLayer,
+        homeLayer,
+        historicIssueFilter,
         onSeeItThen,
+        onReturnToHistoricIssueHome,
       })
     }
 
@@ -5115,6 +5349,7 @@ function MapPins({
   map,
   cityKey,
   selectedLayer,
+  homeLayer,
   selectedPinId,
   activePinFilter,
   historicIssueFilter =
@@ -5124,6 +5359,7 @@ function MapPins({
   newBusinessRangeFilter,
   onDirections,
   onSeeItThen,
+  onReturnToHistoricIssueHome,
 }) {
   const markersRef =
     useRef([])
@@ -5609,10 +5845,19 @@ function MapPins({
           .filter(
             (pin) => {
               if (
+                historicIssueFilter !==
+                  'all'
+              ) {
+                return true
+              }
+
+
+              if (
                 landingLayer
               ) {
                 return true
               }
+
 
               return historicPinIsVisible({
                 pin,
@@ -5792,8 +6037,13 @@ function MapPins({
             pin,
             pinType,
             markerOffset,
+            city,
+            selectedLayer,
+            homeLayer,
+            historicIssueFilter,
             onDirections,
             onSeeItThen,
+            onReturnToHistoricIssueHome,
           })
 
         if (
@@ -5833,6 +6083,8 @@ function MapPins({
     selectedLayer?.layerType,
     activePinFilter,
     historicIssueFilter,
+    homeLayer?.year,
+    homeLayer?.layerType,
     newsRangeFilter,
     newSubtypeFilter,
     newBusinessRangeFilter,
@@ -5843,6 +6095,7 @@ function MapPins({
     selectedPinId,
     onDirections,
     onSeeItThen,
+    onReturnToHistoricIssueHome,
   ])
 
   useEffect(() => {

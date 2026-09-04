@@ -922,6 +922,10 @@ function GeographicApp() {
           selectedLayer
         }
 
+        homeLayer={
+          defaultLayer
+        }
+
         opacity={
           opacity
         }

@@ -373,6 +373,8 @@ const GeographicMap =
 
         selectedLayer,
 
+        homeLayer,
+
         opacity =
           1,
 
@@ -1435,6 +1437,15 @@ const GeographicMap =
 
 
             if (
+              pin.id
+            ) {
+              setSelectedPinId(
+                pin.id
+              )
+            }
+
+
+            if (
               targetLayer
             ) {
               onSelectHistoricalLayer?.(
@@ -1478,6 +1489,58 @@ const GeographicMap =
           },
           [
             city,
+            onSelectHistoricalLayer,
+          ]
+        )
+
+
+      // ========================================================
+      // HISTORIC · ISSUE HOME
+      // ========================================================
+
+      const handleHistoricIssueHome =
+        useCallback(
+          () => {
+            const map =
+              mapRef.current
+
+
+            if (
+              !map ||
+              !city
+            ) {
+              return
+            }
+
+
+            if (
+              homeLayer
+            ) {
+              onSelectHistoricalLayer?.(
+                homeLayer
+              )
+            }
+
+
+            setSelectedPinId(
+              null
+            )
+
+
+            map.flyTo({
+              center:
+                city.center,
+
+              zoom:
+                city.zoom,
+
+              duration:
+                900,
+            })
+          },
+          [
+            city,
+            homeLayer,
             onSelectHistoricalLayer,
           ]
         )
@@ -1816,8 +1879,16 @@ const GeographicMap =
                 handleDirections
               }
 
+              homeLayer={
+                homeLayer
+              }
+
               onSeeItThen={
                 handleHistoricSeeItThen
+              }
+
+              onReturnToHistoricIssueHome={
+                handleHistoricIssueHome
               }
             />
           )}
