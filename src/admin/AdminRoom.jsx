@@ -11,12 +11,14 @@ import {
 import {
   applyNewsItemUpdate,
   createAdminId,
+  getHistoricIssues,
   getHistoricItems,
   getNewsItems,
   getNewsReviewItems,
   getNewItems,
   getNewReviewItems,
   markScraperRecordProcessed,
+  saveHistoricIssues,
   saveHistoricItems,
   saveNewsItems,
   saveNewsReviewItems,
@@ -1448,6 +1450,33 @@ function markTorontoNewMigrationComplete() {
 }
 
 
+function makeDefaultHistoricIssue() {
+  return {
+    id:
+      'historic-issue-001',
+
+    city:
+      'toronto',
+
+    number:
+      '001',
+
+    title:
+      'MURDER. MYSTERY. MISSING.',
+
+    subtitle:
+      'A TORONTO HALLOWEEN SPECIAL',
+
+    status:
+      'draft',
+
+    createdAt:
+      new Date()
+        .toISOString(),
+  }
+}
+
+
 const EMPTY_HISTORIC = {
   ...BASE_RECORD,
 
@@ -1456,6 +1485,15 @@ const EMPTY_HISTORIC = {
 
   category:
     'place',
+
+  issueIds:
+    [],
+
+  issueSection:
+    'murder',
+
+  editorialStatus:
+    'researching',
 
   year:
     '',
@@ -3199,6 +3237,9 @@ function makeHistoricDraft(
 
     city:
       cityKey,
+
+    active:
+      false,
   }
 }
 
@@ -3872,6 +3913,21 @@ function normalizeHistoricRecord(
       pinRecord.layerOverrideYear ||
       '',
 
+    issueIds:
+      Array.isArray(
+        pinRecord.issueIds
+      )
+        ? pinRecord.issueIds
+        : [],
+
+    issueSection:
+      pinRecord.issueSection ||
+      'murder',
+
+    editorialStatus:
+      pinRecord.editorialStatus ||
+      'researching',
+
     pinPositionMode:
       pinRecord.pinPositionMode ||
       'auto',
@@ -4065,6 +4121,56 @@ function AdminRoom() {
 
 
   const [
+    historicIssues,
+    setHistoricIssues,
+  ] =
+    useState(
+      () => {
+        const existing =
+          getHistoricIssues()
+
+
+        return existing.length >
+          0
+          ? existing
+          : [
+              makeDefaultHistoricIssue(),
+            ]
+      }
+    )
+
+
+  const [
+    selectedHistoricIssueId,
+    setSelectedHistoricIssueId,
+  ] =
+    useState(
+      'historic-issue-001'
+    )
+
+
+  const [
+    historicRecordFilter,
+    setHistoricRecordFilter,
+  ] =
+    useState(
+      'drafts'
+    )
+
+
+  useEffect(
+    () => {
+      saveHistoricIssues(
+        historicIssues
+      )
+    },
+    [
+      historicIssues,
+    ]
+  )
+
+
+  const [
     allNewsReviewItems,
     setAllNewsReviewItems,
   ] =
@@ -4118,6 +4224,67 @@ function AdminRoom() {
           cityKey
         )
     )
+
+
+  const cityHistoricIssues =
+    historicIssues.filter(
+      (issue) =>
+        belongsToCity(
+          issue,
+          cityKey
+        )
+    )
+
+
+  const selectedHistoricIssue =
+    cityHistoricIssues.find(
+      (issue) =>
+        issue.id ===
+        selectedHistoricIssueId
+    ) ||
+    cityHistoricIssues[0] ||
+    null
+
+
+  const selectedHistoricIssueRecords =
+    selectedHistoricIssue
+      ? historicItems.filter(
+          (record) =>
+            Array.isArray(
+              record.issueIds
+            ) &&
+            record.issueIds.includes(
+              selectedHistoricIssue.id
+            )
+        )
+      : []
+
+
+  const selectedHistoricIssueDraftCount =
+    selectedHistoricIssueRecords.filter(
+      (record) =>
+        record.active ===
+        false
+    )
+      .length
+
+
+  const selectedHistoricIssuePublishedCount =
+    selectedHistoricIssueRecords.filter(
+      (record) =>
+        record.active !==
+        false
+    )
+      .length
+
+
+  const historicPublishedCount =
+    historicItems.filter(
+      (record) =>
+        record.active !==
+        false
+    )
+      .length
 
 
   const newsReviewItems =
@@ -4525,6 +4692,43 @@ function AdminRoom() {
 
         if (
           tab ===
+            'historic'
+        ) {
+          if (
+            historicRecordFilter ===
+              'drafts'
+          ) {
+            next =
+              next.filter(
+                (record) =>
+                  record.active ===
+                    false &&
+                  (
+                    !selectedHistoricIssueId ||
+                    (
+                      Array.isArray(
+                        record.issueIds
+                      ) &&
+                      record.issueIds.includes(
+                        selectedHistoricIssueId
+                      )
+                    )
+                  )
+              )
+          }
+          else {
+            next =
+              next.filter(
+                (record) =>
+                  record.active !==
+                  false
+              )
+          }
+        }
+
+
+        if (
+          tab ===
             'news' &&
           publishedNewsSourceFilter !==
             'all'
@@ -4723,6 +4927,8 @@ function AdminRoom() {
         publishedNewsStatusFilter,
         publishedNewsSort,
         publishedNewsSearch,
+        historicRecordFilter,
+        selectedHistoricIssueId,
       ]
     )
 
@@ -8210,6 +8416,16 @@ function AdminRoom() {
     )
 
 
+    if (
+      nextTab ===
+      'historic'
+    ) {
+      setHistoricRecordFilter(
+        'drafts'
+      )
+    }
+
+
     setTab(
       nextTab
     )
@@ -8909,7 +9125,11 @@ function AdminRoom() {
         'auto',
 
       active:
-        true,
+        tab ===
+          'historic'
+          ? draft.active !==
+              false
+          : true,
 
       updatedAt:
         new Date()
@@ -8973,6 +9193,29 @@ function AdminRoom() {
 
       record = {
         ...record,
+
+        issueIds:
+          Array.isArray(
+            record.issueIds
+          ) &&
+          record.issueIds.length >
+            0
+            ? record.issueIds
+            : (
+                selectedHistoricIssueId
+                  ? [
+                      selectedHistoricIssueId,
+                    ]
+                  : []
+              ),
+
+        issueSection:
+          record.issueSection ||
+          'murder',
+
+        editorialStatus:
+          record.editorialStatus ||
+          'researching',
 
         autoLayers:
           automaticLayers.map(
@@ -9399,6 +9642,20 @@ function AdminRoom() {
         : normalizePinRecord(
             record
           )
+
+
+    if (
+      tab ===
+        'historic' &&
+      Array.isArray(
+        normalizedRecord.issueIds
+      ) &&
+      normalizedRecord.issueIds[0]
+    ) {
+      setSelectedHistoricIssueId(
+        normalizedRecord.issueIds[0]
+      )
+    }
 
 
     setDraft({
@@ -11599,6 +11856,24 @@ function AdminRoom() {
 
 
     if (
+      tab ===
+      'historic'
+    ) {
+      if (
+        editingId
+      ) {
+        return draft.active ===
+          false
+          ? 'SAVE DRAFT CHANGES'
+          : 'SAVE CHANGES'
+      }
+
+
+      return 'SAVE DRAFT'
+    }
+
+
+    if (
       editingId
     ) {
       return 'SAVE CHANGES'
@@ -12479,6 +12754,188 @@ function AdminRoom() {
               <>
                 <div className="admin-field admin-field-wide">
                   <span>
+                    ISSUE WORKSPACE
+                  </span>
+
+                  <div
+                    style={{
+                      border:
+                        '1px solid rgba(0,0,0,0.18)',
+
+                      padding:
+                        '14px',
+                    }}
+                  >
+                    <strong>
+                      {selectedHistoricIssue
+                        ? (
+                            `HISTORIC ${selectedHistoricIssue.number} · ` +
+                            selectedHistoricIssue.title
+                          )
+                        : 'NO ISSUE SELECTED'}
+                    </strong>
+
+                    {selectedHistoricIssue?.subtitle && (
+                      <div
+                        style={{
+                          marginTop:
+                            '4px',
+                        }}
+                      >
+                        {selectedHistoricIssue.subtitle}
+                      </div>
+                    )}
+
+                    <div
+                      className="admin-record-meta"
+                      style={{
+                        marginTop:
+                          '8px',
+                      }}
+                    >
+                      {String(
+                        selectedHistoricIssue?.status ||
+                        'draft'
+                      )
+                        .toUpperCase()}
+                      {' · '}
+                      {selectedHistoricIssueDraftCount} DRAFTS
+                      {' · '}
+                      {selectedHistoricIssuePublishedCount} PUBLISHED
+                    </div>
+                  </div>
+                </div>
+
+
+                <label className="admin-field">
+                  <span>
+                    ISSUE
+                  </span>
+
+                  <select
+                    value={
+                      draft.issueIds?.[0] ||
+                      selectedHistoricIssue?.id ||
+                      ''
+                    }
+                    onChange={
+                      (event) => {
+                        const issueId =
+                          event.target.value
+
+
+                        setSelectedHistoricIssueId(
+                          issueId
+                        )
+
+
+                        updateDraft(
+                          'issueIds',
+                          issueId
+                            ? [
+                                issueId,
+                              ]
+                            : []
+                        )
+                      }
+                    }
+                  >
+                    <option value="">
+                      NO ISSUE
+                    </option>
+
+                    {cityHistoricIssues.map(
+                      (issue) => (
+                        <option
+                          key={
+                            issue.id
+                          }
+                          value={
+                            issue.id
+                          }
+                        >
+                          {
+                            `HISTORIC ${issue.number} · ${issue.title}`
+                          }
+                        </option>
+                      )
+                    )}
+                  </select>
+                </label>
+
+
+                <label className="admin-field">
+                  <span>
+                    ISSUE SECTION
+                  </span>
+
+                  <select
+                    value={
+                      draft.issueSection ||
+                      'murder'
+                    }
+                    onChange={
+                      (event) =>
+                        updateDraft(
+                          'issueSection',
+                          event.target.value
+                        )
+                    }
+                  >
+                    <option value="murder">
+                      MURDER
+                    </option>
+
+                    <option value="mystery">
+                      MYSTERY
+                    </option>
+
+                    <option value="missing">
+                      MISSING
+                    </option>
+                  </select>
+                </label>
+
+
+                <label className="admin-field">
+                  <span>
+                    EDITORIAL STATUS
+                  </span>
+
+                  <select
+                    value={
+                      draft.editorialStatus ||
+                      'researching'
+                    }
+                    onChange={
+                      (event) =>
+                        updateDraft(
+                          'editorialStatus',
+                          event.target.value
+                        )
+                    }
+                  >
+                    <option value="researching">
+                      RESEARCHING
+                    </option>
+
+                    <option value="writing">
+                      WRITING
+                    </option>
+
+                    <option value="fact-check">
+                      FACT CHECK
+                    </option>
+
+                    <option value="ready">
+                      READY
+                    </option>
+                  </select>
+                </label>
+
+
+                <div className="admin-field admin-field-wide">
+                  <span>
                     TIME TYPE
                   </span>
 
@@ -13062,10 +13519,19 @@ function AdminRoom() {
                 )
               }
             >
-              PUBLISHED
+              {tab ===
+                'historic'
+                ? 'WORKSPACE'
+                : 'PUBLISHED'}
               <span>
                 {
-                  records.length
+                  tab ===
+                    'historic'
+                    ? (
+                        selectedHistoricIssueDraftCount +
+                        historicPublishedCount
+                      )
+                    : records.length
                 }
               </span>
             </button>
@@ -14331,15 +14797,8 @@ function AdminRoom() {
                                   ? (
                                       <a
                                         href={
-                                          getNewsroomSourceKey(
-                                            record
-                                          ) ===
-                                            'transit'
-                                            ? 'https://www.ttc.ca/service-alerts'
-                                            : (
-                                                displayRecord.sourceUrl ||
-                                                record.sourceUrl
-                                              )
+                                          displayRecord.sourceUrl ||
+                                          record.sourceUrl
                                         }
                                         target="_blank"
                                         rel="noreferrer"
@@ -14466,8 +14925,66 @@ function AdminRoom() {
           {recordsPanel ===
             'published' && (
             <div className="admin-published-section">
+              {tab ===
+                'historic' && (
+                <div className="admin-review-type-filters">
+                  <button
+                    type="button"
+                    className={
+                      historicRecordFilter ===
+                        'drafts'
+                        ? 'admin-review-type-filter admin-review-type-filter-active'
+                        : 'admin-review-type-filter'
+                    }
+                    onClick={() =>
+                      setHistoricRecordFilter(
+                        'drafts'
+                      )
+                    }
+                  >
+                    ISSUE DRAFTS
+                    <span>
+                      {
+                        selectedHistoricIssueDraftCount
+                      }
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={
+                      historicRecordFilter ===
+                        'published'
+                        ? 'admin-review-type-filter admin-review-type-filter-active'
+                        : 'admin-review-type-filter'
+                    }
+                    onClick={() =>
+                      setHistoricRecordFilter(
+                        'published'
+                      )
+                    }
+                  >
+                    PUBLISHED ARCHIVE
+                    <span>
+                      {
+                        historicPublishedCount
+                      }
+                    </span>
+                  </button>
+                </div>
+              )}
+
+
               <div className="admin-section-heading">
-              PUBLISHED · {
+              {tab ===
+                'historic'
+                ? (
+                    historicRecordFilter ===
+                      'drafts'
+                      ? 'ISSUE DRAFTS'
+                      : 'PUBLISHED ARCHIVE'
+                  )
+                : 'PUBLISHED'} · {
                 filteredPublishedRecords.length
               }
 
@@ -14688,7 +15205,12 @@ function AdminRoom() {
             {filteredPublishedRecords.length ===
               0 && (
               <div className="admin-empty">
-                NOTHING PUBLISHED YET.
+                {tab ===
+                  'historic' &&
+                historicRecordFilter ===
+                  'drafts'
+                  ? 'NO ISSUE DRAFTS YET.'
+                  : 'NOTHING PUBLISHED YET.'}
               </div>
             )}
 
@@ -14852,10 +15374,40 @@ function AdminRoom() {
                       record.status}
 
                     {tab ===
-                      'historic' &&
-                      historicDateLabel(
-                        record
-                      )}
+                      'historic' && (
+                      <>
+                        {
+                          historicDateLabel(
+                            record
+                          )
+                        }
+                        {' · '}
+                        {String(
+                          record.issueSection ||
+                          'archive'
+                        )
+                          .replace(
+                            /-/g,
+                            ' '
+                          )
+                          .toUpperCase()}
+                        {' · '}
+                        {String(
+                          record.editorialStatus ||
+                          (
+                            record.active ===
+                              false
+                              ? 'draft'
+                              : 'published'
+                          )
+                        )
+                          .replace(
+                            /-/g,
+                            ' '
+                          )
+                          .toUpperCase()}
+                      </>
+                    )}
                   </div>
 
 

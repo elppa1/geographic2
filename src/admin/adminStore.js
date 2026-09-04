@@ -16,6 +16,10 @@ const HISTORIC_KEY =
   'elppa-geographic-historic'
 
 
+const HISTORIC_ISSUES_KEY =
+  'elppa-geographic-historic-issues'
+
+
 const NEWS_REVIEW_KEY =
   'elppa-geographic-news-review'
 
@@ -1308,6 +1312,27 @@ export function saveHistoricItems(
 
 
   markHistoricLegacyCleanupComplete()
+}
+
+
+// ============================================================
+// HISTORIC ISSUES
+// ============================================================
+
+export function getHistoricIssues() {
+  return readRecords(
+    HISTORIC_ISSUES_KEY
+  )
+}
+
+
+export function saveHistoricIssues(
+  records
+) {
+  writeRecords(
+    HISTORIC_ISSUES_KEY,
+    records
+  )
 }
 
 
