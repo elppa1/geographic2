@@ -1184,27 +1184,69 @@ function GeographicApp() {
               );
           }
 
-          .map.weather-atmosphere-cloudy::after,
-          .map.weather-atmosphere-fog::after {
+          .map.weather-atmosphere-cloudy::after {
             display: block;
-            opacity: 0.34;
+            opacity: 0.72;
             background:
               radial-gradient(
-                ellipse at 24% 45%,
-                rgba(245,247,248,0.34) 0%,
-                transparent 44%
+                ellipse at 8% 28%,
+                rgba(250,251,252,0.68) 0%,
+                rgba(238,241,243,0.38) 18%,
+                transparent 42%
               ),
               radial-gradient(
-                ellipse at 72% 58%,
-                rgba(240,243,245,0.28) 0%,
+                ellipse at 26% 38%,
+                rgba(248,250,251,0.74) 0%,
+                rgba(232,236,239,0.34) 22%,
+                transparent 46%
+              ),
+              radial-gradient(
+                ellipse at 48% 26%,
+                rgba(245,248,250,0.60) 0%,
+                rgba(228,233,236,0.28) 24%,
+                transparent 50%
+              ),
+              radial-gradient(
+                ellipse at 70% 44%,
+                rgba(250,251,252,0.72) 0%,
+                rgba(233,237,240,0.34) 20%,
+                transparent 46%
+              ),
+              radial-gradient(
+                ellipse at 92% 34%,
+                rgba(246,248,250,0.58) 0%,
+                rgba(226,231,235,0.26) 22%,
                 transparent 48%
               );
-            filter: blur(28px);
-            animation: liveWeatherClouds 52s ease-in-out infinite alternate;
+            filter: blur(20px);
+            animation: liveWeatherClouds 46s ease-in-out infinite alternate;
           }
 
           .map.weather-atmosphere-fog::after {
-            opacity: 0.52;
+            display: block;
+            opacity: 0.82;
+            background:
+              linear-gradient(
+                180deg,
+                rgba(235,239,240,0.34) 0%,
+                rgba(225,231,232,0.52) 42%,
+                rgba(238,241,241,0.42) 68%,
+                rgba(228,233,234,0.26) 100%
+              ),
+              radial-gradient(
+                ellipse at 18% 48%,
+                rgba(252,252,250,0.72) 0%,
+                rgba(242,244,242,0.40) 30%,
+                transparent 58%
+              ),
+              radial-gradient(
+                ellipse at 72% 58%,
+                rgba(249,250,248,0.66) 0%,
+                rgba(238,241,239,0.38) 32%,
+                transparent 62%
+              );
+            filter: blur(16px);
+            animation: liveWeatherFog 34s ease-in-out infinite alternate;
           }
 
           .map.weather-atmosphere-rain::after,
@@ -1229,13 +1271,14 @@ function GeographicApp() {
 
           .map.weather-atmosphere-snow::after {
             display: block;
-            opacity: 0.46;
+            opacity: 0.82;
             background-image:
-              radial-gradient(circle, rgba(255,255,255,0.80) 0 1.2px, transparent 1.5px),
-              radial-gradient(circle, rgba(255,255,255,0.55) 0 1px, transparent 1.3px);
-            background-size: 46px 46px, 68px 68px;
-            background-position: 0 0, 20px 10px;
-            animation: liveWeatherSnow 9s linear infinite;
+              radial-gradient(circle, rgba(255,255,255,0.98) 0 1.8px, transparent 2.3px),
+              radial-gradient(circle, rgba(255,255,255,0.82) 0 1.3px, transparent 1.8px),
+              radial-gradient(circle, rgba(255,255,255,0.62) 0 0.9px, transparent 1.4px);
+            background-size: 38px 38px, 58px 58px, 82px 82px;
+            background-position: 0 0, 17px 9px, 34px 24px;
+            animation: liveWeatherSnow 7.5s linear infinite;
           }
 
           @keyframes historicHalloweenFog {
@@ -1250,11 +1293,21 @@ function GeographicApp() {
 
           @keyframes liveWeatherClouds {
             from {
-              transform: translate3d(-5%, 0, 0) scale(1.03);
+              transform: translate3d(-7%, -1%, 0) scale(1.04);
             }
 
             to {
-              transform: translate3d(5%, 1%, 0) scale(1.08);
+              transform: translate3d(7%, 2%, 0) scale(1.10);
+            }
+          }
+
+          @keyframes liveWeatherFog {
+            from {
+              transform: translate3d(-6%, 0, 0) scale(1.03);
+            }
+
+            to {
+              transform: translate3d(6%, 1%, 0) scale(1.08);
             }
           }
 
