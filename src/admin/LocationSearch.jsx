@@ -560,24 +560,27 @@ async function searchPlaces({
     q:
       `${query}, ${querySuffix}`,
 
-    format:
-      'jsonv2',
-
-    addressdetails:
-      '1',
-
-    namedetails:
-      '1',
-
     limit:
       '6',
 
-    viewbox:
-      (
-        `${bounds.west},` +
-        `${bounds.north},` +
-        `${bounds.east},` +
-        `${bounds.south}`
+    west:
+      String(
+        bounds.west
+      ),
+
+    north:
+      String(
+        bounds.north
+      ),
+
+    east:
+      String(
+        bounds.east
+      ),
+
+    south:
+      String(
+        bounds.south
       ),
 
     bounded:
@@ -588,7 +591,7 @@ async function searchPlaces({
   if (
     countryCode
   ) {
-    values.countrycodes =
+    values.countryCode =
       countryCode
   }
 
@@ -601,7 +604,7 @@ async function searchPlaces({
 
   const response =
     await fetch(
-      `https://nominatim.openstreetmap.org/search?${params.toString()}`
+      `/api/geographic/location-search/place?${params.toString()}`
     )
 
 
@@ -614,8 +617,16 @@ async function searchPlaces({
   }
 
 
-  const data =
+  const payload =
     await response.json()
+
+
+  const data =
+    Array.isArray(
+      payload?.results
+    )
+      ? payload.results
+      : []
 
 
   return data

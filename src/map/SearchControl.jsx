@@ -606,27 +606,30 @@ out body;
         q:
           `${cleanQuery}, Toronto, Ontario, Canada`,
 
-        format:
-          'jsonv2',
-
-        addressdetails:
-          '1',
-
-        namedetails:
-          '1',
-
         limit:
           '8',
 
-        countrycodes:
+        countryCode:
           'ca',
 
-        viewbox:
-          (
-            `${TORONTO_BOUNDS.west},` +
-            `${TORONTO_BOUNDS.north},` +
-            `${TORONTO_BOUNDS.east},` +
-            `${TORONTO_BOUNDS.south}`
+        west:
+          String(
+            TORONTO_BOUNDS.west
+          ),
+
+        north:
+          String(
+            TORONTO_BOUNDS.north
+          ),
+
+        east:
+          String(
+            TORONTO_BOUNDS.east
+          ),
+
+        south:
+          String(
+            TORONTO_BOUNDS.south
           ),
 
         bounded:
@@ -636,7 +639,7 @@ out body;
 
     const response =
       await fetch(
-        `https://nominatim.openstreetmap.org/search?${params.toString()}`
+        `/api/geographic/location-search/place?${params.toString()}`
       )
 
 
@@ -649,8 +652,16 @@ out body;
     }
 
 
-    const data =
+    const payload =
       await response.json()
+
+
+    const data =
+      Array.isArray(
+        payload?.results
+      )
+        ? payload.results
+        : []
 
 
     const formatted =
