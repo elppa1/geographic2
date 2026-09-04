@@ -2363,6 +2363,43 @@ function normalizeFireLocationPiece(
     .trim()
 }
 
+function isFireAreaCode(
+  value
+) {
+  return /^(NY|EY|SC|ET|YK|TO|TT)$/i.test(
+    cleanText(
+      value
+    )
+  )
+}
+
+
+function fireLocationPieces(
+  value
+) {
+  return normalizeFireLocationPiece(
+    value
+  )
+    .split(
+      /\s*\/\s*|\s*,\s*(?=(?:NY|EY|SC|ET|YK|TO|TT)$)/i
+    )
+    .map(
+      normalizeFireLocationPiece
+    )
+    .filter(
+      Boolean
+    )
+    .filter(
+      (
+        piece
+      ) =>
+        !isFireAreaCode(
+          piece
+        )
+    )
+}
+
+
 
 function fireIncidentShouldBeReviewed({
   incidentType,
@@ -2388,14 +2425,31 @@ function normalizeFireRow(
   cells
 ) {
   const primeStreet =
-    normalizeFireLocationPiece(
+    fireLocationPieces(
       cells[0]
+    )[0] ||
+    ''
+
+
+  const crossPieces =
+    fireLocationPieces(
+      cells[1]
+    )
+
+
+  const usableCrossPieces =
+    crossPieces.filter(
+      (
+        piece
+      ) =>
+        piece.toLowerCase() !==
+        primeStreet.toLowerCase()
     )
 
 
   const crossStreet =
-    normalizeFireLocationPiece(
-      cells[1]
+    usableCrossPieces.join(
+      ' / '
     )
 
 

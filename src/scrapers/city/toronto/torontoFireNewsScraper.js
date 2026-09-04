@@ -622,20 +622,67 @@ function parseIncidentRow({
 // LOCATION
 // ============================================================
 
+function isFireAreaCode(
+  value
+) {
+  return /^(NY|EY|SC|ET|YK|TO|TT)$/i.test(
+    cleanText(
+      value
+    )
+  )
+}
+
+
+function fireLocationPieces(
+  value
+) {
+  return cleanText(
+    value
+  )
+    .replace(
+      /\s*,\s*(?:NY|EY|SC|ET|YK|TO|TT)$/i,
+      ''
+    )
+    .split(
+      /\s*\/\s*/
+    )
+    .map(
+      cleanText
+    )
+    .filter(
+      Boolean
+    )
+    .filter(
+      (
+        piece
+      ) =>
+        !isFireAreaCode(
+          piece
+        )
+    )
+}
+
+
 function buildLocation({
   primeStreet,
   crossStreet,
 }) {
   const prime =
-    cleanText(
+    fireLocationPieces(
       primeStreet
     )
+      .join(
+        ' / '
+      )
 
 
   const cross =
-    cleanText(
+    fireLocationPieces(
       crossStreet
     )
+      .join(
+        ' / '
+      )
 
 
   if (
