@@ -249,26 +249,57 @@ function AtmosphereLayer({
 
   return (
     <div
-      className="geographic-atmosphere"
+      className={[
+        'geographic-atmosphere',
+        atmosphere.storm
+          ? 'geographic-atmosphere-storm'
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       style={style}
       aria-hidden="true"
     >
       <div className="geographic-atmosphere-shade" />
+      <div className="geographic-atmosphere-cloud-veil" />
 
       {atmosphere.fog && (
-        <div className="geographic-atmosphere-fog" />
-      )}
-
-      {atmosphere.rain && (
-        <div className="geographic-atmosphere-rain" />
-      )}
-
-      {atmosphere.snow && (
-        <div className="geographic-atmosphere-snow">
+        <div className="geographic-atmosphere-fog">
           <span />
           <span />
           <span />
         </div>
+      )}
+
+      {atmosphere.rain && (
+        <>
+          <div className="geographic-atmosphere-rain geographic-atmosphere-rain-back" />
+          <div className="geographic-atmosphere-rain geographic-atmosphere-rain-mid" />
+          <div className="geographic-atmosphere-rain geographic-atmosphere-rain-front" />
+          <div className="geographic-atmosphere-rain-mist" />
+        </>
+      )}
+
+      {atmosphere.snow && (
+        <>
+          <div className="geographic-atmosphere-snow geographic-atmosphere-snow-back">
+            <span />
+          </div>
+
+          <div className="geographic-atmosphere-snow geographic-atmosphere-snow-mid">
+            <span />
+          </div>
+
+          <div className="geographic-atmosphere-snow geographic-atmosphere-snow-front">
+            <span />
+          </div>
+
+          <div className="geographic-atmosphere-snow-gust" />
+        </>
+      )}
+
+      {atmosphere.storm && (
+        <div className="geographic-atmosphere-lightning" />
       )}
     </div>
   )
@@ -772,6 +803,13 @@ const GeographicMap =
     useState(null)
 
 
+      const [
+        atmosphereTest,
+        setAtmosphereTest,
+      ] =
+        useState('live')
+
+
   useEffect(() => {
     let cancelled =
       false
@@ -858,6 +896,165 @@ const GeographicMap =
       )
     }
   }, [])
+
+
+  useEffect(() => {
+    window.setAtmosphereTest =
+      (
+        mode =
+          'live'
+      ) => {
+        const normalized =
+          String(
+            mode ||
+            'live'
+          )
+            .trim()
+            .toLowerCase()
+
+        const allowed = [
+          'live',
+          'snow',
+          'rain',
+          'fog',
+          'storm',
+          'night',
+        ]
+
+        if (
+          !allowed.includes(
+            normalized
+          )
+        ) {
+          console.warn(
+            'ATMOSPHERE TEST: use live, snow, rain, fog, storm, or night'
+          )
+
+          return
+        }
+
+        setAtmosphereTest(
+          normalized
+        )
+
+        console.log(
+          `ATMOSPHERE TEST: ${normalized.toUpperCase()}`
+        )
+      }
+
+    return () => {
+      delete window.setAtmosphereTest
+    }
+  }, [])
+
+
+  const displayedAtmosphere =
+    atmosphereTest ===
+      'live'
+      ? atmosphere
+      : atmosphereTest ===
+          'snow'
+        ? {
+            darkness:
+              0.28,
+
+            cloud:
+              0.92,
+
+            fog:
+              true,
+
+            rain:
+              false,
+
+            snow:
+              true,
+
+            storm:
+              false,
+          }
+        : atmosphereTest ===
+            'rain'
+          ? {
+              darkness:
+                0.38,
+
+              cloud:
+                1,
+
+              fog:
+                true,
+
+              rain:
+                true,
+
+              snow:
+                false,
+
+              storm:
+                false,
+            }
+          : atmosphereTest ===
+              'fog'
+            ? {
+                darkness:
+                  0.18,
+
+                cloud:
+                  0.88,
+
+                fog:
+                  true,
+
+                rain:
+                  false,
+
+                snow:
+                  false,
+
+                storm:
+                  false,
+              }
+            : atmosphereTest ===
+                'storm'
+              ? {
+                  darkness:
+                    0.62,
+
+                  cloud:
+                    1,
+
+                  fog:
+                    true,
+
+                  rain:
+                    true,
+
+                  snow:
+                    false,
+
+                  storm:
+                    true,
+                }
+              : {
+                  darkness:
+                    0.72,
+
+                  cloud:
+                    0.35,
+
+                  fog:
+                    false,
+
+                  rain:
+                    false,
+
+                  snow:
+                    false,
+
+                  storm:
+                    false,
+                }
 
 
   useEffect(() => {
@@ -2162,7 +2359,7 @@ const GeographicMap =
 
           <AtmosphereLayer
             atmosphere={
-              atmosphere
+              displayedAtmosphere
             }
           />
 
