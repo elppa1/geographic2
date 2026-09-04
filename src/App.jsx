@@ -1543,6 +1543,63 @@ function GeographicApp() {
 
 
         {activePinFilter ===
+          'new' && (
+          <div className="content-subfilters">
+            <button
+              type="button"
+              className={
+                newSubtypeFilter ===
+                  'businesses'
+                  ? 'content-subfilter content-subfilter-active'
+                  : 'content-subfilter'
+              }
+              onClick={() =>
+                setNewSubtypeFilter(
+                  'businesses'
+                )
+              }
+            >
+              BUSINESS
+            </button>
+
+            <button
+              type="button"
+              className={
+                newSubtypeFilter ===
+                  'events'
+                  ? 'content-subfilter content-subfilter-active'
+                  : 'content-subfilter'
+              }
+              onClick={() =>
+                setNewSubtypeFilter(
+                  'events'
+                )
+              }
+            >
+              EVENTS
+            </button>
+
+            <button
+              type="button"
+              className={
+                newSubtypeFilter ===
+                  'sports'
+                  ? 'content-subfilter content-subfilter-active'
+                  : 'content-subfilter'
+              }
+              onClick={() =>
+                setNewSubtypeFilter(
+                  'sports'
+                )
+              }
+            >
+              SPORTS
+            </button>
+          </div>
+        )}
+
+
+        {activePinFilter ===
           'new' &&
           newSubtypeFilter ===
             'businesses' && (

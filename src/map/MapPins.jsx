@@ -50,6 +50,14 @@ const PUBLISHED_NEW_DEVELOPMENT_ENDPOINT =
   '/api/geographic/toronto/new/development/published?status=all'
 
 
+const PUBLISHED_NEW_EVENTS_ENDPOINT =
+  '/api/geographic/toronto/new/events/published?status=all'
+
+
+const PUBLISHED_NEW_SPORTS_ENDPOINT =
+  '/api/geographic/toronto/new/sports/published?status=all'
+
+
 const PUBLISHED_NEW_REFRESH_MS =
   15 * 1000
 
@@ -71,6 +79,26 @@ const DEVELOPMENT_CATEGORIES = [
   'housing',
   'transit',
   'public-space',
+]
+
+
+const EVENT_CATEGORIES = [
+  'event',
+  'theatre',
+  'comedy',
+  'concert',
+  'festival',
+  'exhibition',
+  'talk',
+  'screening',
+  'community-event',
+]
+
+
+const SPORTS_CATEGORIES = [
+  'sports',
+  'game',
+  'match',
 ]
 
 
@@ -233,6 +261,38 @@ function newPinMatchesSubtype(
       (
         !explicitType &&
         DEVELOPMENT_CATEGORIES.includes(
+          category
+        )
+      )
+    )
+  }
+
+  if (
+    subtype ===
+    'events'
+  ) {
+    return (
+      explicitType ===
+        'events' ||
+      (
+        !explicitType &&
+        EVENT_CATEGORIES.includes(
+          category
+        )
+      )
+    )
+  }
+
+  if (
+    subtype ===
+    'sports'
+  ) {
+    return (
+      explicitType ===
+        'sports' ||
+      (
+        !explicitType &&
+        SPORTS_CATEGORIES.includes(
           category
         )
       )
@@ -5607,6 +5667,16 @@ function MapPins({
             loadPublishedNewEndpoint(
               PUBLISHED_NEW_DEVELOPMENT_ENDPOINT,
               'Published NEW development'
+            ),
+
+            loadPublishedNewEndpoint(
+              PUBLISHED_NEW_EVENTS_ENDPOINT,
+              'Published NEW events'
+            ),
+
+            loadPublishedNewEndpoint(
+              PUBLISHED_NEW_SPORTS_ENDPOINT,
+              'Published NEW sports'
             ),
           ])
 
