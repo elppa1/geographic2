@@ -9,8 +9,9 @@
 //   /api/geographic/location-search/intersection
 //
 // Server:
-//   Overpass for true street intersections
-//   Nominatim for places and intersection fallback
+//   City of Toronto centreline intersections first
+//   Overpass as intersection fallback
+//   Nominatim for places and final intersection fallback
 //
 // External requests stay server-side so the browser never calls
 // Overpass or Nominatim directly.
@@ -36,6 +37,9 @@ const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
 ]
+
+const TORONTO_INTERSECTION_ENDPOINT =
+  'https://gis.toronto.ca/arcgis/rest/services/cot_geospatial/FeatureServer/19/query'
 
 const TORONTO_SEARCH_BOUNDS = {
   west:
@@ -699,6 +703,540 @@ function makeStreetRegex(
 }
 
 
+function getIntersectionStreetSearch(
+  value
+) {
+  const clean =
+    cleanIntersectionStreet(
+      value
+    )
+
+
+  const routeMatch =
+    clean.match(
+      /^(?:(?:ontario|on)\s+)?(?:(?:highway|hwy|route)\s+)?(\d+[a-z]?)$/i
+    )
+
+
+  if (
+    routeMatch
+  ) {
+    const routeNumber =
+      routeMatch[1]
+        .toUpperCase()
+
+
+    return {
+      name:
+        `Highway ${routeNumber}`,
+
+      refRegex:
+        (
+          '^(ON[ .-]*)?' +
+          escapeRegex(
+            routeNumber
+          ) +
+          '$'
+        ),
+    }
+  }
+
+
+  const shorthand =
+    clean
+      .toLowerCase()
+      .replace(
+        /\./g,
+        ''
+      )
+
+
+  if (
+    shorthand ===
+      'dvp'
+  ) {
+    return {
+      name:
+        'Don Valley Parkway',
+
+      refRegex:
+        '',
+    }
+  }
+
+
+  if (
+    shorthand ===
+      'gardiner'
+  ) {
+    return {
+      name:
+        'Gardiner Expressway',
+
+      refRegex:
+        '',
+    }
+  }
+
+
+  if (
+    shorthand ===
+      'qew'
+  ) {
+    return {
+      name:
+        'Queen Elizabeth Way',
+
+      refRegex:
+        '^QEW$',
+    }
+  }
+
+
+  return {
+    name:
+      clean,
+
+    refRegex:
+      '',
+  }
+}
+
+
+function intersectionLookupToken(
+  value
+) {
+  const search =
+    getIntersectionStreetSearch(
+      value
+    )
+
+
+  const genericTokens =
+    new Set([
+      'the',
+      'street',
+      'st',
+      'avenue',
+      'ave',
+      'road',
+      'rd',
+      'boulevard',
+      'blvd',
+      'drive',
+      'dr',
+      'lane',
+      'ln',
+      'court',
+      'ct',
+      'place',
+      'pl',
+      'way',
+      'highway',
+      'hwy',
+      'route',
+      'parkway',
+      'expressway',
+      'north',
+      'south',
+      'east',
+      'west',
+      'n',
+      's',
+      'e',
+      'w',
+    ])
+
+
+  const tokens =
+    String(
+      search.name ||
+      value ||
+      ''
+    )
+      .toLowerCase()
+      .match(
+        /[a-z0-9]+/g
+      ) ||
+    []
+
+
+  const routeNumber =
+    tokens.find(
+      (token) =>
+        /\d/.test(
+          token
+        )
+    )
+
+
+  if (
+    routeNumber
+  ) {
+    return routeNumber
+  }
+
+
+  const useful =
+    tokens.filter(
+      (token) =>
+        !genericTokens.has(
+          token
+        )
+    )
+
+
+  const candidates =
+    useful.length >
+      0
+      ? useful
+      : tokens
+
+
+  return candidates
+    .slice()
+    .sort(
+      (
+        a,
+        b
+      ) =>
+        b.length -
+        a.length
+    )[0] ||
+    ''
+}
+
+
+async function searchTorontoIntersection({
+  streetA,
+  streetB,
+  deadline,
+}) {
+  const tokenA =
+    intersectionLookupToken(
+      streetA
+    )
+
+
+  const tokenB =
+    intersectionLookupToken(
+      streetB
+    )
+
+
+  if (
+    !tokenA ||
+    !tokenB
+  ) {
+    return []
+  }
+
+
+  const cacheKey =
+    (
+      'toronto-intersection:' +
+      tokenA.toLowerCase() +
+      '|' +
+      tokenB.toLowerCase()
+    )
+
+
+  const cached =
+    getLocationCache(
+      cacheKey
+    )
+
+
+  if (
+    cached !==
+    null
+  ) {
+    return cached
+  }
+
+
+  const existing =
+    locationSearchInFlight.get(
+      cacheKey
+    )
+
+
+  if (
+    existing
+  ) {
+    return existing
+  }
+
+
+  const request =
+    (
+      async () => {
+        const upperA =
+          tokenA.toUpperCase()
+
+
+        const upperB =
+          tokenB.toUpperCase()
+
+
+        const params =
+          new URLSearchParams({
+            where:
+              (
+                `UPPER(INTERSECTION_DESC) LIKE '%${upperA}%'` +
+                ' AND ' +
+                `UPPER(INTERSECTION_DESC) LIKE '%${upperB}%'`
+              ),
+
+            outFields:
+              (
+                'INTERSECTION_ID,' +
+                'INTERSECTION_DESC,' +
+                'LONGITUDE,' +
+                'LATITUDE'
+              ),
+
+            returnGeometry:
+              'false',
+
+            resultRecordCount:
+              '12',
+
+            f:
+              'json',
+          })
+
+
+        const response =
+          await fetch(
+            (
+              TORONTO_INTERSECTION_ENDPOINT +
+              '?' +
+              params.toString()
+            ),
+            {
+              headers: {
+                Accept:
+                  'application/json',
+
+                'User-Agent':
+                  'ELPPA-Geographic/1.0 (Toronto Geographic)',
+              },
+
+              signal:
+                AbortSignal.timeout(
+                  Math.max(
+                    1,
+                    Math.min(
+                      4000,
+                      remainingTime(
+                        deadline,
+                        4000
+                      )
+                    )
+                  )
+                ),
+            }
+          )
+
+
+        if (
+          !response.ok
+        ) {
+          throw new Error(
+            `TORONTO INTERSECTION ${response.status}`
+          )
+        }
+
+
+        const data =
+          await response.json()
+
+
+        if (
+          data?.error
+        ) {
+          throw new Error(
+            data.error.message ||
+            'TORONTO INTERSECTION QUERY FAILED'
+          )
+        }
+
+
+        const elements =
+          (
+            Array.isArray(
+              data?.features
+            )
+              ? data.features
+              : []
+          )
+            .map(
+              (
+                feature,
+                index
+              ) => {
+                const attributes =
+                  feature?.attributes ||
+                  {}
+
+
+                return {
+                  type:
+                    'node',
+
+                  id:
+                    (
+                      attributes.INTERSECTION_ID ||
+                      `toronto-${index}`
+                    ),
+
+                  lon:
+                    Number(
+                      attributes.LONGITUDE
+                    ),
+
+                  lat:
+                    Number(
+                      attributes.LATITUDE
+                    ),
+
+                  description:
+                    attributes.INTERSECTION_DESC ||
+                    '',
+                }
+              }
+            )
+            .filter(
+              (item) =>
+                Number.isFinite(
+                  item.lon
+                ) &&
+                Number.isFinite(
+                  item.lat
+                )
+            )
+            .slice(
+              0,
+              6
+            )
+
+
+        setLocationCache(
+          cacheKey,
+          elements
+        )
+
+
+        return elements
+      }
+    )()
+
+
+  locationSearchInFlight.set(
+    cacheKey,
+    request
+  )
+
+
+  try {
+    return await request
+  }
+  finally {
+    locationSearchInFlight.delete(
+      cacheKey
+    )
+  }
+}
+
+
+function makeOverpassStreetClauses(
+  search,
+  bbox
+) {
+  const nameRegex =
+    escapeOverpassString(
+      makeStreetRegex(
+        search.name
+      )
+    )
+
+
+  const clauses =
+    [
+      (
+        '  way\n' +
+        '    ["highway"]\n' +
+        `    ["name"~"${nameRegex}",i]\n` +
+        `    (${bbox});`
+      ),
+    ]
+
+
+  if (
+    search.refRegex
+  ) {
+    clauses.push(
+      (
+        '  way\n' +
+        '    ["highway"]\n' +
+        `    ["ref"~"${escapeOverpassString(search.refRegex)}",i]\n` +
+        `    (${bbox});`
+      )
+    )
+  }
+
+
+  return clauses.join(
+    '\n\n'
+  )
+}
+
+
+function streetWayMatchesSearch(
+  way,
+  search
+) {
+  if (
+    streetNamesMatch(
+      way?.tags?.name,
+      search.name
+    )
+  ) {
+    return true
+  }
+
+
+  if (
+    !search.refRegex
+  ) {
+    return false
+  }
+
+
+  const refPattern =
+    new RegExp(
+      search.refRegex,
+      'i'
+    )
+
+
+  return String(
+    way?.tags?.ref ||
+    ''
+  )
+    .split(
+      /[;,]/
+    )
+    .some(
+      (ref) =>
+        refPattern.test(
+          ref.trim()
+        )
+    )
+}
+
+
 function escapeOverpassString(
   value
 ) {
@@ -1217,19 +1755,15 @@ async function searchOverpassIntersection({
   }
 
 
-  const streetARegex =
-    escapeOverpassString(
-      makeStreetRegex(
-        streetA
-      )
+  const streetASearch =
+    getIntersectionStreetSearch(
+      streetA
     )
 
 
-  const streetBRegex =
-    escapeOverpassString(
-      makeStreetRegex(
-        streetB
-      )
+  const streetBSearch =
+    getIntersectionStreetSearch(
+      streetB
     )
 
 
@@ -1243,20 +1777,28 @@ async function searchOverpassIntersection({
       .join(',')
 
 
+  const streetAClauses =
+    makeOverpassStreetClauses(
+      streetASearch,
+      bbox
+    )
+
+
+  const streetBClauses =
+    makeOverpassStreetClauses(
+      streetBSearch,
+      bbox
+    )
+
+
   const query =
     `
 [out:json][timeout:4];
 
 (
-  way
-    ["highway"]
-    ["name"~"${streetARegex}",i]
-    (${bbox});
+${streetAClauses}
 
-  way
-    ["highway"]
-    ["name"~"${streetBRegex}",i]
-    (${bbox});
+${streetBClauses}
 );
 
 out tags geom;
@@ -1295,9 +1837,9 @@ out tags geom;
   const streetAWays =
     ways.filter(
       (way) =>
-        streetNamesMatch(
-          way?.tags?.name,
-          streetA
+        streetWayMatchesSearch(
+          way,
+          streetASearch
         )
     )
 
@@ -1305,9 +1847,9 @@ out tags geom;
   const streetBWays =
     ways.filter(
       (way) =>
-        streetNamesMatch(
-          way?.tags?.name,
-          streetB
+        streetWayMatchesSearch(
+          way,
+          streetBSearch
         )
     )
 
@@ -1835,22 +2377,9 @@ export function locationSearchApi() {
                 elements =
                   await waitForSearch({
                     promise:
-                      searchOverpassIntersection({
+                      searchTorontoIntersection({
                         streetA,
                         streetB,
-
-                        west:
-                          searchOptions.west,
-
-                        north:
-                          searchOptions.north,
-
-                        east:
-                          searchOptions.east,
-
-                        south:
-                          searchOptions.south,
-
                         deadline,
                       }),
 
@@ -1864,7 +2393,7 @@ export function locationSearchApi() {
                 error
               ) {
                 console.warn(
-                  'LOCATION SEARCH · OVERPASS INTERSECTION FAILED, USING NOMINATIM:',
+                  'LOCATION SEARCH · TORONTO INTERSECTION FAILED, USING OVERPASS:',
                   String(
                     error?.message ||
                     error
@@ -1877,12 +2406,73 @@ export function locationSearchApi() {
                 elements.length ===
                 0
               ) {
+                try {
+                  elements =
+                    await waitForSearch({
+                      promise:
+                        searchOverpassIntersection({
+                          streetA,
+                          streetB,
+
+                          west:
+                            searchOptions.west,
+
+                          north:
+                            searchOptions.north,
+
+                          east:
+                            searchOptions.east,
+
+                          south:
+                            searchOptions.south,
+
+                          deadline,
+                        }),
+
+                      deadline,
+
+                      signal:
+                        requestController.signal,
+                    })
+                }
+                catch (
+                  error
+                ) {
+                  console.warn(
+                    'LOCATION SEARCH · OVERPASS INTERSECTION FAILED, USING NOMINATIM:',
+                    String(
+                      error?.message ||
+                      error
+                    )
+                  )
+                }
+              }
+
+
+              if (
+                elements.length ===
+                0
+              ) {
+                const fallbackStreetA =
+                  getIntersectionStreetSearch(
+                    streetA
+                  )
+                    .name
+
+
+                const fallbackStreetB =
+                  getIntersectionStreetSearch(
+                    streetB
+                  )
+                    .name
+
+
                 const ampersandParams =
                   makeNominatimParams({
                     ...searchOptions,
 
                     query:
-                      `${streetA} & ${streetB}`,
+                      `${fallbackStreetA} & ${fallbackStreetB}`,
                   })
 
 
@@ -1912,7 +2502,7 @@ export function locationSearchApi() {
                       ...searchOptions,
 
                       query:
-                        `${streetA} and ${streetB}`,
+                        `${fallbackStreetA} and ${fallbackStreetB}`,
                     })
 
 
