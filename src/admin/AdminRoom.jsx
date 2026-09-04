@@ -39,6 +39,12 @@ import {
 } from './locationSearchUtils.js'
 
 import {
+  HISTORIC_PIN_ICON_CATEGORIES,
+  HISTORIC_PIN_ICONS,
+  getHistoricPinIcon,
+} from '../historicPinIcons.js'
+
+import {
   getNewsExpiresAt,
   getNewsSourceTimestamp,
   getNewsTimeRemainingMs,
@@ -1600,6 +1606,9 @@ const EMPTY_HISTORIC = {
 
   editorialStatus:
     'researching',
+
+  pinIcon:
+    'map-pin',
 
   year:
     '',
@@ -4034,6 +4043,11 @@ function normalizeHistoricRecord(
       pinRecord.editorialStatus ||
       'researching',
 
+    pinIcon:
+      getHistoricPinIcon(
+        pinRecord.pinIcon
+      ).id,
+
     pinPositionMode:
       pinRecord.pinPositionMode ||
       'auto',
@@ -4294,6 +4308,22 @@ function AdminRoom() {
     )
 
 
+  const [
+    historicPinIconSearch,
+    setHistoricPinIconSearch,
+  ] =
+    useState('')
+
+
+  const [
+    historicPinIconCategory,
+    setHistoricPinIconCategory,
+  ] =
+    useState(
+      'all'
+    )
+
+
   useEffect(
     () => {
       saveHistoricIssues(
@@ -4452,6 +4482,68 @@ function AdminRoom() {
         makeNewsDraft(
           initialCityKey
         )
+    )
+
+
+  const selectedHistoricPinIcon =
+    getHistoricPinIcon(
+      draft.pinIcon
+    )
+
+
+  const filteredHistoricPinIcons =
+    useMemo(
+      () => {
+        const search =
+          String(
+            historicPinIconSearch ||
+            ''
+          )
+            .trim()
+            .toLowerCase()
+
+
+        return HISTORIC_PIN_ICONS.filter(
+          (
+            icon
+          ) => {
+            if (
+              historicPinIconCategory !==
+                'all' &&
+              icon.category !==
+                historicPinIconCategory
+            ) {
+              return false
+            }
+
+
+            if (
+              !search
+            ) {
+              return true
+            }
+
+
+            return [
+              icon.id,
+              icon.label,
+              icon.category,
+              icon.keywords,
+            ]
+              .join(
+                ' '
+              )
+              .toLowerCase()
+              .includes(
+                search
+              )
+          }
+        )
+      },
+      [
+        historicPinIconSearch,
+        historicPinIconCategory,
+      ]
     )
 
 
@@ -8815,7 +8907,7 @@ function AdminRoom() {
         : null
 
 
-    const status =
+    const requestedStatus =
       [
         'draft',
         'ready',
@@ -8827,6 +8919,43 @@ function AdminRoom() {
         )
         ? historicIssueDraft.status
         : 'draft'
+
+
+    if (
+      existing?.status ===
+        'published' &&
+      requestedStatus !==
+        'published'
+    ) {
+      window.alert(
+        'Use UNPUBLISH ISSUE to take a published issue offline.'
+      )
+
+
+      return
+    }
+
+
+    if (
+      existing?.status !==
+        'published' &&
+      requestedStatus ===
+        'published'
+    ) {
+      window.alert(
+        'Use PUBLISH ISSUE to publish the issue and its stories.'
+      )
+
+
+      return
+    }
+
+
+    const status =
+      existing?.status ===
+        'published'
+        ? 'published'
+        : requestedStatus
 
 
     const nextIssue = {
@@ -8969,6 +9098,395 @@ function AdminRoom() {
 
     setHistoricIssueEditingId(
       ''
+    )
+  }
+
+
+  function publishHistoricIssue() {
+    if (
+      !selectedHistoricIssue
+    ) {
+      return
+    }
+
+
+    if (
+      selectedHistoricIssueRecords.length ===
+      0
+    ) {
+      window.alert(
+        'Add at least one Historic entry to this issue before publishing it.'
+      )
+
+
+      return
+    }
+
+
+    const confirmed =
+      window.confirm(
+        (
+          `Publish HISTORIC ${selectedHistoricIssue.number} · ` +
+          `${selectedHistoricIssue.title}? ` +
+          `${selectedHistoricIssueRecords.length} ` +
+          (
+            selectedHistoricIssueRecords.length ===
+              1
+              ? 'entry'
+              : 'entries'
+          ) +
+          ' will become public.'
+        )
+      )
+
+
+    if (
+      !confirmed
+    ) {
+      return
+    }
+
+
+    const now =
+      new Date()
+        .toISOString()
+
+
+    const nextIssues =
+      historicIssues.map(
+        (
+          issue
+        ) =>
+          issue.id ===
+            selectedHistoricIssue.id
+            ? {
+                ...issue,
+
+                status:
+                  'published',
+
+                publicationDate:
+                  issue.publicationDate ||
+                  today(),
+
+                firstPublishedAt:
+                  issue.firstPublishedAt ||
+                  issue.publishedAt ||
+                  now,
+
+                publishedAt:
+                  now,
+
+                unpublishedAt:
+                  '',
+
+                updatedAt:
+                  now,
+              }
+            : issue
+      )
+
+
+    const latestHistoricItems =
+      getHistoricItems()
+        .map(
+          normalizeHistoricRecord
+        )
+
+
+    const nextHistoricItems =
+      latestHistoricItems.map(
+        (
+          record
+        ) => {
+          const inIssue =
+            belongsToCity(
+              record,
+              cityKey
+            ) &&
+            Array.isArray(
+              record.issueIds
+            ) &&
+            record.issueIds.includes(
+              selectedHistoricIssue.id
+            )
+
+
+          if (
+            !inIssue
+          ) {
+            return record
+          }
+
+
+          return {
+            ...record,
+
+            active:
+              true,
+
+            historicIssuePublishedAt:
+              now,
+
+            historicIssueUnpublishedAt:
+              '',
+          }
+        }
+      )
+
+
+    setHistoricIssues(
+      nextIssues
+    )
+
+
+    setAllHistoricItems(
+      nextHistoricItems
+    )
+
+
+    saveHistoricItems(
+      nextHistoricItems
+    )
+
+
+    setDraft(
+      (
+        current
+      ) => {
+        const inIssue =
+          Array.isArray(
+            current.issueIds
+          ) &&
+          current.issueIds.includes(
+            selectedHistoricIssue.id
+          )
+
+
+        return inIssue
+          ? {
+              ...current,
+
+              active:
+                true,
+            }
+          : current
+      }
+    )
+
+
+    setHistoricRecordFilter(
+      'published'
+    )
+
+
+    setRecordsPanel(
+      'published'
+    )
+  }
+
+
+  function unpublishHistoricIssue() {
+    if (
+      !selectedHistoricIssue
+    ) {
+      return
+    }
+
+
+    const confirmed =
+      window.confirm(
+        (
+          `Unpublish HISTORIC ${selectedHistoricIssue.number} · ` +
+          `${selectedHistoricIssue.title}? ` +
+          'Its stories will be removed from the public Historic map.'
+        )
+      )
+
+
+    if (
+      !confirmed
+    ) {
+      return
+    }
+
+
+    const now =
+      new Date()
+        .toISOString()
+
+
+    const nextIssues =
+      historicIssues.map(
+        (
+          issue
+        ) =>
+          issue.id ===
+            selectedHistoricIssue.id
+            ? {
+                ...issue,
+
+                status:
+                  'ready',
+
+                unpublishedAt:
+                  now,
+
+                updatedAt:
+                  now,
+              }
+            : issue
+      )
+
+
+    const publishedIssueIds =
+      new Set(
+        nextIssues
+          .filter(
+            (
+              issue
+            ) =>
+              issue.status ===
+              'published'
+          )
+          .map(
+            (
+              issue
+            ) =>
+              issue.id
+          )
+      )
+
+
+    const latestHistoricItems =
+      getHistoricItems()
+        .map(
+          normalizeHistoricRecord
+        )
+
+
+    const nextHistoricItems =
+      latestHistoricItems.map(
+        (
+          record
+        ) => {
+          const issueIds =
+            Array.isArray(
+              record.issueIds
+            )
+              ? record.issueIds
+              : []
+
+
+          const inIssue =
+            belongsToCity(
+              record,
+              cityKey
+            ) &&
+            issueIds.includes(
+              selectedHistoricIssue.id
+            )
+
+
+          if (
+            !inIssue
+          ) {
+            return record
+          }
+
+
+          const remainsPublishedElsewhere =
+            issueIds.some(
+              (
+                issueId
+              ) =>
+                issueId !==
+                  selectedHistoricIssue.id &&
+                publishedIssueIds.has(
+                  issueId
+                )
+            )
+
+
+          return {
+            ...record,
+
+            active:
+              remainsPublishedElsewhere,
+
+            historicIssueUnpublishedAt:
+              now,
+          }
+        }
+      )
+
+
+    setHistoricIssues(
+      nextIssues
+    )
+
+
+    setAllHistoricItems(
+      nextHistoricItems
+    )
+
+
+    saveHistoricItems(
+      nextHistoricItems
+    )
+
+
+    setDraft(
+      (
+        current
+      ) => {
+        const issueIds =
+          Array.isArray(
+            current.issueIds
+          )
+            ? current.issueIds
+            : []
+
+
+        if (
+          !issueIds.includes(
+            selectedHistoricIssue.id
+          )
+        ) {
+          return current
+        }
+
+
+        const remainsPublishedElsewhere =
+          issueIds.some(
+            (
+              issueId
+            ) =>
+              issueId !==
+                selectedHistoricIssue.id &&
+              publishedIssueIds.has(
+                issueId
+              )
+          )
+
+
+        return {
+          ...current,
+
+          active:
+            remainsPublishedElsewhere,
+        }
+      }
+    )
+
+
+    setHistoricRecordFilter(
+      'drafts'
+    )
+
+
+    setRecordsPanel(
+      'published'
     )
   }
 
@@ -12222,6 +12740,46 @@ function AdminRoom() {
         false
 
 
+    if (
+      tab ===
+        'historic' &&
+      nextActive &&
+      Array.isArray(
+        target.issueIds
+      ) &&
+      target.issueIds.length >
+        0
+    ) {
+      const hasPublishedIssue =
+        target.issueIds.some(
+          (
+            issueId
+          ) =>
+            historicIssues.some(
+              (
+                issue
+              ) =>
+                issue.id ===
+                  issueId &&
+                issue.status ===
+                  'published'
+            )
+        )
+
+
+      if (
+        !hasPublishedIssue
+      ) {
+        window.alert(
+          'Publish the Historic issue to make this story public.'
+        )
+
+
+        return
+      }
+    }
+
+
     let updatedRecord = {
       ...target,
 
@@ -13461,6 +14019,37 @@ function AdminRoom() {
                       >
                         EDIT ISSUE
                       </button>
+
+
+                      {selectedHistoricIssue?.status ===
+                        'published'
+                        ? (
+                            <button
+                              type="button"
+                              className="admin-review-reject"
+                              onClick={
+                                unpublishHistoricIssue
+                              }
+                            >
+                              UNPUBLISH ISSUE
+                            </button>
+                          )
+                        : (
+                            <button
+                              type="button"
+                              className="admin-review-approve"
+                              disabled={
+                                !selectedHistoricIssue ||
+                                selectedHistoricIssueRecords.length ===
+                                  0
+                              }
+                              onClick={
+                                publishHistoricIssue
+                              }
+                            >
+                              PUBLISH ISSUE
+                            </button>
+                          )}
                     </div>
                   </div>
                 </div>
@@ -13540,8 +14129,11 @@ function AdminRoom() {
                           READY
                         </option>
 
-                        <option value="published">
-                          PUBLISHED
+                        <option
+                          value="published"
+                          disabled
+                        >
+                          PUBLISHED · USE PUBLISH ISSUE
                         </option>
 
                         <option value="archived">
@@ -13827,6 +14419,189 @@ function AdminRoom() {
                     </option>
                   </select>
                 </label>
+
+
+                <div className="admin-field admin-field-wide">
+                  <span>
+                    PIN ICON
+                  </span>
+
+
+                  <div
+                    style={{
+                      border:
+                        '1px solid rgba(0,0,0,0.18)',
+
+                      padding:
+                        '12px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display:
+                          'grid',
+
+                        gridTemplateColumns:
+                          'minmax(180px, 1fr) minmax(140px, 220px)',
+
+                        gap:
+                          '8px',
+                      }}
+                    >
+                      <input
+                        type="search"
+                        value={
+                          historicPinIconSearch
+                        }
+                        onChange={
+                          (
+                            event
+                          ) =>
+                            setHistoricPinIconSearch(
+                              event.target.value
+                            )
+                        }
+                        placeholder="Search icons: murder, cemetery, train, hospital..."
+                        aria-label="Search Historic pin icons"
+                      />
+
+
+                      <select
+                        value={
+                          historicPinIconCategory
+                        }
+                        onChange={
+                          (
+                            event
+                          ) =>
+                            setHistoricPinIconCategory(
+                              event.target.value
+                            )
+                        }
+                        aria-label="Historic pin icon category"
+                      >
+                        {HISTORIC_PIN_ICON_CATEGORIES.map(
+                          (
+                            category
+                          ) => (
+                            <option
+                              key={
+                                category
+                              }
+                              value={
+                                category
+                              }
+                            >
+                              {
+                                category.toUpperCase()
+                              }
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </div>
+
+
+                    <div
+                      style={{
+                        margin:
+                          '10px 0',
+
+                        fontSize:
+                          '14px',
+
+                        fontWeight:
+                          '700',
+                      }}
+                    >
+                      SELECTED · {
+                        selectedHistoricPinIcon.emoji
+                      } {
+                        selectedHistoricPinIcon.label
+                          .toUpperCase()
+                      }
+                    </div>
+
+
+                    <div
+                      style={{
+                        display:
+                          'grid',
+
+                        gridTemplateColumns:
+                          'repeat(auto-fill, minmax(145px, 1fr))',
+
+                        gap:
+                          '6px',
+
+                        maxHeight:
+                          '270px',
+
+                        overflowY:
+                          'auto',
+                      }}
+                    >
+                      {filteredHistoricPinIcons.map(
+                        (
+                          icon
+                        ) => (
+                          <button
+                            type="button"
+                            key={
+                              icon.id
+                            }
+                            className={
+                              draft.pinIcon ===
+                                icon.id
+                                ? 'admin-review-type-filter admin-review-type-filter-active'
+                                : 'admin-review-type-filter'
+                            }
+                            onClick={() =>
+                              updateDraft(
+                                'pinIcon',
+                                icon.id
+                              )
+                            }
+                            title={
+                              `${icon.label} · ${icon.category}`
+                            }
+                          >
+                            <span
+                              style={{
+                                fontSize:
+                                  '20px',
+                              }}
+                            >
+                              {
+                                icon.emoji
+                              }
+                            </span>
+
+                            {' '}
+
+                            {
+                              icon.label
+                            }
+                          </button>
+                        )
+                      )}
+                    </div>
+
+
+                    {filteredHistoricPinIcons.length ===
+                      0 && (
+                      <div
+                        className="admin-empty"
+                        style={{
+                          marginTop:
+                            '10px',
+                        }}
+                      >
+                        NO ICONS FOUND.
+                      </div>
+                    )}
+                  </div>
+                </div>
 
 
                 <div className="admin-field admin-field-wide">
@@ -16155,10 +16930,25 @@ function AdminRoom() {
                             )
                           )
                         : (
-                            record.category ||
-                            tabLabel(
-                              tab
-                            )
+                            tab ===
+                              'historic'
+                              ? (
+                                  `${getHistoricPinIcon(
+                                    record.pinIcon
+                                  ).emoji} ` +
+                                  (
+                                    record.category ||
+                                    tabLabel(
+                                      tab
+                                    )
+                                  )
+                                )
+                              : (
+                                  record.category ||
+                                  tabLabel(
+                                    tab
+                                  )
+                                )
                           )}
                     </span>
 

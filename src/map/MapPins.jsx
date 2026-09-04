@@ -20,6 +20,10 @@ import {
   getNewItems,
 } from '../admin/adminStore.js'
 
+import {
+  getHistoricPinIcon,
+} from '../historicPinIcons.js'
+
 
 import {
   newsRecordIsLocallyRetained,
@@ -3108,6 +3112,15 @@ function createMarker({
   element.type =
     'button'
 
+  const historicIcon =
+    pinType ===
+    'historic'
+      ? getHistoricPinIcon(
+          pin.pinIcon
+        )
+      : null
+
+
   const newsEmoji =
     pinType ===
     'news'
@@ -3127,6 +3140,66 @@ function createMarker({
 
 
   if (
+    historicIcon
+  ) {
+    element.className =
+      'geographic-pin-emoji-marker geographic-pin-historic-emoji-marker'
+
+    element.style.width =
+      '32px'
+
+    element.style.height =
+      '32px'
+
+    element.style.padding =
+      '0'
+
+    element.style.margin =
+      '0'
+
+    element.style.border =
+      'none'
+
+    element.style.borderRadius =
+      '0'
+
+    element.style.background =
+      'transparent'
+
+    element.style.boxShadow =
+      'none'
+
+    element.style.cursor =
+      'pointer'
+
+    element.style.display =
+      'flex'
+
+    element.style.alignItems =
+      'center'
+
+    element.style.justifyContent =
+      'center'
+
+    element.style.appearance =
+      'none'
+
+    element.style.WebkitAppearance =
+      'none'
+
+    element.setAttribute(
+      'aria-label',
+      pin.title
+        ? `${historicIcon.label} · ${pin.title}`
+        : `${historicIcon.label} marker`
+    )
+
+    appendEmojiMarkerIcon(
+      element,
+      historicIcon.emoji
+    )
+  }
+  else if (
     newsEmoji
   ) {
     const iconLabel =
