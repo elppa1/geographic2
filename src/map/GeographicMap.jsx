@@ -69,6 +69,301 @@ function getEnhancedTileUrl({
 }
 
 
+function getHistoricLayerFromCity({
+  city,
+  layerType,
+  year,
+}) {
+  const numericYear =
+    Number(
+      year
+    )
+
+
+  if (
+    !city ||
+    !Number.isFinite(
+      numericYear
+    )
+  ) {
+    return null
+  }
+
+
+  const collection =
+    layerType ===
+      'map'
+      ? city.maps
+      : layerType ===
+          'aerial'
+        ? city.aerials
+        : null
+
+
+  const item =
+    collection?.[
+      numericYear
+    ]
+
+
+  if (
+    !item?.url
+  ) {
+    return null
+  }
+
+
+  return {
+    year:
+      numericYear,
+
+    layerType,
+
+    ...item,
+  }
+}
+
+
+function getClosestHistoricLayer({
+  city,
+  year,
+}) {
+  const numericYear =
+    Number(
+      year
+    )
+
+
+  if (
+    !city ||
+    !Number.isFinite(
+      numericYear
+    )
+  ) {
+    return null
+  }
+
+
+  const layers = [
+    ...Object.entries(
+      city.maps ||
+      {}
+    )
+      .filter(
+        ([
+          ,
+          item,
+        ]) =>
+          Boolean(
+            item?.url
+          )
+      )
+      .map(
+        ([
+          layerYear,
+          item,
+        ]) => ({
+          year:
+            Number(
+              layerYear
+            ),
+
+          layerType:
+            'map',
+
+          ...item,
+        })
+      ),
+
+    ...Object.entries(
+      city.aerials ||
+      {}
+    )
+      .filter(
+        ([
+          ,
+          item,
+        ]) =>
+          Boolean(
+            item?.url
+          )
+      )
+      .map(
+        ([
+          layerYear,
+          item,
+        ]) => ({
+          year:
+            Number(
+              layerYear
+            ),
+
+          layerType:
+            'aerial',
+
+          ...item,
+        })
+      ),
+  ]
+    .filter(
+      (layer) =>
+        Number.isFinite(
+          layer.year
+        )
+    )
+
+
+  return layers.reduce(
+    (
+      closest,
+      layer
+    ) => {
+      if (
+        !closest
+      ) {
+        return layer
+      }
+
+
+      const difference =
+        Math.abs(
+          layer.year -
+          numericYear
+        )
+
+
+      const closestDifference =
+        Math.abs(
+          closest.year -
+          numericYear
+        )
+
+
+      if (
+        difference <
+        closestDifference
+      ) {
+        return layer
+      }
+
+
+      if (
+        difference >
+        closestDifference
+      ) {
+        return closest
+      }
+
+
+      const preferredType =
+        city.defaultMode ||
+        'aerial'
+
+
+      if (
+        layer.layerType ===
+          preferredType &&
+        closest.layerType !==
+          preferredType
+      ) {
+        return layer
+      }
+
+
+      if (
+        layer.year >
+        closest.year
+      ) {
+        return layer
+      }
+
+
+      return closest
+    },
+    null
+  )
+}
+
+
+function getHistoricSeeItThenLayer({
+  city,
+  pin,
+}) {
+  if (
+    pin?.layerPlacementMode ===
+      'manual'
+  ) {
+    const manualLayer =
+      getHistoricLayerFromCity({
+        city,
+
+        layerType:
+          pin.layerOverrideType,
+
+        year:
+          pin.layerOverrideYear,
+      })
+
+
+    if (
+      manualLayer
+    ) {
+      return manualLayer
+    }
+  }
+
+
+  const storedAutoLayer =
+    Array.isArray(
+      pin?.autoLayers
+    )
+      ? pin.autoLayers[0]
+      : null
+
+
+  if (
+    storedAutoLayer
+  ) {
+    const autoLayer =
+      getHistoricLayerFromCity({
+        city,
+
+        layerType:
+          storedAutoLayer.layerType,
+
+        year:
+          storedAutoLayer.year,
+      })
+
+
+    if (
+      autoLayer
+    ) {
+      return autoLayer
+    }
+  }
+
+
+  const eventYear =
+    String(
+      pin?.eventDate ||
+      ''
+    )
+      .match(
+        /^(\d{4})-/
+      )?.[1] ||
+    pin?.year ||
+    pin?.startYear
+
+
+  return getClosestHistoricLayer({
+    city,
+    year:
+      eventYear,
+  })
+}
+
+
 const GeographicMap =
   forwardRef(
     function GeographicMap(
@@ -88,6 +383,11 @@ const GeographicMap =
           'historic',
 
         onChangePinFilter,
+
+        historicIssueFilter =
+          'all',
+
+        onSelectHistoricalLayer,
 
         newsRangeFilter =
           'curated',
@@ -1083,6 +1383,107 @@ const GeographicMap =
 
 
       // ========================================================
+      // HISTORIC · SEE IT THEN
+      // ========================================================
+
+      const handleHistoricSeeItThen =
+        useCallback(
+          (
+            pin
+          ) => {
+            const map =
+              mapRef.current
+
+
+            if (
+              !map ||
+              !pin
+            ) {
+              return
+            }
+
+
+            const longitude =
+              Number(
+                pin.longitude
+              )
+
+
+            const latitude =
+              Number(
+                pin.latitude
+              )
+
+
+            if (
+              !Number.isFinite(
+                longitude
+              ) ||
+              !Number.isFinite(
+                latitude
+              )
+            ) {
+              return
+            }
+
+
+            const targetLayer =
+              getHistoricSeeItThenLayer({
+                city,
+                pin,
+              })
+
+
+            if (
+              targetLayer
+            ) {
+              onSelectHistoricalLayer?.(
+                targetLayer
+              )
+            }
+
+
+            const requestedZoom =
+              Number(
+                pin.seeItThenZoom ||
+                16
+              )
+
+
+            const zoom =
+              Number.isFinite(
+                requestedZoom
+              )
+                ? Math.min(
+                    19,
+                    Math.max(
+                      12,
+                      requestedZoom
+                    )
+                  )
+                : 16
+
+
+            map.flyTo({
+              center: [
+                longitude,
+                latitude,
+              ],
+
+              zoom,
+
+              duration:
+                900,
+            })
+          },
+          [
+            city,
+            onSelectHistoricalLayer,
+          ]
+        )
+
+
+      // ========================================================
       // SEARCH RESULT
       // ========================================================
 
@@ -1395,6 +1796,10 @@ const GeographicMap =
                 activePinFilter
               }
 
+              historicIssueFilter={
+                historicIssueFilter
+              }
+
               newsRangeFilter={
                 newsRangeFilter
               }
@@ -1409,6 +1814,10 @@ const GeographicMap =
 
               onDirections={
                 handleDirections
+              }
+
+              onSeeItThen={
+                handleHistoricSeeItThen
               }
             />
           )}

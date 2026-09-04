@@ -1213,6 +1213,48 @@ function getHistoricDateLabel(
     )
   }
 
+
+  const eventDate =
+    String(
+      pin.eventDate ||
+      ''
+    )
+      .trim()
+
+
+  if (
+    eventDate
+  ) {
+    const date =
+      new Date(
+        `${eventDate}T12:00:00`
+      )
+
+
+    if (
+      !Number.isNaN(
+        date.getTime()
+      )
+    ) {
+      return date
+        .toLocaleDateString(
+          'en-CA',
+          {
+            year:
+              'numeric',
+
+            month:
+              'long',
+
+            day:
+              'numeric',
+          }
+        )
+        .toUpperCase()
+    }
+  }
+
+
   return String(
     pin.year ||
     pin.startYear ||
@@ -1553,28 +1595,89 @@ function appendNewsImage({
 // SOURCE / WEBSITE
 // ============================================================
 
-function appendSource({
+function appendSources({
   parent,
   pin,
 }) {
-  const sourceName =
-    String(
-      pin.source ||
-      ''
+  const explicitSources =
+    Array.isArray(
+      pin?.sources
     )
-      .trim()
+      ? pin.sources
+      : []
 
-  const sourceUrl =
-    normalizeUrl(
-      pin.sourceUrl
-    )
+
+  const sources =
+    explicitSources
+      .map(
+        (
+          source
+        ) => ({
+          name:
+            String(
+              source?.name ||
+              source?.label ||
+              ''
+            )
+              .trim(),
+
+          url:
+            normalizeUrl(
+              source?.url ||
+              source?.sourceUrl
+            ),
+        })
+      )
+      .filter(
+        (
+          source
+        ) =>
+          Boolean(
+            source.name ||
+            source.url
+          )
+      )
+
 
   if (
-    !sourceName &&
-    !sourceUrl
+    sources.length ===
+      0
+  ) {
+    const sourceName =
+      String(
+        pin.source ||
+        ''
+      )
+        .trim()
+
+    const sourceUrl =
+      normalizeUrl(
+        pin.sourceUrl
+      )
+
+
+    if (
+      sourceName ||
+      sourceUrl
+    ) {
+      sources.push({
+        name:
+          sourceName,
+
+        url:
+          sourceUrl,
+      })
+    }
+  }
+
+
+  if (
+    sources.length ===
+      0
   ) {
     return
   }
+
 
   const sourceShell =
     document.createElement(
@@ -1584,47 +1687,100 @@ function appendSource({
   sourceShell.className =
     'geographic-pin-source'
 
+
   if (
-    sourceUrl
+    sources.length >
+      1
   ) {
-    const link =
+    const heading =
       document.createElement(
-        'a'
+        'div'
       )
 
-    link.href =
-      sourceUrl
+    heading.textContent =
+      'SOURCES'
 
-    link.target =
-      '_blank'
+    heading.style.fontWeight =
+      '700'
 
-    link.rel =
-      'noopener noreferrer'
-
-    link.className =
-      'geographic-pin-source-link'
-
-    link.textContent =
-      sourceName
-        ? `SOURCE · ${sourceName} ↗`
-        : 'MORE INFORMATION ↗'
-
-    link.addEventListener(
-      'click',
-      (
-        event
-      ) => {
-        event.stopPropagation()
-      }
-    )
+    heading.style.marginBottom =
+      '4px'
 
     sourceShell.appendChild(
-      link
+      heading
     )
-  } else {
-    sourceShell.textContent =
-      `SOURCE · ${sourceName}`
   }
+
+
+  sources.forEach(
+    (
+      source,
+      index
+    ) => {
+      const row =
+        document.createElement(
+          'div'
+        )
+
+
+      if (
+        index >
+          0
+      ) {
+        row.style.marginTop =
+          '3px'
+      }
+
+
+      if (
+        source.url
+      ) {
+        const link =
+          document.createElement(
+            'a'
+          )
+
+        link.href =
+          source.url
+
+        link.target =
+          '_blank'
+
+        link.rel =
+          'noopener noreferrer'
+
+        link.className =
+          'geographic-pin-source-link'
+
+        link.textContent =
+          source.name
+            ? `${source.name} ↗`
+            : 'MORE INFORMATION ↗'
+
+        link.addEventListener(
+          'click',
+          (
+            event
+          ) => {
+            event.stopPropagation()
+          }
+        )
+
+        row.appendChild(
+          link
+        )
+      } else {
+        row.textContent =
+          source.name
+      }
+
+
+      sourceShell.appendChild(
+        row
+      )
+    }
+  )
+
 
   parent.appendChild(
     sourceShell
@@ -1769,6 +1925,72 @@ function appendMobileBusinessLink({
 
   parent.appendChild(
     shell
+  )
+}
+
+
+// ============================================================
+// SEE IT THEN
+// ============================================================
+
+function appendSeeItThenAction({
+  popupContent,
+  pin,
+  onSeeItThen,
+}) {
+  if (
+    typeof onSeeItThen !==
+      'function'
+  ) {
+    return
+  }
+
+
+  const actions =
+    document.createElement(
+      'div'
+    )
+
+  actions.className =
+    'geographic-route-actions'
+
+
+  const button =
+    document.createElement(
+      'button'
+    )
+
+  button.type =
+    'button'
+
+  button.className =
+    'geographic-route-action'
+
+  button.textContent =
+    'SEE IT THEN →'
+
+
+  button.addEventListener(
+    'click',
+    (
+      event
+    ) => {
+      event.stopPropagation()
+
+      onSeeItThen(
+        pin
+      )
+    }
+  )
+
+
+  actions.appendChild(
+    button
+  )
+
+
+  popupContent.appendChild(
+    actions
   )
 }
 
@@ -3082,6 +3304,7 @@ function createMarker({
   markerOffset =
     [0, 0],
   onDirections,
+  onSeeItThen,
 }) {
   const longitude =
     Number(
@@ -3639,7 +3862,9 @@ function createMarker({
 
     if (
       pinType ===
-        'news'
+        'news' ||
+      pinType ===
+        'historic'
     ) {
       appendNewsImage({
         parent:
@@ -3685,12 +3910,24 @@ function createMarker({
     }
 
 
-    appendSource({
+    appendSources({
       parent:
         popupContent,
 
       pin,
     })
+
+
+    if (
+      pinType ===
+        'historic'
+    ) {
+      appendSeeItThenAction({
+        popupContent,
+        pin,
+        onSeeItThen,
+      })
+    }
 
 
     if (
@@ -4880,10 +5117,13 @@ function MapPins({
   selectedLayer,
   selectedPinId,
   activePinFilter,
+  historicIssueFilter =
+    'all',
   newsRangeFilter,
   newSubtypeFilter,
   newBusinessRangeFilter,
   onDirections,
+  onSeeItThen,
 }) {
   const markersRef =
     useRef([])
@@ -5354,6 +5594,19 @@ function MapPins({
                 false
           )
           .filter(
+            (pin) =>
+              historicIssueFilter ===
+                'all' ||
+              (
+                Array.isArray(
+                  pin.issueIds
+                ) &&
+                pin.issueIds.includes(
+                  historicIssueFilter
+                )
+              )
+          )
+          .filter(
             (pin) => {
               if (
                 landingLayer
@@ -5540,6 +5793,7 @@ function MapPins({
             pinType,
             markerOffset,
             onDirections,
+            onSeeItThen,
           })
 
         if (
@@ -5578,6 +5832,7 @@ function MapPins({
     selectedLayer?.year,
     selectedLayer?.layerType,
     activePinFilter,
+    historicIssueFilter,
     newsRangeFilter,
     newSubtypeFilter,
     newBusinessRangeFilter,
@@ -5587,6 +5842,7 @@ function MapPins({
     viewportRevision,
     selectedPinId,
     onDirections,
+    onSeeItThen,
   ])
 
   useEffect(() => {

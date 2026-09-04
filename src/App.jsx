@@ -11,6 +11,11 @@ import LayerInfo from './map/LayerInfo.jsx'
 import AdminRoom from './admin/AdminRoom.jsx'
 
 import {
+  GEOGRAPHIC_STORE_CHANGE_EVENT,
+  getHistoricIssues,
+} from './admin/adminStore.js'
+
+import {
   CITIES,
 } from './cities/index.js'
 
@@ -245,6 +250,64 @@ function GeographicApp() {
 
 
   const [
+    historicIssueFilter,
+    setHistoricIssueFilter,
+  ] =
+    useState(
+      'all'
+    )
+
+
+  const [
+    historicIssues,
+    setHistoricIssues,
+  ] =
+    useState(
+      () =>
+        getHistoricIssues()
+    )
+
+
+  const publishedHistoricIssues =
+    useMemo(
+      () =>
+        historicIssues
+          .filter(
+            (
+              issue
+            ) =>
+              (
+                issue.city ||
+                'toronto'
+              ) ===
+                cityKey &&
+              issue.status ===
+                'published'
+          )
+          .sort(
+            (
+              a,
+              b
+            ) =>
+              String(
+                a.number ||
+                ''
+              )
+                .localeCompare(
+                  String(
+                    b.number ||
+                    ''
+                  )
+                )
+          ),
+      [
+        historicIssues,
+        cityKey,
+      ]
+    )
+
+
+  const [
     newsRangeFilter,
     setNewsRangeFilter,
   ] =
@@ -315,6 +378,80 @@ function GeographicApp() {
     },
     [
       selectedLayer,
+    ]
+  )
+
+
+  useEffect(
+    () => {
+      const refreshHistoricIssues =
+        () => {
+          setHistoricIssues(
+            getHistoricIssues()
+          )
+        }
+
+
+      window.addEventListener(
+        'storage',
+        refreshHistoricIssues
+      )
+
+
+      window.addEventListener(
+        GEOGRAPHIC_STORE_CHANGE_EVENT,
+        refreshHistoricIssues
+      )
+
+
+      return () => {
+        window.removeEventListener(
+          'storage',
+          refreshHistoricIssues
+        )
+
+
+        window.removeEventListener(
+          GEOGRAPHIC_STORE_CHANGE_EVENT,
+          refreshHistoricIssues
+        )
+      }
+    },
+    []
+  )
+
+
+  useEffect(
+    () => {
+      if (
+        historicIssueFilter ===
+          'all'
+      ) {
+        return
+      }
+
+
+      const stillPublished =
+        publishedHistoricIssues.some(
+          (
+            issue
+          ) =>
+            issue.id ===
+            historicIssueFilter
+        )
+
+
+      if (
+        !stillPublished
+      ) {
+        setHistoricIssueFilter(
+          'all'
+        )
+      }
+    },
+    [
+      historicIssueFilter,
+      publishedHistoricIssues,
     ]
   )
 
@@ -464,6 +601,62 @@ function GeographicApp() {
             border-bottom: 1px solid rgba(0,0,0,0.35);
           }
 
+          .historic-issue-nav {
+            display: flex;
+            align-items: stretch;
+            gap: 3px;
+            max-width: min(760px, calc(100vw - 40px));
+            overflow-x: auto;
+            scrollbar-width: none;
+          }
+
+          .historic-issue-nav::-webkit-scrollbar {
+            display: none;
+          }
+
+          .historic-issue-button {
+            flex: 0 0 auto;
+            min-width: 92px;
+            border: 1px solid rgba(0,0,0,0.14);
+            padding: 5px 7px;
+            background: #fff;
+            color: #111;
+            font: inherit;
+            text-align: left;
+            cursor: pointer;
+          }
+
+          .historic-issue-button-active {
+            background: #111;
+            color: #fff;
+          }
+
+          .historic-issue-number {
+            display: block;
+            font-size: 6px;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+            opacity: 0.7;
+          }
+
+          .historic-issue-subtitle {
+            display: block;
+            margin-top: 2px;
+            font-size: 6px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            white-space: nowrap;
+          }
+
+          .historic-issue-title {
+            display: block;
+            margin-top: 2px;
+            font-size: 7px;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            white-space: nowrap;
+          }
+
           .news-history-control {
             display: flex;
             align-items: center;
@@ -556,7 +749,8 @@ function GeographicApp() {
             }
 
             .brand-secondary-filters,
-            .brand-range-filters {
+            .brand-range-filters,
+            .historic-issue-nav {
               gap: 1px !important;
               max-width: 100%;
               overflow-x: auto;
@@ -564,8 +758,23 @@ function GeographicApp() {
             }
 
             .brand-secondary-filters::-webkit-scrollbar,
-            .brand-range-filters::-webkit-scrollbar {
+            .brand-range-filters::-webkit-scrollbar,
+            .historic-issue-nav::-webkit-scrollbar {
               display: none;
+            }
+
+            .historic-issue-button {
+              min-width: 86px;
+              padding: 4px 6px;
+            }
+
+            .historic-issue-number,
+            .historic-issue-subtitle {
+              font-size: 5px;
+            }
+
+            .historic-issue-title {
+              font-size: 6px;
             }
 
             .brand button:not(.mobile-brand-toggle) {
@@ -727,6 +936,14 @@ function GeographicApp() {
 
         onChangePinFilter={
           setActivePinFilter
+        }
+
+        historicIssueFilter={
+          historicIssueFilter
+        }
+
+        onSelectHistoricalLayer={
+          setSelectedLayer
         }
 
         newsRangeFilter={
@@ -1118,6 +1335,83 @@ function GeographicApp() {
               : '▾'}
           </button>
         </div>
+
+
+        {activePinFilter ===
+          'historic' && (
+          <div className="historic-issue-nav">
+            <button
+              type="button"
+              className={
+                historicIssueFilter ===
+                  'all'
+                  ? 'historic-issue-button historic-issue-button-active'
+                  : 'historic-issue-button'
+              }
+              onClick={() =>
+                setHistoricIssueFilter(
+                  'all'
+                )
+              }
+            >
+              <span className="historic-issue-number">
+                HISTORIC
+              </span>
+
+              <span className="historic-issue-title">
+                ALL STORIES
+              </span>
+            </button>
+
+
+            {publishedHistoricIssues.map(
+              (
+                issue
+              ) => (
+                <button
+                  type="button"
+                  key={
+                    issue.id
+                  }
+                  className={
+                    historicIssueFilter ===
+                      issue.id
+                      ? 'historic-issue-button historic-issue-button-active'
+                      : 'historic-issue-button'
+                  }
+                  onClick={() =>
+                    setHistoricIssueFilter(
+                      issue.id
+                    )
+                  }
+                >
+                  <span className="historic-issue-number">
+                    ISSUE {
+                      issue.number ||
+                      ''
+                    }
+                  </span>
+
+                  {issue.subtitle && (
+                    <span className="historic-issue-subtitle">
+                      {
+                        issue.subtitle
+                      }
+                    </span>
+                  )}
+
+                  {issue.title && (
+                    <span className="historic-issue-title">
+                      {
+                        issue.title
+                      }
+                    </span>
+                  )}
+                </button>
+              )
+            )}
+          </div>
+        )}
 
 
         {activePinFilter ===
