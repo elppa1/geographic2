@@ -321,7 +321,7 @@ function GeographicApp() {
     setNewSubtypeFilter,
   ] =
     useState(
-      'businesses'
+      'all'
     )
 
 
@@ -468,7 +468,7 @@ function GeographicApp() {
         'new'
     ) {
       setNewSubtypeFilter(
-        'businesses'
+        'all'
       )
     }
 
@@ -1545,6 +1545,23 @@ function GeographicApp() {
         {activePinFilter ===
           'new' && (
           <div className="content-subfilters">
+            <button
+              type="button"
+              className={
+                newSubtypeFilter ===
+                  'all'
+                  ? 'content-subfilter content-subfilter-active'
+                  : 'content-subfilter'
+              }
+              onClick={() =>
+                setNewSubtypeFilter(
+                  'all'
+                )
+              }
+            >
+              ALL
+            </button>
+
             <button
               type="button"
               className={

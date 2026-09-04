@@ -213,9 +213,7 @@ function newPinMatchesSubtype(
   subtype
 ) {
   if (
-    !subtype ||
-    subtype ===
-      'all'
+    !subtype
   ) {
     return true
   }
@@ -234,6 +232,34 @@ function newPinMatchesSubtype(
       ''
     )
       .toLowerCase()
+
+  if (
+    subtype ===
+      'all'
+  ) {
+    return (
+      explicitType ===
+        'business' ||
+      explicitType ===
+        'events' ||
+      explicitType ===
+        'sports' ||
+      (
+        !explicitType &&
+        (
+          BUSINESS_CATEGORIES.includes(
+            category
+          ) ||
+          EVENT_CATEGORIES.includes(
+            category
+          ) ||
+          SPORTS_CATEGORIES.includes(
+            category
+          )
+        )
+      )
+    )
+  }
 
   if (
     subtype ===
