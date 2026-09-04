@@ -1467,13 +1467,119 @@ function makeDefaultHistoricIssue() {
     subtitle:
       'A TORONTO HALLOWEEN SPECIAL',
 
+    description:
+      '',
+
+    coverImageUrl:
+      '',
+
+    publicationDate:
+      '',
+
     status:
       'draft',
 
     createdAt:
       new Date()
         .toISOString(),
+
+    updatedAt:
+      '',
   }
+}
+
+
+function makeHistoricIssueDraft(
+  cityKey
+) {
+  return {
+    id:
+      '',
+
+    city:
+      cityKey,
+
+    number:
+      '',
+
+    title:
+      '',
+
+    subtitle:
+      '',
+
+    description:
+      '',
+
+    coverImageUrl:
+      '',
+
+    publicationDate:
+      '',
+
+    status:
+      'draft',
+
+    createdAt:
+      '',
+
+    updatedAt:
+      '',
+  }
+}
+
+
+function getNextHistoricIssueNumber({
+  issues,
+  cityKey,
+}) {
+  const numbers =
+    (
+      Array.isArray(
+        issues
+      )
+        ? issues
+        : []
+    )
+      .filter(
+        (issue) =>
+          belongsToCity(
+            issue,
+            cityKey
+          )
+      )
+      .map(
+        (issue) =>
+          Number.parseInt(
+            String(
+              issue?.number ||
+              ''
+            ),
+            10
+          )
+      )
+      .filter(
+        Number.isFinite
+      )
+
+
+  const nextNumber =
+    numbers.length >
+      0
+      ? Math.max(
+          ...numbers
+        ) +
+        1
+      : 1
+
+
+  return String(
+    nextNumber
+  )
+    .padStart(
+      3,
+      '0'
+    )
 }
 
 
@@ -4155,6 +4261,36 @@ function AdminRoom() {
   ] =
     useState(
       'drafts'
+    )
+
+
+  const [
+    historicIssueEditorOpen,
+    setHistoricIssueEditorOpen,
+  ] =
+    useState(
+      false
+    )
+
+
+  const [
+    historicIssueEditingId,
+    setHistoricIssueEditingId,
+  ] =
+    useState(
+      ''
+    )
+
+
+  const [
+    historicIssueDraft,
+    setHistoricIssueDraft,
+  ] =
+    useState(
+      () =>
+        makeHistoricIssueDraft(
+          initialCityKey
+        )
     )
 
 
@@ -8492,6 +8628,462 @@ function AdminRoom() {
 
 
   // ==========================================================
+  // HISTORIC ISSUES
+  // ==========================================================
+
+  function updateHistoricIssueDraft(
+    field,
+    value
+  ) {
+    setHistoricIssueDraft(
+      (
+        current
+      ) => ({
+        ...current,
+
+        [field]:
+          value,
+      })
+    )
+  }
+
+
+  function startNewHistoricIssue() {
+    setHistoricIssueEditingId(
+      ''
+    )
+
+
+    setHistoricIssueDraft({
+      ...makeHistoricIssueDraft(
+        cityKey
+      ),
+
+      number:
+        getNextHistoricIssueNumber({
+          issues:
+            historicIssues,
+
+          cityKey,
+        }),
+    })
+
+
+    setHistoricIssueEditorOpen(
+      true
+    )
+  }
+
+
+  function startEditHistoricIssue() {
+    if (
+      !selectedHistoricIssue
+    ) {
+      return
+    }
+
+
+    setHistoricIssueEditingId(
+      selectedHistoricIssue.id
+    )
+
+
+    setHistoricIssueDraft({
+      ...makeHistoricIssueDraft(
+        cityKey
+      ),
+
+      ...selectedHistoricIssue,
+
+      city:
+        cityKey,
+    })
+
+
+    setHistoricIssueEditorOpen(
+      true
+    )
+  }
+
+
+  function cancelHistoricIssueEdit() {
+    setHistoricIssueEditorOpen(
+      false
+    )
+
+
+    setHistoricIssueEditingId(
+      ''
+    )
+
+
+    setHistoricIssueDraft(
+      makeHistoricIssueDraft(
+        cityKey
+      )
+    )
+  }
+
+
+  function saveHistoricIssue() {
+    const number =
+      String(
+        historicIssueDraft.number ||
+        ''
+      )
+        .trim()
+
+
+    const title =
+      String(
+        historicIssueDraft.title ||
+        ''
+      )
+        .trim()
+
+
+    if (
+      !number
+    ) {
+      window.alert(
+        'Add an issue number first.'
+      )
+
+
+      return
+    }
+
+
+    if (
+      !title
+    ) {
+      window.alert(
+        'Add an issue title first.'
+      )
+
+
+      return
+    }
+
+
+    const duplicateNumber =
+      historicIssues.some(
+        (issue) =>
+          belongsToCity(
+            issue,
+            cityKey
+          ) &&
+          issue.id !==
+            historicIssueEditingId &&
+          String(
+            issue.number ||
+            ''
+          )
+            .trim()
+            .toLowerCase() ===
+          number.toLowerCase()
+      )
+
+
+    if (
+      duplicateNumber
+    ) {
+      window.alert(
+        `Historic ${number} already exists.`
+      )
+
+
+      return
+    }
+
+
+    const now =
+      new Date()
+        .toISOString()
+
+
+    const existing =
+      historicIssueEditingId
+        ? (
+            historicIssues.find(
+              (issue) =>
+                issue.id ===
+                historicIssueEditingId
+            ) ||
+            null
+          )
+        : null
+
+
+    const status =
+      [
+        'draft',
+        'ready',
+        'published',
+        'archived',
+      ]
+        .includes(
+          historicIssueDraft.status
+        )
+        ? historicIssueDraft.status
+        : 'draft'
+
+
+    const nextIssue = {
+      ...makeHistoricIssueDraft(
+        cityKey
+      ),
+
+      ...existing,
+      ...historicIssueDraft,
+
+      id:
+        existing?.id ||
+        createAdminId(
+          'historic-issue'
+        ),
+
+      city:
+        cityKey,
+
+      number,
+
+      title,
+
+      subtitle:
+        String(
+          historicIssueDraft.subtitle ||
+          ''
+        )
+          .trim(),
+
+      description:
+        String(
+          historicIssueDraft.description ||
+          ''
+        )
+          .trim(),
+
+      coverImageUrl:
+        normalizeSourceUrl(
+          historicIssueDraft.coverImageUrl
+        ),
+
+      publicationDate:
+        String(
+          historicIssueDraft.publicationDate ||
+          ''
+        )
+          .trim(),
+
+      status,
+
+      createdAt:
+        existing?.createdAt ||
+        historicIssueDraft.createdAt ||
+        now,
+
+      updatedAt:
+        now,
+    }
+
+
+    setHistoricIssues(
+      (
+        current
+      ) => {
+        const existingIndex =
+          current.findIndex(
+            (issue) =>
+              issue.id ===
+              nextIssue.id
+          )
+
+
+        if (
+          existingIndex >=
+          0
+        ) {
+          return current.map(
+            (
+              issue,
+              index
+            ) =>
+              index ===
+                existingIndex
+                ? nextIssue
+                : issue
+          )
+        }
+
+
+        return [
+          nextIssue,
+          ...current,
+        ]
+      }
+    )
+
+
+    setSelectedHistoricIssueId(
+      nextIssue.id
+    )
+
+
+    if (
+      tab ===
+      'historic'
+    ) {
+      setDraft(
+        (
+          current
+        ) => {
+          if (
+            editingId &&
+            Array.isArray(
+              current.issueIds
+            ) &&
+            current.issueIds.length >
+              0
+          ) {
+            return current
+          }
+
+
+          return {
+            ...current,
+
+            issueIds: [
+              nextIssue.id,
+            ],
+          }
+        }
+      )
+    }
+
+
+    setHistoricIssueEditorOpen(
+      false
+    )
+
+
+    setHistoricIssueEditingId(
+      ''
+    )
+  }
+
+
+  function deleteHistoricIssue() {
+    if (
+      !selectedHistoricIssue
+    ) {
+      return
+    }
+
+
+    if (
+      cityHistoricIssues.length <=
+      1
+    ) {
+      window.alert(
+        'Create another Historic issue before deleting the last issue.'
+      )
+
+
+      return
+    }
+
+
+    if (
+      selectedHistoricIssueRecords.length >
+      0
+    ) {
+      window.alert(
+        (
+          `Historic ${selectedHistoricIssue.number} still has ` +
+          `${selectedHistoricIssueRecords.length} entr` +
+          (
+            selectedHistoricIssueRecords.length ===
+              1
+              ? 'y'
+              : 'ies'
+          ) +
+          '. Reassign or remove those entries first.'
+        )
+      )
+
+
+      return
+    }
+
+
+    const confirmed =
+      window.confirm(
+        (
+          `Delete HISTORIC ${selectedHistoricIssue.number} · ` +
+          `${selectedHistoricIssue.title}?`
+        )
+      )
+
+
+    if (
+      !confirmed
+    ) {
+      return
+    }
+
+
+    const nextIssues =
+      historicIssues.filter(
+        (issue) =>
+          issue.id !==
+          selectedHistoricIssue.id
+      )
+
+
+    const nextCityIssue =
+      nextIssues.find(
+        (issue) =>
+          belongsToCity(
+            issue,
+            cityKey
+          )
+      ) ||
+      null
+
+
+    setHistoricIssues(
+      nextIssues
+    )
+
+
+    setSelectedHistoricIssueId(
+      nextCityIssue?.id ||
+      ''
+    )
+
+
+    setDraft(
+      (
+        current
+      ) => ({
+        ...current,
+
+        issueIds:
+          nextCityIssue
+            ? [
+                nextCityIssue.id,
+              ]
+            : [],
+      })
+    )
+
+
+    cancelHistoricIssueEdit()
+  }
+
+
+  // ==========================================================
   // HISTORIC
   // ==========================================================
 
@@ -9202,9 +9794,15 @@ function AdminRoom() {
             0
             ? record.issueIds
             : (
-                selectedHistoricIssueId
+                (
+                  selectedHistoricIssue?.id ||
+                  selectedHistoricIssueId
+                )
                   ? [
-                      selectedHistoricIssueId,
+                      (
+                        selectedHistoricIssue?.id ||
+                        selectedHistoricIssueId
+                      ),
                     ]
                   : []
               ),
@@ -12803,8 +13401,305 @@ function AdminRoom() {
                       {' · '}
                       {selectedHistoricIssuePublishedCount} PUBLISHED
                     </div>
+
+
+                    {selectedHistoricIssue?.publicationDate && (
+                      <div
+                        className="admin-record-meta"
+                        style={{
+                          marginTop:
+                            '4px',
+                        }}
+                      >
+                        PUBLICATION · {
+                          selectedHistoricIssue.publicationDate
+                        }
+                      </div>
+                    )}
+
+
+                    {selectedHistoricIssue?.description && (
+                      <p
+                        style={{
+                          margin:
+                            '10px 0 0',
+                        }}
+                      >
+                        {
+                          selectedHistoricIssue.description
+                        }
+                      </p>
+                    )}
+
+
+                    <div
+                      className="admin-form-actions"
+                      style={{
+                        marginTop:
+                          '12px',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="admin-save"
+                        onClick={
+                          startNewHistoricIssue
+                        }
+                      >
+                        + NEW ISSUE
+                      </button>
+
+                      <button
+                        type="button"
+                        className="admin-cancel"
+                        disabled={
+                          !selectedHistoricIssue
+                        }
+                        onClick={
+                          startEditHistoricIssue
+                        }
+                      >
+                        EDIT ISSUE
+                      </button>
+                    </div>
                   </div>
                 </div>
+
+
+                {historicIssueEditorOpen && (
+                  <>
+                    <div className="admin-field admin-field-wide">
+                      <span>
+                        {historicIssueEditingId
+                          ? 'EDIT ISSUE DETAILS'
+                          : 'CREATE NEW ISSUE'}
+                      </span>
+
+                      <div
+                        style={{
+                          border:
+                            '1px solid rgba(0,0,0,0.18)',
+
+                          padding:
+                            '14px',
+                        }}
+                      >
+                        {historicIssueEditingId
+                          ? (
+                              `Editing HISTORIC ${historicIssueDraft.number || ''}`
+                            )
+                          : 'Build a private Historic issue workspace.'}
+                      </div>
+                    </div>
+
+
+                    <label className="admin-field">
+                      <span>
+                        ISSUE NUMBER
+                      </span>
+
+                      <input
+                        value={
+                          historicIssueDraft.number
+                        }
+                        onChange={
+                          (event) =>
+                            updateHistoricIssueDraft(
+                              'number',
+                              event.target.value
+                            )
+                        }
+                        placeholder="002"
+                      />
+                    </label>
+
+
+                    <label className="admin-field">
+                      <span>
+                        STATUS
+                      </span>
+
+                      <select
+                        value={
+                          historicIssueDraft.status ||
+                          'draft'
+                        }
+                        onChange={
+                          (event) =>
+                            updateHistoricIssueDraft(
+                              'status',
+                              event.target.value
+                            )
+                        }
+                      >
+                        <option value="draft">
+                          DRAFT
+                        </option>
+
+                        <option value="ready">
+                          READY
+                        </option>
+
+                        <option value="published">
+                          PUBLISHED
+                        </option>
+
+                        <option value="archived">
+                          ARCHIVED
+                        </option>
+                      </select>
+                    </label>
+
+
+                    <label className="admin-field admin-field-wide">
+                      <span>
+                        ISSUE TITLE
+                      </span>
+
+                      <input
+                        value={
+                          historicIssueDraft.title
+                        }
+                        onChange={
+                          (event) =>
+                            updateHistoricIssueDraft(
+                              'title',
+                              event.target.value
+                            )
+                        }
+                        placeholder="MURDER. MYSTERY. MISSING."
+                      />
+                    </label>
+
+
+                    <label className="admin-field admin-field-wide">
+                      <span>
+                        SUBTITLE
+                      </span>
+
+                      <input
+                        value={
+                          historicIssueDraft.subtitle
+                        }
+                        onChange={
+                          (event) =>
+                            updateHistoricIssueDraft(
+                              'subtitle',
+                              event.target.value
+                            )
+                        }
+                        placeholder="A TORONTO HALLOWEEN SPECIAL"
+                      />
+                    </label>
+
+
+                    <label className="admin-field admin-field-wide">
+                      <span>
+                        DESCRIPTION
+                      </span>
+
+                      <textarea
+                        value={
+                          historicIssueDraft.description
+                        }
+                        onChange={
+                          (event) =>
+                            updateHistoricIssueDraft(
+                              'description',
+                              event.target.value
+                            )
+                        }
+                        rows="4"
+                        placeholder="Editorial description, theme, scope, notes..."
+                      />
+                    </label>
+
+
+                    <label className="admin-field admin-field-wide">
+                      <span>
+                        COVER IMAGE URL
+                      </span>
+
+                      <input
+                        value={
+                          historicIssueDraft.coverImageUrl
+                        }
+                        onChange={
+                          (event) =>
+                            updateHistoricIssueDraft(
+                              'coverImageUrl',
+                              event.target.value
+                            )
+                        }
+                        placeholder="https://..."
+                      />
+                    </label>
+
+
+                    <label className="admin-field">
+                      <span>
+                        PUBLICATION DATE
+                      </span>
+
+                      <input
+                        type="date"
+                        value={
+                          historicIssueDraft.publicationDate
+                        }
+                        onChange={
+                          (event) =>
+                            updateHistoricIssueDraft(
+                              'publicationDate',
+                              event.target.value
+                            )
+                        }
+                      />
+                    </label>
+
+
+                    <div
+                      className="admin-form-actions"
+                      style={{
+                        gridColumn:
+                          '1 / -1',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="admin-save"
+                        onClick={
+                          saveHistoricIssue
+                        }
+                      >
+                        {historicIssueEditingId
+                          ? 'SAVE ISSUE CHANGES'
+                          : 'CREATE ISSUE'}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="admin-cancel"
+                        onClick={
+                          cancelHistoricIssueEdit
+                        }
+                      >
+                        CANCEL
+                      </button>
+
+                      {historicIssueEditingId && (
+                        <button
+                          type="button"
+                          className="admin-cancel"
+                          onClick={
+                            deleteHistoricIssue
+                          }
+                        >
+                          DELETE ISSUE
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
 
 
                 <label className="admin-field">
