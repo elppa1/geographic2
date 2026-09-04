@@ -307,6 +307,76 @@ function normalizeTtcApiAlert(
       cleanText(
         record?.routeType
       ),
+
+    direction:
+      cleanText(
+        record?.direction
+      ),
+
+    stopStart:
+      cleanText(
+        record?.stopStart
+      ),
+
+    stopEnd:
+      cleanText(
+        record?.stopEnd
+      ),
+
+    stopStartId:
+      cleanText(
+        record?.stopStartId
+      ),
+
+    stopEndId:
+      cleanText(
+        record?.stopEndId
+      ),
+
+    stops:
+      (
+        Array.isArray(
+          record?.stops
+        )
+          ? record.stops
+          : []
+      )
+        .map(
+          cleanText
+        )
+        .filter(
+          Boolean
+        ),
+
+    stopIDList:
+      (
+        Array.isArray(
+          record?.stopIDList
+        )
+          ? record.stopIDList
+          : []
+      )
+        .map(
+          cleanText
+        )
+        .filter(
+          Boolean
+        ),
+
+    shuttleType:
+      cleanText(
+        record?.shuttleType
+      ),
+
+    shuttleStart:
+      cleanText(
+        record?.shuttleStart
+      ),
+
+    shuttleEnd:
+      cleanText(
+        record?.shuttleEnd
+      ),
   }
 }
 
