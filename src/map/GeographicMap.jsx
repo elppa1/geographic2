@@ -1653,6 +1653,11 @@ const GeographicMap =
             }
 
 
+            setSelectedPinId(
+              pin.id
+            )
+
+
             const targetLayer =
               getHistoricSeeItThenLayer({
                 city,
