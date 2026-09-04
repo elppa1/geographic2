@@ -24,10 +24,11 @@ function parseIntersection(
 
 
   const patterns = [
-    /\s+and\s+/i,
     /\s*&\s*/i,
-    /\s+@\s+/i,
-    /\s+\/\s+/i,
+    /\s+and\s+/i,
+    /\s+at\s+/i,
+    /\s*@\s*/i,
+    /\s*\/\s*/i,
   ]
 
 
