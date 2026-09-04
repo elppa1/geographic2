@@ -178,10 +178,11 @@ function SearchControl({
 
 
     const patterns = [
-      /\s+and\s+/i,
       /\s*&\s*/i,
-      /\s+@\s+/i,
-      /\s+\/\s+/i,
+      /\s*\band\b\s*/i,
+      /\s*\bat\b\s*/i,
+      /\s*@\s*/i,
+      /\s*\/\s*/i,
     ]
 
 
@@ -316,111 +317,63 @@ function SearchControl({
   async function searchIntersection(
     intersection
   ) {
-    const streetARegex =
-      makeStreetRegex(
-        intersection.streetA
-      )
+    const params =
+      new URLSearchParams({
+        streetA:
+          intersection.streetA,
 
-    const streetBRegex =
-      makeStreetRegex(
-        intersection.streetB
-      )
+        streetB:
+          intersection.streetB,
 
+        west:
+          String(
+            TORONTO_BOUNDS.west
+          ),
 
-    const bbox =
-      [
-        TORONTO_BOUNDS.south,
-        TORONTO_BOUNDS.west,
-        TORONTO_BOUNDS.north,
-        TORONTO_BOUNDS.east,
-      ].join(',')
+        north:
+          String(
+            TORONTO_BOUNDS.north
+          ),
 
+        east:
+          String(
+            TORONTO_BOUNDS.east
+          ),
 
-    const overpassQuery =
-      `
-[out:json][timeout:15];
-
-way
-  ["highway"]
-  ["name"~"${streetARegex}",i]
-  (${bbox})
-  ->.streetA;
-
-way
-  ["highway"]
-  ["name"~"${streetBRegex}",i]
-  (${bbox})
-  ->.streetB;
-
-node(w.streetA)
-  ->.nodesA;
-
-node(w.streetB)
-  ->.nodesB;
-
-node.nodesA.nodesB;
-
-out body;
-      `.trim()
-
-
-    console.log(
-      'INTERSECTION QUERY:',
-      overpassQuery
-    )
+        south:
+          String(
+            TORONTO_BOUNDS.south
+          ),
+      })
 
 
     const response =
       await fetch(
-        'https://overpass-api.de/api/interpreter',
-        {
-          method:
-            'POST',
-
-          headers: {
-            'Content-Type':
-              'application/x-www-form-urlencoded;charset=UTF-8',
-          },
-
-          body:
-            new URLSearchParams({
-              data:
-                overpassQuery,
-            }),
-        }
+        `/api/geographic/location-search/intersection?${params.toString()}`
       )
 
 
     if (
       !response.ok
     ) {
-      const errorText =
-        await response.text()
-
-
-      console.error(
-        'OVERPASS ERROR:',
-        errorText
-      )
-
-
       throw new Error(
         'Intersection search unavailable'
       )
     }
 
 
-    const data =
+    const payload =
       await response.json()
 
 
     const nodes =
       Array.isArray(
-        data.elements
+        payload?.elements
       )
-        ? data.elements.filter(
+        ? payload.elements.filter(
             (element) =>
-              element.type === 'node' &&
+              element.type ===
+                'node' &&
               Number.isFinite(
                 Number(
                   element.lon
@@ -445,7 +398,7 @@ out body;
     return nodes
       .slice(
         0,
-        3
+        6
       )
       .map(
         (
