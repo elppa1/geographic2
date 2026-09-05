@@ -1928,155 +1928,178 @@
     inset 0 0 190px rgba(0, 8, 28, 0.38);
 }
 
-/* Broad moving fog banks. More visible than V1, but still translucent. */
+/*
+ * Wispy Halloween mist.
+ * No radial blobs: each bank is a long feathered ribbon built from
+ * narrow linear gradients and masked at the ends.
+ */
 .halloween-historic-fog {
   z-index: 3;
-  left: -42%;
-  width: 184%;
-  border-radius: 50%;
+  left: -70%;
+  width: 210%;
+  height: 22%;
+  opacity: 0;
+  border-radius: 0;
+  mix-blend-mode: screen;
   filter:
-    blur(20px);
-  mix-blend-mode:
-    screen;
+    blur(10px);
+  -webkit-mask-image:
+    linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(0, 0, 0, 0.30) 10%,
+      #000 24%,
+      #000 76%,
+      rgba(0, 0, 0, 0.30) 90%,
+      transparent 100%
+    ),
+    linear-gradient(
+      180deg,
+      transparent 0%,
+      #000 28%,
+      #000 68%,
+      transparent 100%
+    );
+  -webkit-mask-composite:
+    source-in;
+  mask-image:
+    linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(0, 0, 0, 0.30) 10%,
+      #000 24%,
+      #000 76%,
+      rgba(0, 0, 0, 0.30) 90%,
+      transparent 100%
+    ),
+    linear-gradient(
+      180deg,
+      transparent 0%,
+      #000 28%,
+      #000 68%,
+      transparent 100%
+    );
+  mask-composite:
+    intersect;
   will-change:
     transform,
     opacity;
 }
 
 .halloween-historic-fog-one {
-  top: -2%;
-  height: 38%;
-  opacity: 0.58;
+  top: 11%;
   background:
-    radial-gradient(
-      ellipse at 18% 52%,
-      rgba(205, 225, 240, 0.34),
-      transparent 30%
+    linear-gradient(
+      176deg,
+      transparent 0%,
+      rgba(218, 232, 242, 0.04) 28%,
+      rgba(206, 226, 241, 0.20) 42%,
+      rgba(158, 195, 222, 0.13) 49%,
+      rgba(224, 235, 244, 0.17) 57%,
+      rgba(137, 178, 211, 0.06) 66%,
+      transparent 78%
     ),
-    radial-gradient(
-      ellipse at 48% 44%,
-      rgba(151, 187, 215, 0.28),
-      transparent 34%
-    ),
-    radial-gradient(
-      ellipse at 78% 58%,
-      rgba(187, 211, 229, 0.25),
-      transparent 30%
+    linear-gradient(
+      183deg,
+      transparent 0%,
+      rgba(172, 203, 226, 0.06) 37%,
+      rgba(223, 235, 244, 0.15) 49%,
+      rgba(143, 183, 214, 0.08) 59%,
+      transparent 72%
     );
   animation:
     halloween-fog-one
-    16s ease-in-out infinite alternate;
+    18s ease-in-out infinite;
 }
 
 .halloween-historic-fog-two {
-  top: 28%;
-  height: 46%;
-  opacity: 0.50;
+  top: 39%;
+  height: 25%;
   background:
-    radial-gradient(
-      ellipse at 14% 55%,
-      rgba(169, 200, 224, 0.27),
-      transparent 30%
+    linear-gradient(
+      181deg,
+      transparent 0%,
+      rgba(154, 190, 218, 0.05) 26%,
+      rgba(216, 231, 242, 0.18) 40%,
+      rgba(133, 176, 209, 0.09) 48%,
+      rgba(229, 238, 245, 0.16) 57%,
+      rgba(145, 184, 214, 0.05) 67%,
+      transparent 80%
     ),
-    radial-gradient(
-      ellipse at 44% 40%,
-      rgba(215, 230, 241, 0.31),
-      transparent 34%
-    ),
-    radial-gradient(
-      ellipse at 74% 58%,
-      rgba(142, 180, 210, 0.24),
-      transparent 29%
-    ),
-    radial-gradient(
-      ellipse at 94% 42%,
-      rgba(191, 213, 230, 0.20),
-      transparent 25%
+    linear-gradient(
+      174deg,
+      transparent 0%,
+      rgba(209, 226, 239, 0.05) 35%,
+      rgba(177, 206, 228, 0.14) 48%,
+      rgba(225, 236, 244, 0.10) 58%,
+      transparent 73%
     );
   animation:
     halloween-fog-two
-    21s ease-in-out infinite alternate;
+    24s ease-in-out infinite;
 }
 
 .halloween-historic-fog-three {
-  bottom: -10%;
-  height: 42%;
-  opacity: 0.44;
+  top: auto;
+  bottom: 5%;
+  height: 24%;
   background:
-    radial-gradient(
-      ellipse at 24% 50%,
-      rgba(205, 222, 235, 0.29),
-      transparent 31%
+    linear-gradient(
+      178deg,
+      transparent 0%,
+      rgba(224, 235, 244, 0.04) 30%,
+      rgba(186, 211, 230, 0.17) 43%,
+      rgba(227, 237, 245, 0.13) 51%,
+      rgba(135, 176, 208, 0.07) 61%,
+      transparent 76%
     ),
-    radial-gradient(
-      ellipse at 58% 44%,
-      rgba(150, 184, 210, 0.24),
-      transparent 34%
-    ),
-    radial-gradient(
-      ellipse at 86% 56%,
-      rgba(193, 214, 231, 0.23),
-      transparent 28%
+    linear-gradient(
+      185deg,
+      transparent 0%,
+      rgba(158, 194, 220, 0.05) 36%,
+      rgba(219, 233, 243, 0.13) 49%,
+      rgba(147, 184, 214, 0.06) 61%,
+      transparent 74%
     );
   animation:
     halloween-fog-three
-    27s ease-in-out infinite alternate;
+    29s ease-in-out infinite;
 }
 
-/*
- * Visible ghost-wind ribbons.
- * V1 used a 2px border arc at very low opacity, which was effectively invisible.
- * These are broad translucent ribbons with a bright core and soft blue glow.
- */
+/* Thin ghostly wind curls. */
 .halloween-historic-wind {
-  z-index: 5;
-  left: -76%;
-  width: 72%;
-  height: 17%;
+  z-index: 4;
+  width: 54%;
+  height: 20%;
+  left: -62%;
   opacity: 0;
-  border-radius:
-    50% 54% 46% 58%;
-  background:
-    linear-gradient(
-      180deg,
-      transparent 0%,
-      rgba(170, 211, 247, 0.04) 34%,
-      rgba(202, 228, 249, 0.18) 47%,
-      rgba(112, 170, 224, 0.12) 56%,
-      transparent 72%
-    );
   border-top:
-    3px solid rgba(194, 226, 255, 0.38);
-  box-shadow:
-    0 -4px 14px rgba(90, 156, 226, 0.16),
-    inset 0 7px 15px rgba(201, 228, 249, 0.08);
+    2px solid rgba(174, 214, 255, 0.18);
+  border-radius: 50%;
   filter:
-    blur(0.35px)
+    blur(1px)
     drop-shadow(
-      0 0 10px
-      rgba(98, 163, 235, 0.20)
+      0 0 7px
+      rgba(83, 155, 255, 0.16)
     );
-  transform-origin:
-    center;
-  will-change:
-    transform,
-    opacity;
+  will-change: transform, opacity;
 }
 
 .halloween-historic-wind-one {
-  top: 20%;
+  top: 27%;
+  transform: rotate(-7deg);
   animation:
     halloween-wind-one
-    10.5s linear infinite;
+    11s ease-in-out infinite;
 }
 
 .halloween-historic-wind-two {
-  top: 58%;
-  width: 62%;
-  height: 15%;
+  top: 63%;
+  width: 43%;
+  transform: rotate(5deg);
   animation:
     halloween-wind-two
-    14s linear 2.8s infinite;
+    15s ease-in-out 4s infinite;
 }
 
 /* Cold blue sheet-lightning. Two sources flash on different rhythms. */
@@ -2116,182 +2139,179 @@
 
 @keyframes halloween-fog-one {
   0% {
+    opacity: 0;
     transform:
       translate3d(-8%, -2%, 0)
-      scale(0.98)
-      rotate(-1deg);
+      skewX(-10deg)
+      scaleX(0.96)
+      scaleY(0.82);
   }
 
-  45% {
+  14% {
+    opacity: 0.36;
+  }
+
+  46% {
+    opacity: 0.48;
     transform:
-      translate3d(9%, 4%, 0)
-      scale(1.07)
-      rotate(1deg);
+      translate3d(18%, 2%, 0)
+      skewX(-4deg)
+      scaleX(1.06)
+      scaleY(1);
+  }
+
+  78% {
+    opacity: 0.28;
+    transform:
+      translate3d(39%, -1%, 0)
+      skewX(4deg)
+      scaleX(1.12)
+      scaleY(0.88);
   }
 
   100% {
+    opacity: 0;
     transform:
-      translate3d(23%, -2%, 0)
-      scale(1.02)
-      rotate(-1deg);
+      translate3d(54%, 1%, 0)
+      skewX(8deg)
+      scaleX(0.98)
+      scaleY(0.80);
   }
 }
 
 @keyframes halloween-fog-two {
   0% {
+    opacity: 0;
     transform:
-      translate3d(16%, 4%, 0)
-      scale(1.04)
-      rotate(1deg);
+      translate3d(34%, 2%, 0)
+      skewX(8deg)
+      scaleX(1.04)
+      scaleY(0.82);
   }
 
-  50% {
+  16% {
+    opacity: 0.26;
+  }
+
+  48% {
+    opacity: 0.42;
     transform:
-      translate3d(-2%, -4%, 0)
-      scale(0.98)
-      rotate(-1deg);
+      translate3d(8%, -2%, 0)
+      skewX(2deg)
+      scaleX(1.08)
+      scaleY(1);
+  }
+
+  80% {
+    opacity: 0.24;
+    transform:
+      translate3d(-17%, 2%, 0)
+      skewX(-5deg)
+      scaleX(1.12)
+      scaleY(0.88);
   }
 
   100% {
+    opacity: 0;
     transform:
-      translate3d(-19%, 3%, 0)
-      scale(1.08)
-      rotate(1deg);
+      translate3d(-32%, -1%, 0)
+      skewX(-9deg)
+      scaleX(0.98)
+      scaleY(0.80);
   }
 }
 
 @keyframes halloween-fog-three {
   0% {
+    opacity: 0;
     transform:
-      translate3d(-12%, 2%, 0)
-      scale(1)
-      rotate(-1deg);
+      translate3d(-18%, 1%, 0)
+      skewX(-7deg)
+      scaleX(0.98)
+      scaleY(0.80);
   }
 
-  52% {
+  18% {
+    opacity: 0.24;
+  }
+
+  54% {
+    opacity: 0.38;
     transform:
-      translate3d(7%, -4%, 0)
-      scale(1.10)
-      rotate(1deg);
+      translate3d(10%, -2%, 0)
+      skewX(0deg)
+      scaleX(1.10)
+      scaleY(1);
+  }
+
+  82% {
+    opacity: 0.21;
+    transform:
+      translate3d(34%, 2%, 0)
+      skewX(6deg)
+      scaleX(1.08)
+      scaleY(0.88);
   }
 
   100% {
+    opacity: 0;
     transform:
-      translate3d(21%, 3%, 0)
-      scale(0.99)
-      rotate(-1deg);
+      translate3d(49%, 0, 0)
+      skewX(9deg)
+      scaleX(0.98)
+      scaleY(0.80);
   }
 }
 
 @keyframes halloween-wind-one {
-  0% {
+  0%,
+  9% {
+    left: -62%;
     opacity: 0;
-    transform:
-      translate3d(-14vw, 0, 0)
-      rotate(-10deg)
-      skewX(-12deg)
-      scaleX(0.88)
-      scaleY(0.82);
   }
 
-  12% {
-    opacity: 0.34;
-  }
-
-  34% {
-    opacity: 0.58;
-    transform:
-      translate3d(54vw, -2vh, 0)
-      rotate(-5deg)
-      skewX(-7deg)
-      scaleX(1.08)
-      scaleY(1);
+  18% {
+    opacity: 0.42;
   }
 
   58% {
-    opacity: 0.40;
-    transform:
-      translate3d(112vw, 3vh, 0)
-      rotate(1deg)
-      skewX(-2deg)
-      scaleX(1.16)
-      scaleY(0.90);
+    opacity: 0.20;
   }
 
   76% {
-    opacity: 0.10;
-    transform:
-      translate3d(170vw, -1vh, 0)
-      rotate(6deg)
-      skewX(4deg)
-      scaleX(0.96)
-      scaleY(1.06);
+    left: 112%;
+    opacity: 0;
   }
 
   100% {
+    left: 112%;
     opacity: 0;
-    transform:
-      translate3d(205vw, 2vh, 0)
-      rotate(9deg)
-      skewX(8deg)
-      scaleX(0.88)
-      scaleY(0.90);
   }
 }
 
 @keyframes halloween-wind-two {
-  0% {
+  0%,
+  18% {
+    left: -54%;
     opacity: 0;
-    transform:
-      translate3d(-18vw, 0, 0)
-      rotate(8deg)
-      skewX(10deg)
-      scaleX(0.90)
-      scaleY(0.82);
   }
 
-  16% {
-    opacity: 0.28;
+  27% {
+    opacity: 0.30;
   }
 
-  38% {
-    opacity: 0.46;
-    transform:
-      translate3d(48vw, 2vh, 0)
-      rotate(4deg)
-      skewX(6deg)
-      scaleX(1.06)
-      scaleY(1);
+  63% {
+    opacity: 0.16;
   }
 
-  61% {
-    opacity: 0.33;
-    transform:
-      translate3d(108vw, -3vh, 0)
-      rotate(-1deg)
-      skewX(1deg)
-      scaleX(1.13)
-      scaleY(0.91);
-  }
-
-  79% {
-    opacity: 0.08;
-    transform:
-      translate3d(162vw, 1vh, 0)
-      rotate(-6deg)
-      skewX(-4deg)
-      scaleX(0.98)
-      scaleY(1.05);
+  78% {
+    left: 108%;
+    opacity: 0;
   }
 
   100% {
+    left: 108%;
     opacity: 0;
-    transform:
-      translate3d(198vw, -2vh, 0)
-      rotate(-9deg)
-      skewX(-8deg)
-      scaleX(0.90)
-      scaleY(0.88);
   }
 }
 
