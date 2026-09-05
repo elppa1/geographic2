@@ -10,6 +10,8 @@ import './MapControls.css'
 function MapControls({
   onLocate,
   onSearchResult,
+  atmosphereEnabled = true,
+  onToggleAtmosphere,
 }) {
   const [
     locating,
@@ -63,6 +65,38 @@ function MapControls({
         {locating
           ? '…'
           : '◎'}
+      </button>
+
+
+      <button
+        type="button"
+        className={[
+          'map-utility-button',
+          'atmosphere-toggle-button',
+          atmosphereEnabled
+            ? 'atmosphere-toggle-button-active'
+            : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        onClick={
+          onToggleAtmosphere
+        }
+        aria-label={
+          atmosphereEnabled
+            ? 'Turn atmosphere off'
+            : 'Turn atmosphere on'
+        }
+        aria-pressed={
+          atmosphereEnabled
+        }
+        title={
+          atmosphereEnabled
+            ? 'Atmosphere on — click to turn off'
+            : 'Atmosphere off — click to turn on'
+        }
+      >
+        ATM
       </button>
 
 

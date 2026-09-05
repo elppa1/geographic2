@@ -840,6 +840,13 @@ const GeographicMap =
         useState('live')
 
 
+      const [
+        atmosphereEnabled,
+        setAtmosphereEnabled,
+      ] =
+        useState(true)
+
+
   useEffect(() => {
     let cancelled =
       false
@@ -2393,13 +2400,16 @@ const GeographicMap =
 
           <AtmosphereLayer
             atmosphere={
-              displayedAtmosphere
+              atmosphereEnabled
+                ? displayedAtmosphere
+                : null
             }
           />
 
 
           <HalloweenHistoricLayer
             active={
+              atmosphereEnabled &&
               atmosphereTest ===
                 'halloween'
             }
@@ -2470,6 +2480,18 @@ const GeographicMap =
 
             onSearchResult={
               handleSearchResult
+            }
+
+            atmosphereEnabled={
+              atmosphereEnabled
+            }
+
+            onToggleAtmosphere={
+              () =>
+                setAtmosphereEnabled(
+                  (enabled) =>
+                    !enabled
+                )
             }
 
             activePinFilter={

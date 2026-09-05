@@ -55,6 +55,27 @@
 
 
 /* ============================================================
+   ATMOSPHERE TOGGLE
+   ============================================================ */
+
+.atmosphere-toggle-button {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.atmosphere-toggle-button-active {
+  background: #111;
+  color: #fff;
+}
+
+.atmosphere-toggle-button-active:hover {
+  background: #111;
+  color: #fff;
+}
+
+
+/* ============================================================
    CONTENT CONTROL
    ============================================================ */
 
@@ -895,6 +916,12 @@
     line-height: 1;
 
     box-shadow: none;
+  }
+
+
+  .atmosphere-toggle-button {
+    font-size: 6px;
+    letter-spacing: 0.04em;
   }
 
 
