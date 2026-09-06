@@ -11150,6 +11150,46 @@ function AdminRoom() {
 
 
     if (
+      tab ===
+        'new' &&
+      getNewServerSubtype(
+        record
+      ) ===
+        'events'
+    ) {
+      if (
+        !String(
+          record.location ||
+          record.intersection ||
+          ''
+        )
+          .trim()
+      ) {
+        window.alert(
+          'Choose a map location before saving this event.'
+        )
+
+
+        return
+      }
+
+
+      if (
+        !hasRecordCoordinates(
+          record
+        )
+      ) {
+        window.alert(
+          'Confirm the map pin before saving this event.'
+        )
+
+
+        return
+      }
+    }
+
+
+    if (
       editingReviewId
     ) {
       const sourceReview =
