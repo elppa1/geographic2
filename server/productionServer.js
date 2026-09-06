@@ -63,6 +63,14 @@ import {
 } from './feeds/toronto/new/development.js'
 
 import {
+  torontoNewEventsFeed,
+} from './feeds/toronto/new/events.js'
+
+import {
+  torontoNewSportsFeed,
+} from './feeds/toronto/new/sports.js'
+
+import {
   locationSearchApi,
 } from './locationSearch.js'
 
@@ -1350,6 +1358,8 @@ const plugins = [
   nowServingFeed(),
   torontoNewBusinessFeed(),
   torontoNewDevelopmentFeed(),
+  torontoNewEventsFeed(),
+  torontoNewSportsFeed(),
 ]
 
 
