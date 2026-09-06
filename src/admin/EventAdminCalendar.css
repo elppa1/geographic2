@@ -1,0 +1,273 @@
+.event-admin-calendar {
+  margin: 14px 0 18px;
+  border: 1px solid rgba(17, 17, 17, 0.18);
+  background: #fff;
+}
+
+.event-admin-calendar-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px;
+  border-bottom: 1px solid rgba(17, 17, 17, 0.14);
+}
+
+.event-admin-calendar-kicker {
+  margin-bottom: 3px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: rgba(17, 17, 17, 0.5);
+}
+
+.event-admin-calendar-month {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.event-admin-calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.event-admin-calendar-nav button,
+.event-admin-calendar-add {
+  min-height: 32px;
+  border: 1px solid #111;
+  background: #fff;
+  color: #111;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.event-admin-calendar-nav button {
+  min-width: 34px;
+  padding: 0 9px;
+}
+
+.event-admin-calendar-nav button:hover,
+.event-admin-calendar-add:hover {
+  background: #111;
+  color: #fff;
+}
+
+.event-admin-calendar-weekdays,
+.event-admin-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.event-admin-calendar-weekdays {
+  border-bottom: 1px solid rgba(17, 17, 17, 0.14);
+  background: rgba(17, 17, 17, 0.035);
+}
+
+.event-admin-calendar-weekdays div {
+  padding: 7px 5px;
+  text-align: center;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: rgba(17, 17, 17, 0.55);
+}
+
+.event-admin-calendar-grid {
+  border-left: 1px solid rgba(17, 17, 17, 0.1);
+}
+
+.event-admin-calendar-day {
+  position: relative;
+  min-height: 52px;
+  padding: 8px;
+  border: 0;
+  border-right: 1px solid rgba(17, 17, 17, 0.1);
+  border-bottom: 1px solid rgba(17, 17, 17, 0.1);
+  background: #fff;
+  color: #111;
+  text-align: left;
+  cursor: pointer;
+}
+
+.event-admin-calendar-day:hover {
+  background: rgba(17, 17, 17, 0.045);
+}
+
+.event-admin-calendar-day-muted {
+  color: rgba(17, 17, 17, 0.28);
+  background: rgba(17, 17, 17, 0.018);
+}
+
+.event-admin-calendar-day-selected {
+  box-shadow: inset 0 0 0 2px #111;
+  z-index: 1;
+}
+
+.event-admin-calendar-day-today .event-admin-calendar-day-number {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.event-admin-calendar-day-number {
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.event-admin-calendar-day-count {
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #111;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.event-admin-calendar-agenda {
+  padding: 14px;
+}
+
+.event-admin-calendar-agenda-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.event-admin-calendar-agenda-date {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.event-admin-calendar-agenda-count {
+  margin-top: 3px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: rgba(17, 17, 17, 0.5);
+}
+
+.event-admin-calendar-add {
+  padding: 0 12px;
+  background: #111;
+  color: #fff;
+}
+
+.event-admin-calendar-add:hover {
+  background: #fff;
+  color: #111;
+}
+
+.event-admin-calendar-empty {
+  padding: 18px 0 5px;
+  border-top: 1px solid rgba(17, 17, 17, 0.12);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: rgba(17, 17, 17, 0.45);
+}
+
+.event-admin-calendar-list {
+  border-top: 1px solid rgba(17, 17, 17, 0.12);
+}
+
+.event-admin-calendar-event {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr) auto;
+  align-items: center;
+  width: 100%;
+  gap: 12px;
+  padding: 11px 0;
+  border: 0;
+  border-bottom: 1px solid rgba(17, 17, 17, 0.1);
+  background: transparent;
+  color: #111;
+  text-align: left;
+  cursor: pointer;
+}
+
+.event-admin-calendar-event:hover {
+  background: rgba(17, 17, 17, 0.03);
+}
+
+.event-admin-calendar-event-time,
+.event-admin-calendar-event-edit {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.event-admin-calendar-event-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.event-admin-calendar-event-copy strong {
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-admin-calendar-event-copy span {
+  overflow: hidden;
+  font-size: 9px;
+  color: rgba(17, 17, 17, 0.55);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-admin-calendar-event-edit {
+  color: rgba(17, 17, 17, 0.45);
+}
+
+@media (max-width: 720px) {
+  .event-admin-calendar-header,
+  .event-admin-calendar-agenda-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .event-admin-calendar-nav {
+    justify-content: space-between;
+  }
+
+  .event-admin-calendar-nav button {
+    flex: 1;
+  }
+
+  .event-admin-calendar-day {
+    min-height: 43px;
+    padding: 6px;
+  }
+
+  .event-admin-calendar-day-count {
+    right: 5px;
+    bottom: 5px;
+    min-width: 16px;
+    height: 16px;
+  }
+
+  .event-admin-calendar-event {
+    grid-template-columns: 66px minmax(0, 1fr);
+  }
+
+  .event-admin-calendar-event-edit {
+    display: none;
+  }
+}

@@ -33,6 +33,7 @@ import {
 
 import LocationSearch from './LocationSearch.jsx'
 import AdminPinMap from './AdminPinMap.jsx'
+import EventAdminCalendar from './EventAdminCalendar.jsx'
 
 import {
   searchLocation,
@@ -11476,6 +11477,60 @@ function AdminRoom() {
 
 
   // ==========================================================
+  // EVENT CALENDAR
+  // ==========================================================
+
+  function startNewEvent(
+    eventDate
+  ) {
+    setEditingId(
+      null
+    )
+
+
+    setEditingReviewId(
+      null
+    )
+
+
+    setNewTypeFilter(
+      'events'
+    )
+
+
+    setNewStatusFilter(
+      'all'
+    )
+
+
+    setDraft({
+      ...makeNewDraft(
+        cityKey
+      ),
+
+      newType:
+        'events',
+
+      category:
+        'event',
+
+      eventDate:
+        eventDate ||
+        today(),
+    })
+
+
+    window.scrollTo({
+      top:
+        0,
+
+      behavior:
+        'smooth',
+    })
+  }
+
+
+  // ==========================================================
   // EDIT
   // ==========================================================
 
@@ -16828,6 +16883,30 @@ function AdminRoom() {
                   </button>
                 </div>
               )}
+
+
+              {tab ===
+                'new' &&
+                newTypeFilter ===
+                  'events' && (
+                  <EventAdminCalendar
+                    records={
+                      newItems.filter(
+                        (record) =>
+                          newRecordMatchesType(
+                            record,
+                            'events'
+                          )
+                      )
+                    }
+                    onAddEvent={
+                      startNewEvent
+                    }
+                    onEditEvent={
+                      editRecord
+                    }
+                  />
+                )}
 
 
               {/* NEW STATUS */}
