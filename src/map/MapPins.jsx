@@ -2699,6 +2699,265 @@ function getNewBusinessIcon(
 }
 
 
+const NEW_EVENT_ICONS = {
+  music: {
+    emoji:
+      '🎵',
+
+    label:
+      'Music / Concert',
+  },
+
+  food: {
+    emoji:
+      '🍴',
+
+    label:
+      'Food / Pop-up',
+  },
+
+  theatre: {
+    emoji:
+      '🎭',
+
+    label:
+      'Theatre / Play',
+  },
+
+  comedy: {
+    emoji:
+      '🎤',
+
+    label:
+      'Comedy',
+  },
+
+  art: {
+    emoji:
+      '🎨',
+
+    label:
+      'Art / Exhibition',
+  },
+
+  film: {
+    emoji:
+      '🎬',
+
+    label:
+      'Film / Screening',
+  },
+
+  festival: {
+    emoji:
+      '🎪',
+
+    label:
+      'Festival',
+  },
+
+  talk: {
+    emoji:
+      '💬',
+
+    label:
+      'Talk / Lecture',
+  },
+
+  community: {
+    emoji:
+      '📍',
+
+    label:
+      'Community / General',
+  },
+}
+
+
+function getNewEventIcon(
+  pin
+) {
+  const explicitType =
+    normalizeCompareText(
+      pin?.newType
+    )
+
+
+  const category =
+    normalizeCompareText(
+      pin?.category
+    )
+
+
+  if (
+    explicitType !==
+      'events' &&
+    !EVENT_CATEGORIES.includes(
+      category
+    )
+  ) {
+    return null
+  }
+
+
+  const iconKey =
+    normalizeCompareText(
+      pin?.eventPinIcon
+    )
+
+
+  if (
+    !iconKey
+  ) {
+    return null
+  }
+
+
+  return (
+    NEW_EVENT_ICONS[
+      iconKey
+    ] ||
+    null
+  )
+}
+
+
+function formatEventCardDateTime(
+  pin
+) {
+  const dateText =
+    String(
+      pin?.eventDate ||
+      ''
+    )
+      .trim()
+
+
+  const timeText =
+    String(
+      pin?.startTime ||
+      ''
+    )
+      .trim()
+
+
+  let dateLabel =
+    ''
+
+
+  if (
+    dateText
+  ) {
+    const date =
+      new Date(
+        `${dateText}T12:00:00`
+      )
+
+
+    if (
+      !Number.isNaN(
+        date.getTime()
+      )
+    ) {
+      dateLabel =
+        date
+          .toLocaleDateString(
+            'en-CA',
+            {
+              weekday:
+                'short',
+
+              month:
+                'short',
+
+              day:
+                'numeric',
+            }
+          )
+          .toUpperCase()
+    } else {
+      dateLabel =
+        dateText.toUpperCase()
+    }
+  }
+
+
+  let timeLabel =
+    ''
+
+
+  if (
+    /^\d{2}:\d{2}$/.test(
+      timeText
+    )
+  ) {
+    const [
+      hourText,
+      minuteText,
+    ] =
+      timeText.split(
+        ':'
+      )
+
+
+    const hour =
+      Number(
+        hourText
+      )
+
+
+    const minute =
+      Number(
+        minuteText
+      )
+
+
+    if (
+      Number.isFinite(
+        hour
+      ) &&
+      Number.isFinite(
+        minute
+      )
+    ) {
+      const suffix =
+        hour >=
+          12
+          ? 'PM'
+          : 'AM'
+
+
+      const displayHour =
+        hour %
+          12 ||
+        12
+
+
+      timeLabel =
+        `${displayHour}:` +
+        `${String(
+          minute
+        ).padStart(
+          2,
+          '0'
+        )} ${suffix}`
+    }
+  }
+
+
+  return [
+    dateLabel,
+    timeLabel,
+  ]
+    .filter(
+      Boolean
+    )
+    .join(
+      ' · '
+    )
+}
+
+
 function isTorontoPolicePin(
   pin
 ) {
@@ -3677,6 +3936,15 @@ function createMarker({
       : null
 
 
+  const newEventIcon =
+    pinType ===
+    'new'
+      ? getNewEventIcon(
+          pin
+        )
+      : null
+
+
   if (
     historicIcon
   ) {
@@ -3867,6 +4135,73 @@ function createMarker({
     appendEmojiMarkerIcon(
       element,
       newBusinessIcon.emoji
+    )
+
+
+    applyMarkerActivityPulse({
+      element,
+      pin,
+      pinType,
+    })
+  }
+  else if (
+    newEventIcon
+  ) {
+    element.className =
+      'geographic-pin-emoji-marker geographic-pin-new-event-emoji-marker'
+
+    element.style.width =
+      '32px'
+
+    element.style.height =
+      '32px'
+
+    element.style.padding =
+      '0'
+
+    element.style.margin =
+      '0'
+
+    element.style.border =
+      'none'
+
+    element.style.borderRadius =
+      '0'
+
+    element.style.background =
+      'transparent'
+
+    element.style.boxShadow =
+      'none'
+
+    element.style.cursor =
+      'pointer'
+
+    element.style.display =
+      'flex'
+
+    element.style.alignItems =
+      'center'
+
+    element.style.justifyContent =
+      'center'
+
+    element.style.appearance =
+      'none'
+
+    element.style.WebkitAppearance =
+      'none'
+
+    element.setAttribute(
+      'aria-label',
+      pin.title
+        ? `${newEventIcon.label} · ${pin.title}`
+        : `${newEventIcon.label} marker`
+    )
+
+    appendEmojiMarkerIcon(
+      element,
+      newEventIcon.emoji
     )
 
 
@@ -4124,6 +4459,18 @@ function createMarker({
           : ''
 
 
+      const isEvent =
+        normalizeCompareText(
+          pin.newType
+        ) ===
+          'events' ||
+        EVENT_CATEGORIES.includes(
+          normalizeCompareText(
+            pin.category
+          )
+        )
+
+
       appendText({
         parent:
           popupContent,
@@ -4132,18 +4479,22 @@ function createMarker({
           'geographic-pin-year',
 
         text:
-          [
-            formatStatus(
-              pin.status
-            ),
-            ageLabel,
-          ]
-            .filter(
-              Boolean
-            )
-            .join(
-              ' · '
-            ),
+          isEvent
+            ? formatEventCardDateTime(
+                pin
+              )
+            : [
+                formatStatus(
+                  pin.status
+                ),
+                ageLabel,
+              ]
+                .filter(
+                  Boolean
+                )
+                .join(
+                  ' · '
+                ),
       })
     }
 

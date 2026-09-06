@@ -994,6 +994,9 @@ const EMPTY_NEW = {
   businessIcon:
     '',
 
+  eventPinIcon:
+    '',
+
   businessUrl:
     '',
 
@@ -1296,6 +1299,73 @@ const NEW_BUSINESS_ICON_OPTIONS = [
       '🍷 WINE BAR',
   },
 ]
+
+const NEW_EVENT_PIN_ICON_OPTIONS = [
+  {
+    value:
+      'music',
+
+    label:
+      '🎵 MUSIC / CONCERT',
+  },
+  {
+    value:
+      'food',
+
+    label:
+      '🍴 FOOD / POP-UP',
+  },
+  {
+    value:
+      'theatre',
+
+    label:
+      '🎭 THEATRE / PLAY',
+  },
+  {
+    value:
+      'comedy',
+
+    label:
+      '🎤 COMEDY',
+  },
+  {
+    value:
+      'art',
+
+    label:
+      '🎨 ART / EXHIBITION',
+  },
+  {
+    value:
+      'film',
+
+    label:
+      '🎬 FILM / SCREENING',
+  },
+  {
+    value:
+      'festival',
+
+    label:
+      '🎪 FESTIVAL',
+  },
+  {
+    value:
+      'talk',
+
+    label:
+      '💬 TALK / LECTURE',
+  },
+  {
+    value:
+      'community',
+
+    label:
+      '📍 COMMUNITY / GENERAL',
+  },
+]
+
 
 
 function getNewServerSubtype(
@@ -14687,6 +14757,55 @@ function AdminRoom() {
                   ) ===
                   'sports') && (
                   <>
+                    {getNewServerSubtype(
+                      draft
+                    ) ===
+                      'events' && (
+                      <label className="admin-field">
+                        <span>
+                          EVENT PIN
+                        </span>
+
+                        <select
+                          value={
+                            draft.eventPinIcon ||
+                            ''
+                          }
+                          onChange={
+                            (event) =>
+                              updateDraft(
+                                'eventPinIcon',
+                                event.target.value
+                              )
+                          }
+                        >
+                          <option value="">
+                            STANDARD PIN
+                          </option>
+
+                          {NEW_EVENT_PIN_ICON_OPTIONS.map(
+                            (
+                              option
+                            ) => (
+                              <option
+                                key={
+                                  option.value
+                                }
+                                value={
+                                  option.value
+                                }
+                              >
+                                {
+                                  option.label
+                                }
+                              </option>
+                            )
+                          )}
+                        </select>
+                      </label>
+                    )}
+
+
                     <label className="admin-field">
                       <span>
                         VENUE
