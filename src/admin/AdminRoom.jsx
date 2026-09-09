@@ -11587,7 +11587,7 @@ function AdminRoom() {
 
 
   // ==========================================================
-  // EVENT CALENDAR
+  // EVENT + SPORTS CALENDARS
   // ==========================================================
 
   function startNewEvent(
@@ -11623,6 +11623,56 @@ function AdminRoom() {
 
       category:
         'event',
+
+      eventDate:
+        eventDate ||
+        today(),
+    })
+
+
+    window.scrollTo({
+      top:
+        0,
+
+      behavior:
+        'smooth',
+    })
+  }
+
+
+  function startNewSport(
+    eventDate
+  ) {
+    setEditingId(
+      null
+    )
+
+
+    setEditingReviewId(
+      null
+    )
+
+
+    setNewTypeFilter(
+      'sports'
+    )
+
+
+    setNewStatusFilter(
+      'all'
+    )
+
+
+    setDraft({
+      ...makeNewDraft(
+        cityKey
+      ),
+
+      newType:
+        'sports',
+
+      category:
+        'game',
 
       eventDate:
         eventDate ||
@@ -17064,6 +17114,36 @@ function AdminRoom() {
                     onEditEvent={
                       editRecord
                     }
+                  />
+                )}
+
+
+              {tab ===
+                'new' &&
+                newTypeFilter ===
+                  'sports' && (
+                  <EventAdminCalendar
+                    records={
+                      newItems.filter(
+                        (record) =>
+                          newRecordMatchesType(
+                            record,
+                            'sports'
+                          )
+                      )
+                    }
+                    onAddEvent={
+                      startNewSport
+                    }
+                    onEditEvent={
+                      editRecord
+                    }
+                    calendarLabel="SPORTS CALENDAR"
+                    singularLabel="GAME"
+                    pluralLabel="GAMES"
+                    addLabel="+ ADD GAME"
+                    emptyLabel="NO GAMES ON THIS DATE."
+                    untitledLabel="UNTITLED GAME"
                   />
                 )}
 

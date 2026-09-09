@@ -230,6 +230,18 @@ function EventAdminCalendar({
   records = [],
   onAddEvent,
   onEditEvent,
+  calendarLabel =
+    'EVENTS CALENDAR',
+  singularLabel =
+    'EVENT',
+  pluralLabel =
+    'EVENTS',
+  addLabel =
+    '+ ADD EVENT',
+  emptyLabel =
+    'NO EVENTS ON THIS DATE.',
+  untitledLabel =
+    'UNTITLED EVENT',
 }) {
   const [
     selectedDate,
@@ -465,7 +477,7 @@ function EventAdminCalendar({
       <div className="event-admin-calendar-header">
         <div>
           <div className="event-admin-calendar-kicker">
-            EVENTS CALENDAR
+            {calendarLabel}
           </div>
 
           <div className="event-admin-calendar-month">
@@ -617,8 +629,8 @@ function EventAdminCalendar({
             <div className="event-admin-calendar-agenda-count">
               {selectedEvents.length ===
                 1
-                ? '1 EVENT'
-                : `${selectedEvents.length} EVENTS`}
+                ? `1 ${singularLabel}`
+                : `${selectedEvents.length} ${pluralLabel}`}
             </div>
           </div>
 
@@ -632,7 +644,7 @@ function EventAdminCalendar({
               )
             }
           >
-            + ADD EVENT
+            {addLabel}
           </button>
         </div>
 
@@ -641,7 +653,7 @@ function EventAdminCalendar({
           0
           ? (
               <div className="event-admin-calendar-empty">
-                NO EVENTS ON THIS DATE.
+                {emptyLabel}
               </div>
             )
           : (
@@ -675,7 +687,7 @@ function EventAdminCalendar({
                       <span className="event-admin-calendar-event-copy">
                         <strong>
                           {record.title ||
-                            'UNTITLED EVENT'}
+                            untitledLabel}
                         </strong>
 
                         <span>
