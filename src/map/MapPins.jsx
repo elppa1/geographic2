@@ -2822,6 +2822,161 @@ function getNewEventIcon(
 }
 
 
+const NEW_SPORTS_ICONS = {
+  hockey: {
+    emoji:
+      '🏒',
+
+    label:
+      'Hockey',
+  },
+
+  basketball: {
+    emoji:
+      '🏀',
+
+    label:
+      'Basketball',
+  },
+
+  baseball: {
+    emoji:
+      '⚾',
+
+    label:
+      'Baseball',
+  },
+
+  soccer: {
+    emoji:
+      '⚽',
+
+    label:
+      'Soccer',
+  },
+
+  football: {
+    emoji:
+      '🏈',
+
+    label:
+      'Football',
+  },
+
+  tennis: {
+    emoji:
+      '🎾',
+
+    label:
+      'Tennis',
+  },
+
+  golf: {
+    emoji:
+      '⛳',
+
+    label:
+      'Golf',
+  },
+
+  lacrosse: {
+    emoji:
+      '🥍',
+
+    label:
+      'Lacrosse',
+  },
+
+  boxing: {
+    emoji:
+      '🥊',
+
+    label:
+      'Boxing',
+  },
+
+  running: {
+    emoji:
+      '🏃',
+
+    label:
+      'Running / Road Race',
+  },
+
+  cycling: {
+    emoji:
+      '🚲',
+
+    label:
+      'Cycling',
+  },
+
+  motorsport: {
+    emoji:
+      '🏁',
+
+    label:
+      'Motorsport',
+  },
+
+  general: {
+    emoji:
+      '🏆',
+
+    label:
+      'General Sports',
+  },
+}
+
+
+function getNewSportsIcon(
+  pin
+) {
+  const explicitType =
+    normalizeCompareText(
+      pin?.newType
+    )
+
+
+  const category =
+    normalizeCompareText(
+      pin?.category
+    )
+
+
+  if (
+    explicitType !==
+      'sports' &&
+    !SPORTS_CATEGORIES.includes(
+      category
+    )
+  ) {
+    return null
+  }
+
+
+  const iconKey =
+    normalizeCompareText(
+      pin?.sportsPinIcon
+    )
+
+
+  if (
+    !iconKey
+  ) {
+    return null
+  }
+
+
+  return (
+    NEW_SPORTS_ICONS[
+      iconKey
+    ] ||
+    null
+  )
+}
+
+
 function formatEventCardDateTime(
   pin
 ) {
@@ -3945,6 +4100,15 @@ function createMarker({
       : null
 
 
+  const newSportsIcon =
+    pinType ===
+    'new'
+      ? getNewSportsIcon(
+          pin
+        )
+      : null
+
+
   if (
     historicIcon
   ) {
@@ -4202,6 +4366,73 @@ function createMarker({
     appendEmojiMarkerIcon(
       element,
       newEventIcon.emoji
+    )
+
+
+    applyMarkerActivityPulse({
+      element,
+      pin,
+      pinType,
+    })
+  }
+  else if (
+    newSportsIcon
+  ) {
+    element.className =
+      'geographic-pin-emoji-marker geographic-pin-new-sports-emoji-marker'
+
+    element.style.width =
+      '32px'
+
+    element.style.height =
+      '32px'
+
+    element.style.padding =
+      '0'
+
+    element.style.margin =
+      '0'
+
+    element.style.border =
+      'none'
+
+    element.style.borderRadius =
+      '0'
+
+    element.style.background =
+      'transparent'
+
+    element.style.boxShadow =
+      'none'
+
+    element.style.cursor =
+      'pointer'
+
+    element.style.display =
+      'flex'
+
+    element.style.alignItems =
+      'center'
+
+    element.style.justifyContent =
+      'center'
+
+    element.style.appearance =
+      'none'
+
+    element.style.WebkitAppearance =
+      'none'
+
+    element.setAttribute(
+      'aria-label',
+      pin.title
+        ? `${newSportsIcon.label} · ${pin.title}`
+        : `${newSportsIcon.label} marker`
+    )
+
+    appendEmojiMarkerIcon(
+      element,
+      newSportsIcon.emoji
     )
 
 

@@ -997,6 +997,9 @@ const EMPTY_NEW = {
   eventPinIcon:
     '',
 
+  sportsPinIcon:
+    '',
+
   businessUrl:
     '',
 
@@ -1363,6 +1366,101 @@ const NEW_EVENT_PIN_ICON_OPTIONS = [
 
     label:
       '📍 COMMUNITY / GENERAL',
+  },
+]
+
+
+const NEW_SPORTS_PIN_ICON_OPTIONS = [
+  {
+    value:
+      'hockey',
+
+    label:
+      '🏒 HOCKEY',
+  },
+  {
+    value:
+      'basketball',
+
+    label:
+      '🏀 BASKETBALL',
+  },
+  {
+    value:
+      'baseball',
+
+    label:
+      '⚾ BASEBALL',
+  },
+  {
+    value:
+      'soccer',
+
+    label:
+      '⚽ SOCCER',
+  },
+  {
+    value:
+      'football',
+
+    label:
+      '🏈 FOOTBALL',
+  },
+  {
+    value:
+      'tennis',
+
+    label:
+      '🎾 TENNIS',
+  },
+  {
+    value:
+      'golf',
+
+    label:
+      '⛳ GOLF',
+  },
+  {
+    value:
+      'lacrosse',
+
+    label:
+      '🥍 LACROSSE',
+  },
+  {
+    value:
+      'boxing',
+
+    label:
+      '🥊 BOXING',
+  },
+  {
+    value:
+      'running',
+
+    label:
+      '🏃 RUNNING / ROAD RACE',
+  },
+  {
+    value:
+      'cycling',
+
+    label:
+      '🚲 CYCLING',
+  },
+  {
+    value:
+      'motorsport',
+
+    label:
+      '🏁 MOTORSPORT',
+  },
+  {
+    value:
+      'general',
+
+    label:
+      '🏆 GENERAL SPORTS',
   },
 ]
 
@@ -14837,6 +14935,55 @@ function AdminRoom() {
                           </option>
 
                           {NEW_EVENT_PIN_ICON_OPTIONS.map(
+                            (
+                              option
+                            ) => (
+                              <option
+                                key={
+                                  option.value
+                                }
+                                value={
+                                  option.value
+                                }
+                              >
+                                {
+                                  option.label
+                                }
+                              </option>
+                            )
+                          )}
+                        </select>
+                      </label>
+                    )}
+
+
+                    {getNewServerSubtype(
+                      draft
+                    ) ===
+                      'sports' && (
+                      <label className="admin-field">
+                        <span>
+                          SPORTS PIN
+                        </span>
+
+                        <select
+                          value={
+                            draft.sportsPinIcon ||
+                            ''
+                          }
+                          onChange={
+                            (event) =>
+                              updateDraft(
+                                'sportsPinIcon',
+                                event.target.value
+                              )
+                          }
+                        >
+                          <option value="">
+                            STANDARD PIN
+                          </option>
+
+                          {NEW_SPORTS_PIN_ICON_OPTIONS.map(
                             (
                               option
                             ) => (
