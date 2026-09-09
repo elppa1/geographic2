@@ -4471,6 +4471,18 @@ function createMarker({
         )
 
 
+      const isSport =
+        normalizeCompareText(
+          pin.newType
+        ) ===
+          'sports' ||
+        SPORTS_CATEGORIES.includes(
+          normalizeCompareText(
+            pin.category
+          )
+        )
+
+
       appendText({
         parent:
           popupContent,
@@ -4479,7 +4491,10 @@ function createMarker({
           'geographic-pin-year',
 
         text:
-          isEvent
+          (
+            isEvent ||
+            isSport
+          )
             ? formatEventCardDateTime(
                 pin
               )
@@ -4520,8 +4535,39 @@ function createMarker({
 
       text:
         (
-          pin.intersection ||
-          pin.location
+          (
+            pinType ===
+              'new' &&
+            (
+              normalizeCompareText(
+                pin.newType
+              ) ===
+                'events' ||
+              normalizeCompareText(
+                pin.newType
+              ) ===
+                'sports' ||
+              EVENT_CATEGORIES.includes(
+                normalizeCompareText(
+                  pin.category
+                )
+              ) ||
+              SPORTS_CATEGORIES.includes(
+                normalizeCompareText(
+                  pin.category
+                )
+              )
+            )
+          )
+            ? (
+                pin.venue ||
+                pin.intersection ||
+                pin.location
+              )
+            : (
+                pin.intersection ||
+                pin.location
+              )
         ),
     })
 

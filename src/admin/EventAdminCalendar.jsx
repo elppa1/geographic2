@@ -230,6 +230,11 @@ function EventAdminCalendar({
   records = [],
   onAddEvent,
   onEditEvent,
+  onToggleVisibility,
+  includeInactive =
+    false,
+  showVisibilityControls =
+    false,
   calendarLabel =
     'EVENTS CALENDAR',
   singularLabel =
@@ -280,8 +285,11 @@ function EventAdminCalendar({
         )
           .filter(
             (record) =>
-              record?.active !==
-                false &&
+              (
+                includeInactive ||
+                record?.active !==
+                  false
+              ) &&
               getEventDateKey(
                 record
               )
@@ -353,6 +361,7 @@ function EventAdminCalendar({
       },
       [
         records,
+        includeInactive,
       ]
     )
 
@@ -662,46 +671,142 @@ function EventAdminCalendar({
                   (
                     record,
                     index
-                  ) => (
-                    <button
-                      type="button"
-                      className="event-admin-calendar-event"
-                      key={
-                        record.id ||
-                        record.externalId ||
-                        `${selectedDate}-${index}`
-                      }
-                      onClick={() =>
-                        onEditEvent?.(
-                          record
-                        )
-                      }
-                    >
-                      <span className="event-admin-calendar-event-time">
-                        {formatEventTime(
-                          record.startTime
-                        ) ||
-                          'TIME TBD'}
-                      </span>
+                  ) => {
+                    const rowKey =
+                      record.id ||
+                      record.externalId ||
+                      `${selectedDate}-${index}`
 
-                      <span className="event-admin-calendar-event-copy">
-                        <strong>
-                          {record.title ||
-                            untitledLabel}
-                        </strong>
 
-                        <span>
-                          {record.venue ||
-                            record.location ||
-                            'VENUE TBD'}
+                    const editButton = (
+                      <button
+                        type="button"
+                        className="event-admin-calendar-event"
+                        onClick={() =>
+                          onEditEvent?.(
+                            record
+                          )
+                        }
+                      >
+                        <span className="event-admin-calendar-event-time">
+                          {formatEventTime(
+                            record.startTime
+                          ) ||
+                            'TIME TBD'}
                         </span>
-                      </span>
 
-                      <span className="event-admin-calendar-event-edit">
-                        EDIT
-                      </span>
-                    </button>
-                  )
+                        <span className="event-admin-calendar-event-copy">
+                          <strong>
+                            {record.title ||
+                              untitledLabel}
+                          </strong>
+
+                          <span>
+                            {record.venue ||
+                              record.location ||
+                              'VENUE TBD'}
+                          </span>
+                        </span>
+
+                        <span className="event-admin-calendar-event-edit">
+                          EDIT
+                        </span>
+                      </button>
+                    )
+
+
+                    if (
+                      !showVisibilityControls
+                    ) {
+                      return (
+                        <div key={rowKey}>
+                          {editButton}
+                        </div>
+                      )
+                    }
+
+
+                    const pinIsVisible =
+                      record.active !==
+                        false
+
+
+                    return (
+                      <div
+                        key={
+                          rowKey
+                        }
+                        style={{
+                          display:
+                            'grid',
+
+                          gridTemplateColumns:
+                            'minmax(0, 1fr) auto',
+
+                          gap:
+                            '6px',
+
+                          alignItems:
+                            'stretch',
+                        }}
+                      >
+                        {editButton}
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onToggleVisibility?.(
+                              record.id
+                            )
+                          }
+                          style={{
+                            minWidth:
+                              '82px',
+
+                            border:
+                              '1px solid #111',
+
+                            background:
+                              pinIsVisible
+                                ? '#111'
+                                : '#fff',
+
+                            color:
+                              pinIsVisible
+                                ? '#fff'
+                                : '#111',
+
+                            padding:
+                              '8px 10px',
+
+                            font:
+                              'inherit',
+
+                            fontSize:
+                              '7px',
+
+                            fontWeight:
+                              700,
+
+                            letterSpacing:
+                              '0.08em',
+
+                            cursor:
+                              'pointer',
+                          }}
+                          title={
+                            pinIsVisible
+                              ? 'Hide this game pin from the public map'
+                              : 'Show this game pin on the public map'
+                          }
+                        >
+                          {pinIsVisible
+                            ? 'HIDE PIN'
+                            : 'SHOW PIN'}
+                        </button>
+                      </div>
+                    )
+                  }
                 )}
               </div>
             )}

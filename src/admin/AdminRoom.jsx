@@ -11674,6 +11674,9 @@ function AdminRoom() {
       category:
         'game',
 
+      active:
+        false,
+
       eventDate:
         eventDate ||
         today(),
@@ -17137,6 +17140,15 @@ function AdminRoom() {
                     }
                     onEditEvent={
                       editRecord
+                    }
+                    onToggleVisibility={
+                      toggleRecord
+                    }
+                    includeInactive={
+                      true
+                    }
+                    showVisibilityControls={
+                      true
                     }
                     calendarLabel="SPORTS CALENDAR"
                     singularLabel="GAME"
