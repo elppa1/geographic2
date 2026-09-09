@@ -3446,7 +3446,7 @@ function appendEmojiMarkerIcon(
 
 
 // ============================================================
-// ACTIVE / URGENT NEWS PIN PULSE
+// ACTIVE / LIVE PIN PULSE
 // ============================================================
 //
 // NEWS:
@@ -3454,7 +3454,12 @@ function appendEmojiMarkerIcon(
 //   - Police pulse for their first 3 hours
 //   - Fire pulses for its first 8 hours
 //
-// NEW business pins do not pulse.
+// NEW:
+//   - Events pulse only while their scheduled event is happening
+//   - Sports pulse only while their scheduled game/match is happening
+//   - Other NEW pins do not pulse
+//
+// Event and Sports times are interpreted in America/Toronto.
 //
 // Reduced-motion users get a steady glow instead of animation.
 //
@@ -3474,10 +3479,381 @@ const FIRE_NEWS_MARKER_WINDOW_MS =
   1000
 
 
+function getTorontoWallClockNowMs() {
+  const parts =
+    new Intl.DateTimeFormat(
+      'en-CA',
+      {
+        timeZone:
+          'America/Toronto',
+
+        year:
+          'numeric',
+
+        month:
+          '2-digit',
+
+        day:
+          '2-digit',
+
+        hour:
+          '2-digit',
+
+        minute:
+          '2-digit',
+
+        second:
+          '2-digit',
+
+        hourCycle:
+          'h23',
+      }
+    )
+      .formatToParts(
+        new Date()
+      )
+
+
+  const values =
+    Object.fromEntries(
+      parts
+        .filter(
+          (part) =>
+            part.type !==
+              'literal'
+        )
+        .map(
+          (part) => [
+            part.type,
+            part.value,
+          ]
+        )
+    )
+
+
+  const year =
+    Number(
+      values.year
+    )
+
+  const month =
+    Number(
+      values.month
+    )
+
+  const day =
+    Number(
+      values.day
+    )
+
+  const hour =
+    Number(
+      values.hour
+    )
+
+  const minute =
+    Number(
+      values.minute
+    )
+
+  const second =
+    Number(
+      values.second
+    )
+
+
+  if (
+    !Number.isFinite(
+      year
+    ) ||
+    !Number.isFinite(
+      month
+    ) ||
+    !Number.isFinite(
+      day
+    ) ||
+    !Number.isFinite(
+      hour
+    ) ||
+    !Number.isFinite(
+      minute
+    ) ||
+    !Number.isFinite(
+      second
+    )
+  ) {
+    return Date.now()
+  }
+
+
+  return Date.UTC(
+    year,
+    month - 1,
+    day,
+    hour,
+    minute,
+    second
+  )
+}
+
+
+function parseScheduledWallClockMs({
+  eventDate,
+  time,
+}) {
+  const dateText =
+    String(
+      eventDate ||
+      ''
+    )
+      .trim()
+
+
+  const timeText =
+    String(
+      time ||
+      ''
+    )
+      .trim()
+
+
+  const dateMatch =
+    dateText.match(
+      /^(\d{4})-(\d{2})-(\d{2})$/
+    )
+
+
+  const timeMatch =
+    timeText.match(
+      /^(\d{2}):(\d{2})$/
+    )
+
+
+  if (
+    !dateMatch ||
+    !timeMatch
+  ) {
+    return null
+  }
+
+
+  const year =
+    Number(
+      dateMatch[1]
+    )
+
+  const month =
+    Number(
+      dateMatch[2]
+    )
+
+  const day =
+    Number(
+      dateMatch[3]
+    )
+
+  const hour =
+    Number(
+      timeMatch[1]
+    )
+
+  const minute =
+    Number(
+      timeMatch[2]
+    )
+
+
+  if (
+    !Number.isFinite(
+      year
+    ) ||
+    !Number.isFinite(
+      month
+    ) ||
+    month <
+      1 ||
+    month >
+      12 ||
+    !Number.isFinite(
+      day
+    ) ||
+    day <
+      1 ||
+    day >
+      31 ||
+    !Number.isFinite(
+      hour
+    ) ||
+    hour <
+      0 ||
+    hour >
+      23 ||
+    !Number.isFinite(
+      minute
+    ) ||
+    minute <
+      0 ||
+    minute >
+      59
+  ) {
+    return null
+  }
+
+
+  return Date.UTC(
+    year,
+    month - 1,
+    day,
+    hour,
+    minute,
+    0
+  )
+}
+
+
+function getLiveScheduledNewPulseState(
+  pin
+) {
+  if (
+    pin?.active ===
+      false
+  ) {
+    return {
+      pulse:
+        false,
+    }
+  }
+
+
+  const explicitType =
+    normalizeCompareText(
+      pin?.newType
+    )
+
+
+  const category =
+    normalizeCompareText(
+      pin?.category
+    )
+
+
+  const isEvent =
+    explicitType ===
+      'events' ||
+    EVENT_CATEGORIES.includes(
+      category
+    )
+
+
+  const isSport =
+    explicitType ===
+      'sports' ||
+    SPORTS_CATEGORIES.includes(
+      category
+    )
+
+
+  if (
+    !isEvent &&
+    !isSport
+  ) {
+    return {
+      pulse:
+        false,
+    }
+  }
+
+
+  const startMs =
+    parseScheduledWallClockMs({
+      eventDate:
+        pin?.eventDate,
+
+      time:
+        pin?.startTime,
+    })
+
+
+  let endMs =
+    parseScheduledWallClockMs({
+      eventDate:
+        pin?.eventDate,
+
+      time:
+        pin?.endTime,
+    })
+
+
+  if (
+    startMs ===
+      null ||
+    endMs ===
+      null
+  ) {
+    return {
+      pulse:
+        false,
+    }
+  }
+
+
+  if (
+    endMs <=
+      startMs
+  ) {
+    endMs +=
+      24 *
+      60 *
+      60 *
+      1000
+  }
+
+
+  const nowMs =
+    getTorontoWallClockNowMs()
+
+
+  if (
+    nowMs <
+      startMs ||
+    nowMs >=
+      endMs
+  ) {
+    return {
+      pulse:
+        false,
+    }
+  }
+
+
+  return {
+    pulse:
+      true,
+
+    forever:
+      false,
+
+    remainingMs:
+      endMs -
+      nowMs,
+  }
+}
+
+
 function getMarkerPulseState({
   pin,
   pinType,
 }) {
+  if (
+    pinType ===
+      'new'
+  ) {
+    return getLiveScheduledNewPulseState(
+      pin
+    )
+  }
+
+
   if (
     pinType !==
       'news'
@@ -3655,14 +4031,8 @@ function applyMarkerActivityPulse({
 
 
   const target =
-    element.firstElementChild
-
-
-  if (
-    !target
-  ) {
-    return
-  }
+    element.firstElementChild ||
+    element
 
 
   if (
@@ -4454,6 +4824,13 @@ function createMarker({
       pin.title ||
       'Geographic marker'
     )
+
+
+    applyMarkerActivityPulse({
+      element,
+      pin,
+      pinType,
+    })
   }
 
   const compactMobilePopup =
@@ -6119,6 +6496,41 @@ function MapPins({
     )
 
 
+  const [
+    activityRevision,
+    setActivityRevision,
+  ] =
+    useState(
+      0
+    )
+
+
+  useEffect(
+    () => {
+      const interval =
+        window.setInterval(
+          () => {
+            setActivityRevision(
+              (
+                current
+              ) =>
+                current + 1
+            )
+          },
+          15 * 1000
+        )
+
+
+      return () => {
+        window.clearInterval(
+          interval
+        )
+      }
+    },
+    []
+  )
+
+
   useEffect(
     () => {
       if (
@@ -6816,6 +7228,7 @@ function MapPins({
     serverNewsItems,
     serverNewItems,
     viewportRevision,
+    activityRevision,
     selectedPinId,
     onDirections,
     onSeeItThen,
