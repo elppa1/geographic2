@@ -3198,6 +3198,378 @@ function isTorontoFirePin(
 }
 
 
+const TORONTO_FIRE_PUBLIC_UNIT_LABELS = [
+  ['CMD', 'Command Vehicle', 'Command Vehicles'],
+  ['TRS', 'Trench Rescue Support', 'Trench Rescue Support units'],
+  ['Box', 'Canteen Vehicle', 'Canteen Vehicles'],
+  ['Sup', 'Canteen Vehicle', 'Canteen Vehicles'],
+  ['HR', 'Highrise', 'Highrise units'],
+  ['HZ', 'HazMat', 'HazMat units'],
+  ['FB', 'Fireboat', 'Fireboats'],
+  ['LA', 'Air Light', 'Air Light units'],
+  ['WT', 'Water Tanker', 'Water Tankers'],
+  ['HS', 'Haz Support', 'Haz Support units'],
+  ['DE', 'Decon', 'Decon units'],
+  ['MP', 'Mini Pumper', 'Mini Pumpers'],
+  ['FI', 'Fire Investigator', 'Fire Investigators'],
+  ['PL', 'Platform', 'Platforms'],
+  ['P', 'Pumper', 'Pumpers'],
+  ['R', 'Rescue', 'Rescue units'],
+  ['A', 'Aerial', 'Aerials'],
+  ['T', 'Tower', 'Towers'],
+  ['S', 'Squad', 'Squads'],
+  ['C', 'Chief', 'Chiefs'],
+]
+
+
+const TORONTO_FIRE_PUBLIC_ALARM_LABELS = {
+  0:
+    'Initial response',
+
+  1:
+    'Support fire response',
+
+  2:
+    '10–14 emergency vehicles',
+
+  3:
+    '15–18 emergency vehicles',
+
+  4:
+    '19–22 emergency vehicles',
+
+  5:
+    '23–28 emergency vehicles',
+
+  6:
+    '29–32 emergency vehicles',
+}
+
+
+function formatTorontoFirePublicClock(
+  value
+) {
+  const text =
+    String(
+      value ||
+      ''
+    )
+      .trim()
+
+
+  const match =
+    text.match(
+      /^\d{4}-\d{2}-\d{2}(?:T|,\s*)(\d{1,2}):(\d{2})(?::\d{2})?$/
+    )
+
+
+  if (
+    !match
+  ) {
+    return text
+  }
+
+
+  const hour24 =
+    Number(
+      match[1]
+    )
+
+
+  const hour12 =
+    hour24 %
+      12 ||
+    12
+
+
+  return (
+    `${hour12}:${match[2]} ` +
+    (
+      hour24 >=
+        12
+        ? 'PM'
+        : 'AM'
+    )
+  )
+}
+
+
+function formatTorontoFirePublicUnits(
+  value
+) {
+  const groups =
+    new Map()
+
+
+  String(
+    value ||
+    ''
+  )
+    .split(
+      /\s*,\s*/
+    )
+    .map(
+      (code) =>
+        String(
+          code ||
+          ''
+        )
+          .trim()
+    )
+    .filter(
+      Boolean
+    )
+    .forEach(
+      (
+        code,
+        index
+      ) => {
+        const match =
+          TORONTO_FIRE_PUBLIC_UNIT_LABELS.find(
+            ([
+              prefix,
+            ]) =>
+              code
+                .toLowerCase()
+                .startsWith(
+                  prefix.toLowerCase()
+                )
+          )
+
+
+        const label =
+          match?.[1] ||
+          'Other unit'
+
+
+        const pluralLabel =
+          match?.[2] ||
+          'Other units'
+
+
+        const existing =
+          groups.get(
+            label
+          )
+
+
+        if (
+          existing
+        ) {
+          existing.count +=
+            1
+
+          return
+        }
+
+
+        groups.set(
+          label,
+          {
+            count:
+              1,
+
+            label,
+
+            pluralLabel,
+
+            firstIndex:
+              index,
+          }
+        )
+      }
+    )
+
+
+  return Array.from(
+    groups.values()
+  )
+    .sort(
+      (
+        a,
+        b
+      ) =>
+        b.count -
+          a.count ||
+        a.firstIndex -
+          b.firstIndex
+    )
+    .map(
+      (group) =>
+        `${group.count} ` +
+        (
+          group.count ===
+            1
+            ? group.label
+            : group.pluralLabel
+        )
+    )
+    .join(
+      ', '
+    )
+}
+
+
+function getTorontoFirePublicDescription(
+  pin
+) {
+  const description =
+    String(
+      pin?.description ||
+      ''
+    )
+      .trim()
+
+
+  if (
+    !description ||
+    !isTorontoFirePin(
+      pin
+    )
+  ) {
+    return description
+  }
+
+
+  const normalizedDescription =
+    description.replace(
+      /,\s*Units?\s+dispatched\s+/gi,
+      ' · Units '
+    )
+
+
+  let translatedAny =
+    false
+
+
+  const translated =
+    normalizedDescription
+      .split(
+        /\s*·\s*/
+      )
+      .map(
+        (part) =>
+          part.trim()
+      )
+      .filter(
+        Boolean
+      )
+      .map(
+        (part) => {
+          const dispatchMatch =
+            part.match(
+              /^Dispatch\s+(.+)$/i
+            )
+
+
+          if (
+            dispatchMatch
+          ) {
+            translatedAny =
+              true
+
+            return (
+              'Dispatched ' +
+              formatTorontoFirePublicClock(
+                dispatchMatch[1]
+              )
+            )
+          }
+
+
+          const alarmMatch =
+            part.match(
+              /^Alarm\s+(\d+)$/i
+            )
+
+
+          if (
+            alarmMatch
+          ) {
+            translatedAny =
+              true
+
+            const level =
+              Number(
+                alarmMatch[1]
+              )
+
+            const label =
+              TORONTO_FIRE_PUBLIC_ALARM_LABELS[
+                level
+              ]
+
+            return (
+              label
+                ? `Alarm ${level} — ${label}`
+                : `Alarm ${level}`
+            )
+          }
+
+
+          const areaMatch =
+            part.match(
+              /^Area\s+(.+)$/i
+            )
+
+
+          if (
+            areaMatch
+          ) {
+            translatedAny =
+              true
+
+            return (
+              'Nearest fire station ' +
+              areaMatch[1]
+            )
+          }
+
+
+          const unitsMatch =
+            part.match(
+              /^Units?\s+(?:dispatched\s+)?(.+)$/i
+            )
+
+
+          if (
+            unitsMatch
+          ) {
+            const unitsLabel =
+              formatTorontoFirePublicUnits(
+                unitsMatch[1]
+              )
+
+
+            if (
+              unitsLabel
+            ) {
+              translatedAny =
+                true
+
+              return (
+                'Units: ' +
+                unitsLabel
+              )
+            }
+          }
+
+
+          return part
+        }
+      )
+
+
+  return (
+    translatedAny
+      ? translated.join(
+          ' · '
+        )
+      : description
+  )
+}
+
+
 function isTtcPin(
   pin
 ) {
@@ -5602,7 +5974,15 @@ function createMarker({
         'geographic-pin-description',
 
       text:
-        pin.description,
+        pinType ===
+          'news' &&
+        isTorontoFirePin(
+          pin
+        )
+          ? getTorontoFirePublicDescription(
+              pin
+            )
+          : pin.description,
     })
 
 

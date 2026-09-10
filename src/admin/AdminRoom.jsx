@@ -2706,101 +2706,121 @@ const TORONTO_FIRE_UNIT_LABELS = [
   [
     'CMD',
     'Command Vehicle',
+    'Command Vehicles',
   ],
 
   [
     'TRS',
     'Trench Rescue Support',
+    'Trench Rescue Support units',
   ],
 
   [
     'Box',
     'Canteen Vehicle',
+    'Canteen Vehicles',
   ],
 
   [
     'Sup',
     'Canteen Vehicle',
+    'Canteen Vehicles',
   ],
 
   [
     'HR',
     'Highrise',
+    'Highrise units',
   ],
 
   [
     'HZ',
     'HazMat',
+    'HazMat units',
   ],
 
   [
     'FB',
     'Fireboat',
+    'Fireboats',
   ],
 
   [
     'LA',
     'Air Light',
+    'Air Light units',
   ],
 
   [
     'WT',
     'Water Tanker',
+    'Water Tankers',
   ],
 
   [
     'HS',
     'Haz Support',
+    'Haz Support units',
   ],
 
   [
     'DE',
     'Decon',
+    'Decon units',
   ],
 
   [
     'MP',
     'Mini Pumper',
+    'Mini Pumpers',
   ],
 
   [
     'FI',
     'Fire Investigator',
+    'Fire Investigators',
   ],
 
   [
     'PL',
     'Platform',
+    'Platforms',
   ],
 
   [
     'P',
     'Pumper',
+    'Pumpers',
   ],
 
   [
     'R',
     'Rescue',
+    'Rescue units',
   ],
 
   [
     'A',
     'Aerial',
+    'Aerials',
   ],
 
   [
     'T',
     'Tower',
+    'Towers',
   ],
 
   [
     'S',
     'Squad',
+    'Squads',
   ],
 
   [
     'C',
     'Chief',
+    'Chiefs',
   ],
 ]
 
@@ -2823,12 +2843,12 @@ function formatTorontoFireDispatchClock(
   }
 
 
-  // Toronto Fire's CAD timestamp is a Toronto wall-clock value with
-  // no timezone suffix. Read those clock components directly so the
-  // browser does not shift the time by the UTC offset.
+  // Toronto Fire dispatch timestamps are Toronto wall-clock values.
+  // Accept both the ISO-like form and the comma-separated form used
+  // by the live CAD description without letting the browser shift it.
   const localCadMatch =
     text.match(
-      /^\d{4}-\d{2}-\d{2}T(\d{2}):(\d{2})(?::\d{2})?$/
+      /^\d{4}-\d{2}-\d{2}(?:T|,\s*)(\d{1,2}):(\d{2})(?::\d{2})?$/
     )
 
 
@@ -2899,7 +2919,7 @@ function formatTorontoFireDispatchClock(
 }
 
 
-function translateTorontoFireUnit(
+function getTorontoFireUnitInfo(
   value
 ) {
   const code =
@@ -2913,7 +2933,7 @@ function translateTorontoFireUnit(
   if (
     !code
   ) {
-    return ''
+    return null
   }
 
 
@@ -2933,34 +2953,220 @@ function translateTorontoFireUnit(
   if (
     !unitMatch
   ) {
-    return code
+    return {
+      code,
+
+      label:
+        'Unit',
+
+      pluralLabel:
+        'Units',
+
+      unitNumber:
+        code,
+    }
   }
 
 
   const [
     prefix,
     label,
+    pluralLabel,
   ] =
     unitMatch
 
 
-  const unitNumber =
-    code
-      .slice(
-        prefix.length
-      )
-      .trim()
+  return {
+    code,
+
+    label,
+
+    pluralLabel:
+      pluralLabel ||
+      `${label}s`,
+
+    unitNumber:
+      code
+        .slice(
+          prefix.length
+        )
+        .trim(),
+  }
+}
+
+
+function translateTorontoFireUnit(
+  value
+) {
+  const info =
+    getTorontoFireUnitInfo(
+      value
+    )
+
+
+  if (
+    !info
+  ) {
+    return ''
+  }
 
 
   return (
-    unitNumber
+    info.unitNumber
       ? (
-          `${label} ${unitNumber}` +
-          ` (${code})`
+          `${info.label} ` +
+          info.unitNumber
         )
-      : (
-          `${label} (${code})`
+      : info.label
+  )
+}
+
+
+function formatTorontoFireUnits(
+  value
+) {
+  const units =
+    String(
+      value ||
+      ''
+    )
+      .split(
+        /\s*,\s*/
+      )
+      .map(
+        getTorontoFireUnitInfo
+      )
+      .filter(
+        Boolean
+      )
+
+
+  if (
+    units.length ===
+      0
+  ) {
+    return ''
+  }
+
+
+  const groups =
+    new Map()
+
+
+  units.forEach(
+    (
+      unit,
+      index
+    ) => {
+      const key =
+        unit.label
+
+
+      const existing =
+        groups.get(
+          key
         )
+
+
+      if (
+        existing
+      ) {
+        existing.count +=
+          1
+
+        return
+      }
+
+
+      groups.set(
+        key,
+        {
+          count:
+            1,
+
+          label:
+            unit.label,
+
+          pluralLabel:
+            unit.pluralLabel,
+
+          firstIndex:
+            index,
+        }
+      )
+    }
+  )
+
+
+  const summary =
+    Array.from(
+      groups.values()
+    )
+      .sort(
+        (
+          a,
+          b
+        ) =>
+          b.count -
+            a.count ||
+          a.firstIndex -
+            b.firstIndex
+      )
+      .map(
+        (
+          group
+        ) =>
+          (
+            `${group.count} ` +
+            (
+              group.count ===
+                1
+                ? group.label
+                : group.pluralLabel
+            )
+          )
+      )
+      .join(
+        ', '
+      )
+
+
+  const details =
+    units
+      .map(
+        (
+          unit
+        ) =>
+          translateTorontoFireUnit(
+            unit.code
+          )
+      )
+      .filter(
+        Boolean
+      )
+      .join(
+        ', '
+      )
+
+
+  return (
+    `${units.length} ` +
+    (
+      units.length ===
+        1
+        ? 'unit responding'
+        : 'units responding'
+    ) +
+    (
+      summary
+        ? `: ${summary}`
+        : ''
+    ) +
+    (
+      details
+        ? ` · ${details}`
+        : ''
+    )
   )
 }
 
@@ -2987,8 +3193,21 @@ function getAdminDisplayDescription(
   }
 
 
+  // Some Toronto Fire records combine the dispatch timestamp and
+  // unit list into one comma-separated segment:
+  //
+  // Dispatch 2026-09-10, 8:40:44, Units dispatched C33, HZ145...
+  //
+  // Split that display-only representation before translating it.
+  const normalizedDescription =
+    description.replace(
+      /,\s*Units?\s+dispatched\s+/gi,
+      ' · Units '
+    )
+
+
   const parts =
-    description
+    normalizedDescription
       .split(
         /\s*·\s*/
       )
@@ -3096,41 +3315,28 @@ function getAdminDisplayDescription(
 
         const unitsMatch =
           part.match(
-            /^Units?\s+(.+)$/i
+            /^Units?\s+(?:dispatched\s+)?(.+)$/i
           )
 
 
         if (
           unitsMatch
         ) {
-          translatedAny =
-            true
+          const unitsLabel =
+            formatTorontoFireUnits(
+              unitsMatch[1]
+            )
 
 
-          const units =
-            unitsMatch[1]
-              .split(
-                /\s*,\s*/
-              )
-              .map(
-                translateTorontoFireUnit
-              )
-              .filter(
-                Boolean
-              )
+          if (
+            unitsLabel
+          ) {
+            translatedAny =
+              true
 
 
-          return (
-            units.length >
-              0
-              ? (
-                  'Units: ' +
-                  units.join(
-                    ', '
-                  )
-                )
-              : part
-          )
+            return unitsLabel
+          }
         }
 
 
