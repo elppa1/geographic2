@@ -2843,9 +2843,9 @@ function formatTorontoFireDispatchClock(
   }
 
 
-  // Toronto Fire dispatch timestamps are Toronto wall-clock values.
-  // Accept both the ISO-like form and the comma-separated form used
-  // by the live CAD description without letting the browser shift it.
+  // Toronto Fire CAD timestamps are Toronto wall-clock values.
+  // Accept both the ISO-like form and the comma-separated live-feed form
+  // without letting the browser shift the time by the UTC offset.
   const localCadMatch =
     text.match(
       /^\d{4}-\d{2}-\d{2}(?:T|,\s*)(\d{1,2}):(\d{2})(?::\d{2})?$/
@@ -2919,7 +2919,7 @@ function formatTorontoFireDispatchClock(
 }
 
 
-function getTorontoFireUnitInfo(
+function getTorontoFireUnitType(
   value
 ) {
   const code =
@@ -2954,71 +2954,23 @@ function getTorontoFireUnitInfo(
     !unitMatch
   ) {
     return {
-      code,
-
       label:
-        'Unit',
+        'Other unit',
 
       pluralLabel:
-        'Units',
-
-      unitNumber:
-        code,
+        'Other units',
     }
   }
 
 
-  const [
-    prefix,
-    label,
-    pluralLabel,
-  ] =
-    unitMatch
-
-
   return {
-    code,
-
-    label,
+    label:
+      unitMatch[1],
 
     pluralLabel:
-      pluralLabel ||
-      `${label}s`,
-
-    unitNumber:
-      code
-        .slice(
-          prefix.length
-        )
-        .trim(),
+      unitMatch[2] ||
+      `${unitMatch[1]}s`,
   }
-}
-
-
-function translateTorontoFireUnit(
-  value
-) {
-  const info =
-    getTorontoFireUnitInfo(
-      value
-    )
-
-
-  if (
-    !info
-  ) {
-    return ''
-  }
-
-
-  return (
-    info.unitNumber
-      ? (
-          `${info.label} ` +
-          info.unitNumber
-        )
-      : info.label
-  )
 }
 
 
@@ -3034,7 +2986,7 @@ function formatTorontoFireUnits(
         /\s*,\s*/
       )
       .map(
-        getTorontoFireUnitInfo
+        getTorontoFireUnitType
       )
       .filter(
         Boolean
@@ -3058,13 +3010,9 @@ function formatTorontoFireUnits(
       unit,
       index
     ) => {
-      const key =
-        unit.label
-
-
       const existing =
         groups.get(
-          key
+          unit.label
         )
 
 
@@ -3079,7 +3027,7 @@ function formatTorontoFireUnits(
 
 
       groups.set(
-        key,
+        unit.label,
         {
           count:
             1,
@@ -3098,76 +3046,36 @@ function formatTorontoFireUnits(
   )
 
 
-  const summary =
-    Array.from(
-      groups.values()
-    )
-      .sort(
-        (
-          a,
-          b
-        ) =>
-          b.count -
-            a.count ||
-          a.firstIndex -
-            b.firstIndex
-      )
-      .map(
-        (
-          group
-        ) =>
-          (
-            `${group.count} ` +
-            (
-              group.count ===
-                1
-                ? group.label
-                : group.pluralLabel
-            )
-          )
-      )
-      .join(
-        ', '
-      )
-
-
-  const details =
-    units
-      .map(
-        (
-          unit
-        ) =>
-          translateTorontoFireUnit(
-            unit.code
-          )
-      )
-      .filter(
-        Boolean
-      )
-      .join(
-        ', '
-      )
-
-
-  return (
-    `${units.length} ` +
-    (
-      units.length ===
-        1
-        ? 'unit responding'
-        : 'units responding'
-    ) +
-    (
-      summary
-        ? `: ${summary}`
-        : ''
-    ) +
-    (
-      details
-        ? ` · ${details}`
-        : ''
-    )
+  return Array.from(
+    groups.values()
   )
+    .sort(
+      (
+        a,
+        b
+      ) =>
+        b.count -
+          a.count ||
+        a.firstIndex -
+          b.firstIndex
+    )
+    .map(
+      (
+        group
+      ) =>
+        (
+          `${group.count} ` +
+          (
+            group.count ===
+              1
+              ? group.label
+              : group.pluralLabel
+          )
+        )
+    )
+    .join(
+      ', '
+    )
 }
 
 
@@ -3193,12 +3101,8 @@ function getAdminDisplayDescription(
   }
 
 
-  // Some Toronto Fire records combine the dispatch timestamp and
-  // unit list into one comma-separated segment:
-  //
-  // Dispatch 2026-09-10, 8:40:44, Units dispatched C33, HZ145...
-  //
-  // Split that display-only representation before translating it.
+  // Some Fire records arrive with the dispatch time and unit list in the
+  // same comma-separated chunk. Normalize that display copy only.
   const normalizedDescription =
     description.replace(
       /,\s*Units?\s+dispatched\s+/gi,
@@ -3335,7 +3239,10 @@ function getAdminDisplayDescription(
               true
 
 
-            return unitsLabel
+            return (
+              'Units: ' +
+              unitsLabel
+            )
           }
         }
 
@@ -12539,16 +12446,33 @@ function AdminRoom() {
           )
 
 
+    // NEWS editors always start from the same description shown on the
+    // NEWSROOM card. For non-Fire records this helper returns the original
+    // description unchanged; for Fire it removes CAD apparatus numbers and
+    // converts unit codes into readable vehicle counts.
+    const editableRecord = {
+      ...normalizedRecord,
+
+      description:
+        tab ===
+          'news'
+          ? getAdminDisplayDescription(
+              normalizedRecord
+            )
+          : normalizedRecord.description,
+    }
+
+
     if (
       tab ===
         'historic' &&
       Array.isArray(
-        normalizedRecord.issueIds
+        editableRecord.issueIds
       ) &&
-      normalizedRecord.issueIds[0]
+      editableRecord.issueIds[0]
     ) {
       setSelectedHistoricIssueId(
-        normalizedRecord.issueIds[0]
+        editableRecord.issueIds[0]
       )
     }
 
@@ -12559,7 +12483,7 @@ function AdminRoom() {
         cityKey
       ),
 
-      ...normalizedRecord,
+      ...editableRecord,
 
       city:
         cityKey,
@@ -12589,15 +12513,36 @@ function AdminRoom() {
     )
 
 
+    const normalizedRecord =
+      normalizePinRecord(
+        record
+      )
+
+
+    // NEWS editors always start from the same description shown on the
+    // NEWSROOM card. For non-Fire records this helper returns the original
+    // description unchanged; for Fire it removes CAD apparatus numbers and
+    // converts unit codes into readable vehicle counts.
+    const editableRecord = {
+      ...normalizedRecord,
+
+      description:
+        tab ===
+          'news'
+          ? getAdminDisplayDescription(
+              normalizedRecord
+            )
+          : normalizedRecord.description,
+    }
+
+
     setDraft({
       ...makeDraft(
         tab,
         cityKey
       ),
 
-      ...normalizePinRecord(
-        record
-      ),
+      ...editableRecord,
 
       id:
         '',
