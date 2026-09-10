@@ -3252,6 +3252,405 @@ function isTtcPin(
 }
 
 
+// ============================================================
+// TTC ROUTE
+// ============================================================
+
+function getTtcRouteStops(
+  pin
+) {
+  const source =
+    Array.isArray(
+      pin?.ttcRouteStops
+    )
+      ? pin.ttcRouteStops
+      : []
+
+
+  return source
+    .map(
+      (
+        stop
+      ) => {
+        const longitude =
+          Number(
+            stop?.longitude
+          )
+
+
+        const latitude =
+          Number(
+            stop?.latitude
+          )
+
+
+        if (
+          !Number.isFinite(
+            longitude
+          ) ||
+          !Number.isFinite(
+            latitude
+          )
+        ) {
+          return null
+        }
+
+
+        return {
+          id:
+            String(
+              stop?.id ||
+              ''
+            ),
+
+          label:
+            String(
+              stop?.label ||
+              stop?.name ||
+              ''
+            )
+              .trim(),
+
+          longitude,
+
+          latitude,
+        }
+      }
+    )
+    .filter(
+      Boolean
+    )
+}
+
+
+function isTtcRoutePin(
+  pin
+) {
+  return (
+    isTtcPin(
+      pin
+    ) &&
+    pin?.active !==
+      false &&
+    (
+      pin?.ttcRouteEnabled ===
+        true ||
+      getTtcRouteStops(
+        pin
+      ).length >=
+        2
+    ) &&
+    getTtcRouteStops(
+      pin
+    ).length >=
+      2
+  )
+}
+
+
+function safeTtcRouteKey(
+  pin,
+  index
+) {
+  const raw =
+    String(
+      pin?.id ||
+      pin?.externalId ||
+      `route-${index}`
+    )
+
+
+  return raw
+    .replace(
+      /[^a-zA-Z0-9_-]+/g,
+      '-'
+    )
+    .slice(
+      0,
+      80
+    ) ||
+    `route-${index}`
+}
+
+
+function removeTtcRouteArtifact({
+  map,
+  artifact,
+}) {
+  if (
+    !map ||
+    !artifact
+  ) {
+    return
+  }
+
+
+  if (
+    artifact.timerId
+  ) {
+    window.clearInterval(
+      artifact.timerId
+    )
+  }
+
+
+  if (
+    map.getLayer(
+      artifact.pulseLayerId
+    )
+  ) {
+    map.removeLayer(
+      artifact.pulseLayerId
+    )
+  }
+
+
+  if (
+    map.getLayer(
+      artifact.baseLayerId
+    )
+  ) {
+    map.removeLayer(
+      artifact.baseLayerId
+    )
+  }
+
+
+  if (
+    map.getSource(
+      artifact.sourceId
+    )
+  ) {
+    map.removeSource(
+      artifact.sourceId
+    )
+  }
+}
+
+
+function addTtcRouteToMap({
+  map,
+  pin,
+  index,
+}) {
+  const stops =
+    getTtcRouteStops(
+      pin
+    )
+
+
+  if (
+    !map ||
+    stops.length <
+      2
+  ) {
+    return null
+  }
+
+
+  const key =
+    safeTtcRouteKey(
+      pin,
+      index
+    )
+
+
+  const sourceId =
+    `geographic-ttc-route-source-${key}`
+
+
+  const baseLayerId =
+    `geographic-ttc-route-base-${key}`
+
+
+  const pulseLayerId =
+    `geographic-ttc-route-pulse-${key}`
+
+
+  const existingArtifact = {
+    sourceId,
+    baseLayerId,
+    pulseLayerId,
+    timerId:
+      null,
+  }
+
+
+  removeTtcRouteArtifact({
+    map,
+    artifact:
+      existingArtifact,
+  })
+
+
+  if (
+    !map.isStyleLoaded()
+  ) {
+    return null
+  }
+
+
+  map.addSource(
+    sourceId,
+    {
+      type:
+        'geojson',
+
+      data: {
+        type:
+          'Feature',
+
+        properties:
+          {},
+
+        geometry: {
+          type:
+            'LineString',
+
+          coordinates:
+            stops.map(
+              (
+                stop
+              ) => [
+                stop.longitude,
+                stop.latitude,
+              ]
+            ),
+        },
+      },
+    }
+  )
+
+
+  map.addLayer({
+    id:
+      baseLayerId,
+
+    type:
+      'line',
+
+    source:
+      sourceId,
+
+    layout: {
+      'line-cap':
+        'round',
+
+      'line-join':
+        'round',
+    },
+
+    paint: {
+      'line-color':
+        'rgba(18, 18, 18, 0.92)',
+
+      'line-width':
+        7,
+
+      'line-opacity':
+        0.42,
+    },
+  })
+
+
+  map.addLayer({
+    id:
+      pulseLayerId,
+
+    type:
+      'line',
+
+    source:
+      sourceId,
+
+    layout: {
+      'line-cap':
+        'round',
+
+      'line-join':
+        'round',
+    },
+
+    paint: {
+      'line-color':
+        'rgba(225, 170, 45, 0.98)',
+
+      'line-width':
+        4,
+
+      'line-opacity':
+        1,
+    },
+  })
+
+
+  const reducedMotion =
+    typeof window !==
+      'undefined' &&
+    window.matchMedia(
+      '(prefers-reduced-motion: reduce)'
+    )
+      .matches
+
+
+  let timerId =
+    null
+
+
+  if (
+    !reducedMotion
+  ) {
+    let bright =
+      true
+
+
+    timerId =
+      window.setInterval(
+        () => {
+          if (
+            !map.getLayer(
+              pulseLayerId
+            )
+          ) {
+            return
+          }
+
+
+          bright =
+            !bright
+
+
+          map.setPaintProperty(
+            pulseLayerId,
+            'line-opacity',
+            bright
+              ? 1
+              : 0.24
+          )
+
+
+          map.setPaintProperty(
+            pulseLayerId,
+            'line-width',
+            bright
+              ? 4.8
+              : 3.2
+          )
+        },
+        650
+      )
+  }
+
+
+  return {
+    sourceId,
+    baseLayerId,
+    pulseLayerId,
+    timerId,
+  }
+}
+
+
 function getNewsEmoji(
   pin
 ) {
@@ -6460,6 +6859,12 @@ function MapPins({
       new Map()
     )
 
+
+  const ttcRouteArtifactsRef =
+    useRef(
+      []
+    )
+
   const [
     contentRevision,
     setContentRevision,
@@ -6926,6 +7331,23 @@ function MapPins({
     markersRef.current =
       []
 
+
+    ttcRouteArtifactsRef.current.forEach(
+      (
+        artifact
+      ) => {
+        removeTtcRouteArtifact({
+          map,
+          artifact,
+        })
+      }
+    )
+
+
+    ttcRouteArtifactsRef.current =
+      []
+
+
     markerByIdRef.current =
       new Map()
 
@@ -7166,7 +7588,137 @@ function MapPins({
         pin,
         pinType,
         markerOffset,
-      }) => {
+      },
+      visibleIndex
+      ) => {
+        if (
+          pinType ===
+            'news' &&
+          isTtcRoutePin(
+            pin
+          )
+        ) {
+          const routeStops =
+            getTtcRouteStops(
+              pin
+            )
+
+
+          const routeArtifact =
+            addTtcRouteToMap({
+              map,
+              pin,
+              index:
+                visibleIndex,
+            })
+
+
+          if (
+            routeArtifact
+          ) {
+            ttcRouteArtifactsRef.current.push(
+              routeArtifact
+            )
+          }
+
+
+          const endpoints = [
+            {
+              ...pin,
+
+              longitude:
+                routeStops[0].longitude,
+
+              latitude:
+                routeStops[0].latitude,
+
+              location:
+                routeStops[0].label ||
+                pin.location,
+
+              ttcRouteEndpoint:
+                'start',
+            },
+            {
+              ...pin,
+
+              longitude:
+                routeStops[
+                  routeStops.length -
+                  1
+                ].longitude,
+
+              latitude:
+                routeStops[
+                  routeStops.length -
+                  1
+                ].latitude,
+
+              location:
+                routeStops[
+                  routeStops.length -
+                  1
+                ].label ||
+                pin.location,
+
+              ttcRouteEndpoint:
+                'end',
+            },
+          ]
+
+
+          endpoints.forEach(
+            (
+              endpointPin,
+              endpointIndex
+            ) => {
+              const marker =
+                createMarker({
+                  map,
+                  pin:
+                    endpointPin,
+                  pinType,
+                  markerOffset:
+                    [0, 0],
+                  city,
+                  selectedLayer,
+                  homeLayer,
+                  historicIssueFilter,
+                  onDirections,
+                  onSeeItThen,
+                  onReturnToHistoricIssueHome,
+                })
+
+
+              if (
+                !marker
+              ) {
+                return
+              }
+
+
+              markersRef.current.push(
+                marker
+              )
+
+
+              if (
+                endpointIndex ===
+                  0
+              ) {
+                markerByIdRef.current.set(
+                  pin.id,
+                  marker
+                )
+              }
+            }
+          )
+
+
+          return
+        }
+
+
         const marker =
           createMarker({
             map,
@@ -7208,6 +7760,23 @@ function MapPins({
 
       markersRef.current =
         []
+
+
+      ttcRouteArtifactsRef.current.forEach(
+        (
+          artifact
+        ) => {
+          removeTtcRouteArtifact({
+            map,
+            artifact,
+          })
+        }
+      )
+
+
+      ttcRouteArtifactsRef.current =
+        []
+
 
       markerByIdRef.current =
         new Map()

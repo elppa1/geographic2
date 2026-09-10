@@ -973,6 +973,12 @@ const EMPTY_NEWS = {
 
   expiresAt:
     '',
+
+  ttcRouteEnabled:
+    false,
+
+  ttcRouteStops:
+    [],
 }
 
 
@@ -4493,6 +4499,78 @@ function normalizeSourceUrl(
 
 
 // ============================================================
+// TTC ROUTE STOPS
+// ============================================================
+
+function normalizeTtcRouteStops(
+  value
+) {
+  const source =
+    Array.isArray(
+      value
+    )
+      ? value
+      : []
+
+
+  return source
+    .map(
+      (
+        stop,
+        index
+      ) => {
+        const longitude =
+          Number(
+            stop?.longitude
+          )
+
+
+        const latitude =
+          Number(
+            stop?.latitude
+          )
+
+
+        if (
+          !Number.isFinite(
+            longitude
+          ) ||
+          !Number.isFinite(
+            latitude
+          )
+        ) {
+          return null
+        }
+
+
+        return {
+          id:
+            String(
+              stop?.id ||
+              `ttc-route-stop-${index + 1}`
+            ),
+
+          label:
+            String(
+              stop?.label ||
+              stop?.name ||
+              ''
+            )
+              .trim(),
+
+          longitude,
+
+          latitude,
+        }
+      }
+    )
+    .filter(
+      Boolean
+    )
+}
+
+
+// ============================================================
 // NORMALIZE PIN
 // ============================================================
 
@@ -4530,6 +4608,19 @@ function normalizePinRecord(
       record.searchedLatitude ??
       record.latitude ??
       null,
+
+    ttcRouteEnabled:
+      record.ttcRouteEnabled ===
+        true ||
+      normalizeTtcRouteStops(
+        record.ttcRouteStops
+      ).length >
+        0,
+
+    ttcRouteStops:
+      normalizeTtcRouteStops(
+        record.ttcRouteStops
+      ),
   }
 }
 
@@ -10747,6 +10838,295 @@ function AdminRoom() {
 
 
   // ==========================================================
+  // TTC ROUTE EDITOR
+  // ==========================================================
+
+  function enableTtcRoute() {
+    setDraft(
+      (
+        current
+      ) => {
+        const existingStops =
+          normalizeTtcRouteStops(
+            current.ttcRouteStops
+          )
+
+
+        const canSeedFromPin =
+          existingStops.length ===
+            0 &&
+          hasRecordCoordinates(
+            current
+          )
+
+
+        const seededStops =
+          canSeedFromPin
+            ? [
+                {
+                  id:
+                    'ttc-route-stop-1',
+
+                  label:
+                    String(
+                      current.intersection ||
+                      current.location ||
+                      ''
+                    )
+                      .trim(),
+
+                  longitude:
+                    Number(
+                      current.longitude
+                    ),
+
+                  latitude:
+                    Number(
+                      current.latitude
+                    ),
+                },
+              ]
+            : existingStops
+
+
+        return {
+          ...current,
+
+          category:
+            'ttc',
+
+          source:
+            current.source ||
+            'TTC',
+
+          ttcRouteEnabled:
+            true,
+
+          ttcRouteStops:
+            seededStops,
+
+          pinPositionMode:
+            'custom',
+        }
+      }
+    )
+  }
+
+
+  function clearTtcRoute() {
+    setDraft(
+      (
+        current
+      ) => ({
+        ...current,
+
+        ttcRouteEnabled:
+          false,
+
+        ttcRouteStops:
+          [],
+
+        longitude:
+          null,
+
+        latitude:
+          null,
+
+        searchedLongitude:
+          null,
+
+        searchedLatitude:
+          null,
+
+        pinPositionMode:
+          'auto',
+      })
+    )
+  }
+
+
+  function changeTtcRouteStops(
+    nextStops
+  ) {
+    const normalized =
+      normalizeTtcRouteStops(
+        nextStops
+      )
+
+
+    const firstStop =
+      normalized[0] ||
+      null
+
+
+    setDraft(
+      (
+        current
+      ) => ({
+        ...current,
+
+        category:
+          'ttc',
+
+        source:
+          current.source ||
+          'TTC',
+
+        ttcRouteEnabled:
+          true,
+
+        ttcRouteStops:
+          normalized,
+
+        longitude:
+          firstStop
+            ? firstStop.longitude
+            : null,
+
+        latitude:
+          firstStop
+            ? firstStop.latitude
+            : null,
+
+        searchedLongitude:
+          firstStop
+            ? firstStop.longitude
+            : null,
+
+        searchedLatitude:
+          firstStop
+            ? firstStop.latitude
+            : null,
+
+        pinPositionMode:
+          'custom',
+      })
+    )
+  }
+
+
+  function updateTtcRouteStopLabel(
+    index,
+    label
+  ) {
+    setDraft(
+      (
+        current
+      ) => ({
+        ...current,
+
+        ttcRouteStops:
+          normalizeTtcRouteStops(
+            current.ttcRouteStops
+          )
+            .map(
+              (
+                stop,
+                stopIndex
+              ) =>
+                stopIndex ===
+                  index
+                  ? {
+                      ...stop,
+
+                      label,
+                    }
+                  : stop
+            ),
+      })
+    )
+  }
+
+
+  function removeTtcRouteStop(
+    index
+  ) {
+    const nextStops =
+      normalizeTtcRouteStops(
+        draft.ttcRouteStops
+      )
+        .filter(
+          (
+            _,
+            stopIndex
+          ) =>
+            stopIndex !==
+              index
+        )
+
+
+    changeTtcRouteStops(
+      nextStops
+    )
+  }
+
+
+  function moveTtcRouteStop(
+    index,
+    direction
+  ) {
+    const nextStops =
+      normalizeTtcRouteStops(
+        draft.ttcRouteStops
+      )
+
+
+    const nextIndex =
+      index +
+      direction
+
+
+    if (
+      index <
+        0 ||
+      nextIndex <
+        0 ||
+      nextIndex >=
+        nextStops.length
+    ) {
+      return
+    }
+
+
+    const [
+      moved,
+    ] =
+      nextStops.splice(
+        index,
+        1
+      )
+
+
+    nextStops.splice(
+      nextIndex,
+      0,
+      moved
+    )
+
+
+    changeTtcRouteStops(
+      nextStops
+    )
+  }
+
+
+  function undoLastTtcRouteStop() {
+    const nextStops =
+      normalizeTtcRouteStops(
+        draft.ttcRouteStops
+      )
+
+
+    nextStops.pop()
+
+
+    changeTtcRouteStops(
+      nextStops
+    )
+  }
+
+
+  // ==========================================================
   // LOCATION
   // ==========================================================
 
@@ -11160,6 +11540,114 @@ function AdminRoom() {
 
     if (
       tab ===
+        'news'
+    ) {
+      const routeStops =
+        normalizeTtcRouteStops(
+          record.ttcRouteStops
+        )
+
+
+      const routeEnabled =
+        record.ttcRouteEnabled ===
+          true ||
+        routeStops.length >
+          0
+
+
+      if (
+        routeEnabled
+      ) {
+        const firstStop =
+          routeStops[0] ||
+          null
+
+
+        const lastStop =
+          routeStops[
+            routeStops.length -
+            1
+          ] ||
+          null
+
+
+        record.ttcRouteEnabled =
+          true
+
+
+        record.ttcRouteStops =
+          routeStops
+
+
+        record.category =
+          'ttc'
+
+
+        record.source =
+          record.source ||
+          'TTC'
+
+
+        record.pinPositionMode =
+          'custom'
+
+
+        if (
+          firstStop
+        ) {
+          record.longitude =
+            firstStop.longitude
+
+
+          record.latitude =
+            firstStop.latitude
+
+
+          record.searchedLongitude =
+            firstStop.longitude
+
+
+          record.searchedLatitude =
+            firstStop.latitude
+        }
+
+
+        if (
+          !String(
+            record.location ||
+            ''
+          )
+            .trim() &&
+          firstStop &&
+          lastStop
+        ) {
+          const firstLabel =
+            firstStop.label ||
+            'START'
+
+
+          const lastLabel =
+            lastStop.label ||
+            'END'
+
+
+          record.location =
+            `${firstLabel} → ${lastLabel}`
+        }
+      }
+      else {
+        record.ttcRouteEnabled =
+          false
+
+
+        record.ttcRouteStops =
+          []
+      }
+    }
+
+
+    if (
+      tab ===
         'new'
     ) {
       const subtype =
@@ -11314,6 +11802,32 @@ function AdminRoom() {
       !record
     ) {
       return
+    }
+
+
+    if (
+      tab ===
+        'news' &&
+      record.ttcRouteEnabled ===
+        true
+    ) {
+      const routeStops =
+        normalizeTtcRouteStops(
+          record.ttcRouteStops
+        )
+
+
+      if (
+        routeStops.length <
+          2
+      ) {
+        window.alert(
+          'Add at least two TTC route stops before publishing.'
+        )
+
+
+        return
+      }
     }
 
 
@@ -14432,6 +14946,74 @@ function AdminRoom() {
             </label>
 
 
+            {tab ===
+              'news' && (
+              <div className="admin-field admin-field-wide">
+                <span>
+                  TTC ROUTE
+                </span>
+
+                <div className="admin-pin-position-controls">
+                  {!draft.ttcRouteEnabled && (
+                    <button
+                      type="button"
+                      className="admin-pin-position-button"
+                      onClick={
+                        enableTtcRoute
+                      }
+                    >
+                      MAKE TTC ROUTE
+                    </button>
+                  )}
+
+                  {draft.ttcRouteEnabled && (
+                    <>
+                      <button
+                        type="button"
+                        className="admin-pin-position-button admin-pin-position-button-active"
+                        disabled
+                      >
+                        ROUTE ON
+                      </button>
+
+                      <button
+                        type="button"
+                        className="admin-pin-position-button"
+                        onClick={
+                          undoLastTtcRouteStop
+                        }
+                        disabled={
+                          normalizeTtcRouteStops(
+                            draft.ttcRouteStops
+                          ).length ===
+                            0
+                        }
+                      >
+                        UNDO LAST STOP
+                      </button>
+
+                      <button
+                        type="button"
+                        className="admin-pin-position-button"
+                        onClick={
+                          clearTtcRoute
+                        }
+                      >
+                        CLEAR ROUTE
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {draft.ttcRouteEnabled && (
+                  <div className="admin-pin-position-note">
+                    CLICK THE MAP BELOW TO ADD STOPS IN ORDER. THE PUBLIC MAP WILL SHOW PINS ONLY AT THE FIRST AND LAST STOP.
+                  </div>
+                )}
+              </div>
+            )}
+
+
             <div className="admin-field admin-field-wide">
               <span>
                 LOCATION
@@ -14474,44 +15056,48 @@ function AdminRoom() {
 
             <div className="admin-field admin-field-wide">
               <span>
-                PIN POSITION
+                {draft.ttcRouteEnabled
+                  ? 'TTC ROUTE STOPS'
+                  : 'PIN POSITION'}
               </span>
 
-                <div className="admin-pin-position-controls">
-                  <button
-                    type="button"
-                    className={
-                      draft.pinPositionMode ===
-                      'auto'
-                        ? 'admin-pin-position-button admin-pin-position-button-active'
-                        : 'admin-pin-position-button'
-                    }
-                    onClick={() =>
-                      changePinPositionMode(
+                {!draft.ttcRouteEnabled && (
+                  <div className="admin-pin-position-controls">
+                    <button
+                      type="button"
+                      className={
+                        draft.pinPositionMode ===
                         'auto'
-                      )
-                    }
-                  >
-                    AUTO
-                  </button>
+                          ? 'admin-pin-position-button admin-pin-position-button-active'
+                          : 'admin-pin-position-button'
+                      }
+                      onClick={() =>
+                        changePinPositionMode(
+                          'auto'
+                        )
+                      }
+                    >
+                      AUTO
+                    </button>
 
-                  <button
-                    type="button"
-                    className={
-                      draft.pinPositionMode ===
-                      'custom'
-                        ? 'admin-pin-position-button admin-pin-position-button-active'
-                        : 'admin-pin-position-button'
-                    }
-                    onClick={() =>
-                      changePinPositionMode(
+                    <button
+                      type="button"
+                      className={
+                        draft.pinPositionMode ===
                         'custom'
-                      )
-                    }
-                  >
-                    CUSTOM
-                  </button>
-                </div>
+                          ? 'admin-pin-position-button admin-pin-position-button-active'
+                          : 'admin-pin-position-button'
+                      }
+                      onClick={() =>
+                        changePinPositionMode(
+                          'custom'
+                        )
+                      }
+                    >
+                      CUSTOM
+                    </button>
+                  </div>
+                )}
 
                 <AdminPinMap
                   city={
@@ -14524,28 +15110,203 @@ function AdminRoom() {
                     draft.latitude
                   }
                   draggable={
+                    !draft.ttcRouteEnabled &&
                     draft.pinPositionMode ===
-                    'custom'
+                      'custom'
                   }
                   onChange={
                     changeCustomPinPosition
                   }
+                  routeMode={
+                    draft.ttcRouteEnabled ===
+                      true
+                  }
+                  routeStops={
+                    normalizeTtcRouteStops(
+                      draft.ttcRouteStops
+                    )
+                  }
+                  onRouteStopsChange={
+                    changeTtcRouteStops
+                  }
                 />
 
               <div className="admin-pin-position-note">
-                {draft.pinPositionMode ===
-                'custom'
+                {draft.ttcRouteEnabled
                   ? (
-                      hasPinLocation
-                        ? 'CLICK THE MAP OR DRAG THE PIN TO ITS EXACT LOCATION.'
-                        : 'CLICK THE MAP TO PLACE THE PIN.'
+                      normalizeTtcRouteStops(
+                        draft.ttcRouteStops
+                      ).length >
+                        0
+                        ? (
+                            `${normalizeTtcRouteStops(
+                              draft.ttcRouteStops
+                            ).length} ROUTE STOP` +
+                            (
+                              normalizeTtcRouteStops(
+                                draft.ttcRouteStops
+                              ).length ===
+                                1
+                                ? ''
+                                : 'S'
+                            ) +
+                            ' · CLICK THE MAP TO ADD THE NEXT STOP.'
+                          )
+                        : 'CLICK THE MAP TO ADD THE START STOP.'
                     )
                   : (
-                      hasPinLocation
-                        ? 'USING THE SEARCHED LOCATION.'
-                        : 'SEARCH FOR A LOCATION OR CHOOSE CUSTOM TO PLACE IT YOURSELF.'
+                      draft.pinPositionMode ===
+                      'custom'
+                        ? (
+                            hasPinLocation
+                              ? 'CLICK THE MAP OR DRAG THE PIN TO ITS EXACT LOCATION.'
+                              : 'CLICK THE MAP TO PLACE THE PIN.'
+                          )
+                        : (
+                            hasPinLocation
+                              ? 'USING THE SEARCHED LOCATION.'
+                              : 'SEARCH FOR A LOCATION OR CHOOSE CUSTOM TO PLACE IT YOURSELF.'
+                          )
                     )}
               </div>
+
+              {draft.ttcRouteEnabled && (
+                <div
+                  style={{
+                    display:
+                      'grid',
+
+                    gap:
+                      '6px',
+
+                    marginTop:
+                      '10px',
+                  }}
+                >
+                  {normalizeTtcRouteStops(
+                    draft.ttcRouteStops
+                  ).map(
+                    (
+                      stop,
+                      index,
+                      stops
+                    ) => (
+                      <div
+                        key={
+                          stop.id ||
+                          index
+                        }
+                        style={{
+                          display:
+                            'grid',
+
+                          gridTemplateColumns:
+                            '70px minmax(0, 1fr) auto auto auto',
+
+                          gap:
+                            '5px',
+
+                          alignItems:
+                            'center',
+                        }}
+                      >
+                        <strong
+                          style={{
+                            fontSize:
+                              '8px',
+
+                            letterSpacing:
+                              '0.08em',
+                          }}
+                        >
+                          {index ===
+                            0
+                              ? 'START'
+                              : index ===
+                                  stops.length -
+                                    1
+                                ? 'END'
+                                : `STOP ${index + 1}`}
+                        </strong>
+
+                        <input
+                          value={
+                            stop.label ||
+                            ''
+                          }
+                          onChange={
+                            (event) =>
+                              updateTtcRouteStopLabel(
+                                index,
+                                event.target.value
+                              )
+                          }
+                          placeholder={
+                            index ===
+                              0
+                              ? 'Start stop name'
+                              : index ===
+                                  stops.length -
+                                    1
+                                ? 'End stop name'
+                                : 'Stop name'
+                          }
+                        />
+
+                        <button
+                          type="button"
+                          className="admin-pin-position-button"
+                          onClick={() =>
+                            moveTtcRouteStop(
+                              index,
+                              -1
+                            )
+                          }
+                          disabled={
+                            index ===
+                              0
+                          }
+                          title="Move stop earlier"
+                        >
+                          ↑
+                        </button>
+
+                        <button
+                          type="button"
+                          className="admin-pin-position-button"
+                          onClick={() =>
+                            moveTtcRouteStop(
+                              index,
+                              1
+                            )
+                          }
+                          disabled={
+                            index ===
+                              stops.length -
+                                1
+                          }
+                          title="Move stop later"
+                        >
+                          ↓
+                        </button>
+
+                        <button
+                          type="button"
+                          className="admin-pin-position-button"
+                          onClick={() =>
+                            removeTtcRouteStop(
+                              index
+                            )
+                          }
+                          title="Remove stop"
+                        >
+                          REMOVE
+                        </button>
+                      </div>
+                    )
+                  )}
+                </div>
+              )}
             </div>
 
 

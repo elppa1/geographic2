@@ -11,6 +11,13 @@ import {
 import 'maplibre-gl/dist/maplibre-gl.css'
 
 
+const ROUTE_SOURCE_ID =
+  'admin-ttc-route-source'
+
+const ROUTE_LAYER_ID =
+  'admin-ttc-route-line'
+
+
 function hasCoordinate(
   value
 ) {
@@ -30,6 +37,70 @@ function hasCoordinate(
 }
 
 
+function normalizeRouteStops(
+  value
+) {
+  return (
+    Array.isArray(
+      value
+    )
+      ? value
+      : []
+  )
+    .map(
+      (
+        stop,
+        index
+      ) => {
+        const longitude =
+          Number(
+            stop?.longitude
+          )
+
+
+        const latitude =
+          Number(
+            stop?.latitude
+          )
+
+
+        if (
+          !Number.isFinite(
+            longitude
+          ) ||
+          !Number.isFinite(
+            latitude
+          )
+        ) {
+          return null
+        }
+
+
+        return {
+          id:
+            String(
+              stop?.id ||
+              `ttc-route-stop-${index + 1}`
+            ),
+
+          label:
+            String(
+              stop?.label ||
+              ''
+            ),
+
+          longitude,
+
+          latitude,
+        }
+      }
+    )
+    .filter(
+      Boolean
+    )
+}
+
+
 function AdminPinMap({
   city,
   longitude,
@@ -37,6 +108,11 @@ function AdminPinMap({
   draggable =
     false,
   onChange,
+  routeMode =
+    false,
+  routeStops =
+    [],
+  onRouteStopsChange,
 }) {
   const containerRef =
     useRef(null)
@@ -48,6 +124,10 @@ function AdminPinMap({
 
   const markerRef =
     useRef(null)
+
+
+  const routeMarkersRef =
+    useRef([])
 
 
   // ==========================================================
@@ -160,6 +240,19 @@ function AdminPinMap({
         null
 
 
+      routeMarkersRef.current.forEach(
+        (
+          marker
+        ) => {
+          marker.remove()
+        }
+      )
+
+
+      routeMarkersRef.current =
+        []
+
+
       map.remove()
 
 
@@ -172,7 +265,7 @@ function AdminPinMap({
 
 
   // ==========================================================
-  // CLICK TO PLACE CUSTOM PIN
+  // CLICK TO PLACE PIN / ADD ROUTE STOP
   // ==========================================================
 
   useEffect(() => {
@@ -191,6 +284,41 @@ function AdminPinMap({
       (
         event
       ) => {
+        if (
+          routeMode
+        ) {
+          const currentStops =
+            normalizeRouteStops(
+              routeStops
+            )
+
+
+          const nextIndex =
+            currentStops.length
+
+
+          onRouteStopsChange?.([
+            ...currentStops,
+            {
+              id:
+                `ttc-route-stop-${Date.now()}-${nextIndex + 1}`,
+
+              label:
+                '',
+
+              longitude:
+                event.lngLat.lng,
+
+              latitude:
+                event.lngLat.lat,
+            },
+          ])
+
+
+          return
+        }
+
+
         if (
           !draggable
         ) {
@@ -223,11 +351,14 @@ function AdminPinMap({
   }, [
     draggable,
     onChange,
+    routeMode,
+    routeStops,
+    onRouteStopsChange,
   ])
 
 
   // ==========================================================
-  // MARKER
+  // SINGLE PIN MARKER
   // ==========================================================
 
   useEffect(() => {
@@ -237,6 +368,7 @@ function AdminPinMap({
 
     if (
       !map ||
+      routeMode ||
       !hasCoordinate(
         longitude
       ) ||
@@ -353,7 +485,423 @@ function AdminPinMap({
     latitude,
     draggable,
     onChange,
+    routeMode,
   ])
+
+
+  // ==========================================================
+  // TTC ROUTE PREVIEW
+  // ==========================================================
+
+  useEffect(
+    () => {
+      const map =
+        mapRef.current
+
+
+      if (
+        !map
+      ) {
+        return
+      }
+
+
+      routeMarkersRef.current.forEach(
+        (
+          marker
+        ) => {
+          marker.remove()
+        }
+      )
+
+
+      routeMarkersRef.current =
+        []
+
+
+      const removeRouteLine =
+        () => {
+          if (
+            map.getLayer(
+              ROUTE_LAYER_ID
+            )
+          ) {
+            map.removeLayer(
+              ROUTE_LAYER_ID
+            )
+          }
+
+
+          if (
+            map.getSource(
+              ROUTE_SOURCE_ID
+            )
+          ) {
+            map.removeSource(
+              ROUTE_SOURCE_ID
+            )
+          }
+        }
+
+
+      if (
+        !routeMode
+      ) {
+        removeRouteLine()
+
+
+        return
+      }
+
+
+      markerRef.current?.remove()
+
+
+      markerRef.current =
+        null
+
+
+      const stops =
+        normalizeRouteStops(
+          routeStops
+        )
+
+
+      stops.forEach(
+        (
+          stop,
+          index
+        ) => {
+          const isEndpoint =
+            index ===
+              0 ||
+            index ===
+              stops.length -
+                1
+
+
+          const element =
+            document.createElement(
+              'div'
+            )
+
+
+          element.textContent =
+            String(
+              index +
+              1
+            )
+
+
+          element.style.width =
+            isEndpoint
+              ? '24px'
+              : '17px'
+
+
+          element.style.height =
+            isEndpoint
+              ? '24px'
+              : '17px'
+
+
+          element.style.display =
+            'grid'
+
+
+          element.style.placeItems =
+            'center'
+
+
+          element.style.borderRadius =
+            '50%'
+
+
+          element.style.border =
+            '2px solid #111'
+
+
+          element.style.background =
+            isEndpoint
+              ? '#111'
+              : '#fff'
+
+
+          element.style.color =
+            isEndpoint
+              ? '#fff'
+              : '#111'
+
+
+          element.style.fontSize =
+            isEndpoint
+              ? '9px'
+              : '7px'
+
+
+          element.style.fontWeight =
+            '800'
+
+
+          element.style.lineHeight =
+            '1'
+
+
+          element.style.boxSizing =
+            'border-box'
+
+
+          element.style.cursor =
+            'grab'
+
+
+          const marker =
+            new Marker({
+              element,
+
+              anchor:
+                'center',
+
+              draggable:
+                true,
+            })
+              .setLngLat([
+                stop.longitude,
+                stop.latitude,
+              ])
+              .addTo(
+                map
+              )
+
+
+          marker.on(
+            'dragend',
+            () => {
+              const position =
+                marker.getLngLat()
+
+
+              const nextStops =
+                normalizeRouteStops(
+                  routeStops
+                )
+
+
+              if (
+                !nextStops[
+                  index
+                ]
+              ) {
+                return
+              }
+
+
+              nextStops[
+                index
+              ] = {
+                ...nextStops[
+                  index
+                ],
+
+                longitude:
+                  position.lng,
+
+                latitude:
+                  position.lat,
+              }
+
+
+              onRouteStopsChange?.(
+                nextStops
+              )
+            }
+          )
+
+
+          routeMarkersRef.current.push(
+            marker
+          )
+        }
+      )
+
+
+      const drawRouteLine =
+        () => {
+          removeRouteLine()
+
+
+          if (
+            stops.length <
+              2
+          ) {
+            return
+          }
+
+
+          const data = {
+            type:
+              'Feature',
+
+            properties:
+              {},
+
+            geometry: {
+              type:
+                'LineString',
+
+              coordinates:
+                stops.map(
+                  (
+                    stop
+                  ) => [
+                    stop.longitude,
+                    stop.latitude,
+                  ]
+                ),
+            },
+          }
+
+
+          map.addSource(
+            ROUTE_SOURCE_ID,
+            {
+              type:
+                'geojson',
+
+              data,
+            }
+          )
+
+
+          map.addLayer({
+            id:
+              ROUTE_LAYER_ID,
+
+            type:
+              'line',
+
+            source:
+              ROUTE_SOURCE_ID,
+
+            layout: {
+              'line-cap':
+                'round',
+
+              'line-join':
+                'round',
+            },
+
+            paint: {
+              'line-color':
+                '#111',
+
+              'line-width':
+                4,
+
+              'line-opacity':
+                0.82,
+            },
+          })
+        }
+
+
+      if (
+        map.isStyleLoaded()
+      ) {
+        drawRouteLine()
+      }
+      else {
+        map.once(
+          'load',
+          drawRouteLine
+        )
+      }
+
+
+      if (
+        stops.length >
+          0
+      ) {
+        const longitudes =
+          stops.map(
+            (
+              stop
+            ) =>
+              stop.longitude
+          )
+
+
+        const latitudes =
+          stops.map(
+            (
+              stop
+            ) =>
+              stop.latitude
+          )
+
+
+        map.fitBounds(
+          [
+            [
+              Math.min(
+                ...longitudes
+              ),
+              Math.min(
+                ...latitudes
+              ),
+            ],
+            [
+              Math.max(
+                ...longitudes
+              ),
+              Math.max(
+                ...latitudes
+              ),
+            ],
+          ],
+          {
+            padding:
+              42,
+
+            maxZoom:
+              16,
+
+            duration:
+              350,
+          }
+        )
+      }
+
+
+      return () => {
+        map.off(
+          'load',
+          drawRouteLine
+        )
+
+
+        routeMarkersRef.current.forEach(
+          (
+            marker
+          ) => {
+            marker.remove()
+          }
+        )
+
+
+        routeMarkersRef.current =
+          []
+
+
+        removeRouteLine()
+      }
+    },
+    [
+      routeMode,
+      routeStops,
+      onRouteStopsChange,
+    ]
+  )
 
 
   return (
