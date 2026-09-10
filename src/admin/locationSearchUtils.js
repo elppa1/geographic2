@@ -744,8 +744,49 @@ export async function searchLocation({
   if (
     intersection
   ) {
-    return searchIntersection({
-      intersection,
+    try {
+      const intersectionResults =
+        await searchIntersection({
+          intersection,
+          city,
+          signal,
+        })
+
+
+      if (
+        intersectionResults.length >
+          0
+      ) {
+        return intersectionResults
+      }
+    }
+    catch (
+      error
+    ) {
+      if (
+        error?.name ===
+          'AbortError'
+      ) {
+        throw error
+      }
+
+
+      console.warn(
+        'DIRECT INTERSECTION SEARCH FAILED; FALLING BACK TO PLACE SEARCH:',
+        clean,
+        error
+      )
+    }
+
+
+    // The direct intersection endpoint can occasionally be unavailable
+    // or return no nodes. Do not let that kill Admin location search.
+    // Fall back to the same bounded place/address search used by ordinary
+    // street searches so the editor can keep working.
+    return searchPlaces({
+      query:
+        clean,
+
       city,
       signal,
     })
