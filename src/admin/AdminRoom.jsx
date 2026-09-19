@@ -11,19 +11,15 @@ import {
 import {
   applyNewsItemUpdate,
   createAdminId,
-  getHistoricCategories,
   getHistoricIssues,
   getHistoricItems,
-  getHistoricLayers,
   getNewsItems,
   getNewsReviewItems,
   getNewItems,
   getNewReviewItems,
   markScraperRecordProcessed,
-  saveHistoricCategories,
   saveHistoricIssues,
   saveHistoricItems,
-  saveHistoricLayers,
   saveNewsItems,
   saveNewsReviewItems,
   saveNewItems,
@@ -2136,104 +2132,6 @@ function getNextHistoricIssueNumber({
 }
 
 
-function makeHistoricSlug(
-  value
-) {
-  return String(
-    value ||
-    ''
-  )
-    .trim()
-    .toLowerCase()
-    .replace(
-      /[^a-z0-9]+/g,
-      '-'
-    )
-    .replace(
-      /^-+|-+$/g,
-      ''
-    )
-}
-
-
-function makeHistoricCategoryDraft(
-  cityKey
-) {
-  return {
-    id:
-      '',
-
-    city:
-      cityKey,
-
-    title:
-      '',
-
-    slug:
-      '',
-
-    description:
-      '',
-
-    pinIcon:
-      'map-pin',
-
-    displayOrder:
-      0,
-
-    status:
-      'published',
-
-    createdAt:
-      '',
-
-    updatedAt:
-      '',
-  }
-}
-
-
-function makeHistoricLayerDraft(
-  cityKey,
-  categoryId =
-    ''
-) {
-  return {
-    id:
-      '',
-
-    city:
-      cityKey,
-
-    categoryId,
-
-    title:
-      '',
-
-    slug:
-      '',
-
-    description:
-      '',
-
-    coverImageUrl:
-      '',
-
-    displayOrder:
-      0,
-
-    status:
-      'published',
-
-    createdAt:
-      '',
-
-    updatedAt:
-      '',
-  }
-}
-
-
 const EMPTY_HISTORIC = {
   ...BASE_RECORD,
 
@@ -2242,12 +2140,6 @@ const EMPTY_HISTORIC = {
 
   category:
     'place',
-
-  historicCategoryId:
-    '',
-
-  historicLayerId:
-    '',
 
   issueIds:
     [],
@@ -4907,14 +4799,6 @@ function normalizeHistoricRecord(
       pinRecord.layerOverrideYear ||
       '',
 
-    historicCategoryId:
-      pinRecord.historicCategoryId ||
-      '',
-
-    historicLayerId:
-      pinRecord.historicLayerId ||
-      '',
-
     issueIds:
       Array.isArray(
         pinRecord.issueIds
@@ -5128,78 +5012,6 @@ function AdminRoom() {
 
 
   const [
-    historicCategories,
-    setHistoricCategories,
-  ] =
-    useState(
-      () =>
-        getHistoricCategories()
-    )
-
-
-  const [
-    historicLayers,
-    setHistoricLayers,
-  ] =
-    useState(
-      () =>
-        getHistoricLayers()
-    )
-
-
-  const [
-    selectedHistoricCategoryId,
-    setSelectedHistoricCategoryId,
-  ] =
-    useState('')
-
-
-  const [
-    selectedHistoricLayerId,
-    setSelectedHistoricLayerId,
-  ] =
-    useState('')
-
-
-  const [
-    historicCategoryEditorOpen,
-    setHistoricCategoryEditorOpen,
-  ] =
-    useState(false)
-
-
-  const [
-    historicLayerEditorOpen,
-    setHistoricLayerEditorOpen,
-  ] =
-    useState(false)
-
-
-  const [
-    historicCategoryDraft,
-    setHistoricCategoryDraft,
-  ] =
-    useState(
-      () =>
-        makeHistoricCategoryDraft(
-          initialCityKey
-        )
-    )
-
-
-  const [
-    historicLayerDraft,
-    setHistoricLayerDraft,
-  ] =
-    useState(
-      () =>
-        makeHistoricLayerDraft(
-          initialCityKey
-        )
-    )
-
-
-  const [
     historicIssues,
     setHistoricIssues,
   ] =
@@ -5292,30 +5104,6 @@ function AdminRoom() {
 
   useEffect(
     () => {
-      saveHistoricCategories(
-        historicCategories
-      )
-    },
-    [
-      historicCategories,
-    ]
-  )
-
-
-  useEffect(
-    () => {
-      saveHistoricLayers(
-        historicLayers
-      )
-    },
-    [
-      historicLayers,
-    ]
-  )
-
-
-  useEffect(
-    () => {
       saveHistoricIssues(
         historicIssues
       )
@@ -5382,138 +5170,6 @@ function AdminRoom() {
     )
 
 
-  const cityHistoricCategories =
-    historicCategories
-      .filter(
-        (category) =>
-          belongsToCity(
-            category,
-            cityKey
-          )
-      )
-      .sort(
-        (
-          a,
-          b
-        ) => {
-          const orderDifference =
-            Number(
-              a.displayOrder ||
-              0
-            ) -
-            Number(
-              b.displayOrder ||
-              0
-            )
-
-
-          if (
-            orderDifference !==
-              0
-          ) {
-            return orderDifference
-          }
-
-
-          return String(
-            a.title ||
-            ''
-          )
-            .localeCompare(
-              String(
-                b.title ||
-                ''
-              )
-            )
-        }
-      )
-
-
-  const cityHistoricLayers =
-    historicLayers
-      .filter(
-        (layer) =>
-          belongsToCity(
-            layer,
-            cityKey
-          )
-      )
-      .sort(
-        (
-          a,
-          b
-        ) => {
-          const orderDifference =
-            Number(
-              a.displayOrder ||
-              0
-            ) -
-            Number(
-              b.displayOrder ||
-              0
-            )
-
-
-          if (
-            orderDifference !==
-              0
-          ) {
-            return orderDifference
-          }
-
-
-          return String(
-            a.title ||
-            ''
-          )
-            .localeCompare(
-              String(
-                b.title ||
-                ''
-              )
-            )
-        }
-      )
-
-
-  const selectedHistoricCategory =
-    cityHistoricCategories.find(
-      (category) =>
-        category.id ===
-        selectedHistoricCategoryId
-    ) ||
-    null
-
-
-  const selectedHistoricCategoryLayers =
-    selectedHistoricCategory
-      ? cityHistoricLayers.filter(
-          (layer) =>
-            layer.categoryId ===
-            selectedHistoricCategory.id
-        )
-      : []
-
-
-  const selectedHistoricLayer =
-    cityHistoricLayers.find(
-      (layer) =>
-        layer.id ===
-        selectedHistoricLayerId
-    ) ||
-    null
-
-
-  const selectedHistoricLayerRecords =
-    selectedHistoricLayer
-      ? historicItems.filter(
-          (record) =>
-            record.historicLayerId ===
-            selectedHistoricLayer.id
-        )
-      : []
-
-
   const cityHistoricIssues =
     historicIssues.filter(
       (issue) =>
@@ -5525,16 +5181,13 @@ function AdminRoom() {
 
 
   const selectedHistoricIssue =
-    selectedHistoricIssueId
-      ? (
-          cityHistoricIssues.find(
-            (issue) =>
-              issue.id ===
-              selectedHistoricIssueId
-          ) ||
-          null
-        )
-      : null
+    cityHistoricIssues.find(
+      (issue) =>
+        issue.id ===
+        selectedHistoricIssueId
+    ) ||
+    cityHistoricIssues[0] ||
+    null
 
 
   const selectedHistoricIssueRecords =
@@ -9776,35 +9429,6 @@ function AdminRoom() {
     )
 
 
-    setSelectedHistoricCategoryId(
-      ''
-    )
-
-    setSelectedHistoricLayerId(
-      ''
-    )
-
-    setHistoricCategoryEditorOpen(
-      false
-    )
-
-    setHistoricLayerEditorOpen(
-      false
-    )
-
-    setHistoricCategoryDraft(
-      makeHistoricCategoryDraft(
-        nextCityKey
-      )
-    )
-
-    setHistoricLayerDraft(
-      makeHistoricLayerDraft(
-        nextCityKey
-      )
-    )
-
-
     setEditingId(
       null
     )
@@ -9972,459 +9596,6 @@ function AdminRoom() {
   // ==========================================================
   // HISTORIC ISSUES
   // ==========================================================
-
-  function updateHistoricCategoryDraft(
-    field,
-    value
-  ) {
-    setHistoricCategoryDraft(
-      (
-        current
-      ) => ({
-        ...current,
-
-        [field]:
-          value,
-      })
-    )
-  }
-
-
-  function updateHistoricLayerDraft(
-    field,
-    value
-  ) {
-    setHistoricLayerDraft(
-      (
-        current
-      ) => ({
-        ...current,
-
-        [field]:
-          value,
-      })
-    )
-  }
-
-
-  function startNewHistoricCategory() {
-    setHistoricCategoryDraft(
-      makeHistoricCategoryDraft(
-        cityKey
-      )
-    )
-
-
-    setHistoricCategoryEditorOpen(
-      true
-    )
-  }
-
-
-  function startEditHistoricCategory() {
-    if (
-      !selectedHistoricCategory
-    ) {
-      return
-    }
-
-
-    setHistoricCategoryDraft({
-      ...makeHistoricCategoryDraft(
-        cityKey
-      ),
-
-      ...selectedHistoricCategory,
-
-      city:
-        cityKey,
-    })
-
-
-    setHistoricCategoryEditorOpen(
-      true
-    )
-  }
-
-
-  function cancelHistoricCategoryEdit() {
-    setHistoricCategoryEditorOpen(
-      false
-    )
-
-
-    setHistoricCategoryDraft(
-      makeHistoricCategoryDraft(
-        cityKey
-      )
-    )
-  }
-
-
-  function saveHistoricCategory() {
-    const title =
-      String(
-        historicCategoryDraft.title ||
-        ''
-      )
-        .trim()
-
-
-    if (
-      !title
-    ) {
-      window.alert(
-        'Enter a Historic category name.'
-      )
-
-
-      return
-    }
-
-
-    const now =
-      new Date()
-        .toISOString()
-
-
-    const existing =
-      historicCategoryDraft.id
-        ? historicCategories.find(
-            (category) =>
-              category.id ===
-              historicCategoryDraft.id
-          )
-        : null
-
-
-    const record = {
-      ...historicCategoryDraft,
-
-      id:
-        historicCategoryDraft.id ||
-        createAdminId(
-          'historic-category'
-        ),
-
-      city:
-        cityKey,
-
-      title,
-
-      slug:
-        makeHistoricSlug(
-          historicCategoryDraft.slug ||
-          title
-        ),
-
-      pinIcon:
-        historicCategoryDraft.pinIcon ||
-        'map-pin',
-
-      displayOrder:
-        Number(
-          historicCategoryDraft.displayOrder ||
-          0
-        ),
-
-      status:
-        historicCategoryDraft.status ||
-        'published',
-
-      createdAt:
-        existing?.createdAt ||
-        historicCategoryDraft.createdAt ||
-        now,
-
-      updatedAt:
-        now,
-    }
-
-
-    setHistoricCategories(
-      (
-        current
-      ) =>
-        existing
-          ? current.map(
-              (category) =>
-                category.id ===
-                  record.id
-                  ? record
-                  : category
-            )
-          : [
-              ...current,
-              record,
-            ]
-    )
-
-
-    setSelectedHistoricCategoryId(
-      record.id
-    )
-
-
-    setSelectedHistoricLayerId(
-      ''
-    )
-
-
-    setHistoricCategoryEditorOpen(
-      false
-    )
-  }
-
-
-  function startNewHistoricLayer() {
-    if (
-      !selectedHistoricCategory
-    ) {
-      window.alert(
-        'Create or select a Historic category first.'
-      )
-
-
-      return
-    }
-
-
-    setHistoricLayerDraft(
-      makeHistoricLayerDraft(
-        cityKey,
-        selectedHistoricCategory.id
-      )
-    )
-
-
-    setHistoricLayerEditorOpen(
-      true
-    )
-  }
-
-
-  function startEditHistoricLayer() {
-    if (
-      !selectedHistoricLayer
-    ) {
-      return
-    }
-
-
-    setHistoricLayerDraft({
-      ...makeHistoricLayerDraft(
-        cityKey,
-        selectedHistoricLayer.categoryId
-      ),
-
-      ...selectedHistoricLayer,
-
-      city:
-        cityKey,
-    })
-
-
-    setHistoricLayerEditorOpen(
-      true
-    )
-  }
-
-
-  function cancelHistoricLayerEdit() {
-    setHistoricLayerEditorOpen(
-      false
-    )
-
-
-    setHistoricLayerDraft(
-      makeHistoricLayerDraft(
-        cityKey,
-        selectedHistoricCategory?.id ||
-        ''
-      )
-    )
-  }
-
-
-  function saveHistoricLayer() {
-    const title =
-      String(
-        historicLayerDraft.title ||
-        ''
-      )
-        .trim()
-
-
-    const categoryId =
-      historicLayerDraft.categoryId ||
-      selectedHistoricCategory?.id ||
-      ''
-
-
-    if (
-      !title ||
-      !categoryId
-    ) {
-      window.alert(
-        'Choose a category and enter a Historic layer name.'
-      )
-
-
-      return
-    }
-
-
-    const categoryExists =
-      cityHistoricCategories.some(
-        (category) =>
-          category.id ===
-          categoryId
-      )
-
-
-    if (
-      !categoryExists
-    ) {
-      window.alert(
-        'That Historic category no longer exists.'
-      )
-
-
-      return
-    }
-
-
-    const now =
-      new Date()
-        .toISOString()
-
-
-    const existing =
-      historicLayerDraft.id
-        ? historicLayers.find(
-            (layer) =>
-              layer.id ===
-              historicLayerDraft.id
-          )
-        : null
-
-
-    const record = {
-      ...historicLayerDraft,
-
-      id:
-        historicLayerDraft.id ||
-        createAdminId(
-          'historic-layer'
-        ),
-
-      city:
-        cityKey,
-
-      categoryId,
-
-      title,
-
-      slug:
-        makeHistoricSlug(
-          historicLayerDraft.slug ||
-          title
-        ),
-
-      displayOrder:
-        Number(
-          historicLayerDraft.displayOrder ||
-          0
-        ),
-
-      status:
-        historicLayerDraft.status ||
-        'published',
-
-      createdAt:
-        existing?.createdAt ||
-        historicLayerDraft.createdAt ||
-        now,
-
-      updatedAt:
-        now,
-    }
-
-
-    setHistoricLayers(
-      (
-        current
-      ) =>
-        existing
-          ? current.map(
-              (layer) =>
-                layer.id ===
-                  record.id
-                  ? record
-                  : layer
-            )
-          : [
-              ...current,
-              record,
-            ]
-    )
-
-
-    setSelectedHistoricCategoryId(
-      categoryId
-    )
-
-
-    setSelectedHistoricLayerId(
-      record.id
-    )
-
-
-    setHistoricLayerEditorOpen(
-      false
-    )
-  }
-
-
-  function startHistoricStoryForSelectedLayer() {
-    if (
-      !selectedHistoricCategory ||
-      !selectedHistoricLayer
-    ) {
-      window.alert(
-        'Select a Historic layer first.'
-      )
-
-
-      return
-    }
-
-
-    setEditingId(
-      null
-    )
-
-    setEditingReviewId(
-      null
-    )
-
-    setSelectedHistoricIssueId(
-      ''
-    )
-
-    setDraft({
-      ...makeHistoricDraft(
-        cityKey
-      ),
-
-      historicCategoryId:
-        selectedHistoricCategory.id,
-
-      historicLayerId:
-        selectedHistoricLayer.id,
-    })
-  }
-
 
   function updateHistoricIssueDraft(
     field,
@@ -15293,46 +14464,6 @@ function AdminRoom() {
         false
 
 
-    if (
-      tab ===
-        'historic' &&
-      nextActive &&
-      Array.isArray(
-        target.issueIds
-      ) &&
-      target.issueIds.length >
-        0
-    ) {
-      const hasPublishedIssue =
-        target.issueIds.some(
-          (
-            issueId
-          ) =>
-            historicIssues.some(
-              (
-                issue
-              ) =>
-                issue.id ===
-                  issueId &&
-                issue.status ===
-                  'published'
-            )
-        )
-
-
-      if (
-        !hasPublishedIssue
-      ) {
-        window.alert(
-          'Publish the Historic issue to make this story public.'
-        )
-
-
-        return
-      }
-    }
-
-
     let updatedRecord = {
       ...target,
 
@@ -16955,7 +16086,7 @@ function AdminRoom() {
               <>
                 <div className="admin-field admin-field-wide">
                   <span>
-                    HISTORIC ARCHIVE · CATEGORY → LAYER → STORY
+                    ISSUE WORKSPACE
                   </span>
 
                   <div
@@ -16967,668 +16098,656 @@ function AdminRoom() {
                         '14px',
                     }}
                   >
+                    <strong>
+                      {selectedHistoricIssue
+                        ? (
+                            `HISTORIC ${selectedHistoricIssue.number} · ` +
+                            selectedHistoricIssue.title
+                          )
+                        : 'NO ISSUE SELECTED'}
+                    </strong>
+
+                    {selectedHistoricIssue?.subtitle && (
+                      <div
+                        style={{
+                          marginTop:
+                            '4px',
+                        }}
+                      >
+                        {selectedHistoricIssue.subtitle}
+                      </div>
+                    )}
+
                     <div
+                      className="admin-record-meta"
                       style={{
-                        display:
-                          'grid',
-
-                        gridTemplateColumns:
-                          'repeat(2, minmax(0, 1fr))',
-
-                        gap:
-                          '10px',
+                        marginTop:
+                          '8px',
                       }}
                     >
-                      <label className="admin-field">
-                        <span>
-                          CATEGORY
-                        </span>
-
-                        <select
-                          value={
-                            selectedHistoricCategoryId
-                          }
-                          onChange={
-                            (event) => {
-                              const categoryId =
-                                event.target.value
-
-                              setSelectedHistoricCategoryId(
-                                categoryId
-                              )
-
-                              setSelectedHistoricLayerId(
-                                ''
-                              )
-                            }
-                          }
-                        >
-                          <option value="">
-                            SELECT CATEGORY
-                          </option>
-
-                          {cityHistoricCategories.map(
-                            (category) => (
-                              <option
-                                key={
-                                  category.id
-                                }
-                                value={
-                                  category.id
-                                }
-                              >
-                                {category.title} · {String(
-                                  category.status ||
-                                  'published'
-                                ).toUpperCase()}
-                              </option>
-                            )
-                          )}
-                        </select>
-                      </label>
-
-
-                      <label className="admin-field">
-                        <span>
-                          LAYER
-                        </span>
-
-                        <select
-                          value={
-                            selectedHistoricLayerId
-                          }
-                          disabled={
-                            !selectedHistoricCategory
-                          }
-                          onChange={
-                            (event) =>
-                              setSelectedHistoricLayerId(
-                                event.target.value
-                              )
-                          }
-                        >
-                          <option value="">
-                            SELECT LAYER
-                          </option>
-
-                          {selectedHistoricCategoryLayers.map(
-                            (layer) => (
-                              <option
-                                key={
-                                  layer.id
-                                }
-                                value={
-                                  layer.id
-                                }
-                              >
-                                {layer.title} · {String(
-                                  layer.status ||
-                                  'published'
-                                ).toUpperCase()}
-                              </option>
-                            )
-                          )}
-                        </select>
-                      </label>
+                      {String(
+                        selectedHistoricIssue?.status ||
+                        'draft'
+                      )
+                        .toUpperCase()}
+                      {' · '}
+                      {selectedHistoricIssueDraftCount} DRAFTS
+                      {' · '}
+                      {selectedHistoricIssuePublishedCount} PUBLISHED
                     </div>
+
+
+                    {selectedHistoricIssue?.publicationDate && (
+                      <div
+                        className="admin-record-meta"
+                        style={{
+                          marginTop:
+                            '4px',
+                        }}
+                      >
+                        PUBLICATION · {
+                          selectedHistoricIssue.publicationDate
+                        }
+                      </div>
+                    )}
+
+
+                    {selectedHistoricIssue?.description && (
+                      <p
+                        style={{
+                          margin:
+                            '10px 0 0',
+                        }}
+                      >
+                        {
+                          selectedHistoricIssue.description
+                        }
+                      </p>
+                    )}
 
 
                     <div
                       className="admin-form-actions"
                       style={{
                         marginTop:
-                          '10px',
+                          '12px',
                       }}
                     >
                       <button
                         type="button"
                         className="admin-save"
                         onClick={
-                          startNewHistoricCategory
+                          startNewHistoricIssue
                         }
                       >
-                        + NEW CATEGORY
+                        + NEW ISSUE
                       </button>
 
                       <button
                         type="button"
                         className="admin-cancel"
                         disabled={
-                          !selectedHistoricCategory
+                          !selectedHistoricIssue
                         }
                         onClick={
-                          startEditHistoricCategory
+                          startEditHistoricIssue
                         }
                       >
-                        EDIT CATEGORY
+                        EDIT ISSUE
                       </button>
 
-                      <button
-                        type="button"
-                        className="admin-save"
-                        disabled={
-                          !selectedHistoricCategory
-                        }
-                        onClick={
-                          startNewHistoricLayer
-                        }
-                      >
-                        + NEW LAYER
-                      </button>
 
-                      <button
-                        type="button"
-                        className="admin-cancel"
-                        disabled={
-                          !selectedHistoricLayer
-                        }
-                        onClick={
-                          startEditHistoricLayer
-                        }
-                      >
-                        EDIT LAYER
-                      </button>
-
-                      <button
-                        type="button"
-                        className="admin-save"
-                        disabled={
-                          !selectedHistoricLayer
-                        }
-                        onClick={
-                          startHistoricStoryForSelectedLayer
-                        }
-                      >
-                        + ADD STORY
-                      </button>
-                    </div>
-
-
-                    {selectedHistoricLayer && (
-                      <div
-                        className="admin-record-meta"
-                        style={{
-                          marginTop:
-                            '8px',
-                        }}
-                      >
-                        {selectedHistoricLayerRecords.length} {
-                          selectedHistoricLayerRecords.length ===
-                            1
-                            ? 'STORY'
-                            : 'STORIES'
-                        } · {
-                          String(
-                            selectedHistoricLayer.status ||
-                            'published'
+                      {selectedHistoricIssue?.status ===
+                        'published'
+                        ? (
+                            <button
+                              type="button"
+                              className="admin-review-reject"
+                              onClick={
+                                unpublishHistoricIssue
+                              }
+                            >
+                              UNPUBLISH ISSUE
+                            </button>
                           )
-                            .toUpperCase()
-                        }
-                      </div>
-                    )}
-
-
-                    {historicCategoryEditorOpen && (
-                      <div
-                        style={{
-                          marginTop:
-                            '12px',
-
-                          borderTop:
-                            '1px solid rgba(0,0,0,0.12)',
-
-                          paddingTop:
-                            '12px',
-                        }}
-                      >
-                        <div className="admin-form-grid">
-                          <label className="admin-field">
-                            <span>
-                              CATEGORY NAME
-                            </span>
-
-                            <input
-                              value={
-                                historicCategoryDraft.title
+                        : (
+                            <button
+                              type="button"
+                              className="admin-review-approve"
+                              disabled={
+                                !selectedHistoricIssue ||
+                                selectedHistoricIssueRecords.length ===
+                                  0
                               }
-                              onChange={
-                                (event) =>
-                                  updateHistoricCategoryDraft(
-                                    'title',
-                                    event.target.value
-                                  )
-                              }
-                              placeholder="SPORTS"
-                            />
-                          </label>
-
-                          <label className="admin-field">
-                            <span>
-                              SLUG
-                            </span>
-
-                            <input
-                              value={
-                                historicCategoryDraft.slug ||
-                                ''
-                              }
-                              onChange={
-                                (event) =>
-                                  updateHistoricCategoryDraft(
-                                    'slug',
-                                    event.target.value
-                                  )
-                              }
-                              placeholder="sports"
-                            />
-                          </label>
-
-                          <label className="admin-field">
-                            <span>
-                              CATEGORY ICON
-                            </span>
-
-                            <select
-                              value={
-                                historicCategoryDraft.pinIcon ||
-                                'map-pin'
-                              }
-                              onChange={
-                                (event) =>
-                                  updateHistoricCategoryDraft(
-                                    'pinIcon',
-                                    event.target.value
-                                  )
+                              onClick={
+                                publishHistoricIssue
                               }
                             >
-                              {HISTORIC_PIN_ICONS.map(
-                                (icon) => (
-                                  <option
-                                    key={
-                                      icon.id
-                                    }
-                                    value={
-                                      icon.id
-                                    }
-                                  >
-                                    {icon.emoji} {icon.label}
-                                  </option>
-                                )
-                              )}
-                            </select>
-                          </label>
-
-                          <label className="admin-field">
-                            <span>
-                              DISPLAY ORDER
-                            </span>
-
-                            <input
-                              type="number"
-                              value={
-                                historicCategoryDraft.displayOrder ??
-                                0
-                              }
-                              onChange={
-                                (event) =>
-                                  updateHistoricCategoryDraft(
-                                    'displayOrder',
-                                    event.target.value
-                                  )
-                              }
-                            />
-                          </label>
-
-                          <label className="admin-field">
-                            <span>
-                              STATUS
-                            </span>
-
-                            <select
-                              value={
-                                historicCategoryDraft.status ||
-                                'published'
-                              }
-                              onChange={
-                                (event) =>
-                                  updateHistoricCategoryDraft(
-                                    'status',
-                                    event.target.value
-                                  )
-                              }
-                            >
-                              <option value="published">
-                                PUBLISHED
-                              </option>
-
-                              <option value="draft">
-                                DRAFT
-                              </option>
-
-                              <option value="archived">
-                                ARCHIVED
-                              </option>
-                            </select>
-                          </label>
-
-                          <label className="admin-field admin-field-wide">
-                            <span>
-                              DESCRIPTION
-                            </span>
-
-                            <textarea
-                              value={
-                                historicCategoryDraft.description ||
-                                ''
-                              }
-                              onChange={
-                                (event) =>
-                                  updateHistoricCategoryDraft(
-                                    'description',
-                                    event.target.value
-                                  )
-                              }
-                            />
-                          </label>
-                        </div>
-
-                        <div className="admin-form-actions">
-                          <button
-                            type="button"
-                            className="admin-save"
-                            onClick={
-                              saveHistoricCategory
-                            }
-                          >
-                            SAVE CATEGORY
-                          </button>
-
-                          <button
-                            type="button"
-                            className="admin-cancel"
-                            onClick={
-                              cancelHistoricCategoryEdit
-                            }
-                          >
-                            CANCEL
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-
-                    {historicLayerEditorOpen && (
-                      <div
-                        style={{
-                          marginTop:
-                            '12px',
-
-                          borderTop:
-                            '1px solid rgba(0,0,0,0.12)',
-
-                          paddingTop:
-                            '12px',
-                        }}
-                      >
-                        <div className="admin-form-grid">
-                          <label className="admin-field">
-                            <span>
-                              LAYER NAME
-                            </span>
-
-                            <input
-                              value={
-                                historicLayerDraft.title
-                              }
-                              onChange={
-                                (event) =>
-                                  updateHistoricLayerDraft(
-                                    'title',
-                                    event.target.value
-                                  )
-                              }
-                              placeholder="Forgotten Ballparks"
-                            />
-                          </label>
-
-                          <label className="admin-field">
-                            <span>
-                              SLUG
-                            </span>
-
-                            <input
-                              value={
-                                historicLayerDraft.slug ||
-                                ''
-                              }
-                              onChange={
-                                (event) =>
-                                  updateHistoricLayerDraft(
-                                    'slug',
-                                    event.target.value
-                                  )
-                              }
-                              placeholder="forgotten-ballparks"
-                            />
-                          </label>
-
-                          <label className="admin-field">
-                            <span>
-                              CATEGORY
-                            </span>
-
-                            <select
-                              value={
-                                historicLayerDraft.categoryId ||
-                                selectedHistoricCategoryId ||
-                                ''
-                              }
-                              onChange={
-                                (event) =>
-                                  updateHistoricLayerDraft(
-                                    'categoryId',
-                                    event.target.value
-                                  )
-                              }
-                            >
-                              <option value="">
-                                SELECT CATEGORY
-                              </option>
-
-                              {cityHistoricCategories.map(
-                                (category) => (
-                                  <option
-                                    key={
-                                      category.id
-                                    }
-                                    value={
-                                      category.id
-                                    }
-                                  >
-                                    {category.title}
-                                  </option>
-                                )
-                              )}
-                            </select>
-                          </label>
-
-                          <label className="admin-field">
-                            <span>
-                              DISPLAY ORDER
-                            </span>
-
-                            <input
-                              type="number"
-                              value={
-                                historicLayerDraft.displayOrder ??
-                                0
-                              }
-                              onChange={
-                                (event) =>
-                                  updateHistoricLayerDraft(
-                                    'displayOrder',
-                                    event.target.value
-                                  )
-                              }
-                            />
-                          </label>
-
-                          <label className="admin-field">
-                            <span>
-                              STATUS
-                            </span>
-
-                            <select
-                              value={
-                                historicLayerDraft.status ||
-                                'published'
-                              }
-                              onChange={
-                                (event) =>
-                                  updateHistoricLayerDraft(
-                                    'status',
-                                    event.target.value
-                                  )
-                              }
-                            >
-                              <option value="published">
-                                PUBLISHED
-                              </option>
-
-                              <option value="draft">
-                                DRAFT
-                              </option>
-
-                              <option value="archived">
-                                ARCHIVED
-                              </option>
-                            </select>
-                          </label>
-
-                          <label className="admin-field admin-field-wide">
-                            <span>
-                              DESCRIPTION
-                            </span>
-
-                            <textarea
-                              value={
-                                historicLayerDraft.description ||
-                                ''
-                              }
-                              onChange={
-                                (event) =>
-                                  updateHistoricLayerDraft(
-                                    'description',
-                                    event.target.value
-                                  )
-                              }
-                            />
-                          </label>
-
-                          <label className="admin-field admin-field-wide">
-                            <span>
-                              COVER IMAGE URL
-                            </span>
-
-                            <input
-                              value={
-                                historicLayerDraft.coverImageUrl ||
-                                ''
-                              }
-                              onChange={
-                                (event) =>
-                                  updateHistoricLayerDraft(
-                                    'coverImageUrl',
-                                    event.target.value
-                                  )
-                              }
-                              placeholder="https://..."
-                            />
-                          </label>
-                        </div>
-
-                        <div className="admin-form-actions">
-                          <button
-                            type="button"
-                            className="admin-save"
-                            onClick={
-                              saveHistoricLayer
-                            }
-                          >
-                            SAVE LAYER
-                          </button>
-
-                          <button
-                            type="button"
-                            className="admin-cancel"
-                            onClick={
-                              cancelHistoricLayerEdit
-                            }
-                          >
-                            CANCEL
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                              PUBLISH ISSUE
+                            </button>
+                          )}
+                    </div>
                   </div>
                 </div>
 
 
+                {historicIssueEditorOpen && (
+                  <>
+                    <div className="admin-field admin-field-wide">
+                      <span>
+                        {historicIssueEditingId
+                          ? 'EDIT ISSUE DETAILS'
+                          : 'CREATE NEW ISSUE'}
+                      </span>
+
+                      <div
+                        style={{
+                          border:
+                            '1px solid rgba(0,0,0,0.18)',
+
+                          padding:
+                            '14px',
+                        }}
+                      >
+                        {historicIssueEditingId
+                          ? (
+                              `Editing HISTORIC ${historicIssueDraft.number || ''}`
+                            )
+                          : 'Build a private Historic issue workspace.'}
+                      </div>
+                    </div>
+
+
+                    <label className="admin-field">
+                      <span>
+                        ISSUE NUMBER
+                      </span>
+
+                      <input
+                        value={
+                          historicIssueDraft.number
+                        }
+                        onChange={
+                          (event) =>
+                            updateHistoricIssueDraft(
+                              'number',
+                              event.target.value
+                            )
+                        }
+                        placeholder="002"
+                      />
+                    </label>
+
+
+                    <label className="admin-field">
+                      <span>
+                        STATUS
+                      </span>
+
+                      <select
+                        value={
+                          historicIssueDraft.status ||
+                          'draft'
+                        }
+                        onChange={
+                          (event) =>
+                            updateHistoricIssueDraft(
+                              'status',
+                              event.target.value
+                            )
+                        }
+                      >
+                        <option value="draft">
+                          DRAFT
+                        </option>
+
+                        <option value="ready">
+                          READY
+                        </option>
+
+                        <option
+                          value="published"
+                          disabled
+                        >
+                          PUBLISHED · USE PUBLISH ISSUE
+                        </option>
+
+                        <option value="archived">
+                          ARCHIVED
+                        </option>
+                      </select>
+                    </label>
+
+
+                    <label className="admin-field admin-field-wide">
+                      <span>
+                        ISSUE TITLE
+                      </span>
+
+                      <input
+                        value={
+                          historicIssueDraft.title
+                        }
+                        onChange={
+                          (event) =>
+                            updateHistoricIssueDraft(
+                              'title',
+                              event.target.value
+                            )
+                        }
+                        placeholder="MURDER. MYSTERY. MISSING."
+                      />
+                    </label>
+
+
+                    <label className="admin-field admin-field-wide">
+                      <span>
+                        SUBTITLE
+                      </span>
+
+                      <input
+                        value={
+                          historicIssueDraft.subtitle
+                        }
+                        onChange={
+                          (event) =>
+                            updateHistoricIssueDraft(
+                              'subtitle',
+                              event.target.value
+                            )
+                        }
+                        placeholder="A TORONTO HALLOWEEN SPECIAL"
+                      />
+                    </label>
+
+
+                    <label className="admin-field admin-field-wide">
+                      <span>
+                        DESCRIPTION
+                      </span>
+
+                      <textarea
+                        value={
+                          historicIssueDraft.description
+                        }
+                        onChange={
+                          (event) =>
+                            updateHistoricIssueDraft(
+                              'description',
+                              event.target.value
+                            )
+                        }
+                        rows="4"
+                        placeholder="Editorial description, theme, scope, notes..."
+                      />
+                    </label>
+
+
+                    <div className="admin-field admin-field-wide">
+                      <span>
+                        ISSUE SECTIONS
+                      </span>
+
+
+                      <div
+                        style={{
+                          border:
+                            '1px solid rgba(0,0,0,0.18)',
+
+                          padding:
+                            '12px',
+                        }}
+                      >
+                        {normalizeHistoricIssueSections(
+                          historicIssueDraft.sections
+                        )
+                          .map(
+                            (
+                              section,
+                              index
+                            ) => (
+                              <div
+                                key={
+                                  section.id
+                                }
+                                style={{
+                                  display:
+                                    'grid',
+
+                                  gridTemplateColumns:
+                                    'minmax(0, 1fr) auto auto auto',
+
+                                  gap:
+                                    '6px',
+
+                                  alignItems:
+                                    'center',
+
+                                  marginTop:
+                                    index ===
+                                      0
+                                      ? '0'
+                                      : '6px',
+                                }}
+                              >
+                                <input
+                                  value={
+                                    section.title
+                                  }
+                                  onChange={
+                                    (event) =>
+                                      updateHistoricIssueSectionTitle(
+                                        section.id,
+                                        event.target.value
+                                      )
+                                  }
+                                  aria-label="Historic issue section title"
+                                />
+
+                                <button
+                                  type="button"
+                                  className="admin-cancel"
+                                  disabled={
+                                    index ===
+                                    0
+                                  }
+                                  onClick={() =>
+                                    moveHistoricIssueSection(
+                                      section.id,
+                                      -1
+                                    )
+                                  }
+                                  title="Move section up"
+                                >
+                                  ↑
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="admin-cancel"
+                                  disabled={
+                                    index ===
+                                    normalizeHistoricIssueSections(
+                                      historicIssueDraft.sections
+                                    ).length -
+                                      1
+                                  }
+                                  onClick={() =>
+                                    moveHistoricIssueSection(
+                                      section.id,
+                                      1
+                                    )
+                                  }
+                                  title="Move section down"
+                                >
+                                  ↓
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="admin-cancel"
+                                  onClick={() =>
+                                    removeHistoricIssueSection(
+                                      section.id
+                                    )
+                                  }
+                                >
+                                  REMOVE
+                                </button>
+                              </div>
+                            )
+                          )}
+
+
+                        {normalizeHistoricIssueSections(
+                          historicIssueDraft.sections
+                        ).length ===
+                          0 && (
+                          <div className="admin-record-meta">
+                            NO SECTIONS YET
+                          </div>
+                        )}
+
+
+                        <div
+                          style={{
+                            display:
+                              'grid',
+
+                            gridTemplateColumns:
+                              'minmax(0, 1fr) auto',
+
+                            gap:
+                              '6px',
+
+                            marginTop:
+                              '10px',
+                          }}
+                        >
+                          <input
+                            value={
+                              historicIssueNewSectionTitle
+                            }
+                            onChange={
+                              (event) =>
+                                setHistoricIssueNewSectionTitle(
+                                  event.target.value
+                                )
+                            }
+                            onKeyDown={
+                              (event) => {
+                                if (
+                                  event.key ===
+                                  'Enter'
+                                ) {
+                                  event.preventDefault()
+
+                                  addHistoricIssueSection()
+                                }
+                              }
+                            }
+                            placeholder="e.g. GHOSTS & HAUNTINGS"
+                          />
+
+                          <button
+                            type="button"
+                            className="admin-save"
+                            onClick={
+                              addHistoricIssueSection
+                            }
+                          >
+                            + ADD SECTION
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+
+                    <label className="admin-field admin-field-wide">
+                      <span>
+                        COVER IMAGE URL
+                      </span>
+
+                      <input
+                        value={
+                          historicIssueDraft.coverImageUrl
+                        }
+                        onChange={
+                          (event) =>
+                            updateHistoricIssueDraft(
+                              'coverImageUrl',
+                              event.target.value
+                            )
+                        }
+                        placeholder="https://..."
+                      />
+                    </label>
+
+
+                    <label className="admin-field">
+                      <span>
+                        PUBLICATION DATE
+                      </span>
+
+                      <input
+                        type="date"
+                        value={
+                          historicIssueDraft.publicationDate
+                        }
+                        onChange={
+                          (event) =>
+                            updateHistoricIssueDraft(
+                              'publicationDate',
+                              event.target.value
+                            )
+                        }
+                      />
+                    </label>
+
+
+                    <div
+                      className="admin-form-actions"
+                      style={{
+                        gridColumn:
+                          '1 / -1',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="admin-save"
+                        onClick={
+                          saveHistoricIssue
+                        }
+                      >
+                        {historicIssueEditingId
+                          ? 'SAVE ISSUE CHANGES'
+                          : 'CREATE ISSUE'}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="admin-cancel"
+                        onClick={
+                          cancelHistoricIssueEdit
+                        }
+                      >
+                        CANCEL
+                      </button>
+
+                      {historicIssueEditingId && (
+                        <button
+                          type="button"
+                          className="admin-cancel"
+                          onClick={
+                            deleteHistoricIssue
+                          }
+                        >
+                          DELETE ISSUE
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+
+
                 <label className="admin-field">
                   <span>
-                    HISTORIC CATEGORY · CONTROLS PUBLIC MAP ICON
+                    ISSUE
                   </span>
 
                   <select
                     value={
-                      draft.historicCategoryId ||
+                      draft.issueIds?.[0] ||
+                      selectedHistoricIssue?.id ||
                       ''
                     }
                     onChange={
                       (event) => {
-                        const categoryId =
+                        const issueId =
                           event.target.value
 
-                        const layerStillMatches =
-                          cityHistoricLayers.some(
-                            (layer) =>
-                              layer.id ===
-                                draft.historicLayerId &&
-                              layer.categoryId ===
-                                categoryId
-                          )
 
-                        updateDraft(
-                          'historicCategoryId',
-                          categoryId
+                        const nextIssue =
+                          cityHistoricIssues.find(
+                            (issue) =>
+                              issue.id ===
+                              issueId
+                          ) ||
+                          null
+
+
+                        const nextIssueRecords =
+                          nextIssue
+                            ? historicItems.filter(
+                                (record) =>
+                                  Array.isArray(
+                                    record.issueIds
+                                  ) &&
+                                  record.issueIds.includes(
+                                    nextIssue.id
+                                  )
+                              )
+                            : []
+
+
+                        const nextSections =
+                          getHistoricIssueSections({
+                            issue:
+                              nextIssue,
+
+                            records:
+                              nextIssueRecords,
+                          })
+
+
+                        setSelectedHistoricIssueId(
+                          issueId
                         )
 
-                        if (
-                          !layerStillMatches
-                        ) {
-                          updateDraft(
-                            'historicLayerId',
-                            ''
+
+                        updateDraft(
+                          'issueIds',
+                          issueId
+                            ? [
+                                issueId,
+                              ]
+                            : []
+                        )
+
+
+                        updateDraft(
+                          'issueSection',
+                          nextSections.some(
+                            (section) =>
+                              section.id ===
+                              draft.issueSection
                           )
-                        }
+                            ? draft.issueSection
+                            : (
+                                nextSections[0]?.id ||
+                                ''
+                              )
+                        )
                       }
                     }
                   >
                     <option value="">
-                      NO CATEGORY
+                      NO ISSUE
                     </option>
 
-                    {cityHistoricCategories.map(
-                      (category) => (
+                    {cityHistoricIssues.map(
+                      (issue) => (
                         <option
                           key={
-                            category.id
+                            issue.id
                           }
                           value={
-                            category.id
+                            issue.id
                           }
                         >
-                          {category.title}
+                          {
+                            `HISTORIC ${issue.number} · ${issue.title}`
+                          }
                         </option>
                       )
                     )}
@@ -17638,49 +16757,45 @@ function AdminRoom() {
 
                 <label className="admin-field">
                   <span>
-                    HISTORIC LAYER
+                    ISSUE SECTION
                   </span>
 
                   <select
                     value={
-                      draft.historicLayerId ||
+                      draft.issueSection ||
+                      selectedHistoricIssueSections[0]?.id ||
                       ''
-                    }
-                    disabled={
-                      !draft.historicCategoryId
                     }
                     onChange={
                       (event) =>
                         updateDraft(
-                          'historicLayerId',
+                          'issueSection',
                           event.target.value
                         )
                     }
                   >
-                    <option value="">
-                      NO LAYER
-                    </option>
+                    {selectedHistoricIssueSections.length ===
+                      0 && (
+                      <option value="">
+                        NO SECTIONS · EDIT ISSUE TO ADD
+                      </option>
+                    )}
 
-                    {cityHistoricLayers
-                      .filter(
-                        (layer) =>
-                          layer.categoryId ===
-                          draft.historicCategoryId
+
+                    {selectedHistoricIssueSections.map(
+                      (section) => (
+                        <option
+                          key={
+                            section.id
+                          }
+                          value={
+                            section.id
+                          }
+                        >
+                          {section.title}
+                        </option>
                       )
-                      .map(
-                        (layer) => (
-                          <option
-                            key={
-                              layer.id
-                            }
-                            value={
-                              layer.id
-                            }
-                          >
-                            {layer.title}
-                          </option>
-                        )
-                      )}
+                    )}
                   </select>
                 </label>
 
