@@ -2278,18 +2278,39 @@ function appendSeeItThenAction({
   button.className =
     'geographic-route-action'
 
-  button.textContent =
-    returnToIssueHome
-      ? historicLayerFilter !==
-          'all'
+
+  const getReturnLabel =
+    () =>
+      historicLayerFilter !==
+        'all'
         ? '← RETURN TO LAYER'
         : historicCategoryFilter !==
             'all'
           ? '← RETURN TO CATEGORY'
-          : '← RETURN TO MAIN PAGE OF ISSUE'
-      : storyLayer?.year
+          : '← RETURN TO COLLECTION'
+
+
+  const getSeeItThenLabel =
+    () =>
+      storyLayer?.year
         ? `SEE IT IN ${storyLayer.year} →`
         : 'SEE IT THEN →'
+
+
+  let viewingStoryLayer =
+    returnToIssueHome
+
+
+  const refreshButtonLabel =
+    () => {
+      button.textContent =
+        viewingStoryLayer
+          ? getReturnLabel()
+          : getSeeItThenLabel()
+    }
+
+
+  refreshButtonLabel()
 
 
   button.addEventListener(
@@ -2301,8 +2322,16 @@ function appendSeeItThenAction({
 
 
       if (
-        returnToIssueHome
+        viewingStoryLayer &&
+        insideHistoricCollection &&
+        typeof onReturnToHistoricIssueHome ===
+          'function'
       ) {
+        viewingStoryLayer =
+          false
+
+        refreshButtonLabel()
+
         onReturnToHistoricIssueHome()
 
         return
@@ -2312,6 +2341,18 @@ function appendSeeItThenAction({
       onSeeItThen?.(
         pin
       )
+
+
+      if (
+        insideHistoricCollection &&
+        typeof onReturnToHistoricIssueHome ===
+          'function'
+      ) {
+        viewingStoryLayer =
+          true
+
+        refreshButtonLabel()
+      }
     }
   )
 
@@ -7320,6 +7361,58 @@ function MapPins({
     )
 
 
+  const historicCollectionActive =
+    activePinFilter ===
+      'historic' &&
+    (
+      historicIssueFilter !==
+        'all' ||
+      historicCategoryFilter !==
+        'all' ||
+      historicLayerFilter !==
+        'all'
+    )
+
+
+  // When a Historic collection is open, changing the historical
+  // basemap must not rebuild its markers. The collection owns the
+  // pins; SEE IT THEN only changes the map underneath them.
+  const markerSelectedLayerKey =
+    historicCollectionActive
+      ? 'historic-collection'
+      : `${selectedLayer?.layerType || ''}:${selectedLayer?.year || ''}`
+
+
+  const markerSelectedPinKey =
+    historicCollectionActive
+      ? ''
+      : selectedPinId
+
+
+  const markerViewportRevision =
+    historicCollectionActive
+      ? 0
+      : viewportRevision
+
+
+  const markerActivityRevision =
+    historicCollectionActive
+      ? 0
+      : activityRevision
+
+
+  const markerServerNewsItems =
+    historicCollectionActive
+      ? null
+      : serverNewsItems
+
+
+  const markerServerNewItems =
+    historicCollectionActive
+      ? null
+      : serverNewItems
+
+
   useEffect(
     () => {
       const interval =
@@ -8313,8 +8406,7 @@ function MapPins({
   }, [
     map,
     cityKey,
-    selectedLayer?.year,
-    selectedLayer?.layerType,
+    markerSelectedLayerKey,
     activePinFilter,
     historicIssueFilter,
     historicCategoryFilter,
@@ -8325,11 +8417,11 @@ function MapPins({
     newSubtypeFilter,
     newBusinessRangeFilter,
     contentRevision,
-    serverNewsItems,
-    serverNewItems,
-    viewportRevision,
-    activityRevision,
-    selectedPinId,
+    markerServerNewsItems,
+    markerServerNewItems,
+    markerViewportRevision,
+    markerActivityRevision,
+    markerSelectedPinKey,
     onDirections,
     onSeeItThen,
     onReturnToHistoricIssueHome,
@@ -8370,6 +8462,34 @@ function MapPins({
     newSubtypeFilter,
     selectedLayer?.year,
     selectedLayer?.layerType,
+  ])
+
+
+  useEffect(() => {
+    if (
+      !map ||
+      selectedPinId
+    ) {
+      return
+    }
+
+
+    markersRef.current.forEach(
+      (marker) => {
+        const popup =
+          marker.getPopup?.()
+
+
+        if (
+          popup?.isOpen?.()
+        ) {
+          popup.remove()
+        }
+      }
+    )
+  }, [
+    map,
+    selectedPinId,
   ])
 
   return null

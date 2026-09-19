@@ -710,6 +710,22 @@ function GeographicApp() {
           : 'all'
 
 
+  const historicCollectionActive =
+    historicIssueFilter !==
+      'all' ||
+    historicCategoryFilter !==
+      'all' ||
+    historicLayerFilter !==
+      'all'
+
+
+  const historicAtCollectionHome =
+    selectedLayer?.year ===
+      defaultLayer?.year &&
+    selectedLayer?.layerType ===
+      defaultLayer?.layerType
+
+
   function resetHistoricMapHome() {
     setSelectedLayer(
       defaultLayer
@@ -1858,6 +1874,27 @@ function GeographicApp() {
                 </optgroup>
               )}
             </select>
+
+
+            {historicCollectionActive &&
+              !historicAtCollectionHome && (
+              <button
+                type="button"
+                className="historic-issue-button"
+                onClick={
+                  resetHistoricMapHome
+                }
+                style={{
+                  minWidth:
+                    'auto',
+
+                  whiteSpace:
+                    'nowrap',
+                }}
+              >
+                ← RETURN TO COLLECTION
+              </button>
+            )}
           </div>
         )}
 
