@@ -9,6 +9,11 @@
 
 export const HISTORIC_PIN_ICON_CATEGORIES = [
   'all',
+  'sports',
+  'music',
+  'food',
+  'culture',
+  'disasters',
   'crime',
   'people',
   'death',
@@ -85,6 +90,250 @@ export const HISTORIC_PIN_ICONS = [
     label: 'Market / Shop',
     category: 'places',
     keywords: 'market shop store commercial',
+  },
+
+  // ============================================================
+  // SPORTS
+  // ============================================================
+  {
+    id: 'baseball',
+    emoji: '⚾',
+    label: 'Baseball',
+    category: 'sports',
+    keywords: 'baseball ballpark stadium diamond sports',
+  },
+  {
+    id: 'hockey',
+    emoji: '🏒',
+    label: 'Hockey',
+    category: 'sports',
+    keywords: 'hockey rink arena ice sports',
+  },
+  {
+    id: 'basketball',
+    emoji: '🏀',
+    label: 'Basketball',
+    category: 'sports',
+    keywords: 'basketball court arena sports',
+  },
+  {
+    id: 'soccer',
+    emoji: '⚽',
+    label: 'Soccer / Football',
+    category: 'sports',
+    keywords: 'soccer football pitch field stadium sports',
+  },
+  {
+    id: 'football',
+    emoji: '🏈',
+    label: 'Football',
+    category: 'sports',
+    keywords: 'football gridiron stadium field sports',
+  },
+  {
+    id: 'tennis',
+    emoji: '🎾',
+    label: 'Tennis',
+    category: 'sports',
+    keywords: 'tennis court racket sports',
+  },
+  {
+    id: 'lacrosse',
+    emoji: '🥍',
+    label: 'Lacrosse',
+    category: 'sports',
+    keywords: 'lacrosse arena field sports',
+  },
+  {
+    id: 'boxing',
+    emoji: '🥊',
+    label: 'Boxing',
+    category: 'sports',
+    keywords: 'boxing fight ring sports',
+  },
+  {
+    id: 'running',
+    emoji: '🏃',
+    label: 'Running / Athletics',
+    category: 'sports',
+    keywords: 'running athletics track race marathon sports',
+  },
+  {
+    id: 'golf',
+    emoji: '⛳',
+    label: 'Golf',
+    category: 'sports',
+    keywords: 'golf course club sports',
+  },
+  {
+    id: 'skating',
+    emoji: '⛸️',
+    label: 'Skating',
+    category: 'sports',
+    keywords: 'skating ice rink winter sports',
+  },
+  {
+    id: 'swimming',
+    emoji: '🏊',
+    label: 'Swimming',
+    category: 'sports',
+    keywords: 'swimming pool aquatic sports',
+  },
+  {
+    id: 'trophy',
+    emoji: '🏆',
+    label: 'Championship / Sports',
+    category: 'sports',
+    keywords: 'sports championship trophy victory game match',
+  },
+  {
+    id: 'sports-venue',
+    emoji: '🏟️',
+    label: 'Sports Venue / Ballpark',
+    category: 'sports',
+    keywords: 'sports venue stadium arena ballpark field grounds',
+  },
+
+  // ============================================================
+  // MUSIC
+  // ============================================================
+  {
+    id: 'music-note',
+    emoji: '🎵',
+    label: 'Music / Concert',
+    category: 'music',
+    keywords: 'music concert show performance venue',
+  },
+  {
+    id: 'guitar',
+    emoji: '🎸',
+    label: 'Guitar / Live Music',
+    category: 'music',
+    keywords: 'guitar band rock live music concert venue',
+  },
+  {
+    id: 'record',
+    emoji: '💿',
+    label: 'Record / Record Store',
+    category: 'music',
+    keywords: 'record vinyl album record store music',
+  },
+  {
+    id: 'piano',
+    emoji: '🎹',
+    label: 'Piano / Music Hall',
+    category: 'music',
+    keywords: 'piano music hall concert performance',
+  },
+  {
+    id: 'headphones',
+    emoji: '🎧',
+    label: 'Studio / Recording',
+    category: 'music',
+    keywords: 'studio recording audio music radio',
+  },
+
+  // ============================================================
+  // FOOD + DRINK
+  // ============================================================
+  {
+    id: 'restaurant',
+    emoji: '🍽️',
+    label: 'Restaurant',
+    category: 'food',
+    keywords: 'restaurant food dining eatery',
+  },
+  {
+    id: 'diner',
+    emoji: '🍔',
+    label: 'Diner / Lunch Counter',
+    category: 'food',
+    keywords: 'diner restaurant lunch counter food',
+  },
+  {
+    id: 'cafe',
+    emoji: '☕',
+    label: 'Cafe / Coffee',
+    category: 'food',
+    keywords: 'cafe coffee shop restaurant food',
+  },
+  {
+    id: 'bar',
+    emoji: '🍺',
+    label: 'Bar / Tavern',
+    category: 'food',
+    keywords: 'bar tavern pub beer nightlife food drink',
+  },
+
+  // ============================================================
+  // CULTURE + ENTERTAINMENT
+  // ============================================================
+  {
+    id: 'film',
+    emoji: '🎬',
+    label: 'Film / Movie Location',
+    category: 'culture',
+    keywords: 'film movie cinema screen location culture',
+  },
+  {
+    id: 'cinema',
+    emoji: '🎞️',
+    label: 'Cinema',
+    category: 'culture',
+    keywords: 'cinema theatre movie film culture',
+  },
+  {
+    id: 'nightlife',
+    emoji: '🪩',
+    label: 'Nightclub / Nightlife',
+    category: 'culture',
+    keywords: 'nightclub club nightlife dance disco culture',
+  },
+  {
+    id: 'amusement',
+    emoji: '🎡',
+    label: 'Amusement Park',
+    category: 'culture',
+    keywords: 'amusement park fair midway entertainment culture',
+  },
+  {
+    id: 'radio',
+    emoji: '📻',
+    label: 'Radio / Broadcast',
+    category: 'culture',
+    keywords: 'radio broadcast station media culture',
+  },
+
+  // ============================================================
+  // DISASTERS + MAJOR EVENTS
+  // ============================================================
+  {
+    id: 'blackout',
+    emoji: '🌑',
+    label: 'Blackout / Power Outage',
+    category: 'disasters',
+    keywords: 'blackout power outage electricity grid disaster',
+  },
+  {
+    id: 'flood',
+    emoji: '🌊',
+    label: 'Flood',
+    category: 'disasters',
+    keywords: 'flood flooding water storm disaster',
+  },
+  {
+    id: 'explosion',
+    emoji: '💥',
+    label: 'Explosion',
+    category: 'disasters',
+    keywords: 'explosion blast disaster accident',
+  },
+  {
+    id: 'collapse',
+    emoji: '🏚️',
+    label: 'Collapse / Ruin',
+    category: 'disasters',
+    keywords: 'collapse ruin demolished damaged building disaster',
   },
 
   {
