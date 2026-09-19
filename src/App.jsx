@@ -1876,25 +1876,6 @@ function GeographicApp() {
             </select>
 
 
-            {historicCollectionActive &&
-              !historicAtCollectionHome && (
-              <button
-                type="button"
-                className="historic-issue-button"
-                onClick={
-                  resetHistoricMapHome
-                }
-                style={{
-                  minWidth:
-                    'auto',
-
-                  whiteSpace:
-                    'nowrap',
-                }}
-              >
-                ← RETURN TO COLLECTION
-              </button>
-            )}
           </div>
         )}
 
