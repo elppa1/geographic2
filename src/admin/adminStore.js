@@ -20,6 +20,14 @@ const HISTORIC_ISSUES_KEY =
   'elppa-geographic-historic-issues'
 
 
+const HISTORIC_CATEGORIES_KEY =
+  'elppa-geographic-historic-categories'
+
+
+const HISTORIC_LAYERS_KEY =
+  'elppa-geographic-historic-layers'
+
+
 const NEWS_REVIEW_KEY =
   'elppa-geographic-news-review'
 
@@ -1331,6 +1339,48 @@ export function saveHistoricIssues(
 ) {
   writeRecords(
     HISTORIC_ISSUES_KEY,
+    records
+  )
+}
+
+
+// ============================================================
+// HISTORIC CATEGORIES
+// ============================================================
+
+export function getHistoricCategories() {
+  return readRecords(
+    HISTORIC_CATEGORIES_KEY
+  )
+}
+
+
+export function saveHistoricCategories(
+  records
+) {
+  writeRecords(
+    HISTORIC_CATEGORIES_KEY,
+    records
+  )
+}
+
+
+// ============================================================
+// HISTORIC LAYERS
+// ============================================================
+
+export function getHistoricLayers() {
+  return readRecords(
+    HISTORIC_LAYERS_KEY
+  )
+}
+
+
+export function saveHistoricLayers(
+  records
+) {
+  writeRecords(
+    HISTORIC_LAYERS_KEY,
     records
   )
 }

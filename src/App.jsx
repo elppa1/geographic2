@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 
@@ -12,12 +13,18 @@ import AdminRoom from './admin/AdminRoom.jsx'
 
 import {
   GEOGRAPHIC_STORE_CHANGE_EVENT,
+  getHistoricCategories,
   getHistoricIssues,
+  getHistoricLayers,
 } from './admin/adminStore.js'
 
 import {
   CITIES,
 } from './cities/index.js'
+
+import {
+  getHistoricPinIcon,
+} from './historicPinIcons.js'
 
 
 const NEWS_HISTORY_STEPS = [
@@ -115,6 +122,10 @@ function GeographicApp() {
     CITIES[
       cityKey
     ]
+
+
+  const geographicMapRef =
+    useRef(null)
 
 
   const sponsorName =
@@ -259,12 +270,168 @@ function GeographicApp() {
 
 
   const [
+    historicCategoryFilter,
+    setHistoricCategoryFilter,
+  ] =
+    useState(
+      'all'
+    )
+
+
+  const [
+    historicLayerFilter,
+    setHistoricLayerFilter,
+  ] =
+    useState(
+      'all'
+    )
+
+
+  const [
+    historicCategories,
+    setHistoricCategories,
+  ] =
+    useState(
+      () =>
+        getHistoricCategories()
+    )
+
+
+  const [
+    historicLayers,
+    setHistoricLayers,
+  ] =
+    useState(
+      () =>
+        getHistoricLayers()
+    )
+
+
+  const [
     historicIssues,
     setHistoricIssues,
   ] =
     useState(
       () =>
         getHistoricIssues()
+    )
+
+
+  const publishedHistoricCategories =
+    useMemo(
+      () =>
+        historicCategories
+          .filter(
+            (
+              category
+            ) =>
+              (
+                category.city ||
+                'toronto'
+              ) ===
+                cityKey &&
+              category.status ===
+                'published'
+          )
+          .sort(
+            (
+              a,
+              b
+            ) => {
+              const orderDifference =
+                Number(
+                  a.displayOrder ||
+                  0
+                ) -
+                Number(
+                  b.displayOrder ||
+                  0
+                )
+
+
+              if (
+                orderDifference !==
+                0
+              ) {
+                return orderDifference
+              }
+
+
+              return String(
+                a.title ||
+                ''
+              )
+                .localeCompare(
+                  String(
+                    b.title ||
+                    ''
+                  )
+                )
+            }
+          ),
+      [
+        historicCategories,
+        cityKey,
+      ]
+    )
+
+
+  const publishedHistoricLayers =
+    useMemo(
+      () =>
+        historicLayers
+          .filter(
+            (
+              layer
+            ) =>
+              (
+                layer.city ||
+                'toronto'
+              ) ===
+                cityKey &&
+              layer.status ===
+                'published'
+          )
+          .sort(
+            (
+              a,
+              b
+            ) => {
+              const orderDifference =
+                Number(
+                  a.displayOrder ||
+                  0
+                ) -
+                Number(
+                  b.displayOrder ||
+                  0
+                )
+
+
+              if (
+                orderDifference !==
+                0
+              ) {
+                return orderDifference
+              }
+
+
+              return String(
+                a.title ||
+                ''
+              )
+                .localeCompare(
+                  String(
+                    b.title ||
+                    ''
+                  )
+                )
+            }
+          ),
+      [
+        historicLayers,
+        cityKey,
+      ]
     )
 
 
@@ -384,36 +551,44 @@ function GeographicApp() {
 
   useEffect(
     () => {
-      const refreshHistoricIssues =
+      const refreshHistoricArchive =
         () => {
           setHistoricIssues(
             getHistoricIssues()
+          )
+
+          setHistoricCategories(
+            getHistoricCategories()
+          )
+
+          setHistoricLayers(
+            getHistoricLayers()
           )
         }
 
 
       window.addEventListener(
         'storage',
-        refreshHistoricIssues
+        refreshHistoricArchive
       )
 
 
       window.addEventListener(
         GEOGRAPHIC_STORE_CHANGE_EVENT,
-        refreshHistoricIssues
+        refreshHistoricArchive
       )
 
 
       return () => {
         window.removeEventListener(
           'storage',
-          refreshHistoricIssues
+          refreshHistoricArchive
         )
 
 
         window.removeEventListener(
           GEOGRAPHIC_STORE_CHANGE_EVENT,
-          refreshHistoricIssues
+          refreshHistoricArchive
         )
       }
     },
@@ -454,6 +629,213 @@ function GeographicApp() {
       publishedHistoricIssues,
     ]
   )
+
+
+  useEffect(
+    () => {
+      if (
+        historicCategoryFilter ===
+          'all'
+      ) {
+        return
+      }
+
+
+      const stillPublished =
+        publishedHistoricCategories.some(
+          (category) =>
+            category.id ===
+            historicCategoryFilter
+        )
+
+
+      if (
+        !stillPublished
+      ) {
+        setHistoricCategoryFilter(
+          'all'
+        )
+      }
+    },
+    [
+      historicCategoryFilter,
+      publishedHistoricCategories,
+    ]
+  )
+
+
+  useEffect(
+    () => {
+      if (
+        historicLayerFilter ===
+          'all'
+      ) {
+        return
+      }
+
+
+      const stillPublished =
+        publishedHistoricLayers.some(
+          (layer) =>
+            layer.id ===
+            historicLayerFilter
+        )
+
+
+      if (
+        !stillPublished
+      ) {
+        setHistoricLayerFilter(
+          'all'
+        )
+      }
+    },
+    [
+      historicLayerFilter,
+      publishedHistoricLayers,
+    ]
+  )
+
+
+  const historicArchiveValue =
+    historicIssueFilter !==
+      'all'
+      ? `issue:${historicIssueFilter}`
+      : historicLayerFilter !==
+          'all'
+        ? `layer:${historicLayerFilter}`
+        : historicCategoryFilter !==
+            'all'
+          ? `category:${historicCategoryFilter}`
+          : 'all'
+
+
+  function resetHistoricMapHome() {
+    setSelectedLayer(
+      defaultLayer
+    )
+
+
+    window.requestAnimationFrame(
+      () => {
+        geographicMapRef.current
+          ?.clearSelectedPin?.()
+
+
+        const map =
+          geographicMapRef.current
+            ?.getMap?.()
+
+
+        if (
+          !map ||
+          !city
+        ) {
+          return
+        }
+
+
+        map.flyTo({
+          center:
+            city.center,
+
+          zoom:
+            city.zoom,
+
+          duration:
+            700,
+        })
+      }
+    )
+  }
+
+
+  function changeHistoricArchive(
+    value
+  ) {
+    setHistoricIssueFilter(
+      'all'
+    )
+
+    setHistoricCategoryFilter(
+      'all'
+    )
+
+    setHistoricLayerFilter(
+      'all'
+    )
+
+
+    if (
+      value.startsWith(
+        'issue:'
+      )
+    ) {
+      setHistoricIssueFilter(
+        value.slice(
+          'issue:'.length
+        )
+      )
+    }
+
+
+    if (
+      value.startsWith(
+        'category:'
+      )
+    ) {
+      setHistoricCategoryFilter(
+        value.slice(
+          'category:'.length
+        )
+      )
+    }
+
+
+    if (
+      value.startsWith(
+        'layer:'
+      )
+    ) {
+      setHistoricLayerFilter(
+        value.slice(
+          'layer:'.length
+        )
+      )
+    }
+
+
+    resetHistoricMapHome()
+  }
+
+
+  function selectHistoricTimeMachineLayer(
+    layer
+  ) {
+    geographicMapRef.current
+      ?.clearSelectedPin?.()
+
+
+    setActivePinFilter(
+      'historic'
+    )
+
+    setHistoricIssueFilter(
+      'all'
+    )
+
+    setHistoricCategoryFilter(
+      'all'
+    )
+
+    setHistoricLayerFilter(
+      'all'
+    )
+
+    setSelectedLayer(
+      layer
+    )
+  }
 
 
   // ==========================================================
@@ -914,6 +1296,10 @@ function GeographicApp() {
       </style>
 
       <GeographicMap
+        ref={
+          geographicMapRef
+        }
+
         cityKey={
           cityKey
         }
@@ -944,6 +1330,14 @@ function GeographicApp() {
 
         historicIssueFilter={
           historicIssueFilter
+        }
+
+        historicCategoryFilter={
+          historicCategoryFilter
+        }
+
+        historicLayerFilter={
+          historicLayerFilter
         }
 
         onSelectHistoricalLayer={
@@ -1344,76 +1738,126 @@ function GeographicApp() {
         {activePinFilter ===
           'historic' && (
           <div className="historic-issue-nav">
-            <button
-              type="button"
-              className={
-                historicIssueFilter ===
-                  'all'
-                  ? 'historic-issue-button historic-issue-button-active'
-                  : 'historic-issue-button'
+            <select
+              value={
+                historicArchiveValue
               }
-              onClick={() =>
-                setHistoricIssueFilter(
-                  'all'
-                )
+              onChange={
+                (event) =>
+                  changeHistoricArchive(
+                    event.target.value
+                  )
               }
+              aria-label="Historic archive"
+              style={{
+                minWidth:
+                  '240px',
+
+                maxWidth:
+                  'min(520px, calc(100vw - 40px))',
+
+                border:
+                  '1px solid rgba(0,0,0,0.18)',
+
+                padding:
+                  '6px 8px',
+
+                background:
+                  '#fff',
+
+                color:
+                  '#111',
+
+                font:
+                  'inherit',
+
+                fontSize:
+                  '8px',
+
+                fontWeight:
+                  800,
+
+                letterSpacing:
+                  '0.06em',
+              }}
             >
-              <span className="historic-issue-number">
-                HISTORIC
-              </span>
-
-              <span className="historic-issue-title">
-                ALL STORIES
-              </span>
-            </button>
+              <option value="all">
+                HISTORIC · ALL STORIES
+              </option>
 
 
-            {publishedHistoricIssues.map(
-              (
-                issue
-              ) => (
-                <button
-                  type="button"
-                  key={
-                    issue.id
-                  }
-                  className={
-                    historicIssueFilter ===
-                      issue.id
-                      ? 'historic-issue-button historic-issue-button-active'
-                      : 'historic-issue-button'
-                  }
-                  onClick={() =>
-                    setHistoricIssueFilter(
-                      issue.id
+              {publishedHistoricCategories.map(
+                (category) => {
+                  const categoryIcon =
+                    getHistoricPinIcon(
+                      category.pinIcon ||
+                      'map-pin'
                     )
-                  }
-                >
-                  <span className="historic-issue-number">
-                    ISSUE {
-                      issue.number ||
-                      ''
-                    }
-                  </span>
 
-                  {issue.subtitle && (
-                    <span className="historic-issue-subtitle">
-                      {
-                        issue.subtitle
-                      }
-                    </span>
-                  )}
 
-                  {issue.title && (
-                    <span className="historic-issue-title">
-                      {
-                        issue.title
+                  return (
+                    <optgroup
+                      key={
+                        category.id
                       }
-                    </span>
+                      label={
+                        `${categoryIcon.emoji} ${category.title}`
+                      }
+                    >
+                      <option
+                        value={
+                          `category:${category.id}`
+                        }
+                      >
+                        {categoryIcon.emoji} ALL {category.title}
+                      </option>
+
+                      {publishedHistoricLayers
+                        .filter(
+                          (layer) =>
+                            layer.categoryId ===
+                            category.id
+                        )
+                        .map(
+                          (layer) => (
+                            <option
+                              key={
+                                layer.id
+                              }
+                              value={
+                                `layer:${layer.id}`
+                              }
+                            >
+                              {categoryIcon.emoji} {category.title} — {layer.title}
+                            </option>
+                          )
+                        )}
+                    </optgroup>
+                  )
+                }
+              )}
+
+
+              {publishedHistoricIssues.length >
+                0 && (
+                <optgroup label="SPECIAL ISSUES">
+                  {publishedHistoricIssues.map(
+                    (issue) => (
+                      <option
+                        key={
+                          issue.id
+                        }
+                        value={
+                          `issue:${issue.id}`
+                        }
+                      >
+                        ★ ISSUE {issue.number || ''} — {issue.title}
+                      </option>
+                    )
                   )}
-                </button>
-              )
-            )}
+                </optgroup>
+              )}
+            </select>
           </div>
         )}
 
@@ -1930,7 +2374,7 @@ function GeographicApp() {
           }
 
           onSelectYear={
-            setSelectedLayer
+            selectHistoricTimeMachineLayer
           }
 
           opacity={

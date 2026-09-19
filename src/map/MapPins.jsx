@@ -15,7 +15,9 @@ import {
 
 import {
   GEOGRAPHIC_STORE_CHANGE_EVENT,
+  getHistoricCategories,
   getHistoricItems,
+  getHistoricLayers,
   getNewsItems,
   getNewItems,
 } from '../admin/adminStore.js'
@@ -2189,6 +2191,8 @@ function appendSeeItThenAction({
   selectedLayer,
   homeLayer,
   historicIssueFilter,
+  historicCategoryFilter,
+  historicLayerFilter,
   onSeeItThen,
   onReturnToHistoricIssueHome,
 }) {
@@ -2199,11 +2203,23 @@ function appendSeeItThenAction({
     })
 
 
-  const insideIssue =
+  const insideHistoricCollection =
     Boolean(
-      historicIssueFilter &&
-      historicIssueFilter !==
-        'all'
+      (
+        historicIssueFilter &&
+        historicIssueFilter !==
+          'all'
+      ) ||
+      (
+        historicCategoryFilter &&
+        historicCategoryFilter !==
+          'all'
+      ) ||
+      (
+        historicLayerFilter &&
+        historicLayerFilter !==
+          'all'
+      )
     )
 
 
@@ -2226,7 +2242,7 @@ function appendSeeItThenAction({
 
 
   const returnToIssueHome =
-    insideIssue &&
+    insideHistoricCollection &&
     atStoryLayer &&
     !atHomeLayer &&
     typeof onReturnToHistoricIssueHome ===
@@ -2264,7 +2280,13 @@ function appendSeeItThenAction({
 
   button.textContent =
     returnToIssueHome
-      ? '← RETURN TO MAIN PAGE OF ISSUE'
+      ? historicLayerFilter !==
+          'all'
+        ? '← RETURN TO LAYER'
+        : historicCategoryFilter !==
+            'all'
+          ? '← RETURN TO CATEGORY'
+          : '← RETURN TO MAIN PAGE OF ISSUE'
       : storyLayer?.year
         ? `SEE IT IN ${storyLayer.year} →`
         : 'SEE IT THEN →'
@@ -5172,6 +5194,8 @@ function createMarker({
   selectedLayer,
   homeLayer,
   historicIssueFilter,
+  historicCategoryFilter,
+  historicLayerFilter,
   onDirections,
   onSeeItThen,
   onReturnToHistoricIssueHome,
@@ -6028,6 +6052,8 @@ function createMarker({
         selectedLayer,
         homeLayer,
         historicIssueFilter,
+        historicCategoryFilter,
+        historicLayerFilter,
         onSeeItThen,
         onReturnToHistoricIssueHome,
       })
@@ -7224,6 +7250,10 @@ function MapPins({
   activePinFilter,
   historicIssueFilter =
     'all',
+  historicCategoryFilter =
+    'all',
+  historicLayerFilter =
+    'all',
   newsRangeFilter,
   newSubtypeFilter,
   newBusinessRangeFilter,
@@ -7756,6 +7786,44 @@ function MapPins({
           selectedLayer,
         })
 
+
+      const historicCategoryById =
+        new Map(
+          getHistoricCategories()
+            .filter(
+              (category) =>
+                belongsToCity(
+                  category,
+                  cityKey
+                )
+            )
+            .map(
+              (category) => [
+                category.id,
+                category,
+              ]
+            )
+        )
+
+
+      const historicLayerById =
+        new Map(
+          getHistoricLayers()
+            .filter(
+              (layer) =>
+                belongsToCity(
+                  layer,
+                  cityKey
+                )
+            )
+            .map(
+              (layer) => [
+                layer.id,
+                layer,
+              ]
+            )
+        )
+
       visiblePins =
         getHistoricItems()
           .filter(
@@ -7766,6 +7834,49 @@ function MapPins({
               ) &&
               pin.active !==
                 false
+          )
+          .filter(
+            (pin) => {
+              if (
+                pin.historicCategoryId
+              ) {
+                const category =
+                  historicCategoryById.get(
+                    pin.historicCategoryId
+                  )
+
+
+                if (
+                  !category ||
+                  category.status !==
+                    'published'
+                ) {
+                  return false
+                }
+              }
+
+
+              if (
+                pin.historicLayerId
+              ) {
+                const layer =
+                  historicLayerById.get(
+                    pin.historicLayerId
+                  )
+
+
+                if (
+                  !layer ||
+                  layer.status !==
+                    'published'
+                ) {
+                  return false
+                }
+              }
+
+
+              return true
+            }
           )
           .filter(
             (pin) =>
@@ -7781,9 +7892,27 @@ function MapPins({
               )
           )
           .filter(
+            (pin) =>
+              historicCategoryFilter ===
+                'all' ||
+              pin.historicCategoryId ===
+                historicCategoryFilter
+          )
+          .filter(
+            (pin) =>
+              historicLayerFilter ===
+                'all' ||
+              pin.historicLayerId ===
+                historicLayerFilter
+          )
+          .filter(
             (pin) => {
               if (
                 historicIssueFilter !==
+                  'all' ||
+                historicCategoryFilter !==
+                  'all' ||
+                historicLayerFilter !==
                   'all'
               ) {
                 return true
@@ -7805,12 +7934,28 @@ function MapPins({
             }
           )
           .map(
-            (pin) => ({
-              pin,
+            (pin) => {
+              const category =
+                historicCategoryById.get(
+                  pin.historicCategoryId
+                )
 
-              pinType:
-                'historic',
-            })
+
+              return {
+                pin:
+                  category?.pinIcon
+                    ? {
+                        ...pin,
+
+                        pinIcon:
+                          category.pinIcon,
+                      }
+                    : pin,
+
+                pinType:
+                  'historic',
+              }
+            }
           )
     }
 
@@ -8064,6 +8209,8 @@ function MapPins({
                   selectedLayer,
                   homeLayer,
                   historicIssueFilter,
+                  historicCategoryFilter,
+                  historicLayerFilter,
                   onDirections,
                   onSeeItThen,
                   onReturnToHistoricIssueHome,
@@ -8109,6 +8256,8 @@ function MapPins({
             selectedLayer,
             homeLayer,
             historicIssueFilter,
+            historicCategoryFilter,
+            historicLayerFilter,
             onDirections,
             onSeeItThen,
             onReturnToHistoricIssueHome,
@@ -8168,6 +8317,8 @@ function MapPins({
     selectedLayer?.layerType,
     activePinFilter,
     historicIssueFilter,
+    historicCategoryFilter,
+    historicLayerFilter,
     homeLayer?.year,
     homeLayer?.layerType,
     newsRangeFilter,

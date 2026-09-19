@@ -678,6 +678,12 @@ const GeographicMap =
         historicIssueFilter =
           'all',
 
+        historicCategoryFilter =
+          'all',
+
+        historicLayerFilter =
+          'all',
+
         onSelectHistoricalLayer,
 
         newsRangeFilter =
@@ -784,6 +790,13 @@ const GeographicMap =
 
           getUserPosition() {
             return userPositionRef.current
+          },
+
+
+          clearSelectedPin() {
+            setSelectedPinId(
+              null
+            )
           },
         }),
         []
@@ -2440,6 +2453,14 @@ const GeographicMap =
 
               historicIssueFilter={
                 historicIssueFilter
+              }
+
+              historicCategoryFilter={
+                historicCategoryFilter
+              }
+
+              historicLayerFilter={
+                historicLayerFilter
               }
 
               newsRangeFilter={
