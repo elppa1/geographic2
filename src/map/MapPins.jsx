@@ -6339,6 +6339,9 @@ function createMarker({
       closeOnClick:
         true,
 
+      closeOnMove:
+        false,
+
       offset:
         14,
 
@@ -8435,25 +8438,79 @@ function MapPins({
       return
     }
 
-    const marker =
-      markerByIdRef.current.get(
-        selectedPinId
-      )
+
+    const openSelectedPopup =
+      () => {
+        const marker =
+          markerByIdRef.current.get(
+            selectedPinId
+          )
+
+
+        if (
+          !marker
+        ) {
+          return
+        }
+
+
+        const popup =
+          marker.getPopup()
+
+
+        if (
+          popup &&
+          !popup.isOpen()
+        ) {
+          marker.togglePopup()
+        }
+      }
+
+
+    openSelectedPopup()
+
 
     if (
-      !marker
+      !historicCollectionActive
     ) {
       return
     }
 
-    const popup =
-      marker.getPopup()
 
-    if (
-      popup &&
-      !popup.isOpen()
-    ) {
-      marker.togglePopup()
+    // SEE IT THEN changes the historical basemap and flies the map.
+    // Some MapLibre transitions can close an attached popup after the
+    // React selection effect has already run. Re-open the same selected
+    // Historic story once that transition finishes so the user never
+    // loses the story they were reading.
+    const reopenAfterMove =
+      () => {
+        openSelectedPopup()
+      }
+
+
+    const reopenTimer =
+      window.setTimeout(
+        openSelectedPopup,
+        0
+      )
+
+
+    map.once(
+      'moveend',
+      reopenAfterMove
+    )
+
+
+    return () => {
+      window.clearTimeout(
+        reopenTimer
+      )
+
+
+      map.off(
+        'moveend',
+        reopenAfterMove
+      )
     }
   }, [
     map,
@@ -8462,6 +8519,7 @@ function MapPins({
     newSubtypeFilter,
     selectedLayer?.year,
     selectedLayer?.layerType,
+    historicCollectionActive,
   ])
 
 
