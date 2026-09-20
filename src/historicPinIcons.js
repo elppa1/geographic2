@@ -394,6 +394,13 @@ export const HISTORIC_PIN_ICONS = [
     keywords: 'person individual biography resident',
   },
   {
+    id: 'owl',
+    emoji: '🦉',
+    label: 'Owl / OVO',
+    category: 'people',
+    keywords: 'owl ovo drake toronto music artist person',
+  },
+  {
     id: 'missing-person',
     emoji: '👤',
     label: 'Missing Person',
