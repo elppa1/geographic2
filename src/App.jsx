@@ -828,24 +828,8 @@ function GeographicApp() {
   function selectHistoricTimeMachineLayer(
     layer
   ) {
-    geographicMapRef.current
-      ?.clearSelectedPin?.()
-
-
     setActivePinFilter(
       'historic'
-    )
-
-    setHistoricIssueFilter(
-      'all'
-    )
-
-    setHistoricCategoryFilter(
-      'all'
-    )
-
-    setHistoricLayerFilter(
-      'all'
     )
 
     setSelectedLayer(
