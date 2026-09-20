@@ -857,7 +857,7 @@ const GeographicMap =
         atmosphereEnabled,
         setAtmosphereEnabled,
       ] =
-        useState(true)
+        useState(false)
 
 
   useEffect(() => {

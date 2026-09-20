@@ -662,6 +662,66 @@ function getNewBusinessAgeLabel(
 }
 
 
+function getNewBusinessLocationLabel(
+  pin
+) {
+  const candidates =
+    [
+      pin?.address,
+      pin?.streetAddress,
+      pin?.formattedAddress,
+      pin?.businessAddress,
+      pin?.location,
+      pin?.intersection,
+    ]
+      .map(
+        (value) =>
+          String(
+            value ||
+            ''
+          )
+            .trim()
+      )
+      .filter(
+        Boolean
+      )
+
+
+  const looksLikeStreetAddress =
+    (value) =>
+      /^\s*\d+[A-Za-z]?(?:-\d+[A-Za-z]?)?\s+\S/.test(
+        value
+      ) ||
+      /^\s*(?:unit|suite|#)\s*[^, ]+[, ]+\d+[A-Za-z]?(?:-\d+[A-Za-z]?)?\s+\S/i.test(
+        value
+      )
+
+
+  const looksLikeIntersection =
+    (value) =>
+      /\s(?:&|and|@)\s/i.test(
+        value
+      ) &&
+      /\b(?:street|st\.?|road|rd\.?|avenue|ave\.?|boulevard|blvd\.?|drive|dr\.?|lane|ln\.?|way|court|ct\.?|crescent|cres\.?|trail|trl\.?|highway|hwy\.?)\b/i.test(
+        value
+      )
+
+
+  return (
+    candidates.find(
+      (value) =>
+        looksLikeStreetAddress(
+          value
+        ) ||
+        looksLikeIntersection(
+          value
+        )
+    ) ||
+    ''
+  )
+}
+
+
 // ============================================================
 // NEW LIFECYCLE GROUP
 // ============================================================
@@ -5817,10 +5877,8 @@ function createMarker({
         'geographic-pin-location',
 
       text:
-        (
-          pin.location ||
-          pin.intersection ||
-          ''
+        getNewBusinessLocationLabel(
+          pin
         ),
     })
 
@@ -6007,8 +6065,26 @@ function createMarker({
                 pin.location
               )
             : (
-                pin.intersection ||
-                pin.location
+                pinType ===
+                  'new' &&
+                (
+                  normalizeCompareText(
+                    pin.newType
+                  ) ===
+                    'business' ||
+                  BUSINESS_CATEGORIES.includes(
+                    normalizeCompareText(
+                      pin.category
+                    )
+                  )
+                )
+                  ? getNewBusinessLocationLabel(
+                      pin
+                    )
+                  : (
+                      pin.intersection ||
+                      pin.location
+                    )
               )
         ),
     })

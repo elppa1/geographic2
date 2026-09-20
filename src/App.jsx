@@ -828,10 +828,6 @@ function GeographicApp() {
   function selectHistoricTimeMachineLayer(
     layer
   ) {
-    setActivePinFilter(
-      'historic'
-    )
-
     setSelectedLayer(
       layer
     )
