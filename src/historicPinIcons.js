@@ -244,6 +244,13 @@ export const HISTORIC_PIN_ICONS = [
     keywords: 'restaurant food dining eatery',
   },
   {
+    id: 'pizza',
+    emoji: '🍕',
+    label: 'Pizza',
+    category: 'food',
+    keywords: 'pizza pizzeria slice pie food restaurant portnoy one bite',
+  },
+  {
     id: 'diner',
     emoji: '🍔',
     label: 'Diner / Lunch Counter',

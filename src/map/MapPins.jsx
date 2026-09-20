@@ -5280,6 +5280,360 @@ function spreadActiveTtcMarkers({
 
 
 // ============================================================
+// HISTORIC STACKED MARKERS
+// ============================================================
+//
+// Historic stories can legitimately share one exact venue
+// (Rogers Centre, Scotiabank Arena, Maple Leaf Gardens, etc.).
+// Keep every stored coordinate true to the event location, but
+// collapse same-location stories into one count marker. Clicking
+// that marker fans the real story markers out around the venue.
+//
+
+const HISTORIC_STACK_COORDINATE_PRECISION =
+  4
+
+const HISTORIC_STACK_RADIUS_PX =
+  27
+
+
+function getHistoricStackKey(
+  item
+) {
+  if (
+    item?.pinType !==
+      'historic'
+  ) {
+    return ''
+  }
+
+
+  const longitude =
+    Number(
+      item?.pin?.longitude
+    )
+
+  const latitude =
+    Number(
+      item?.pin?.latitude
+    )
+
+
+  if (
+    !Number.isFinite(
+      longitude
+    ) ||
+    !Number.isFinite(
+      latitude
+    )
+  ) {
+    return ''
+  }
+
+
+  return (
+    `${latitude.toFixed(
+      HISTORIC_STACK_COORDINATE_PRECISION
+    )}:` +
+    `${longitude.toFixed(
+      HISTORIC_STACK_COORDINATE_PRECISION
+    )}`
+  )
+}
+
+
+function getHistoricStackOffsets(
+  count
+) {
+  if (
+    count <=
+      1
+  ) {
+    return [
+      [0, 0],
+    ]
+  }
+
+
+  if (
+    count ===
+      2
+  ) {
+    return [
+      [-20, 0],
+      [20, 0],
+    ]
+  }
+
+
+  return Array.from(
+    {
+      length:
+        count,
+    },
+    (
+      _,
+      index
+    ) => {
+      const ring =
+        Math.floor(
+          index /
+          8
+        )
+
+      const positionInRing =
+        index %
+        8
+
+      const itemsInRing =
+        Math.min(
+          8,
+          count -
+          (
+            ring *
+            8
+          )
+        )
+
+      const radius =
+        HISTORIC_STACK_RADIUS_PX +
+        (
+          ring *
+          16
+        )
+
+      const angle =
+        (
+          -Math.PI /
+          2
+        ) +
+        (
+          (
+            Math.PI *
+            2
+          ) *
+          (
+            positionInRing /
+            itemsInRing
+          )
+        )
+
+
+      return [
+        Math.round(
+          Math.cos(
+            angle
+          ) *
+          radius
+        ),
+        Math.round(
+          Math.sin(
+            angle
+          ) *
+          radius
+        ),
+      ]
+    }
+  )
+}
+
+
+function createHistoricStackMarker({
+  map,
+  items,
+  onExpand,
+}) {
+  const firstPin =
+    items?.[0]?.pin
+
+
+  if (
+    !firstPin
+  ) {
+    return null
+  }
+
+
+  const longitude =
+    Number(
+      firstPin.longitude
+    )
+
+  const latitude =
+    Number(
+      firstPin.latitude
+    )
+
+
+  if (
+    !Number.isFinite(
+      longitude
+    ) ||
+    !Number.isFinite(
+      latitude
+    )
+  ) {
+    return null
+  }
+
+
+  const element =
+    document.createElement(
+      'button'
+    )
+
+  element.type =
+    'button'
+
+  element.className =
+    'geographic-pin-historic-stack'
+
+  element.style.height =
+    '32px'
+
+  element.style.minWidth =
+    '42px'
+
+  element.style.padding =
+    '0 8px'
+
+  element.style.border =
+    '1px solid rgba(0, 0, 0, 0.72)'
+
+  element.style.borderRadius =
+    '999px'
+
+  element.style.background =
+    'rgba(255, 255, 255, 0.96)'
+
+  element.style.boxShadow =
+    '0 2px 8px rgba(0, 0, 0, 0.24)'
+
+  element.style.cursor =
+    'pointer'
+
+  element.style.display =
+    'flex'
+
+  element.style.alignItems =
+    'center'
+
+  element.style.justifyContent =
+    'center'
+
+  element.style.gap =
+    '4px'
+
+  element.style.fontSize =
+    '13px'
+
+  element.style.fontWeight =
+    '800'
+
+  element.style.lineHeight =
+    '1'
+
+  element.style.whiteSpace =
+    'nowrap'
+
+  element.style.appearance =
+    'none'
+
+  element.style.WebkitAppearance =
+    'none'
+
+
+  const emojis =
+    Array.from(
+      new Set(
+        items
+          .map(
+            (item) =>
+              getHistoricPinIcon(
+                item?.pin?.pinIcon
+              )?.emoji
+          )
+          .filter(
+            Boolean
+          )
+      )
+    )
+      .slice(
+        0,
+        3
+      )
+
+
+  const iconText =
+    document.createElement(
+      'span'
+    )
+
+  iconText.textContent =
+    emojis.join(
+      ''
+    )
+
+
+  const countText =
+    document.createElement(
+      'span'
+    )
+
+  countText.textContent =
+    String(
+      items.length
+    )
+
+
+  element.appendChild(
+    iconText
+  )
+
+  element.appendChild(
+    countText
+  )
+
+
+  element.setAttribute(
+    'aria-label',
+    (
+      `${items.length} Historic stories ` +
+      'at this location. Click to spread markers.'
+    )
+  )
+
+
+  element.addEventListener(
+    'click',
+    (
+      event
+    ) => {
+      event.preventDefault()
+      event.stopPropagation()
+
+      onExpand?.()
+    }
+  )
+
+
+  return new Marker({
+    element,
+
+    anchor:
+      'center',
+  })
+    .setLngLat([
+      longitude,
+      latitude,
+    ])
+    .addTo(
+      map
+    )
+}
+
+
+// ============================================================
 // CREATE MARKER
 // ============================================================
 
@@ -8301,6 +8655,114 @@ function MapPins({
         })
     }
 
+
+    const historicStackGroups =
+      new Map()
+
+
+    if (
+      activePinFilter ===
+        'historic'
+    ) {
+      visiblePins.forEach(
+        (item) => {
+          const stackKey =
+            getHistoricStackKey(
+              item
+            )
+
+
+          if (
+            !stackKey
+          ) {
+            return
+          }
+
+
+          const group =
+            historicStackGroups.get(
+              stackKey
+            ) ||
+            []
+
+
+          group.push(
+            item
+          )
+
+          historicStackGroups.set(
+            stackKey,
+            group
+          )
+        }
+      )
+    }
+
+
+    const renderedHistoricStacks =
+      new Set()
+
+
+    const renderExpandedHistoricStack =
+      (
+        group
+      ) => {
+        const offsets =
+          getHistoricStackOffsets(
+            group.length
+          )
+
+
+        group.forEach(
+          (
+            {
+              pin,
+              pinType,
+            },
+            groupIndex
+          ) => {
+            const marker =
+              createMarker({
+                map,
+                pin,
+                pinType,
+                markerOffset:
+                  offsets[
+                    groupIndex
+                  ] ||
+                  [0, 0],
+                city,
+                selectedLayer,
+                homeLayer,
+                historicIssueFilter,
+                historicCategoryFilter,
+                historicLayerFilter,
+                onDirections,
+                onSeeItThen,
+                onReturnToHistoricIssueHome,
+              })
+
+
+            if (
+              !marker
+            ) {
+              return
+            }
+
+
+            markersRef.current.push(
+              marker
+            )
+
+            markerByIdRef.current.set(
+              pin.id,
+              marker
+            )
+          }
+        )
+      }
+
+
     visiblePins.forEach(
       ({
         pin,
@@ -8309,6 +8771,99 @@ function MapPins({
       },
       visibleIndex
       ) => {
+        if (
+          pinType ===
+            'historic'
+        ) {
+          const stackKey =
+            getHistoricStackKey({
+              pin,
+              pinType,
+            })
+
+          const stackGroup =
+            stackKey
+              ? historicStackGroups.get(
+                  stackKey
+                )
+              : null
+
+
+          if (
+            stackGroup?.length >
+              1
+          ) {
+            if (
+              renderedHistoricStacks.has(
+                stackKey
+              )
+            ) {
+              return
+            }
+
+
+            renderedHistoricStacks.add(
+              stackKey
+            )
+
+
+            const selectedStoryInStack =
+              Boolean(
+                selectedPinId &&
+                stackGroup.some(
+                  (item) =>
+                    item?.pin?.id ===
+                    selectedPinId
+                )
+              )
+
+
+            if (
+              selectedStoryInStack
+            ) {
+              renderExpandedHistoricStack(
+                stackGroup
+              )
+
+              return
+            }
+
+
+            let stackMarker =
+              null
+
+
+            stackMarker =
+              createHistoricStackMarker({
+                map,
+                items:
+                  stackGroup,
+
+                onExpand:
+                  () => {
+                    stackMarker?.remove()
+
+                    renderExpandedHistoricStack(
+                      stackGroup
+                    )
+                  },
+              })
+
+
+            if (
+              stackMarker
+            ) {
+              markersRef.current.push(
+                stackMarker
+              )
+            }
+
+
+            return
+          }
+        }
+
+
         if (
           pinType ===
             'news' &&
