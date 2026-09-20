@@ -2292,9 +2292,7 @@ function appendSeeItThenAction({
 
   const getSeeItThenLabel =
     () =>
-      storyLayer?.year
-        ? `SEE IT IN ${storyLayer.year} →`
-        : 'SEE IT THEN →'
+      'SEE WHAT IT LOOKED LIKE →'
 
 
   let viewingStoryLayer =
