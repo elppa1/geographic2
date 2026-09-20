@@ -395,8 +395,8 @@ export const HISTORIC_PIN_ICONS = [
 
   {
     id: 'person',
-    emoji: '👤',
-    label: 'Person',
+    emoji: '⭐',
+    label: 'Person / Biography',
     category: 'people',
     keywords: 'person individual biography resident',
   },
@@ -409,7 +409,7 @@ export const HISTORIC_PIN_ICONS = [
   },
   {
     id: 'missing-person',
-    emoji: '👤',
+    emoji: '🔎',
     label: 'Missing Person',
     category: 'people',
     keywords: 'missing disappeared disappearance person lost',
