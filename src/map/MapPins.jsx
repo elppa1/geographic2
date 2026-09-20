@@ -8111,16 +8111,39 @@ function MapPins({
                 )
 
 
-              return {
-                pin:
-                  category?.pinIcon
-                    ? {
-                        ...pin,
+              const layer =
+                historicLayerById.get(
+                  pin.historicLayerId
+                )
 
-                        pinIcon:
-                          category.pinIcon,
-                      }
-                    : pin,
+
+              const storyPinIcon =
+                String(
+                  pin.pinIcon ||
+                  ''
+                )
+                  .trim()
+
+
+              const pinIcon =
+                storyPinIcon &&
+                storyPinIcon !==
+                  'map-pin'
+                  ? storyPinIcon
+                  : (
+                      layer?.pinIcon ||
+                      category?.pinIcon ||
+                      storyPinIcon ||
+                      'map-pin'
+                    )
+
+
+              return {
+                pin: {
+                  ...pin,
+
+                  pinIcon,
+                },
 
                 pinType:
                   'historic',

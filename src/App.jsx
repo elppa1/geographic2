@@ -828,6 +828,10 @@ function GeographicApp() {
   function selectHistoricTimeMachineLayer(
     layer
   ) {
+    setActivePinFilter(
+      'historic'
+    )
+
     setSelectedLayer(
       layer
     )
@@ -1815,18 +1819,28 @@ function GeographicApp() {
                             category.id
                         )
                         .map(
-                          (layer) => (
-                            <option
-                              key={
-                                layer.id
-                              }
-                              value={
-                                `layer:${layer.id}`
-                              }
-                            >
-                              {categoryIcon.emoji} {category.title} — {layer.title}
-                            </option>
-                          )
+                          (layer) => {
+                            const layerIcon =
+                              getHistoricPinIcon(
+                                layer.pinIcon ||
+                                category.pinIcon ||
+                                'map-pin'
+                              )
+
+
+                            return (
+                              <option
+                                key={
+                                  layer.id
+                                }
+                                value={
+                                  `layer:${layer.id}`
+                                }
+                              >
+                                {layerIcon.emoji} {category.title} — {layer.title}
+                              </option>
+                            )
+                          }
                         )}
                     </optgroup>
                   )

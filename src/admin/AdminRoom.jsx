@@ -5050,23 +5050,6 @@ function AdminRoom() {
     useState(
       () =>
         getHistoricLayers()
-          .map(
-            (layer) =>
-              String(
-                layer?.title ||
-                ''
-              )
-                .trim()
-                .toUpperCase() ===
-                "DRAKE'S TORONTO"
-                ? {
-                    ...layer,
-
-                    pinIcon:
-                      'owl',
-                  }
-                : layer
-          )
     )
 
 
@@ -10075,21 +10058,11 @@ function AdminRoom() {
         .trim()
 
 
-    const defaultIcon =
+    const pinIcon =
       title.toUpperCase() ===
         'PEOPLE'
         ? 'person'
         : 'map-pin'
-
-
-    const pinIcon =
-      getHistoricPinIcon(
-        window.prompt(
-          'DEFAULT ICON ID',
-          defaultIcon
-        ) ||
-        defaultIcon
-      ).id
 
 
     const record = {
@@ -10190,15 +10163,8 @@ function AdminRoom() {
 
 
     const pinIcon =
-      getHistoricPinIcon(
-        window.prompt(
-          'DEFAULT ICON ID',
-          selectedHistoricCategory.pinIcon ||
-          'map-pin'
-        ) ||
-        selectedHistoricCategory.pinIcon ||
-        'map-pin'
-      ).id
+      selectedHistoricCategory.pinIcon ||
+      'map-pin'
 
 
     setHistoricCategories(
@@ -10217,6 +10183,42 @@ function AdminRoom() {
                   ),
 
                 description,
+
+                pinIcon,
+
+                updatedAt:
+                  new Date()
+                    .toISOString(),
+              }
+            : category
+      )
+    )
+  }
+
+
+  function updateHistoricCategoryIcon(
+    value
+  ) {
+    if (
+      !selectedHistoricCategory
+    ) {
+      return
+    }
+
+
+    const pinIcon =
+      getHistoricPinIcon(
+        value
+      ).id
+
+
+    setHistoricCategories(
+      historicCategories.map(
+        (category) =>
+          category.id ===
+            selectedHistoricCategory.id
+            ? {
+                ...category,
 
                 pinIcon,
 
@@ -10377,24 +10379,9 @@ function AdminRoom() {
         .trim()
 
 
-    const defaultIcon =
-      title.toUpperCase() ===
-        "DRAKE'S TORONTO"
-        ? 'owl'
-        : (
-            selectedHistoricCategory.pinIcon ||
-            'map-pin'
-          )
-
-
     const pinIcon =
-      getHistoricPinIcon(
-        window.prompt(
-          'LAYER ICON ID',
-          defaultIcon
-        ) ||
-        defaultIcon
-      ).id
+      selectedHistoricCategory.pinIcon ||
+      'map-pin'
 
 
     const record = {
@@ -10498,25 +10485,10 @@ function AdminRoom() {
         .trim()
 
 
-    const defaultIcon =
-      title.toUpperCase() ===
-        "DRAKE'S TORONTO"
-        ? 'owl'
-        : (
-            selectedHistoricLayer.pinIcon ||
-            selectedHistoricCategory?.pinIcon ||
-            'map-pin'
-          )
-
-
     const pinIcon =
-      getHistoricPinIcon(
-        window.prompt(
-          'LAYER ICON ID',
-          defaultIcon
-        ) ||
-        defaultIcon
-      ).id
+      selectedHistoricLayer.pinIcon ||
+      selectedHistoricCategory?.pinIcon ||
+      'map-pin'
 
 
     setHistoricLayers(
@@ -10535,6 +10507,42 @@ function AdminRoom() {
                   ),
 
                 description,
+
+                pinIcon,
+
+                updatedAt:
+                  new Date()
+                    .toISOString(),
+              }
+            : layer
+      )
+    )
+  }
+
+
+  function updateHistoricLayerIcon(
+    value
+  ) {
+    if (
+      !selectedHistoricLayer
+    ) {
+      return
+    }
+
+
+    const pinIcon =
+      getHistoricPinIcon(
+        value
+      ).id
+
+
+    setHistoricLayers(
+      historicLayers.map(
+        (layer) =>
+          layer.id ===
+            selectedHistoricLayer.id
+            ? {
+                ...layer,
 
                 pinIcon,
 
@@ -10957,14 +10965,9 @@ function AdminRoom() {
 
 
     const requestedLayerIcon =
-      layerTitle.toUpperCase() ===
-        "DRAKE'S TORONTO"
-        ? 'owl'
-        : (
-            layerInput.pinIcon ||
-            category.pinIcon ||
-            'map-pin'
-          )
+      layerInput.pinIcon ||
+      category.pinIcon ||
+      'map-pin'
 
 
     if (
@@ -11040,31 +11043,39 @@ function AdminRoom() {
       ]
     }
     else if (
-      layerTitle.toUpperCase() ===
-        "DRAKE'S TORONTO" &&
-      layer.pinIcon !==
-        'owl'
+      layerInput.pinIcon
     ) {
-      layer = {
-        ...layer,
+      const importedLayerIcon =
+        getHistoricPinIcon(
+          layerInput.pinIcon
+        ).id
 
-        pinIcon:
-          'owl',
 
-        updatedAt:
-          new Date()
-            .toISOString(),
+      if (
+        layer.pinIcon !==
+          importedLayerIcon
+      ) {
+        layer = {
+          ...layer,
+
+          pinIcon:
+            importedLayerIcon,
+
+          updatedAt:
+            new Date()
+              .toISOString(),
+        }
+
+
+        nextLayers =
+          nextLayers.map(
+            (item) =>
+              item.id ===
+                layer.id
+                ? layer
+                : item
+          )
       }
-
-
-      nextLayers =
-        nextLayers.map(
-          (item) =>
-            item.id ===
-              layer.id
-              ? layer
-              : item
-        )
     }
 
 
@@ -18283,6 +18294,54 @@ function AdminRoom() {
                           }
                         </div>
 
+                        <label
+                          className="admin-field"
+                          style={{
+                            marginTop:
+                              '10px',
+
+                            maxWidth:
+                              '360px',
+                          }}
+                        >
+                          <span>
+                            CATEGORY ICON
+                          </span>
+
+                          <select
+                            value={
+                              selectedHistoricCategory.pinIcon ||
+                              'map-pin'
+                            }
+                            onChange={
+                              (
+                                event
+                              ) =>
+                                updateHistoricCategoryIcon(
+                                  event.target.value
+                                )
+                            }
+                          >
+                            {HISTORIC_PIN_ICONS.map(
+                              (
+                                icon
+                              ) => (
+                                <option
+                                  key={
+                                    icon.id
+                                  }
+                                  value={
+                                    icon.id
+                                  }
+                                >
+                                  {icon.emoji} {icon.label}
+                                </option>
+                              )
+                            )}
+                          </select>
+                        </label>
+
+
                         <button
                           type="button"
                           className="admin-cancel"
@@ -18495,6 +18554,55 @@ function AdminRoom() {
                             historicScopedItems.length
                           } STORIES
                         </div>
+
+                        <label
+                          className="admin-field"
+                          style={{
+                            marginTop:
+                              '10px',
+
+                            maxWidth:
+                              '360px',
+                          }}
+                        >
+                          <span>
+                            LAYER / SUBCATEGORY ICON
+                          </span>
+
+                          <select
+                            value={
+                              selectedHistoricLayer.pinIcon ||
+                              selectedHistoricCategory?.pinIcon ||
+                              'map-pin'
+                            }
+                            onChange={
+                              (
+                                event
+                              ) =>
+                                updateHistoricLayerIcon(
+                                  event.target.value
+                                )
+                            }
+                          >
+                            {HISTORIC_PIN_ICONS.map(
+                              (
+                                icon
+                              ) => (
+                                <option
+                                  key={
+                                    icon.id
+                                  }
+                                  value={
+                                    icon.id
+                                  }
+                                >
+                                  {icon.emoji} {icon.label}
+                                </option>
+                              )
+                            )}
+                          </select>
+                        </label>
+
 
                         <div
                           className="admin-form-actions"
