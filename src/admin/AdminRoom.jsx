@@ -5115,7 +5115,16 @@ function AdminRoom() {
     setHistoricRecordFilter,
   ] =
     useState(
-      'drafts'
+      'published'
+    )
+
+
+  const [
+    historicStoryScope,
+    setHistoricStoryScope,
+  ] =
+    useState(
+      'all'
     )
 
 
@@ -5383,6 +5392,71 @@ function AdminRoom() {
         false
     )
       .length
+
+
+  const historicCategoryItems =
+    historicItems.filter(
+      (record) =>
+        !selectedHistoricCategory?.id ||
+        record.historicCategoryId ===
+          selectedHistoricCategory.id
+    )
+
+
+  const historicAllDraftCount =
+    historicItems.filter(
+      (record) =>
+        record.active ===
+        false
+    )
+      .length
+
+
+  const historicAllPublishedCount =
+    historicItems.filter(
+      (record) =>
+        record.active !==
+        false
+    )
+      .length
+
+
+  const historicCategoryDraftCount =
+    historicCategoryItems.filter(
+      (record) =>
+        record.active ===
+        false
+    )
+      .length
+
+
+  const historicCategoryPublishedCount =
+    historicCategoryItems.filter(
+      (record) =>
+        record.active !==
+        false
+    )
+      .length
+
+
+  const historicScopeDraftCount =
+    historicStoryScope ===
+      'layer'
+      ? historicScopedDraftCount
+      : historicStoryScope ===
+          'category'
+        ? historicCategoryDraftCount
+        : historicAllDraftCount
+
+
+  const historicScopePublishedCount =
+    historicStoryScope ===
+      'layer'
+      ? historicScopedPublishedCount
+      : historicStoryScope ===
+          'category'
+        ? historicCategoryPublishedCount
+        : historicAllPublishedCount
 
 
   useEffect(
@@ -6039,6 +6113,8 @@ function AdminRoom() {
             next.filter(
               (record) => {
                 if (
+                  historicStoryScope ===
+                    'category' &&
                   selectedHistoricCategory?.id &&
                   record.historicCategoryId !==
                     selectedHistoricCategory.id
@@ -6048,6 +6124,8 @@ function AdminRoom() {
 
 
                 if (
+                  historicStoryScope ===
+                    'layer' &&
                   selectedHistoricLayer?.id &&
                   record.historicLayerId !==
                     selectedHistoricLayer.id
@@ -6270,6 +6348,7 @@ function AdminRoom() {
         publishedNewsSort,
         publishedNewsSearch,
         historicRecordFilter,
+        historicStoryScope,
         selectedHistoricCategoryId,
         selectedHistoricLayerId,
       ]
@@ -21190,51 +21269,134 @@ function AdminRoom() {
             <div className="admin-published-section">
               {tab ===
                 'historic' && (
-                <div className="admin-review-type-filters">
-                  <button
-                    type="button"
-                    className={
-                      historicRecordFilter ===
-                        'drafts'
-                        ? 'admin-review-type-filter admin-review-type-filter-active'
-                        : 'admin-review-type-filter'
-                    }
-                    onClick={() =>
-                      setHistoricRecordFilter(
-                        'drafts'
-                      )
-                    }
-                  >
-                    DRAFT STORIES
-                    <span>
-                      {
-                        historicScopedDraftCount
+                <>
+                  <div className="admin-review-type-filters">
+                    <button
+                      type="button"
+                      className={
+                        historicRecordFilter ===
+                          'drafts'
+                          ? 'admin-review-type-filter admin-review-type-filter-active'
+                          : 'admin-review-type-filter'
                       }
-                    </span>
-                  </button>
+                      onClick={() =>
+                        setHistoricRecordFilter(
+                          'drafts'
+                        )
+                      }
+                    >
+                      DRAFT STORIES
+                      <span>
+                        {
+                          historicScopeDraftCount
+                        }
+                      </span>
+                    </button>
 
-                  <button
-                    type="button"
-                    className={
-                      historicRecordFilter ===
-                        'published'
-                        ? 'admin-review-type-filter admin-review-type-filter-active'
-                        : 'admin-review-type-filter'
-                    }
-                    onClick={() =>
-                      setHistoricRecordFilter(
-                        'published'
-                      )
-                    }
-                  >
-                    PUBLISHED STORIES
-                    <span>
-                      {
-                        historicScopedPublishedCount
+                    <button
+                      type="button"
+                      className={
+                        historicRecordFilter ===
+                          'published'
+                          ? 'admin-review-type-filter admin-review-type-filter-active'
+                          : 'admin-review-type-filter'
                       }
-                    </span>
-                  </button>
-                </div>
+                      onClick={() =>
+                        setHistoricRecordFilter(
+                          'published'
+                        )
+                      }
+                    >
+                      PUBLISHED STORIES
+                      <span>
+                        {
+                          historicScopePublishedCount
+                        }
+                      </span>
+                    </button>
+                  </div>
+
+
+                  <div className="admin-review-type-filters">
+                    <button
+                      type="button"
+                      className={
+                        historicStoryScope ===
+                          'all'
+                          ? 'admin-review-type-filter admin-review-type-filter-active'
+                          : 'admin-review-type-filter'
+                      }
+                      onClick={() =>
+                        setHistoricStoryScope(
+                          'all'
+                        )
+                      }
+                    >
+                      {historicRecordFilter ===
+                        'drafts'
+                        ? 'ALL DRAFTS'
+                        : 'ALL PUBLISHED'}
+                      <span>
+                        {historicRecordFilter ===
+                          'drafts'
+                          ? historicAllDraftCount
+                          : historicAllPublishedCount}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={
+                        historicStoryScope ===
+                          'category'
+                          ? 'admin-review-type-filter admin-review-type-filter-active'
+                          : 'admin-review-type-filter'
+                      }
+                      disabled={
+                        !selectedHistoricCategory
+                      }
+                      onClick={() =>
+                        setHistoricStoryScope(
+                          'category'
+                        )
+                      }
+                    >
+                      CURRENT CATEGORY
+                      <span>
+                        {historicRecordFilter ===
+                          'drafts'
+                          ? historicCategoryDraftCount
+                          : historicCategoryPublishedCount}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={
+                        historicStoryScope ===
+                          'layer'
+                          ? 'admin-review-type-filter admin-review-type-filter-active'
+                          : 'admin-review-type-filter'
+                      }
+                      disabled={
+                        !selectedHistoricLayer
+                      }
+                      onClick={() =>
+                        setHistoricStoryScope(
+                          'layer'
+                        )
+                      }
+                    >
+                      CURRENT LAYER
+                      <span>
+                        {historicRecordFilter ===
+                          'drafts'
+                          ? historicScopedDraftCount
+                          : historicScopedPublishedCount}
+                      </span>
+                    </button>
+                  </div>
+                </>
               )}
 
 
