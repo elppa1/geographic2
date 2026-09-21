@@ -16,6 +16,7 @@ import {
   getHistoricCategories,
   getHistoricIssues,
   getHistoricLayers,
+  loadPublishedHistoricSnapshot,
 } from './admin/adminStore.js'
 
 import {
@@ -25,6 +26,10 @@ import {
 import {
   getHistoricPinIcon,
 } from './historicPinIcons.js'
+
+
+const PUBLISHED_HISTORIC_REFRESH_MS =
+  30 * 1000
 
 
 const NEWS_HISTORY_STEPS = [
@@ -546,6 +551,56 @@ function GeographicApp() {
     [
       selectedLayer,
     ]
+  )
+
+
+  useEffect(
+    () => {
+      let cancelled =
+        false
+
+
+      const loadHistoric =
+        async () => {
+          try {
+            await loadPublishedHistoricSnapshot()
+          }
+          catch (
+            error
+          ) {
+            if (
+              !cancelled
+            ) {
+              console.warn(
+                'PUBLIC MAP · HISTORIC LOAD FAILED:',
+                error
+              )
+            }
+          }
+        }
+
+
+      loadHistoric()
+
+
+      const interval =
+        window.setInterval(
+          loadHistoric,
+          PUBLISHED_HISTORIC_REFRESH_MS
+        )
+
+
+      return () => {
+        cancelled =
+          true
+
+
+        window.clearInterval(
+          interval
+        )
+      }
+    },
+    []
   )
 
 
@@ -1819,28 +1874,18 @@ function GeographicApp() {
                             category.id
                         )
                         .map(
-                          (layer) => {
-                            const layerIcon =
-                              getHistoricPinIcon(
-                                layer.pinIcon ||
-                                category.pinIcon ||
-                                'map-pin'
-                              )
-
-
-                            return (
-                              <option
-                                key={
-                                  layer.id
-                                }
-                                value={
-                                  `layer:${layer.id}`
-                                }
-                              >
-                                {layerIcon.emoji} {category.title} — {layer.title}
-                              </option>
-                            )
-                          }
+                          (layer) => (
+                            <option
+                              key={
+                                layer.id
+                              }
+                              value={
+                                `layer:${layer.id}`
+                              }
+                            >
+                              {categoryIcon.emoji} {category.title} — {layer.title}
+                            </option>
+                          )
                         )}
                     </optgroup>
                   )

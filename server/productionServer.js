@@ -71,6 +71,10 @@ import {
 } from './feeds/toronto/new/sports.js'
 
 import {
+  torontoHistoricFeed,
+} from './feeds/toronto/historic.js'
+
+import {
   locationSearchApi,
 } from './locationSearch.js'
 
@@ -338,6 +342,15 @@ function requestNeedsAdminAuth(
   if (
     pathname.startsWith(
       '/api/geographic/toronto/newsroom/'
+    )
+  ) {
+    return true
+  }
+
+
+  if (
+    pathname.startsWith(
+      '/api/geographic/toronto/historic/admin'
     )
   ) {
     return true
@@ -1360,6 +1373,7 @@ const plugins = [
   torontoNewDevelopmentFeed(),
   torontoNewEventsFeed(),
   torontoNewSportsFeed(),
+  torontoHistoricFeed(),
 ]
 
 

@@ -28,6 +28,22 @@ const HISTORIC_LAYERS_KEY =
   'elppa-geographic-historic-layers'
 
 
+const HISTORIC_SERVER_MIGRATION_KEY =
+  'elppa-geographic-historic-server-migrated-v1'
+
+
+const PUBLISHED_HISTORIC_ENDPOINT =
+  '/api/geographic/toronto/historic/published'
+
+
+const ADMIN_HISTORIC_ENDPOINT =
+  '/api/geographic/toronto/historic/admin'
+
+
+const ADMIN_HISTORIC_MIGRATE_ENDPOINT =
+  '/api/geographic/toronto/historic/admin/migrate'
+
+
 const NEWS_REVIEW_KEY =
   'elppa-geographic-news-review'
 
@@ -1213,6 +1229,608 @@ export function addNewReviewItem(
 
 
 // ============================================================
+// HISTORIC SERVER PERSISTENCE
+// ============================================================
+//
+// HISTORIC is the only content type using this path.
+//
+// Public pages read the production Historic snapshot into an in-memory
+// cache. They do NOT copy production data into localStorage, so opening
+// the public map in the same browser cannot destroy Admin drafts.
+//
+// Admin keeps its existing localStorage workflow as a local working copy.
+// The first Admin load migrates that working copy to the dedicated
+// production Historic store only when the production store is empty.
+// After that, Historic saves are mirrored to production automatically.
+//
+// NEWS / NEW stores and endpoints are not used here.
+// ============================================================
+
+let publicHistoricSnapshot =
+  null
+
+
+function isHistoricAdminPath() {
+  if (
+    typeof window ===
+      'undefined'
+  ) {
+    return false
+  }
+
+
+  const pathname =
+    window.location.pathname ||
+    ''
+
+
+  return (
+    pathname ===
+      '/admin' ||
+    pathname.startsWith(
+      '/admin/'
+    )
+  )
+}
+
+
+function isHistoricLocalDevelopmentHost() {
+  if (
+    typeof window ===
+      'undefined'
+  ) {
+    return false
+  }
+
+
+  const hostname =
+    String(
+      window.location.hostname ||
+      ''
+    )
+      .toLowerCase()
+
+
+  return (
+    hostname ===
+      'localhost' ||
+    hostname ===
+      '127.0.0.1'
+  )
+}
+
+
+function normalizeHistoricSnapshot(
+  value
+) {
+  return {
+    items:
+      Array.isArray(
+        value?.items
+      )
+        ? value.items
+        : [],
+
+    issues:
+      Array.isArray(
+        value?.issues
+      )
+        ? value.issues
+        : [],
+
+    categories:
+      Array.isArray(
+        value?.categories
+      )
+        ? value.categories
+        : [],
+
+    layers:
+      Array.isArray(
+        value?.layers
+      )
+        ? value.layers
+        : [],
+  }
+}
+
+
+function historicSnapshotHasData(
+  snapshot
+) {
+  return (
+    snapshot.items.length >
+      0 ||
+    snapshot.issues.length >
+      0 ||
+    snapshot.categories.length >
+      0 ||
+    snapshot.layers.length >
+      0
+  )
+}
+
+
+function dispatchHistoricServerChange() {
+  if (
+    typeof window ===
+      'undefined'
+  ) {
+    return
+  }
+
+
+  window.dispatchEvent(
+    new CustomEvent(
+      GEOGRAPHIC_STORE_CHANGE_EVENT,
+      {
+        detail: {
+          key:
+            'historic-server',
+        },
+      }
+    )
+  )
+}
+
+
+async function readHistoricServerResponse(
+  response,
+  label
+) {
+  const payload =
+    await response.json()
+      .catch(
+        () => null
+      )
+
+
+  if (
+    !response.ok
+  ) {
+    throw new Error(
+      payload?.error ||
+      `${label} failed (${response.status})`
+    )
+  }
+
+
+  return normalizeHistoricSnapshot(
+    payload?.snapshot ||
+    payload
+  )
+}
+
+
+function getLocalHistoricSnapshot() {
+  return normalizeHistoricSnapshot({
+    items:
+      readRecords(
+        HISTORIC_KEY
+      ),
+
+    issues:
+      readRecords(
+        HISTORIC_ISSUES_KEY
+      ),
+
+    categories:
+      readRecords(
+        HISTORIC_CATEGORIES_KEY
+      ),
+
+    layers:
+      readRecords(
+        HISTORIC_LAYERS_KEY
+      ),
+  })
+}
+
+
+export function downloadHistoricMigrationSnapshot() {
+  const snapshot =
+    getLocalHistoricSnapshot()
+
+
+  const payload = {
+    ...snapshot,
+
+    exportedAt:
+      new Date()
+        .toISOString(),
+  }
+
+
+  const blob =
+    new Blob(
+      [
+        JSON.stringify(
+          payload,
+          null,
+          2
+        ),
+      ],
+      {
+        type:
+          'application/json',
+      }
+    )
+
+
+  const url =
+    URL.createObjectURL(
+      blob
+    )
+
+
+  const link =
+    document.createElement(
+      'a'
+    )
+
+
+  const date =
+    new Date()
+      .toISOString()
+      .slice(
+        0,
+        10
+      )
+
+
+  link.href =
+    url
+
+
+  link.download =
+    `toronto-historic-migration-${date}.json`
+
+
+  document.body.appendChild(
+    link
+  )
+
+
+  link.click()
+
+
+  link.remove()
+
+
+  window.setTimeout(
+    () => {
+      URL.revokeObjectURL(
+        url
+      )
+    },
+    0
+  )
+
+
+  return snapshot
+}
+
+
+function writeLocalHistoricSnapshot(
+  snapshot
+) {
+  const normalized =
+    normalizeHistoricSnapshot(
+      snapshot
+    )
+
+
+  writeRecords(
+    HISTORIC_KEY,
+    normalized.items
+  )
+
+
+  writeRecords(
+    HISTORIC_ISSUES_KEY,
+    normalized.issues
+  )
+
+
+  writeRecords(
+    HISTORIC_CATEGORIES_KEY,
+    normalized.categories
+  )
+
+
+  writeRecords(
+    HISTORIC_LAYERS_KEY,
+    normalized.layers
+  )
+}
+
+
+
+function markHistoricServerMigrationComplete() {
+  try {
+    localStorage.setItem(
+      HISTORIC_SERVER_MIGRATION_KEY,
+      'true'
+    )
+  }
+  catch {
+    // Production persistence still works if this browser cannot
+    // remember the one-time migration marker.
+  }
+}
+
+
+async function fetchAdminHistoricSnapshot() {
+  const response =
+    await fetch(
+      ADMIN_HISTORIC_ENDPOINT,
+      {
+        cache:
+          'no-store',
+      }
+    )
+
+
+  return readHistoricServerResponse(
+    response,
+    'Historic admin load'
+  )
+}
+
+
+async function migrateLocalHistoricSnapshot(
+  snapshot
+) {
+  const response =
+    await fetch(
+      ADMIN_HISTORIC_MIGRATE_ENDPOINT,
+      {
+        method:
+          'POST',
+
+        headers: {
+          'Content-Type':
+            'application/json',
+        },
+
+        body:
+          JSON.stringify(
+            snapshot
+          ),
+      }
+    )
+
+
+  return readHistoricServerResponse(
+    response,
+    'Historic migration'
+  )
+}
+
+
+function persistHistoricCollection(
+  collection,
+  records
+) {
+  if (
+    !isHistoricAdminPath()
+  ) {
+    return
+  }
+
+
+  fetch(
+    `${ADMIN_HISTORIC_ENDPOINT}/${collection}`,
+    {
+      method:
+        'PUT',
+
+      headers: {
+        'Content-Type':
+          'application/json',
+      },
+
+      body:
+        JSON.stringify({
+          records:
+            Array.isArray(
+              records
+            )
+              ? records
+              : [],
+        }),
+    }
+  )
+    .then(
+      async (
+        response
+      ) => {
+        if (
+          response.ok
+        ) {
+          return
+        }
+
+
+        const payload =
+          await response.json()
+            .catch(
+              () => null
+            )
+
+
+        throw new Error(
+          payload?.error ||
+          (
+            `Historic ${collection} save failed ` +
+            `(${response.status})`
+          )
+        )
+      }
+    )
+    .catch(
+      (
+        error
+      ) => {
+        console.error(
+          'HISTORIC SERVER SAVE ERROR:',
+          collection,
+          error
+        )
+      }
+    )
+}
+
+
+export async function loadPublishedHistoricSnapshot() {
+  try {
+    const response =
+      await fetch(
+        PUBLISHED_HISTORIC_ENDPOINT,
+        {
+          cache:
+            'no-store',
+        }
+      )
+
+
+    const snapshot =
+      await readHistoricServerResponse(
+        response,
+        'Published Historic load'
+      )
+
+
+    publicHistoricSnapshot =
+      snapshot
+
+
+    dispatchHistoricServerChange()
+
+
+    return snapshot
+  }
+  catch (
+    error
+  ) {
+    if (
+      isHistoricLocalDevelopmentHost()
+    ) {
+      const localSnapshot =
+        getLocalHistoricSnapshot()
+
+
+      publicHistoricSnapshot =
+        localSnapshot
+
+
+      dispatchHistoricServerChange()
+
+
+      return localSnapshot
+    }
+
+
+    throw error
+  }
+}
+
+
+export async function initializeHistoricAdminPersistence() {
+  const localSnapshot =
+    getLocalHistoricSnapshot()
+
+
+  let serverSnapshot
+
+
+  try {
+    serverSnapshot =
+      await fetchAdminHistoricSnapshot()
+  }
+  catch (
+    error
+  ) {
+    console.error(
+      'HISTORIC SERVER INITIAL LOAD ERROR:',
+      error
+    )
+
+
+    return localSnapshot
+  }
+
+
+  const localHasData =
+    historicSnapshotHasData(
+      localSnapshot
+    )
+
+
+  const serverHasData =
+    historicSnapshotHasData(
+      serverSnapshot
+    )
+
+
+  if (
+    !serverHasData &&
+    localHasData
+  ) {
+    try {
+      const migrated =
+        await migrateLocalHistoricSnapshot(
+          localSnapshot
+        )
+
+
+      markHistoricServerMigrationComplete()
+
+
+      return migrated
+    }
+    catch (
+      error
+    ) {
+      console.error(
+        'HISTORIC SERVER MIGRATION ERROR:',
+        error
+      )
+
+
+      return localSnapshot
+    }
+  }
+
+
+  if (
+    serverHasData &&
+    !localHasData
+  ) {
+    writeLocalHistoricSnapshot(
+      serverSnapshot
+    )
+
+
+    markHistoricServerMigrationComplete()
+
+
+    return serverSnapshot
+  }
+
+
+  if (
+    serverHasData
+  ) {
+    markHistoricServerMigrationComplete()
+  }
+
+
+  return localSnapshot
+}
+
+
+// ============================================================
 // HISTORIC
 // ============================================================
 //
@@ -1271,6 +1889,16 @@ function markHistoricLegacyCleanupComplete() {
 
 
 export function getHistoricItems() {
+  if (
+    !isHistoricAdminPath()
+  ) {
+    return (
+      publicHistoricSnapshot?.items ||
+      []
+    )
+  }
+
+
   const existing =
     readRecords(
       HISTORIC_KEY
@@ -1320,6 +1948,12 @@ export function saveHistoricItems(
 
 
   markHistoricLegacyCleanupComplete()
+
+
+  persistHistoricCollection(
+    'items',
+    records
+  )
 }
 
 
@@ -1328,6 +1962,16 @@ export function saveHistoricItems(
 // ============================================================
 
 export function getHistoricIssues() {
+  if (
+    !isHistoricAdminPath()
+  ) {
+    return (
+      publicHistoricSnapshot?.issues ||
+      []
+    )
+  }
+
+
   return readRecords(
     HISTORIC_ISSUES_KEY
   )
@@ -1341,6 +1985,12 @@ export function saveHistoricIssues(
     HISTORIC_ISSUES_KEY,
     records
   )
+
+
+  persistHistoricCollection(
+    'issues',
+    records
+  )
 }
 
 
@@ -1349,6 +1999,16 @@ export function saveHistoricIssues(
 // ============================================================
 
 export function getHistoricCategories() {
+  if (
+    !isHistoricAdminPath()
+  ) {
+    return (
+      publicHistoricSnapshot?.categories ||
+      []
+    )
+  }
+
+
   return readRecords(
     HISTORIC_CATEGORIES_KEY
   )
@@ -1362,6 +2022,12 @@ export function saveHistoricCategories(
     HISTORIC_CATEGORIES_KEY,
     records
   )
+
+
+  persistHistoricCollection(
+    'categories',
+    records
+  )
 }
 
 
@@ -1370,6 +2036,16 @@ export function saveHistoricCategories(
 // ============================================================
 
 export function getHistoricLayers() {
+  if (
+    !isHistoricAdminPath()
+  ) {
+    return (
+      publicHistoricSnapshot?.layers ||
+      []
+    )
+  }
+
+
   return readRecords(
     HISTORIC_LAYERS_KEY
   )
@@ -1381,6 +2057,12 @@ export function saveHistoricLayers(
 ) {
   writeRecords(
     HISTORIC_LAYERS_KEY,
+    records
+  )
+
+
+  persistHistoricCollection(
+    'layers',
     records
   )
 }

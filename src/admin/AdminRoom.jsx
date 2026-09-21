@@ -11,19 +11,17 @@ import {
 import {
   applyNewsItemUpdate,
   createAdminId,
-  getHistoricCategories,
+  downloadHistoricMigrationSnapshot,
   getHistoricIssues,
   getHistoricItems,
-  getHistoricLayers,
+  initializeHistoricAdminPersistence,
   getNewsItems,
   getNewsReviewItems,
   getNewItems,
   getNewReviewItems,
   markScraperRecordProcessed,
-  saveHistoricCategories,
   saveHistoricIssues,
   saveHistoricItems,
-  saveHistoricLayers,
   saveNewsItems,
   saveNewsReviewItems,
   saveNewItems,
@@ -2144,12 +2142,6 @@ const EMPTY_HISTORIC = {
 
   category:
     'place',
-
-  historicCategoryId:
-    '',
-
-  historicLayerId:
-    '',
 
   issueIds:
     [],
@@ -4809,18 +4801,6 @@ function normalizeHistoricRecord(
       pinRecord.layerOverrideYear ||
       '',
 
-    historicCategoryId:
-      String(
-        pinRecord.historicCategoryId ||
-        ''
-      ),
-
-    historicLayerId:
-      String(
-        pinRecord.historicLayerId ||
-        ''
-      ),
-
     issueIds:
       Array.isArray(
         pinRecord.issueIds
@@ -5034,54 +5014,6 @@ function AdminRoom() {
 
 
   const [
-    historicCategories,
-    setHistoricCategories,
-  ] =
-    useState(
-      () =>
-        getHistoricCategories()
-    )
-
-
-  const [
-    historicLayers,
-    setHistoricLayers,
-  ] =
-    useState(
-      () =>
-        getHistoricLayers()
-    )
-
-
-  const [
-    selectedHistoricCategoryId,
-    setSelectedHistoricCategoryId,
-  ] =
-    useState('')
-
-
-  const [
-    selectedHistoricLayerId,
-    setSelectedHistoricLayerId,
-  ] =
-    useState('')
-
-
-  const [
-    historicBulkJson,
-    setHistoricBulkJson,
-  ] =
-    useState('')
-
-
-  const [
-    historicBulkStatus,
-    setHistoricBulkStatus,
-  ] =
-    useState('')
-
-
-  const [
     historicIssues,
     setHistoricIssues,
   ] =
@@ -5102,6 +5034,86 @@ function AdminRoom() {
 
 
   const [
+    historicPersistenceReady,
+    setHistoricPersistenceReady,
+  ] =
+    useState(
+      false
+    )
+
+
+  useEffect(
+    () => {
+      let cancelled =
+        false
+
+
+      initializeHistoricAdminPersistence()
+        .then(
+          (
+            snapshot
+          ) => {
+            if (
+              cancelled
+            ) {
+              return
+            }
+
+
+            setAllHistoricItems(
+              snapshot.items
+                .map(
+                  normalizeHistoricRecord
+                )
+            )
+
+
+            setHistoricIssues(
+              snapshot.issues.length >
+                0
+                ? snapshot.issues
+                : [
+                    makeDefaultHistoricIssue(),
+                  ]
+            )
+
+
+            setHistoricPersistenceReady(
+              true
+            )
+          }
+        )
+        .catch(
+          (
+            error
+          ) => {
+            console.error(
+              'HISTORIC PERSISTENCE INIT ERROR:',
+              error
+            )
+
+
+            if (
+              !cancelled
+            ) {
+              setHistoricPersistenceReady(
+                true
+              )
+            }
+          }
+        )
+
+
+      return () => {
+        cancelled =
+          true
+      }
+    },
+    []
+  )
+
+
+  const [
     selectedHistoricIssueId,
     setSelectedHistoricIssueId,
   ] =
@@ -5115,16 +5127,7 @@ function AdminRoom() {
     setHistoricRecordFilter,
   ] =
     useState(
-      'published'
-    )
-
-
-  const [
-    historicStoryScope,
-    setHistoricStoryScope,
-  ] =
-    useState(
-      'all'
+      'drafts'
     )
 
 
@@ -5183,12 +5186,20 @@ function AdminRoom() {
 
   useEffect(
     () => {
+      if (
+        !historicPersistenceReady
+      ) {
+        return
+      }
+
+
       saveHistoricIssues(
         historicIssues
       )
     },
     [
       historicIssues,
+      historicPersistenceReady,
     ]
   )
 
@@ -5247,326 +5258,6 @@ function AdminRoom() {
           cityKey
         )
     )
-
-
-
-  const cityHistoricCategories =
-    historicCategories
-      .filter(
-        (category) =>
-          belongsToCity(
-            category,
-            cityKey
-          )
-      )
-      .sort(
-        (
-          a,
-          b
-        ) =>
-          Number(
-            a.displayOrder ||
-            0
-          ) -
-            Number(
-              b.displayOrder ||
-              0
-            ) ||
-          String(
-            a.title ||
-            ''
-          )
-            .localeCompare(
-              String(
-                b.title ||
-                ''
-              )
-            )
-      )
-
-
-  const cityHistoricLayers =
-    historicLayers
-      .filter(
-        (layer) =>
-          belongsToCity(
-            layer,
-            cityKey
-          )
-      )
-      .sort(
-        (
-          a,
-          b
-        ) =>
-          Number(
-            a.displayOrder ||
-            0
-          ) -
-            Number(
-              b.displayOrder ||
-              0
-            ) ||
-          String(
-            a.title ||
-            ''
-          )
-            .localeCompare(
-              String(
-                b.title ||
-                ''
-              )
-            )
-      )
-
-
-  const selectedHistoricCategory =
-    cityHistoricCategories.find(
-      (category) =>
-        category.id ===
-        selectedHistoricCategoryId
-    ) ||
-    cityHistoricCategories[0] ||
-    null
-
-
-  const selectedHistoricCategoryLayers =
-    selectedHistoricCategory
-      ? cityHistoricLayers.filter(
-          (layer) =>
-            layer.categoryId ===
-            selectedHistoricCategory.id
-        )
-      : []
-
-
-  const selectedHistoricLayer =
-    selectedHistoricCategoryLayers.find(
-      (layer) =>
-        layer.id ===
-        selectedHistoricLayerId
-    ) ||
-    selectedHistoricCategoryLayers[0] ||
-    null
-
-
-  const historicScopedItems =
-    historicItems.filter(
-      (record) => {
-        if (
-          selectedHistoricCategory?.id &&
-          record.historicCategoryId !==
-            selectedHistoricCategory.id
-        ) {
-          return false
-        }
-
-
-        if (
-          selectedHistoricLayer?.id &&
-          record.historicLayerId !==
-            selectedHistoricLayer.id
-        ) {
-          return false
-        }
-
-
-        return true
-      }
-    )
-
-
-  const historicScopedDraftCount =
-    historicScopedItems.filter(
-      (record) =>
-        record.active ===
-        false
-    )
-      .length
-
-
-  const historicScopedPublishedCount =
-    historicScopedItems.filter(
-      (record) =>
-        record.active !==
-        false
-    )
-      .length
-
-
-  const historicCategoryItems =
-    historicItems.filter(
-      (record) =>
-        !selectedHistoricCategory?.id ||
-        record.historicCategoryId ===
-          selectedHistoricCategory.id
-    )
-
-
-  const historicAllDraftCount =
-    historicItems.filter(
-      (record) =>
-        record.active ===
-        false
-    )
-      .length
-
-
-  const historicAllPublishedCount =
-    historicItems.filter(
-      (record) =>
-        record.active !==
-        false
-    )
-      .length
-
-
-  const historicCategoryDraftCount =
-    historicCategoryItems.filter(
-      (record) =>
-        record.active ===
-        false
-    )
-      .length
-
-
-  const historicCategoryPublishedCount =
-    historicCategoryItems.filter(
-      (record) =>
-        record.active !==
-        false
-    )
-      .length
-
-
-  const historicScopeDraftCount =
-    historicStoryScope ===
-      'layer'
-      ? historicScopedDraftCount
-      : historicStoryScope ===
-          'category'
-        ? historicCategoryDraftCount
-        : historicAllDraftCount
-
-
-  const historicScopePublishedCount =
-    historicStoryScope ===
-      'layer'
-      ? historicScopedPublishedCount
-      : historicStoryScope ===
-          'category'
-        ? historicCategoryPublishedCount
-        : historicAllPublishedCount
-
-
-  useEffect(
-    () => {
-      saveHistoricCategories(
-        historicCategories
-      )
-    },
-    [
-      historicCategories,
-    ]
-  )
-
-
-  useEffect(
-    () => {
-      saveHistoricLayers(
-        historicLayers
-      )
-    },
-    [
-      historicLayers,
-    ]
-  )
-
-
-  useEffect(
-    () => {
-      const nextCategoryId =
-        cityHistoricCategories.some(
-          (category) =>
-            category.id ===
-            selectedHistoricCategoryId
-        )
-          ? selectedHistoricCategoryId
-          : (
-              cityHistoricCategories[0]?.id ||
-              ''
-            )
-
-
-      if (
-        nextCategoryId !==
-        selectedHistoricCategoryId
-      ) {
-        setSelectedHistoricCategoryId(
-          nextCategoryId
-        )
-      }
-    },
-    [
-      cityKey,
-      historicCategories,
-      selectedHistoricCategoryId,
-    ]
-  )
-
-
-  useEffect(
-    () => {
-      const nextCategory =
-        cityHistoricCategories.find(
-          (category) =>
-            category.id ===
-            selectedHistoricCategoryId
-        ) ||
-        cityHistoricCategories[0] ||
-        null
-
-
-      const availableLayers =
-        nextCategory
-          ? cityHistoricLayers.filter(
-              (layer) =>
-                layer.categoryId ===
-                nextCategory.id
-            )
-          : []
-
-
-      const nextLayerId =
-        availableLayers.some(
-          (layer) =>
-            layer.id ===
-            selectedHistoricLayerId
-        )
-          ? selectedHistoricLayerId
-          : (
-              availableLayers[0]?.id ||
-              ''
-            )
-
-
-      if (
-        nextLayerId !==
-        selectedHistoricLayerId
-      ) {
-        setSelectedHistoricLayerId(
-          nextLayerId
-        )
-      }
-    },
-    [
-      cityKey,
-      historicCategories,
-      historicLayers,
-      selectedHistoricCategoryId,
-      selectedHistoricLayerId,
-    ]
-  )
 
 
   const cityHistoricIssues =
@@ -6109,41 +5800,36 @@ function AdminRoom() {
           tab ===
             'historic'
         ) {
-          next =
-            next.filter(
-              (record) => {
-                if (
-                  historicStoryScope ===
-                    'category' &&
-                  selectedHistoricCategory?.id &&
-                  record.historicCategoryId !==
-                    selectedHistoricCategory.id
-                ) {
-                  return false
-                }
-
-
-                if (
-                  historicStoryScope ===
-                    'layer' &&
-                  selectedHistoricLayer?.id &&
-                  record.historicLayerId !==
-                    selectedHistoricLayer.id
-                ) {
-                  return false
-                }
-
-
-                return (
-                  historicRecordFilter ===
-                    'drafts'
-                    ? record.active ===
-                        false
-                    : record.active !==
-                        false
-                )
-              }
-            )
+          if (
+            historicRecordFilter ===
+              'drafts'
+          ) {
+            next =
+              next.filter(
+                (record) =>
+                  record.active ===
+                    false &&
+                  (
+                    !selectedHistoricIssueId ||
+                    (
+                      Array.isArray(
+                        record.issueIds
+                      ) &&
+                      record.issueIds.includes(
+                        selectedHistoricIssueId
+                      )
+                    )
+                  )
+              )
+          }
+          else {
+            next =
+              next.filter(
+                (record) =>
+                  record.active !==
+                  false
+              )
+          }
         }
 
 
@@ -6348,9 +6034,7 @@ function AdminRoom() {
         publishedNewsSort,
         publishedNewsSearch,
         historicRecordFilter,
-        historicStoryScope,
-        selectedHistoricCategoryId,
-        selectedHistoricLayerId,
+        selectedHistoricIssueId,
       ]
     )
 
@@ -9950,30 +9634,10 @@ function AdminRoom() {
 
 
     setDraft(
-      nextTab ===
-        'historic'
-        ? {
-            ...makeHistoricDraft(
-              cityKey
-            ),
-
-            historicCategoryId:
-              selectedHistoricCategory?.id ||
-              '',
-
-            historicLayerId:
-              selectedHistoricLayer?.id ||
-              '',
-
-            pinIcon:
-              selectedHistoricLayer?.pinIcon ||
-              selectedHistoricCategory?.pinIcon ||
-              'map-pin',
-          }
-        : makeDraft(
-            nextTab,
-            cityKey
-          )
+      makeDraft(
+        nextTab,
+        cityKey
+      )
     )
   }
 
@@ -10011,1614 +9675,9 @@ function AdminRoom() {
 
 
     setDraft(
-      tab ===
-        'historic'
-        ? {
-            ...makeHistoricDraft(
-              cityKey
-            ),
-
-            historicCategoryId:
-              selectedHistoricCategory?.id ||
-              '',
-
-            historicLayerId:
-              selectedHistoricLayer?.id ||
-              '',
-
-            pinIcon:
-              selectedHistoricLayer?.pinIcon ||
-              selectedHistoricCategory?.pinIcon ||
-              'map-pin',
-          }
-        : makeDraft(
-            tab,
-            cityKey
-          )
-    )
-  }
-
-
-  // ==========================================================
-  // HISTORIC LIBRARY · CATEGORY → LAYER → STORY
-  // ==========================================================
-
-  function historicCollectionSlug(
-    value
-  ) {
-    return String(
-      value ||
-      ''
-    )
-      .trim()
-      .toLowerCase()
-      .replace(
-        /[^a-z0-9]+/g,
-        '-'
-      )
-      .replace(
-        /^-+|-+$/g,
-        ''
-      )
-  }
-
-
-  function nextHistoricDisplayOrder(
-    records,
-    filterFn = null
-  ) {
-    const values =
-      (
-        Array.isArray(
-          records
-        )
-          ? records
-          : []
-      )
-        .filter(
-          (record) =>
-            filterFn
-              ? filterFn(
-                  record
-                )
-              : true
-        )
-        .map(
-          (record) =>
-            Number(
-              record.displayOrder ||
-              0
-            )
-        )
-        .filter(
-          Number.isFinite
-        )
-
-
-    return (
-      values.length >
-        0
-        ? Math.max(
-            ...values
-          ) +
-          10
-        : 10
-    )
-  }
-
-
-  function createHistoricCategory() {
-    const title =
-      String(
-        window.prompt(
-          'CATEGORY NAME',
-          ''
-        ) ||
-        ''
-      )
-        .trim()
-
-
-    if (
-      !title
-    ) {
-      return
-    }
-
-
-    const description =
-      String(
-        window.prompt(
-          'CATEGORY DESCRIPTION',
-          ''
-        ) ||
-        ''
-      )
-        .trim()
-
-
-    const pinIcon =
-      title.toUpperCase() ===
-        'PEOPLE'
-        ? 'person'
-        : 'map-pin'
-
-
-    const record = {
-      id:
-        createAdminId(
-          'historic-category'
-        ),
-
-      city:
-        cityKey,
-
-      title,
-
-      slug:
-        historicCollectionSlug(
-          title
-        ),
-
-      description,
-
-      pinIcon,
-
-      displayOrder:
-        nextHistoricDisplayOrder(
-          cityHistoricCategories
-        ),
-
-      status:
-        'published',
-
-      createdAt:
-        new Date()
-          .toISOString(),
-
-      updatedAt:
-        new Date()
-          .toISOString(),
-    }
-
-
-    setHistoricCategories(
-      [
-        ...historicCategories,
-        record,
-      ]
-    )
-
-
-    setSelectedHistoricCategoryId(
-      record.id
-    )
-
-
-    setSelectedHistoricLayerId(
-      ''
-    )
-  }
-
-
-  function editHistoricCategory() {
-    if (
-      !selectedHistoricCategory
-    ) {
-      return
-    }
-
-
-    const title =
-      String(
-        window.prompt(
-          'CATEGORY NAME',
-          selectedHistoricCategory.title ||
-          ''
-        ) ||
-        ''
-      )
-        .trim()
-
-
-    if (
-      !title
-    ) {
-      return
-    }
-
-
-    const description =
-      String(
-        window.prompt(
-          'CATEGORY DESCRIPTION',
-          selectedHistoricCategory.description ||
-          ''
-        ) ??
-        selectedHistoricCategory.description ??
-        ''
-      )
-        .trim()
-
-
-    const pinIcon =
-      selectedHistoricCategory.pinIcon ||
-      'map-pin'
-
-
-    setHistoricCategories(
-      historicCategories.map(
-        (category) =>
-          category.id ===
-            selectedHistoricCategory.id
-            ? {
-                ...category,
-
-                title,
-
-                slug:
-                  historicCollectionSlug(
-                    title
-                  ),
-
-                description,
-
-                pinIcon,
-
-                updatedAt:
-                  new Date()
-                    .toISOString(),
-              }
-            : category
-      )
-    )
-  }
-
-
-  function updateHistoricCategoryIcon(
-    value
-  ) {
-    if (
-      !selectedHistoricCategory
-    ) {
-      return
-    }
-
-
-    const pinIcon =
-      getHistoricPinIcon(
-        value
-      ).id
-
-
-    setHistoricCategories(
-      historicCategories.map(
-        (category) =>
-          category.id ===
-            selectedHistoricCategory.id
-            ? {
-                ...category,
-
-                pinIcon,
-
-                updatedAt:
-                  new Date()
-                    .toISOString(),
-              }
-            : category
-      )
-    )
-  }
-
-
-  function toggleHistoricCategoryStatus() {
-    if (
-      !selectedHistoricCategory
-    ) {
-      return
-    }
-
-
-    setHistoricCategories(
-      historicCategories.map(
-        (category) =>
-          category.id ===
-            selectedHistoricCategory.id
-            ? {
-                ...category,
-
-                status:
-                  category.status ===
-                    'published'
-                    ? 'draft'
-                    : 'published',
-
-                updatedAt:
-                  new Date()
-                    .toISOString(),
-              }
-            : category
-      )
-    )
-  }
-
-
-  function deleteHistoricCategory() {
-    if (
-      !selectedHistoricCategory
-    ) {
-      return
-    }
-
-
-    const categoryLayers =
-      cityHistoricLayers.filter(
-        (layer) =>
-          layer.categoryId ===
-          selectedHistoricCategory.id
-      )
-
-
-    const categoryStories =
-      historicItems.filter(
-        (record) =>
-          record.historicCategoryId ===
-          selectedHistoricCategory.id
-      )
-
-
-    if (
-      categoryLayers.length >
-        0 ||
-      categoryStories.length >
-        0
-    ) {
-      window.alert(
-        (
-          'This category still contains ' +
-          `${categoryLayers.length} layer(s) and ` +
-          `${categoryStories.length} stor${categoryStories.length === 1 ? 'y' : 'ies'}. ` +
-          'Move or delete them first.'
-        )
-      )
-
-
-      return
-    }
-
-
-    if (
-      !window.confirm(
-        `Delete category ${selectedHistoricCategory.title}?`
-      )
-    ) {
-      return
-    }
-
-
-    setHistoricCategories(
-      historicCategories.filter(
-        (category) =>
-          category.id !==
-          selectedHistoricCategory.id
-      )
-    )
-
-
-    setSelectedHistoricCategoryId(
-      ''
-    )
-
-
-    setSelectedHistoricLayerId(
-      ''
-    )
-  }
-
-
-  function createHistoricLayer() {
-    if (
-      !selectedHistoricCategory
-    ) {
-      window.alert(
-        'Create or select a Historic category first.'
-      )
-
-
-      return
-    }
-
-
-    const title =
-      String(
-        window.prompt(
-          'LAYER / SUBCATEGORY NAME',
-          ''
-        ) ||
-        ''
-      )
-        .trim()
-
-
-    if (
-      !title
-    ) {
-      return
-    }
-
-
-    const description =
-      String(
-        window.prompt(
-          'LAYER DESCRIPTION',
-          ''
-        ) ||
-        ''
-      )
-        .trim()
-
-
-    const pinIcon =
-      selectedHistoricCategory.pinIcon ||
-      'map-pin'
-
-
-    const record = {
-      id:
-        createAdminId(
-          'historic-layer'
-        ),
-
-      city:
-        cityKey,
-
-      categoryId:
-        selectedHistoricCategory.id,
-
-      title,
-
-      slug:
-        historicCollectionSlug(
-          title
-        ),
-
-      description,
-
-      pinIcon,
-
-      coverImageUrl:
-        '',
-
-      displayOrder:
-        nextHistoricDisplayOrder(
-          cityHistoricLayers,
-          (layer) =>
-            layer.categoryId ===
-            selectedHistoricCategory.id
-        ),
-
-      status:
-        'published',
-
-      createdAt:
-        new Date()
-          .toISOString(),
-
-      updatedAt:
-        new Date()
-          .toISOString(),
-    }
-
-
-    setHistoricLayers(
-      [
-        ...historicLayers,
-        record,
-      ]
-    )
-
-
-    setSelectedHistoricLayerId(
-      record.id
-    )
-  }
-
-
-  function editHistoricLayer() {
-    if (
-      !selectedHistoricLayer
-    ) {
-      return
-    }
-
-
-    const title =
-      String(
-        window.prompt(
-          'LAYER / SUBCATEGORY NAME',
-          selectedHistoricLayer.title ||
-          ''
-        ) ||
-        ''
-      )
-        .trim()
-
-
-    if (
-      !title
-    ) {
-      return
-    }
-
-
-    const description =
-      String(
-        window.prompt(
-          'LAYER DESCRIPTION',
-          selectedHistoricLayer.description ||
-          ''
-        ) ??
-        selectedHistoricLayer.description ??
-        ''
-      )
-        .trim()
-
-
-    const pinIcon =
-      selectedHistoricLayer.pinIcon ||
-      selectedHistoricCategory?.pinIcon ||
-      'map-pin'
-
-
-    setHistoricLayers(
-      historicLayers.map(
-        (layer) =>
-          layer.id ===
-            selectedHistoricLayer.id
-            ? {
-                ...layer,
-
-                title,
-
-                slug:
-                  historicCollectionSlug(
-                    title
-                  ),
-
-                description,
-
-                pinIcon,
-
-                updatedAt:
-                  new Date()
-                    .toISOString(),
-              }
-            : layer
-      )
-    )
-  }
-
-
-  function updateHistoricLayerIcon(
-    value
-  ) {
-    if (
-      !selectedHistoricLayer
-    ) {
-      return
-    }
-
-
-    const pinIcon =
-      getHistoricPinIcon(
-        value
-      ).id
-
-
-    setHistoricLayers(
-      historicLayers.map(
-        (layer) =>
-          layer.id ===
-            selectedHistoricLayer.id
-            ? {
-                ...layer,
-
-                pinIcon,
-
-                updatedAt:
-                  new Date()
-                    .toISOString(),
-              }
-            : layer
-      )
-    )
-  }
-
-
-  function toggleHistoricLayerStatus() {
-    if (
-      !selectedHistoricLayer
-    ) {
-      return
-    }
-
-
-    setHistoricLayers(
-      historicLayers.map(
-        (layer) =>
-          layer.id ===
-            selectedHistoricLayer.id
-            ? {
-                ...layer,
-
-                status:
-                  layer.status ===
-                    'published'
-                    ? 'draft'
-                    : 'published',
-
-                updatedAt:
-                  new Date()
-                    .toISOString(),
-              }
-            : layer
-      )
-    )
-  }
-
-
-  function deleteHistoricLayer() {
-    if (
-      !selectedHistoricLayer
-    ) {
-      return
-    }
-
-
-    const layerStories =
-      historicItems.filter(
-        (record) =>
-          record.historicLayerId ===
-          selectedHistoricLayer.id
-      )
-
-
-    if (
-      layerStories.length >
-      0
-    ) {
-      window.alert(
-        (
-          `This layer still contains ${layerStories.length} stor` +
-          `${layerStories.length === 1 ? 'y' : 'ies'}. ` +
-          'Move or delete them first.'
-        )
-      )
-
-
-      return
-    }
-
-
-    if (
-      !window.confirm(
-        `Delete layer ${selectedHistoricLayer.title}?`
-      )
-    ) {
-      return
-    }
-
-
-    setHistoricLayers(
-      historicLayers.filter(
-        (layer) =>
-          layer.id !==
-          selectedHistoricLayer.id
-      )
-    )
-
-
-    setSelectedHistoricLayerId(
-      ''
-    )
-  }
-
-
-  function startHistoricStory() {
-    if (
-      !selectedHistoricCategory ||
-      !selectedHistoricLayer
-    ) {
-      window.alert(
-        'Select a Historic category and layer first.'
-      )
-
-
-      return
-    }
-
-
-    setEditingId(
-      null
-    )
-
-
-    setEditingReviewId(
-      null
-    )
-
-
-    setDraft({
-      ...makeHistoricDraft(
+      makeDraft(
+        tab,
         cityKey
-      ),
-
-      historicCategoryId:
-        selectedHistoricCategory.id,
-
-      historicLayerId:
-        selectedHistoricLayer.id,
-
-      pinIcon:
-        selectedHistoricLayer.pinIcon ||
-        selectedHistoricCategory.pinIcon ||
-        'map-pin',
-
-      active:
-        false,
-    })
-
-
-    window.scrollTo({
-      top:
-        0,
-
-      behavior:
-        'smooth',
-    })
-  }
-
-
-  function getHistoricRecordCollectionLabel(
-    record
-  ) {
-    const category =
-      historicCategories.find(
-        (item) =>
-          item.id ===
-          record.historicCategoryId
-      ) ||
-      null
-
-
-    const layer =
-      historicLayers.find(
-        (item) =>
-          item.id ===
-          record.historicLayerId
-      ) ||
-      null
-
-
-    return (
-      (
-        category?.title ||
-        'HISTORIC'
-      ) +
-      (
-        layer?.title
-          ? ` · ${layer.title}`
-          : ''
-      )
-    )
-  }
-
-
-  async function importHistoricBulkJson() {
-    let payload
-
-
-    try {
-      payload =
-        JSON.parse(
-          historicBulkJson
-        )
-    }
-    catch {
-      window.alert(
-        'That is not valid JSON.'
-      )
-
-
-      return
-    }
-
-
-    const pins =
-      Array.isArray(
-        payload?.pins
-      )
-        ? payload.pins
-        : []
-
-
-    if (
-      pins.length ===
-      0
-    ) {
-      window.alert(
-        'This import has no pins.'
-      )
-
-
-      return
-    }
-
-
-    const categoryInput =
-      typeof payload.category ===
-        'string'
-        ? {
-            title:
-              payload.category,
-          }
-        : (
-            payload.category ||
-            {}
-          )
-
-
-    const layerInput =
-      typeof payload.layer ===
-        'string'
-        ? {
-            title:
-              payload.layer,
-          }
-        : (
-            payload.layer ||
-            {}
-          )
-
-
-    const categoryTitle =
-      String(
-        categoryInput.title ||
-        ''
-      )
-        .trim()
-
-
-    const layerTitle =
-      String(
-        layerInput.title ||
-        ''
-      )
-        .trim()
-
-
-    if (
-      !categoryTitle ||
-      !layerTitle
-    ) {
-      window.alert(
-        'Bulk import needs a category title and layer title.'
-      )
-
-
-      return
-    }
-
-
-    if (
-      !window.confirm(
-        (
-          `Import ${pins.length} Historic pin(s) into ` +
-          `${categoryTitle} → ${layerTitle}?`
-        )
-      )
-    ) {
-      return
-    }
-
-
-    setHistoricBulkStatus(
-      'IMPORTING…'
-    )
-
-
-    let nextCategories = [
-      ...historicCategories,
-    ]
-
-
-    let category =
-      nextCategories.find(
-        (item) =>
-          belongsToCity(
-            item,
-            cityKey
-          ) &&
-          String(
-            item.title ||
-            ''
-          )
-            .trim()
-            .toLowerCase() ===
-          categoryTitle.toLowerCase()
-      ) ||
-      null
-
-
-    if (
-      !category
-    ) {
-      category = {
-        id:
-          createAdminId(
-            'historic-category'
-          ),
-
-        city:
-          cityKey,
-
-        title:
-          categoryTitle,
-
-        slug:
-          historicCollectionSlug(
-            categoryTitle
-          ),
-
-        description:
-          String(
-            categoryInput.description ||
-            ''
-          ),
-
-        pinIcon:
-          getHistoricPinIcon(
-            categoryInput.pinIcon ||
-            (
-              categoryTitle.toUpperCase() ===
-                'PEOPLE'
-                ? 'person'
-                : 'map-pin'
-            )
-          ).id,
-
-        displayOrder:
-          Number(
-            categoryInput.displayOrder
-          ) ||
-          nextHistoricDisplayOrder(
-            cityHistoricCategories
-          ),
-
-        status:
-          payload.publishCollection ===
-            false
-            ? 'draft'
-            : 'published',
-
-        createdAt:
-          new Date()
-            .toISOString(),
-
-        updatedAt:
-          new Date()
-            .toISOString(),
-      }
-
-
-      nextCategories = [
-        ...nextCategories,
-        category,
-      ]
-    }
-
-
-    let nextLayers = [
-      ...historicLayers,
-    ]
-
-
-    let layer =
-      nextLayers.find(
-        (item) =>
-          belongsToCity(
-            item,
-            cityKey
-          ) &&
-          item.categoryId ===
-            category.id &&
-          String(
-            item.title ||
-            ''
-          )
-            .trim()
-            .toLowerCase() ===
-          layerTitle.toLowerCase()
-      ) ||
-      null
-
-
-    const requestedLayerIcon =
-      layerInput.pinIcon ||
-      category.pinIcon ||
-      'map-pin'
-
-
-    if (
-      !layer
-    ) {
-      layer = {
-        id:
-          createAdminId(
-            'historic-layer'
-          ),
-
-        city:
-          cityKey,
-
-        categoryId:
-          category.id,
-
-        title:
-          layerTitle,
-
-        slug:
-          historicCollectionSlug(
-            layerTitle
-          ),
-
-        description:
-          String(
-            layerInput.description ||
-            ''
-          ),
-
-        pinIcon:
-          getHistoricPinIcon(
-            requestedLayerIcon
-          ).id,
-
-        coverImageUrl:
-          String(
-            layerInput.coverImageUrl ||
-            ''
-          ),
-
-        displayOrder:
-          Number(
-            layerInput.displayOrder
-          ) ||
-          nextHistoricDisplayOrder(
-            cityHistoricLayers,
-            (item) =>
-              item.categoryId ===
-              category.id
-          ),
-
-        status:
-          payload.publishCollection ===
-            false
-            ? 'draft'
-            : 'published',
-
-        createdAt:
-          new Date()
-            .toISOString(),
-
-        updatedAt:
-          new Date()
-            .toISOString(),
-      }
-
-
-      nextLayers = [
-        ...nextLayers,
-        layer,
-      ]
-    }
-    else if (
-      layerInput.pinIcon
-    ) {
-      const importedLayerIcon =
-        getHistoricPinIcon(
-          layerInput.pinIcon
-        ).id
-
-
-      if (
-        layer.pinIcon !==
-          importedLayerIcon
-      ) {
-        layer = {
-          ...layer,
-
-          pinIcon:
-            importedLayerIcon,
-
-          updatedAt:
-            new Date()
-              .toISOString(),
-        }
-
-
-        nextLayers =
-          nextLayers.map(
-            (item) =>
-              item.id ===
-                layer.id
-                ? layer
-                : item
-          )
-      }
-    }
-
-
-    const currentHistoric =
-      getHistoricItems()
-        .map(
-          normalizeHistoricRecord
-        )
-
-
-    const imported = []
-    const skipped = []
-    const unresolved = []
-
-
-    for (
-      const input
-      of pins
-    ) {
-      const title =
-        String(
-          input?.title ||
-          ''
-        )
-          .trim()
-
-
-      if (
-        !title
-      ) {
-        skipped.push(
-          'UNTITLED'
-        )
-
-
-        continue
-      }
-
-
-      const duplicate =
-        currentHistoric.some(
-          (record) =>
-            record.historicLayerId ===
-              layer.id &&
-            String(
-              record.title ||
-              ''
-            )
-              .trim()
-              .toLowerCase() ===
-            title.toLowerCase()
-        ) ||
-        imported.some(
-          (record) =>
-            String(
-              record.title ||
-              ''
-            )
-              .trim()
-              .toLowerCase() ===
-            title.toLowerCase()
-        )
-
-
-      if (
-        duplicate
-      ) {
-        skipped.push(
-          title
-        )
-
-
-        continue
-      }
-
-
-      const overrideType =
-        String(
-          input?.storyLayer?.type ||
-          input?.layerOverrideType ||
-          ''
-        )
-          .trim()
-          .toLowerCase()
-
-
-      const overrideYear =
-        Number(
-          input?.storyLayer?.year ??
-          input?.layerOverrideYear
-        )
-
-
-      const selectedHistoricalLayer =
-        historicalLayers.find(
-          (item) =>
-            item.layerType ===
-              overrideType &&
-            item.year ===
-              overrideYear
-        ) ||
-        null
-
-
-      if (
-        !selectedHistoricalLayer
-      ) {
-        skipped.push(
-          `${title} · MISSING VALID storyLayer`
-        )
-
-
-        continue
-      }
-
-
-      let longitude =
-        isUsableCoordinate(
-          input.longitude
-        )
-          ? Number(
-              input.longitude
-            )
-          : null
-
-
-      let latitude =
-        isUsableCoordinate(
-          input.latitude
-        )
-          ? Number(
-              input.latitude
-            )
-          : null
-
-
-      let location =
-        String(
-          input.location ||
-          input.intersection ||
-          ''
-        )
-          .trim()
-
-
-      let intersection =
-        String(
-          input.intersection ||
-          input.location ||
-          ''
-        )
-          .trim()
-
-
-      if (
-        !Number.isFinite(
-          longitude
-        ) ||
-        !Number.isFinite(
-          latitude
-        )
-      ) {
-        const searchValue =
-          intersection ||
-          location
-
-
-        if (
-          searchValue
-        ) {
-          try {
-            const locationResults =
-              await searchLocation({
-                value:
-                  searchValue,
-
-                city,
-              })
-
-
-            const firstResult =
-              locationResults?.[0] ||
-              null
-
-
-            if (
-              firstResult &&
-              Number.isFinite(
-                Number(
-                  firstResult.longitude
-                )
-              ) &&
-              Number.isFinite(
-                Number(
-                  firstResult.latitude
-                )
-              )
-            ) {
-              longitude =
-                Number(
-                  firstResult.longitude
-                )
-
-
-              latitude =
-                Number(
-                  firstResult.latitude
-                )
-
-
-              location =
-                firstResult.location ||
-                location ||
-                firstResult.name ||
-                ''
-
-
-              intersection =
-                firstResult.intersection ||
-                intersection ||
-                firstResult.name ||
-                ''
-            }
-          }
-          catch (
-            error
-          ) {
-            console.warn(
-              'HISTORIC BULK GEOCODE FAILED:',
-              title,
-              error
-            )
-          }
-        }
-      }
-
-
-      if (
-        !Number.isFinite(
-          longitude
-        ) ||
-        !Number.isFinite(
-          latitude
-        )
-      ) {
-        unresolved.push(
-          title
-        )
-
-
-        continue
-      }
-
-
-      const timeMode =
-        [
-          'event',
-          'range',
-          'present',
-        ].includes(
-          input.timeMode
-        )
-          ? input.timeMode
-          : 'event'
-
-
-      const anchorYear =
-        String(
-          input.year ||
-          input.startYear ||
-          ''
-        )
-          .trim()
-
-
-      const now =
-        new Date()
-          .toISOString()
-
-
-      imported.push({
-        ...EMPTY_HISTORIC,
-        ...input,
-
-        id:
-          createAdminId(
-            'historic'
-          ),
-
-        city:
-          cityKey,
-
-        type:
-          'historic',
-
-        title,
-
-        category:
-          input.category ||
-          'place',
-
-        historicCategoryId:
-          category.id,
-
-        historicLayerId:
-          layer.id,
-
-        issueIds:
-          [],
-
-        issueSection:
-          '',
-
-        pinIcon:
-          getHistoricPinIcon(
-            input.pinIcon ||
-            layer.pinIcon ||
-            category.pinIcon ||
-            'map-pin'
-          ).id,
-
-        timeMode,
-
-        year:
-          anchorYear,
-
-        startYear:
-          String(
-            input.startYear ||
-            (
-              timeMode ===
-                'range' ||
-              timeMode ===
-                'present'
-                ? anchorYear
-                : ''
-            )
-          ),
-
-        endYear:
-          String(
-            input.endYear ||
-            ''
-          ),
-
-        location,
-
-        intersection,
-
-        longitude,
-
-        latitude,
-
-        searchedLongitude:
-          longitude,
-
-        searchedLatitude:
-          latitude,
-
-        pinPositionMode:
-          input.pinPositionMode ||
-          'auto',
-
-        source:
-          String(
-            input.source ||
-            ''
-          ),
-
-        sourceUrl:
-          normalizeSourceUrl(
-            input.sourceUrl
-          ),
-
-        imageUrl:
-          normalizeSourceUrl(
-            input.imageUrl
-          ),
-
-        layerPlacementMode:
-          'manual',
-
-        layerOverrideType:
-          selectedHistoricalLayer.layerType,
-
-        layerOverrideYear:
-          selectedHistoricalLayer.year,
-
-        autoLayers: [
-          {
-            year:
-              selectedHistoricalLayer.year,
-
-            layerType:
-              selectedHistoricalLayer.layerType,
-          },
-        ],
-
-        active:
-          input.active ===
-            false
-            ? false
-            : payload.publish !==
-                false,
-
-        createdAt:
-          input.createdAt ||
-          now,
-
-        updatedAt:
-          now,
-      })
-    }
-
-
-    const nextHistoric = [
-      ...imported,
-      ...currentHistoric,
-    ]
-
-
-    setHistoricCategories(
-      nextCategories
-    )
-
-
-    setHistoricLayers(
-      nextLayers
-    )
-
-
-    setAllHistoricItems(
-      nextHistoric
-    )
-
-
-    saveHistoricItems(
-      nextHistoric
-    )
-
-
-    setSelectedHistoricCategoryId(
-      category.id
-    )
-
-
-    setSelectedHistoricLayerId(
-      layer.id
-    )
-
-
-    setHistoricBulkStatus(
-      (
-        `${imported.length} IMPORTED` +
-        (
-          skipped.length
-            ? ` · ${skipped.length} SKIPPED`
-            : ''
-        ) +
-        (
-          unresolved.length
-            ? ` · ${unresolved.length} UNRESOLVED`
-            : ''
-        )
       )
     )
   }
@@ -13837,54 +11896,6 @@ function AdminRoom() {
       tab ===
       'historic'
     ) {
-      const historicCategoryId =
-        record.historicCategoryId ||
-        selectedHistoricCategory?.id ||
-        ''
-
-
-      const historicLayerId =
-        record.historicLayerId ||
-        selectedHistoricLayer?.id ||
-        ''
-
-
-      if (
-        !historicCategoryId ||
-        !historicLayerId
-      ) {
-        window.alert(
-          'Choose a Historic category and layer before saving this story.'
-        )
-
-
-        return null
-      }
-
-
-      const layerRecord =
-        historicLayers.find(
-          (layer) =>
-            layer.id ===
-            historicLayerId
-        ) ||
-        null
-
-
-      if (
-        !layerRecord ||
-        layerRecord.categoryId !==
-          historicCategoryId
-      ) {
-        window.alert(
-          'That Historic layer does not belong to the selected category.'
-        )
-
-
-        return null
-      }
-
-
       const automaticLayers =
         getAutomaticHistoricLayers({
           city,
@@ -13895,14 +11906,30 @@ function AdminRoom() {
       record = {
         ...record,
 
-        historicCategoryId,
-
-        historicLayerId,
-
         issueIds:
-          [],
+          Array.isArray(
+            record.issueIds
+          ) &&
+          record.issueIds.length >
+            0
+            ? record.issueIds
+            : (
+                (
+                  selectedHistoricIssue?.id ||
+                  selectedHistoricIssueId
+                )
+                  ? [
+                      (
+                        selectedHistoricIssue?.id ||
+                        selectedHistoricIssueId
+                      ),
+                    ]
+                  : []
+              ),
 
         issueSection:
+          record.issueSection ||
+          selectedHistoricIssueSections[0]?.id ||
           '',
 
         editorialStatus:
@@ -13910,34 +11937,15 @@ function AdminRoom() {
           'researching',
 
         autoLayers:
-          record.layerPlacementMode ===
-            'manual' &&
-          record.layerOverrideType &&
-          Number.isFinite(
-            Number(
-              record.layerOverrideYear
-            )
-          )
-            ? [
-                {
-                  year:
-                    Number(
-                      record.layerOverrideYear
-                    ),
+          automaticLayers.map(
+            (layer) => ({
+              year:
+                layer.year,
 
-                  layerType:
-                    record.layerOverrideType,
-                },
-              ]
-            : automaticLayers.map(
-                (layer) => ({
-                  year:
-                    layer.year,
-
-                  layerType:
-                    layer.layerType,
-                })
-              ),
+              layerType:
+                layer.layerType,
+            })
+          ),
       }
 
 
@@ -14542,23 +12550,6 @@ function AdminRoom() {
               normalizedRecord
             )
           : normalizedRecord.description,
-    }
-
-
-    if (
-      tab ===
-        'historic'
-    ) {
-      setSelectedHistoricCategoryId(
-        editableRecord.historicCategoryId ||
-        ''
-      )
-
-
-      setSelectedHistoricLayerId(
-        editableRecord.historicLayerId ||
-        ''
-      )
     }
 
 
@@ -16563,6 +14554,46 @@ function AdminRoom() {
         false
 
 
+    if (
+      tab ===
+        'historic' &&
+      nextActive &&
+      Array.isArray(
+        target.issueIds
+      ) &&
+      target.issueIds.length >
+        0
+    ) {
+      const hasPublishedIssue =
+        target.issueIds.some(
+          (
+            issueId
+          ) =>
+            historicIssues.some(
+              (
+                issue
+              ) =>
+                issue.id ===
+                  issueId &&
+                issue.status ===
+                  'published'
+            )
+        )
+
+
+      if (
+        !hasPublishedIssue
+      ) {
+        window.alert(
+          'Publish the Historic issue to make this story public.'
+        )
+
+
+        return
+      }
+    }
+
+
     let updatedRecord = {
       ...target,
 
@@ -18185,7 +16216,7 @@ function AdminRoom() {
               <>
                 <div className="admin-field admin-field-wide">
                   <span>
-                    HISTORIC LIBRARY
+                    ISSUE WORKSPACE
                   </span>
 
                   <div
@@ -18197,575 +16228,26 @@ function AdminRoom() {
                         '14px',
                     }}
                   >
-                    <div
-                      style={{
-                        display:
-                          'grid',
-
-                        gridTemplateColumns:
-                          'minmax(180px, 1fr) auto auto auto',
-
-                        gap:
-                          '6px',
-
-                        alignItems:
-                          'center',
-                      }}
-                    >
-                      <select
-                        value={
-                          selectedHistoricCategory?.id ||
-                          ''
-                        }
-                        onChange={
-                          (
-                            event
-                          ) => {
-                            const categoryId =
-                              event.target.value
-
-
-                            const nextLayer =
-                              cityHistoricLayers.find(
-                                (layer) =>
-                                  layer.categoryId ===
-                                  categoryId
-                              ) ||
-                              null
-
-
-                            setSelectedHistoricCategoryId(
-                              categoryId
-                            )
-
-
-                            setSelectedHistoricLayerId(
-                              nextLayer?.id ||
-                              ''
-                            )
-
-
-                            if (
-                              !editingId
-                            ) {
-                              setDraft(
-                                (
-                                  current
-                                ) => ({
-                                  ...current,
-
-                                  historicCategoryId:
-                                    categoryId,
-
-                                  historicLayerId:
-                                    nextLayer?.id ||
-                                    '',
-
-                                  pinIcon:
-                                    nextLayer?.pinIcon ||
-                                    cityHistoricCategories.find(
-                                      (category) =>
-                                        category.id ===
-                                        categoryId
-                                    )?.pinIcon ||
-                                    current.pinIcon ||
-                                    'map-pin',
-                                })
-                              )
-                            }
-                          }
-                        }
-                      >
-                        {cityHistoricCategories.length ===
-                          0 && (
-                          <option value="">
-                            NO CATEGORIES YET
-                          </option>
-                        )}
-
-
-                        {cityHistoricCategories.map(
-                          (
-                            category
-                          ) => (
-                            <option
-                              key={
-                                category.id
-                              }
-                              value={
-                                category.id
-                              }
-                            >
-                              {
-                                `${getHistoricPinIcon(
-                                  category.pinIcon
-                                ).emoji} ${category.title}` +
-                                (
-                                  category.status ===
-                                    'published'
-                                    ? ''
-                                    : ' · DRAFT'
-                                )
-                              }
-                            </option>
+                    <strong>
+                      {selectedHistoricIssue
+                        ? (
+                            `HISTORIC ${selectedHistoricIssue.number} · ` +
+                            selectedHistoricIssue.title
                           )
-                        )}
-                      </select>
+                        : 'NO ISSUE SELECTED'}
+                    </strong>
 
-                      <button
-                        type="button"
-                        className="admin-save"
-                        onClick={
-                          createHistoricCategory
-                        }
+                    {selectedHistoricIssue?.subtitle && (
+                      <div
+                        style={{
+                          marginTop:
+                            '4px',
+                        }}
                       >
-                        + CATEGORY
-                      </button>
-
-                      <button
-                        type="button"
-                        className="admin-cancel"
-                        disabled={
-                          !selectedHistoricCategory
-                        }
-                        onClick={
-                          editHistoricCategory
-                        }
-                      >
-                        EDIT
-                      </button>
-
-                      <button
-                        type="button"
-                        className="admin-cancel"
-                        disabled={
-                          !selectedHistoricCategory
-                        }
-                        onClick={
-                          deleteHistoricCategory
-                        }
-                      >
-                        DELETE
-                      </button>
-                    </div>
-
-
-                    {selectedHistoricCategory && (
-                      <>
-                        <div
-                          className="admin-record-meta"
-                          style={{
-                            marginTop:
-                              '8px',
-                          }}
-                        >
-                          {
-                            selectedHistoricCategory.description ||
-                            'NO CATEGORY DESCRIPTION'
-                          }
-                          {' · '}
-                          {
-                            String(
-                              selectedHistoricCategory.status ||
-                              'draft'
-                            )
-                              .toUpperCase()
-                          }
-                        </div>
-
-                        <label
-                          className="admin-field"
-                          style={{
-                            marginTop:
-                              '10px',
-
-                            maxWidth:
-                              '360px',
-                          }}
-                        >
-                          <span>
-                            CATEGORY ICON
-                          </span>
-
-                          <select
-                            value={
-                              selectedHistoricCategory.pinIcon ||
-                              'map-pin'
-                            }
-                            onChange={
-                              (
-                                event
-                              ) =>
-                                updateHistoricCategoryIcon(
-                                  event.target.value
-                                )
-                            }
-                          >
-                            {HISTORIC_PIN_ICONS.map(
-                              (
-                                icon
-                              ) => (
-                                <option
-                                  key={
-                                    icon.id
-                                  }
-                                  value={
-                                    icon.id
-                                  }
-                                >
-                                  {icon.emoji} {icon.label}
-                                </option>
-                              )
-                            )}
-                          </select>
-                        </label>
-
-
-                        <button
-                          type="button"
-                          className="admin-cancel"
-                          style={{
-                            marginTop:
-                              '8px',
-                          }}
-                          onClick={
-                            toggleHistoricCategoryStatus
-                          }
-                        >
-                          {selectedHistoricCategory.status ===
-                            'published'
-                            ? 'UNPUBLISH CATEGORY'
-                            : 'PUBLISH CATEGORY'}
-                        </button>
-                      </>
+                        {selectedHistoricIssue.subtitle}
+                      </div>
                     )}
 
-
-                    <div
-                      style={{
-                        display:
-                          'grid',
-
-                        gridTemplateColumns:
-                          'minmax(180px, 1fr) auto auto auto',
-
-                        gap:
-                          '6px',
-
-                        alignItems:
-                          'center',
-
-                        marginTop:
-                          '14px',
-                      }}
-                    >
-                      <select
-                        value={
-                          selectedHistoricLayer?.id ||
-                          ''
-                        }
-                        onChange={
-                          (
-                            event
-                          ) => {
-                            const layerId =
-                              event.target.value
-
-
-                            const nextLayer =
-                              cityHistoricLayers.find(
-                                (layer) =>
-                                  layer.id ===
-                                  layerId
-                              ) ||
-                              null
-
-
-                            setSelectedHistoricLayerId(
-                              layerId
-                            )
-
-
-                            if (
-                              nextLayer
-                            ) {
-                              setSelectedHistoricCategoryId(
-                                nextLayer.categoryId
-                              )
-                            }
-
-
-                            if (
-                              !editingId
-                            ) {
-                              setDraft(
-                                (
-                                  current
-                                ) => ({
-                                  ...current,
-
-                                  historicCategoryId:
-                                    nextLayer?.categoryId ||
-                                    selectedHistoricCategory?.id ||
-                                    '',
-
-                                  historicLayerId:
-                                    nextLayer?.id ||
-                                    '',
-
-                                  pinIcon:
-                                    nextLayer?.pinIcon ||
-                                    selectedHistoricCategory?.pinIcon ||
-                                    current.pinIcon ||
-                                    'map-pin',
-                                })
-                              )
-                            }
-                          }
-                        }
-                      >
-                        {selectedHistoricCategoryLayers.length ===
-                          0 && (
-                          <option value="">
-                            NO LAYERS YET
-                          </option>
-                        )}
-
-
-                        {selectedHistoricCategoryLayers.map(
-                          (
-                            layer
-                          ) => (
-                            <option
-                              key={
-                                layer.id
-                              }
-                              value={
-                                layer.id
-                              }
-                            >
-                              {
-                                `${getHistoricPinIcon(
-                                  layer.pinIcon
-                                ).emoji} ${layer.title}` +
-                                (
-                                  layer.status ===
-                                    'published'
-                                    ? ''
-                                    : ' · DRAFT'
-                                )
-                              }
-                            </option>
-                          )
-                        )}
-                      </select>
-
-                      <button
-                        type="button"
-                        className="admin-save"
-                        disabled={
-                          !selectedHistoricCategory
-                        }
-                        onClick={
-                          createHistoricLayer
-                        }
-                      >
-                        + LAYER
-                      </button>
-
-                      <button
-                        type="button"
-                        className="admin-cancel"
-                        disabled={
-                          !selectedHistoricLayer
-                        }
-                        onClick={
-                          editHistoricLayer
-                        }
-                      >
-                        EDIT
-                      </button>
-
-                      <button
-                        type="button"
-                        className="admin-cancel"
-                        disabled={
-                          !selectedHistoricLayer
-                        }
-                        onClick={
-                          deleteHistoricLayer
-                        }
-                      >
-                        DELETE
-                      </button>
-                    </div>
-
-
-                    {selectedHistoricLayer && (
-                      <>
-                        <div
-                          className="admin-record-meta"
-                          style={{
-                            marginTop:
-                              '8px',
-                          }}
-                        >
-                          {
-                            getHistoricPinIcon(
-                              selectedHistoricLayer.pinIcon
-                            ).emoji
-                          }
-                          {' '}
-                          {
-                            selectedHistoricLayer.description ||
-                            'NO LAYER DESCRIPTION'
-                          }
-                          {' · '}
-                          {
-                            String(
-                              selectedHistoricLayer.status ||
-                              'draft'
-                            )
-                              .toUpperCase()
-                          }
-                          {' · '}
-                          {
-                            historicScopedItems.length
-                          } STORIES
-                        </div>
-
-                        <label
-                          className="admin-field"
-                          style={{
-                            marginTop:
-                              '10px',
-
-                            maxWidth:
-                              '360px',
-                          }}
-                        >
-                          <span>
-                            LAYER / SUBCATEGORY ICON
-                          </span>
-
-                          <select
-                            value={
-                              selectedHistoricLayer.pinIcon ||
-                              selectedHistoricCategory?.pinIcon ||
-                              'map-pin'
-                            }
-                            onChange={
-                              (
-                                event
-                              ) =>
-                                updateHistoricLayerIcon(
-                                  event.target.value
-                                )
-                            }
-                          >
-                            {HISTORIC_PIN_ICONS.map(
-                              (
-                                icon
-                              ) => (
-                                <option
-                                  key={
-                                    icon.id
-                                  }
-                                  value={
-                                    icon.id
-                                  }
-                                >
-                                  {icon.emoji} {icon.label}
-                                </option>
-                              )
-                            )}
-                          </select>
-                        </label>
-
-
-                        <div
-                          className="admin-form-actions"
-                          style={{
-                            marginTop:
-                              '10px',
-                          }}
-                        >
-                          <button
-                            type="button"
-                            className="admin-save"
-                            onClick={
-                              startHistoricStory
-                            }
-                          >
-                            + NEW STORY
-                          </button>
-
-                          <button
-                            type="button"
-                            className="admin-cancel"
-                            onClick={
-                              toggleHistoricLayerStatus
-                            }
-                          >
-                            {selectedHistoricLayer.status ===
-                              'published'
-                              ? 'UNPUBLISH LAYER'
-                              : 'PUBLISH LAYER'}
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-
-                <div className="admin-field admin-field-wide">
-                  <span>
-                    BULK IMPORT · JSON
-                  </span>
-
-                  <textarea
-                    value={
-                      historicBulkJson
-                    }
-                    onChange={
-                      (
-                        event
-                      ) =>
-                        setHistoricBulkJson(
-                          event.target.value
-                        )
-                    }
-                    rows="8"
-                    placeholder='{"category":{"title":"PEOPLE"},"layer":{"title":"DRAKE&apos;S TORONTO","pinIcon":"owl"},"pins":[...]}'
-                  />
-
-                  <div
-                    className="admin-form-actions"
-                    style={{
-                      marginTop:
-                        '8px',
-                    }}
-                  >
-                    <button
-                      type="button"
-                      className="admin-save"
-                      disabled={
-                        !String(
-                          historicBulkJson ||
-                          ''
-                        )
-                          .trim()
-                      }
-                      onClick={
-                        importHistoricBulkJson
-                      }
-                    >
-                      IMPORT JSON
-                    </button>
-                  </div>
-
-                  {historicBulkStatus && (
                     <div
                       className="admin-record-meta"
                       style={{
@@ -18773,86 +16255,638 @@ function AdminRoom() {
                           '8px',
                       }}
                     >
-                      {
-                        historicBulkStatus
-                      }
+                      {String(
+                        selectedHistoricIssue?.status ||
+                        'draft'
+                      )
+                        .toUpperCase()}
+                      {' · '}
+                      {selectedHistoricIssueDraftCount} DRAFTS
+                      {' · '}
+                      {selectedHistoricIssuePublishedCount} PUBLISHED
                     </div>
-                  )}
+
+
+                    {selectedHistoricIssue?.publicationDate && (
+                      <div
+                        className="admin-record-meta"
+                        style={{
+                          marginTop:
+                            '4px',
+                        }}
+                      >
+                        PUBLICATION · {
+                          selectedHistoricIssue.publicationDate
+                        }
+                      </div>
+                    )}
+
+
+                    {selectedHistoricIssue?.description && (
+                      <p
+                        style={{
+                          margin:
+                            '10px 0 0',
+                        }}
+                      >
+                        {
+                          selectedHistoricIssue.description
+                        }
+                      </p>
+                    )}
+
+
+                    <div
+                      className="admin-form-actions"
+                      style={{
+                        marginTop:
+                          '12px',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="admin-save"
+                        onClick={
+                          startNewHistoricIssue
+                        }
+                      >
+                        + NEW ISSUE
+                      </button>
+
+                      <button
+                        type="button"
+                        className="admin-cancel"
+                        disabled={
+                          !selectedHistoricIssue
+                        }
+                        onClick={
+                          startEditHistoricIssue
+                        }
+                      >
+                        EDIT ISSUE
+                      </button>
+
+                      <button
+                        type="button"
+                        className="admin-cancel"
+                        onClick={
+                          downloadHistoricMigrationSnapshot
+                        }
+                      >
+                        DOWNLOAD HISTORIC BACKUP
+                      </button>
+
+
+                      {selectedHistoricIssue?.status ===
+                        'published'
+                        ? (
+                            <button
+                              type="button"
+                              className="admin-review-reject"
+                              onClick={
+                                unpublishHistoricIssue
+                              }
+                            >
+                              UNPUBLISH ISSUE
+                            </button>
+                          )
+                        : (
+                            <button
+                              type="button"
+                              className="admin-review-approve"
+                              disabled={
+                                !selectedHistoricIssue ||
+                                selectedHistoricIssueRecords.length ===
+                                  0
+                              }
+                              onClick={
+                                publishHistoricIssue
+                              }
+                            >
+                              PUBLISH ISSUE
+                            </button>
+                          )}
+                    </div>
+                  </div>
                 </div>
+
+
+                {historicIssueEditorOpen && (
+                  <>
+                    <div className="admin-field admin-field-wide">
+                      <span>
+                        {historicIssueEditingId
+                          ? 'EDIT ISSUE DETAILS'
+                          : 'CREATE NEW ISSUE'}
+                      </span>
+
+                      <div
+                        style={{
+                          border:
+                            '1px solid rgba(0,0,0,0.18)',
+
+                          padding:
+                            '14px',
+                        }}
+                      >
+                        {historicIssueEditingId
+                          ? (
+                              `Editing HISTORIC ${historicIssueDraft.number || ''}`
+                            )
+                          : 'Build a private Historic issue workspace.'}
+                      </div>
+                    </div>
+
+
+                    <label className="admin-field">
+                      <span>
+                        ISSUE NUMBER
+                      </span>
+
+                      <input
+                        value={
+                          historicIssueDraft.number
+                        }
+                        onChange={
+                          (event) =>
+                            updateHistoricIssueDraft(
+                              'number',
+                              event.target.value
+                            )
+                        }
+                        placeholder="002"
+                      />
+                    </label>
+
+
+                    <label className="admin-field">
+                      <span>
+                        STATUS
+                      </span>
+
+                      <select
+                        value={
+                          historicIssueDraft.status ||
+                          'draft'
+                        }
+                        onChange={
+                          (event) =>
+                            updateHistoricIssueDraft(
+                              'status',
+                              event.target.value
+                            )
+                        }
+                      >
+                        <option value="draft">
+                          DRAFT
+                        </option>
+
+                        <option value="ready">
+                          READY
+                        </option>
+
+                        <option
+                          value="published"
+                          disabled
+                        >
+                          PUBLISHED · USE PUBLISH ISSUE
+                        </option>
+
+                        <option value="archived">
+                          ARCHIVED
+                        </option>
+                      </select>
+                    </label>
+
+
+                    <label className="admin-field admin-field-wide">
+                      <span>
+                        ISSUE TITLE
+                      </span>
+
+                      <input
+                        value={
+                          historicIssueDraft.title
+                        }
+                        onChange={
+                          (event) =>
+                            updateHistoricIssueDraft(
+                              'title',
+                              event.target.value
+                            )
+                        }
+                        placeholder="MURDER. MYSTERY. MISSING."
+                      />
+                    </label>
+
+
+                    <label className="admin-field admin-field-wide">
+                      <span>
+                        SUBTITLE
+                      </span>
+
+                      <input
+                        value={
+                          historicIssueDraft.subtitle
+                        }
+                        onChange={
+                          (event) =>
+                            updateHistoricIssueDraft(
+                              'subtitle',
+                              event.target.value
+                            )
+                        }
+                        placeholder="A TORONTO HALLOWEEN SPECIAL"
+                      />
+                    </label>
+
+
+                    <label className="admin-field admin-field-wide">
+                      <span>
+                        DESCRIPTION
+                      </span>
+
+                      <textarea
+                        value={
+                          historicIssueDraft.description
+                        }
+                        onChange={
+                          (event) =>
+                            updateHistoricIssueDraft(
+                              'description',
+                              event.target.value
+                            )
+                        }
+                        rows="4"
+                        placeholder="Editorial description, theme, scope, notes..."
+                      />
+                    </label>
+
+
+                    <div className="admin-field admin-field-wide">
+                      <span>
+                        ISSUE SECTIONS
+                      </span>
+
+
+                      <div
+                        style={{
+                          border:
+                            '1px solid rgba(0,0,0,0.18)',
+
+                          padding:
+                            '12px',
+                        }}
+                      >
+                        {normalizeHistoricIssueSections(
+                          historicIssueDraft.sections
+                        )
+                          .map(
+                            (
+                              section,
+                              index
+                            ) => (
+                              <div
+                                key={
+                                  section.id
+                                }
+                                style={{
+                                  display:
+                                    'grid',
+
+                                  gridTemplateColumns:
+                                    'minmax(0, 1fr) auto auto auto',
+
+                                  gap:
+                                    '6px',
+
+                                  alignItems:
+                                    'center',
+
+                                  marginTop:
+                                    index ===
+                                      0
+                                      ? '0'
+                                      : '6px',
+                                }}
+                              >
+                                <input
+                                  value={
+                                    section.title
+                                  }
+                                  onChange={
+                                    (event) =>
+                                      updateHistoricIssueSectionTitle(
+                                        section.id,
+                                        event.target.value
+                                      )
+                                  }
+                                  aria-label="Historic issue section title"
+                                />
+
+                                <button
+                                  type="button"
+                                  className="admin-cancel"
+                                  disabled={
+                                    index ===
+                                    0
+                                  }
+                                  onClick={() =>
+                                    moveHistoricIssueSection(
+                                      section.id,
+                                      -1
+                                    )
+                                  }
+                                  title="Move section up"
+                                >
+                                  ↑
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="admin-cancel"
+                                  disabled={
+                                    index ===
+                                    normalizeHistoricIssueSections(
+                                      historicIssueDraft.sections
+                                    ).length -
+                                      1
+                                  }
+                                  onClick={() =>
+                                    moveHistoricIssueSection(
+                                      section.id,
+                                      1
+                                    )
+                                  }
+                                  title="Move section down"
+                                >
+                                  ↓
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="admin-cancel"
+                                  onClick={() =>
+                                    removeHistoricIssueSection(
+                                      section.id
+                                    )
+                                  }
+                                >
+                                  REMOVE
+                                </button>
+                              </div>
+                            )
+                          )}
+
+
+                        {normalizeHistoricIssueSections(
+                          historicIssueDraft.sections
+                        ).length ===
+                          0 && (
+                          <div className="admin-record-meta">
+                            NO SECTIONS YET
+                          </div>
+                        )}
+
+
+                        <div
+                          style={{
+                            display:
+                              'grid',
+
+                            gridTemplateColumns:
+                              'minmax(0, 1fr) auto',
+
+                            gap:
+                              '6px',
+
+                            marginTop:
+                              '10px',
+                          }}
+                        >
+                          <input
+                            value={
+                              historicIssueNewSectionTitle
+                            }
+                            onChange={
+                              (event) =>
+                                setHistoricIssueNewSectionTitle(
+                                  event.target.value
+                                )
+                            }
+                            onKeyDown={
+                              (event) => {
+                                if (
+                                  event.key ===
+                                  'Enter'
+                                ) {
+                                  event.preventDefault()
+
+                                  addHistoricIssueSection()
+                                }
+                              }
+                            }
+                            placeholder="e.g. GHOSTS & HAUNTINGS"
+                          />
+
+                          <button
+                            type="button"
+                            className="admin-save"
+                            onClick={
+                              addHistoricIssueSection
+                            }
+                          >
+                            + ADD SECTION
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+
+                    <label className="admin-field admin-field-wide">
+                      <span>
+                        COVER IMAGE URL
+                      </span>
+
+                      <input
+                        value={
+                          historicIssueDraft.coverImageUrl
+                        }
+                        onChange={
+                          (event) =>
+                            updateHistoricIssueDraft(
+                              'coverImageUrl',
+                              event.target.value
+                            )
+                        }
+                        placeholder="https://..."
+                      />
+                    </label>
+
+
+                    <label className="admin-field">
+                      <span>
+                        PUBLICATION DATE
+                      </span>
+
+                      <input
+                        type="date"
+                        value={
+                          historicIssueDraft.publicationDate
+                        }
+                        onChange={
+                          (event) =>
+                            updateHistoricIssueDraft(
+                              'publicationDate',
+                              event.target.value
+                            )
+                        }
+                      />
+                    </label>
+
+
+                    <div
+                      className="admin-form-actions"
+                      style={{
+                        gridColumn:
+                          '1 / -1',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="admin-save"
+                        onClick={
+                          saveHistoricIssue
+                        }
+                      >
+                        {historicIssueEditingId
+                          ? 'SAVE ISSUE CHANGES'
+                          : 'CREATE ISSUE'}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="admin-cancel"
+                        onClick={
+                          cancelHistoricIssueEdit
+                        }
+                      >
+                        CANCEL
+                      </button>
+
+                      {historicIssueEditingId && (
+                        <button
+                          type="button"
+                          className="admin-cancel"
+                          onClick={
+                            deleteHistoricIssue
+                          }
+                        >
+                          DELETE ISSUE
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
 
 
                 <label className="admin-field">
                   <span>
-                    CATEGORY
+                    ISSUE
                   </span>
 
                   <select
                     value={
-                      draft.historicCategoryId ||
+                      draft.issueIds?.[0] ||
+                      selectedHistoricIssue?.id ||
                       ''
                     }
                     onChange={
-                      (
-                        event
-                      ) => {
-                        const categoryId =
+                      (event) => {
+                        const issueId =
                           event.target.value
 
 
-                        const firstLayer =
-                          cityHistoricLayers.find(
-                            (layer) =>
-                              layer.categoryId ===
-                              categoryId
+                        const nextIssue =
+                          cityHistoricIssues.find(
+                            (issue) =>
+                              issue.id ===
+                              issueId
                           ) ||
                           null
 
 
-                        updateDraft(
-                          'historicCategoryId',
-                          categoryId
+                        const nextIssueRecords =
+                          nextIssue
+                            ? historicItems.filter(
+                                (record) =>
+                                  Array.isArray(
+                                    record.issueIds
+                                  ) &&
+                                  record.issueIds.includes(
+                                    nextIssue.id
+                                  )
+                              )
+                            : []
+
+
+                        const nextSections =
+                          getHistoricIssueSections({
+                            issue:
+                              nextIssue,
+
+                            records:
+                              nextIssueRecords,
+                          })
+
+
+                        setSelectedHistoricIssueId(
+                          issueId
                         )
 
 
                         updateDraft(
-                          'historicLayerId',
-                          firstLayer?.id ||
-                          ''
+                          'issueIds',
+                          issueId
+                            ? [
+                                issueId,
+                              ]
+                            : []
                         )
 
 
-                        setSelectedHistoricCategoryId(
-                          categoryId
-                        )
-
-
-                        setSelectedHistoricLayerId(
-                          firstLayer?.id ||
-                          ''
+                        updateDraft(
+                          'issueSection',
+                          nextSections.some(
+                            (section) =>
+                              section.id ===
+                              draft.issueSection
+                          )
+                            ? draft.issueSection
+                            : (
+                                nextSections[0]?.id ||
+                                ''
+                              )
                         )
                       }
                     }
                   >
                     <option value="">
-                      CHOOSE CATEGORY
+                      NO ISSUE
                     </option>
 
-                    {cityHistoricCategories.map(
-                      (
-                        category
-                      ) => (
+                    {cityHistoricIssues.map(
+                      (issue) => (
                         <option
                           key={
-                            category.id
+                            issue.id
                           }
                           value={
-                            category.id
+                            issue.id
                           }
                         >
                           {
-                            `${getHistoricPinIcon(
-                              category.pinIcon
-                            ).emoji} ${category.title}`
+                            `HISTORIC ${issue.number} · ${issue.title}`
                           }
                         </option>
                       )
@@ -18863,89 +16897,45 @@ function AdminRoom() {
 
                 <label className="admin-field">
                   <span>
-                    LAYER / SUBCATEGORY
+                    ISSUE SECTION
                   </span>
 
                   <select
                     value={
-                      draft.historicLayerId ||
+                      draft.issueSection ||
+                      selectedHistoricIssueSections[0]?.id ||
                       ''
                     }
                     onChange={
-                      (
-                        event
-                      ) => {
-                        const layerId =
-                          event.target.value
-
-
-                        const layer =
-                          cityHistoricLayers.find(
-                            (item) =>
-                              item.id ===
-                              layerId
-                          ) ||
-                          null
-
-
+                      (event) =>
                         updateDraft(
-                          'historicLayerId',
-                          layerId
+                          'issueSection',
+                          event.target.value
                         )
-
-
-                        if (
-                          layer
-                        ) {
-                          updateDraft(
-                            'historicCategoryId',
-                            layer.categoryId
-                          )
-
-
-                          setSelectedHistoricCategoryId(
-                            layer.categoryId
-                          )
-                        }
-
-
-                        setSelectedHistoricLayerId(
-                          layerId
-                        )
-                      }
                     }
                   >
-                    <option value="">
-                      CHOOSE LAYER
-                    </option>
+                    {selectedHistoricIssueSections.length ===
+                      0 && (
+                      <option value="">
+                        NO SECTIONS · EDIT ISSUE TO ADD
+                      </option>
+                    )}
 
-                    {cityHistoricLayers
-                      .filter(
-                        (layer) =>
-                          !draft.historicCategoryId ||
-                          layer.categoryId ===
-                            draft.historicCategoryId
+
+                    {selectedHistoricIssueSections.map(
+                      (section) => (
+                        <option
+                          key={
+                            section.id
+                          }
+                          value={
+                            section.id
+                          }
+                        >
+                          {section.title}
+                        </option>
                       )
-                      .map(
-                        (
-                          layer
-                        ) => (
-                          <option
-                            key={
-                              layer.id
-                            }
-                            value={
-                              layer.id
-                            }
-                          >
-                            {
-                              `${getHistoricPinIcon(
-                                layer.pinIcon
-                              ).emoji} ${layer.title}`
-                            }
-                          </option>
-                        )
-                      )}
+                    )}
                   </select>
                 </label>
 
@@ -19757,13 +17747,16 @@ function AdminRoom() {
             >
               {tab ===
                 'historic'
-                ? 'HISTORIC STORIES'
+                ? 'WORKSPACE'
                 : 'PUBLISHED'}
               <span>
                 {
                   tab ===
                     'historic'
-                    ? historicScopedItems.length
+                    ? (
+                        selectedHistoricIssueDraftCount +
+                        historicPublishedCount
+                      )
                     : records.length
                 }
               </span>
@@ -21269,134 +19262,51 @@ function AdminRoom() {
             <div className="admin-published-section">
               {tab ===
                 'historic' && (
-                <>
-                  <div className="admin-review-type-filters">
-                    <button
-                      type="button"
-                      className={
-                        historicRecordFilter ===
-                          'drafts'
-                          ? 'admin-review-type-filter admin-review-type-filter-active'
-                          : 'admin-review-type-filter'
-                      }
-                      onClick={() =>
-                        setHistoricRecordFilter(
-                          'drafts'
-                        )
-                      }
-                    >
-                      DRAFT STORIES
-                      <span>
-                        {
-                          historicScopeDraftCount
-                        }
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className={
-                        historicRecordFilter ===
-                          'published'
-                          ? 'admin-review-type-filter admin-review-type-filter-active'
-                          : 'admin-review-type-filter'
-                      }
-                      onClick={() =>
-                        setHistoricRecordFilter(
-                          'published'
-                        )
-                      }
-                    >
-                      PUBLISHED STORIES
-                      <span>
-                        {
-                          historicScopePublishedCount
-                        }
-                      </span>
-                    </button>
-                  </div>
-
-
-                  <div className="admin-review-type-filters">
-                    <button
-                      type="button"
-                      className={
-                        historicStoryScope ===
-                          'all'
-                          ? 'admin-review-type-filter admin-review-type-filter-active'
-                          : 'admin-review-type-filter'
-                      }
-                      onClick={() =>
-                        setHistoricStoryScope(
-                          'all'
-                        )
-                      }
-                    >
-                      {historicRecordFilter ===
+                <div className="admin-review-type-filters">
+                  <button
+                    type="button"
+                    className={
+                      historicRecordFilter ===
                         'drafts'
-                        ? 'ALL DRAFTS'
-                        : 'ALL PUBLISHED'}
-                      <span>
-                        {historicRecordFilter ===
-                          'drafts'
-                          ? historicAllDraftCount
-                          : historicAllPublishedCount}
-                      </span>
-                    </button>
+                        ? 'admin-review-type-filter admin-review-type-filter-active'
+                        : 'admin-review-type-filter'
+                    }
+                    onClick={() =>
+                      setHistoricRecordFilter(
+                        'drafts'
+                      )
+                    }
+                  >
+                    ISSUE DRAFTS
+                    <span>
+                      {
+                        selectedHistoricIssueDraftCount
+                      }
+                    </span>
+                  </button>
 
-                    <button
-                      type="button"
-                      className={
-                        historicStoryScope ===
-                          'category'
-                          ? 'admin-review-type-filter admin-review-type-filter-active'
-                          : 'admin-review-type-filter'
+                  <button
+                    type="button"
+                    className={
+                      historicRecordFilter ===
+                        'published'
+                        ? 'admin-review-type-filter admin-review-type-filter-active'
+                        : 'admin-review-type-filter'
+                    }
+                    onClick={() =>
+                      setHistoricRecordFilter(
+                        'published'
+                      )
+                    }
+                  >
+                    PUBLISHED ARCHIVE
+                    <span>
+                      {
+                        historicPublishedCount
                       }
-                      disabled={
-                        !selectedHistoricCategory
-                      }
-                      onClick={() =>
-                        setHistoricStoryScope(
-                          'category'
-                        )
-                      }
-                    >
-                      CURRENT CATEGORY
-                      <span>
-                        {historicRecordFilter ===
-                          'drafts'
-                          ? historicCategoryDraftCount
-                          : historicCategoryPublishedCount}
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className={
-                        historicStoryScope ===
-                          'layer'
-                          ? 'admin-review-type-filter admin-review-type-filter-active'
-                          : 'admin-review-type-filter'
-                      }
-                      disabled={
-                        !selectedHistoricLayer
-                      }
-                      onClick={() =>
-                        setHistoricStoryScope(
-                          'layer'
-                        )
-                      }
-                    >
-                      CURRENT LAYER
-                      <span>
-                        {historicRecordFilter ===
-                          'drafts'
-                          ? historicScopedDraftCount
-                          : historicScopedPublishedCount}
-                      </span>
-                    </button>
-                  </div>
-                </>
+                    </span>
+                  </button>
+                </div>
               )}
 
 
@@ -21406,8 +19316,8 @@ function AdminRoom() {
                 ? (
                     historicRecordFilter ===
                       'drafts'
-                      ? 'DRAFT STORIES'
-                      : 'PUBLISHED STORIES'
+                      ? 'ISSUE DRAFTS'
+                      : 'PUBLISHED ARCHIVE'
                   )
                 : 'PUBLISHED'} · {
                 filteredPublishedRecords.length
@@ -21634,8 +19544,8 @@ function AdminRoom() {
                   'historic' &&
                 historicRecordFilter ===
                   'drafts'
-                  ? 'NO DRAFT STORIES IN THIS LAYER.'
-                  : 'NOTHING PUBLISHED IN THIS LAYER.'}
+                  ? 'NO ISSUE DRAFTS YET.'
+                  : 'NOTHING PUBLISHED YET.'}
               </div>
             )}
 
@@ -21691,8 +19601,11 @@ function AdminRoom() {
                                   `${getHistoricPinIcon(
                                     record.pinIcon
                                   ).emoji} ` +
-                                  getHistoricRecordCollectionLabel(
-                                    record
+                                  (
+                                    record.category ||
+                                    tabLabel(
+                                      tab
+                                    )
                                   )
                                 )
                               : (
