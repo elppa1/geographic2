@@ -12,16 +12,20 @@ import {
   applyNewsItemUpdate,
   createAdminId,
   downloadHistoricMigrationSnapshot,
+  getHistoricCategories,
   getHistoricIssues,
   getHistoricItems,
+  getHistoricLayers,
   initializeHistoricAdminPersistence,
   getNewsItems,
   getNewsReviewItems,
   getNewItems,
   getNewReviewItems,
   markScraperRecordProcessed,
+  saveHistoricCategories,
   saveHistoricIssues,
   saveHistoricItems,
+  saveHistoricLayers,
   saveNewsItems,
   saveNewsReviewItems,
   saveNewItems,
@@ -5128,6 +5132,42 @@ function AdminRoom() {
   ] =
     useState(
       'drafts'
+    )
+
+
+  const [
+    historicBulkImportOpen,
+    setHistoricBulkImportOpen,
+  ] =
+    useState(
+      false
+    )
+
+
+  const [
+    historicBulkImportText,
+    setHistoricBulkImportText,
+  ] =
+    useState(
+      ''
+    )
+
+
+  const [
+    historicBulkImportStatus,
+    setHistoricBulkImportStatus,
+  ] =
+    useState(
+      ''
+    )
+
+
+  const [
+    historicBulkImportRunning,
+    setHistoricBulkImportRunning,
+  ] =
+    useState(
+      false
     )
 
 
@@ -11454,6 +11494,1189 @@ function AdminRoom() {
 
 
   // ==========================================================
+  // HISTORIC BULK IMPORT
+  // ==========================================================
+  //
+  // Expected shape:
+  //
+  // {
+  //   "category": "PEOPLE",
+  //   "layer": "FAMOUS HOMES",
+  //   "publish": true,
+  //   "pins": [...]
+  // }
+  //
+  // Missing coordinates are resolved through the same Admin location
+  // search used by the one-at-a-time editor. Imported Historic records
+  // use the same automatic/manual historical-layer fields as normal saves.
+  //
+  // ==========================================================
+
+  async function importHistoricBulkJson() {
+    if (
+      historicBulkImportRunning
+    ) {
+      return
+    }
+
+
+    const raw =
+      String(
+        historicBulkImportText ||
+        ''
+      )
+        .trim()
+
+
+    if (
+      !raw
+    ) {
+      setHistoricBulkImportStatus(
+        'PASTE HISTORIC JSON FIRST.'
+      )
+
+      return
+    }
+
+
+    let payload
+
+
+    try {
+      payload =
+        JSON.parse(
+          raw
+        )
+    }
+    catch (
+      error
+    ) {
+      console.warn(
+        'HISTORIC BULK IMPORT JSON:',
+        error
+      )
+
+      setHistoricBulkImportStatus(
+        'INVALID JSON.'
+      )
+
+      return
+    }
+
+
+    if (
+      !payload ||
+      Array.isArray(
+        payload
+      ) ||
+      typeof payload !==
+        'object'
+    ) {
+      setHistoricBulkImportStatus(
+        'USE AN OBJECT WITH CATEGORY, LAYER, AND PINS.'
+      )
+
+      return
+    }
+
+
+    const pins =
+      Array.isArray(
+        payload.pins
+      )
+        ? payload.pins
+        : []
+
+
+    if (
+      pins.length ===
+        0
+    ) {
+      setHistoricBulkImportStatus(
+        'NO PINS FOUND.'
+      )
+
+      return
+    }
+
+
+    const categorySpec =
+      payload.category
+
+
+    const layerSpec =
+      payload.layer
+
+
+    const categoryTitle =
+      String(
+        typeof categorySpec ===
+          'object'
+          ? (
+              categorySpec?.title ||
+              categorySpec?.name ||
+              ''
+            )
+          : (
+              categorySpec ||
+              ''
+            )
+      )
+        .trim()
+
+
+    const layerTitle =
+      String(
+        typeof layerSpec ===
+          'object'
+          ? (
+              layerSpec?.title ||
+              layerSpec?.name ||
+              ''
+            )
+          : (
+              layerSpec ||
+              ''
+            )
+      )
+        .trim()
+
+
+    if (
+      !categoryTitle ||
+      !layerTitle
+    ) {
+      setHistoricBulkImportStatus(
+        'CATEGORY AND LAYER ARE REQUIRED.'
+      )
+
+      return
+    }
+
+
+    const confirmed =
+      window.confirm(
+        (
+          `Import ${pins.length} Historic ` +
+          (
+            pins.length ===
+              1
+              ? 'pin'
+              : 'pins'
+          ) +
+          ` into ${categoryTitle.toUpperCase()} → ` +
+          `${layerTitle.toUpperCase()}?`
+        )
+      )
+
+
+    if (
+      !confirmed
+    ) {
+      return
+    }
+
+
+    setHistoricBulkImportRunning(
+      true
+    )
+
+    setHistoricBulkImportStatus(
+      'IMPORTING…'
+    )
+
+
+    try {
+      const now =
+        new Date()
+          .toISOString()
+
+
+      const normalizeTitle =
+        (value) =>
+          String(
+            value ||
+            ''
+          )
+            .trim()
+            .toLowerCase()
+
+
+      const existingCategories =
+        getHistoricCategories()
+
+
+      let category =
+        existingCategories.find(
+          (item) =>
+            belongsToCity(
+              item,
+              cityKey
+            ) &&
+            normalizeTitle(
+              item.title
+            ) ===
+              normalizeTitle(
+                categoryTitle
+              )
+        ) ||
+        null
+
+
+      const categoryInput =
+        typeof categorySpec ===
+          'object'
+          ? categorySpec
+          : {}
+
+
+      if (
+        !category
+      ) {
+        category = {
+          id:
+            createAdminId(
+              'historic-category'
+            ),
+
+          city:
+            cityKey,
+
+          title:
+            categoryTitle,
+
+          description:
+            String(
+              categoryInput.description ||
+              ''
+            )
+              .trim(),
+
+          pinIcon:
+            getHistoricPinIcon(
+              categoryInput.pinIcon ||
+              'map-pin'
+            ).id,
+
+          displayOrder:
+            Number(
+              categoryInput.displayOrder ||
+              0
+            ),
+
+          status:
+            'published',
+
+          createdAt:
+            now,
+
+          updatedAt:
+            now,
+        }
+      }
+      else if (
+        payload.publishCollection !==
+          false &&
+        category.status !==
+          'published'
+      ) {
+        category = {
+          ...category,
+
+          status:
+            'published',
+
+          updatedAt:
+            now,
+        }
+      }
+
+
+      const nextCategories = [
+        category,
+        ...existingCategories.filter(
+          (item) =>
+            item.id !==
+            category.id
+        ),
+      ]
+
+
+      const existingLayers =
+        getHistoricLayers()
+
+
+      let layer =
+        existingLayers.find(
+          (item) =>
+            belongsToCity(
+              item,
+              cityKey
+            ) &&
+            item.categoryId ===
+              category.id &&
+            normalizeTitle(
+              item.title
+            ) ===
+              normalizeTitle(
+                layerTitle
+              )
+        ) ||
+        null
+
+
+      const layerInput =
+        typeof layerSpec ===
+          'object'
+          ? layerSpec
+          : {}
+
+
+      if (
+        !layer
+      ) {
+        layer = {
+          id:
+            createAdminId(
+              'historic-layer'
+            ),
+
+          city:
+            cityKey,
+
+          categoryId:
+            category.id,
+
+          title:
+            layerTitle,
+
+          description:
+            String(
+              layerInput.description ||
+              ''
+            )
+              .trim(),
+
+          displayOrder:
+            Number(
+              layerInput.displayOrder ||
+              0
+            ),
+
+          status:
+            'published',
+
+          createdAt:
+            now,
+
+          updatedAt:
+            now,
+        }
+      }
+      else if (
+        payload.publishCollection !==
+          false &&
+        layer.status !==
+          'published'
+      ) {
+        layer = {
+          ...layer,
+
+          status:
+            'published',
+
+          updatedAt:
+            now,
+        }
+      }
+
+
+      const nextLayers = [
+        layer,
+        ...existingLayers.filter(
+          (item) =>
+            item.id !==
+            layer.id
+        ),
+      ]
+
+
+      const currentHistoric =
+        getHistoricItems()
+          .map(
+            normalizeHistoricRecord
+          )
+
+
+      const existingTitles =
+        new Set(
+          currentHistoric
+            .filter(
+              (record) =>
+                belongsToCity(
+                  record,
+                  cityKey
+                ) &&
+                record.historicLayerId ===
+                  layer.id
+            )
+            .map(
+              (record) =>
+                normalizeTitle(
+                  record.title
+                )
+            )
+            .filter(
+              Boolean
+            )
+        )
+
+
+      const imported =
+        []
+
+
+      const skipped =
+        []
+
+
+      const unresolved =
+        []
+
+
+      for (
+        let index =
+          0;
+        index <
+          pins.length;
+        index +=
+          1
+      ) {
+        const input =
+          pins[
+            index
+          ]
+
+
+        if (
+          !input ||
+          typeof input !==
+            'object' ||
+          Array.isArray(
+            input
+          )
+        ) {
+          unresolved.push(
+            `#${index + 1}`
+          )
+
+          continue
+        }
+
+
+        const title =
+          String(
+            input.title ||
+            ''
+          )
+            .trim()
+
+
+        if (
+          !title
+        ) {
+          unresolved.push(
+            `#${index + 1} missing title`
+          )
+
+          continue
+        }
+
+
+        if (
+          existingTitles.has(
+            normalizeTitle(
+              title
+            )
+          )
+        ) {
+          skipped.push(
+            title
+          )
+
+          continue
+        }
+
+
+        let longitude =
+          isUsableCoordinate(
+            input.longitude
+          )
+            ? Number(
+                input.longitude
+              )
+            : null
+
+
+        let latitude =
+          isUsableCoordinate(
+            input.latitude
+          )
+            ? Number(
+                input.latitude
+              )
+            : null
+
+
+        let searchedLongitude =
+          isUsableCoordinate(
+            input.searchedLongitude
+          )
+            ? Number(
+                input.searchedLongitude
+              )
+            : longitude
+
+
+        let searchedLatitude =
+          isUsableCoordinate(
+            input.searchedLatitude
+          )
+            ? Number(
+                input.searchedLatitude
+              )
+            : latitude
+
+
+        let location =
+          String(
+            input.location ||
+            input.address ||
+            ''
+          )
+            .trim()
+
+
+        let intersection =
+          String(
+            input.intersection ||
+            ''
+          )
+            .trim()
+
+
+        if (
+          !isUsableCoordinate(
+            longitude
+          ) ||
+          !isUsableCoordinate(
+            latitude
+          )
+        ) {
+          const searchValue =
+            intersection ||
+            location
+
+
+          if (
+            searchValue
+          ) {
+            try {
+              const locationResults =
+                await searchLocation({
+                  value:
+                    searchValue,
+
+                  city,
+                })
+
+
+              const firstResult =
+                locationResults?.[
+                  0
+                ] ||
+                null
+
+
+              if (
+                firstResult &&
+                isUsableCoordinate(
+                  firstResult.longitude
+                ) &&
+                isUsableCoordinate(
+                  firstResult.latitude
+                )
+              ) {
+                longitude =
+                  Number(
+                    firstResult.longitude
+                  )
+
+
+                latitude =
+                  Number(
+                    firstResult.latitude
+                  )
+
+
+                searchedLongitude =
+                  longitude
+
+
+                searchedLatitude =
+                  latitude
+
+
+                location =
+                  location ||
+                  firstResult.location ||
+                  firstResult.name ||
+                  searchValue
+
+
+                intersection =
+                  intersection ||
+                  firstResult.intersection ||
+                  ''
+              }
+            }
+            catch (
+              error
+            ) {
+              console.warn(
+                'HISTORIC BULK LOCATION SEARCH FAILED:',
+                title,
+                error
+              )
+            }
+          }
+        }
+
+
+        if (
+          !isUsableCoordinate(
+            longitude
+          ) ||
+          !isUsableCoordinate(
+            latitude
+          )
+        ) {
+          unresolved.push(
+            `${title} · location`
+          )
+
+          continue
+        }
+
+
+        const requestedTimeMode =
+          String(
+            input.timeMode ||
+            'event'
+          )
+            .trim()
+            .toLowerCase()
+
+
+        const timeMode =
+          [
+            'event',
+            'range',
+            'present',
+          ].includes(
+            requestedTimeMode
+          )
+            ? requestedTimeMode
+            : 'event'
+
+
+        const requestedStoryLayer =
+          input.storyLayer &&
+          typeof input.storyLayer ===
+            'object'
+            ? input.storyLayer
+            : null
+
+
+        const requestedLayerType =
+          String(
+            requestedStoryLayer?.layerType ||
+            requestedStoryLayer?.type ||
+            input.layerOverrideType ||
+            ''
+          )
+            .trim()
+            .toLowerCase()
+
+
+        const requestedLayerYear =
+          Number(
+            requestedStoryLayer?.year ||
+            input.layerOverrideYear ||
+            0
+          )
+
+
+        const hasManualLayer =
+          (
+            requestedLayerType ===
+              'map' ||
+            requestedLayerType ===
+              'aerial'
+          ) &&
+          Number.isFinite(
+            requestedLayerYear
+          ) &&
+          requestedLayerYear >
+            0
+
+
+        if (
+          hasManualLayer
+        ) {
+          const manualLayerExists =
+            historicalLayers.some(
+              (historicLayer) =>
+                historicLayer.layerType ===
+                  requestedLayerType &&
+                historicLayer.year ===
+                  requestedLayerYear
+            )
+
+
+          if (
+            !manualLayerExists
+          ) {
+            unresolved.push(
+              (
+                `${title} · ` +
+                `${requestedLayerYear} ` +
+                `${requestedLayerType} unavailable`
+              )
+            )
+
+            continue
+          }
+        }
+
+
+        const eventDate =
+          String(
+            input.eventDate ||
+            ''
+          )
+            .trim()
+
+
+        const eventDateYear =
+          eventDate.match(
+            /^(\d{4})-/
+          )?.[
+            1
+          ] ||
+          ''
+
+
+        const anchorYear =
+          String(
+            input.year ||
+            input.startYear ||
+            eventDateYear ||
+            (
+              hasManualLayer
+                ? requestedLayerYear
+                : ''
+            )
+          )
+            .trim()
+
+
+        if (
+          !hasManualLayer &&
+          (
+            !Number.isFinite(
+              Number(
+                anchorYear
+              )
+            ) ||
+            Number(
+              anchorYear
+            ) <=
+              0
+          )
+        ) {
+          unresolved.push(
+            `${title} · historic year`
+          )
+
+          continue
+        }
+
+
+        let record = {
+          ...EMPTY_HISTORIC,
+
+          ...input,
+
+          id:
+            input.id ||
+            createAdminId(
+              'historic'
+            ),
+
+          city:
+            cityKey,
+
+          type:
+            'historic',
+
+          title,
+
+          description:
+            String(
+              input.description ||
+              ''
+            )
+              .trim(),
+
+          location,
+
+          intersection,
+
+          longitude,
+
+          latitude,
+
+          searchedLongitude,
+
+          searchedLatitude,
+
+          pinPositionMode:
+            input.pinPositionMode ||
+            'auto',
+
+          category:
+            input.category ||
+            'place',
+
+          historicCategoryId:
+            category.id,
+
+          historicLayerId:
+            layer.id,
+
+          issueIds:
+            Array.isArray(
+              input.issueIds
+            )
+              ? input.issueIds
+              : [],
+
+          issueSection:
+            String(
+              input.issueSection ||
+              ''
+            )
+              .trim(),
+
+          editorialStatus:
+            input.editorialStatus ||
+            (
+              payload.publish ===
+                true
+                ? 'ready'
+                : 'researching'
+            ),
+
+          pinIcon:
+            getHistoricPinIcon(
+              input.pinIcon ||
+              category.pinIcon ||
+              'map-pin'
+            ).id,
+
+          year:
+            anchorYear,
+
+          timeMode,
+
+          startYear:
+            timeMode ===
+              'range' ||
+            timeMode ===
+              'present'
+              ? String(
+                  input.startYear ||
+                  anchorYear
+                )
+                  .trim()
+              : '',
+
+          endYear:
+            timeMode ===
+              'range'
+              ? String(
+                  input.endYear ||
+                  ''
+                )
+                  .trim()
+              : '',
+
+          layerPlacementMode:
+            hasManualLayer
+              ? 'manual'
+              : 'auto',
+
+          layerOverrideType:
+            hasManualLayer
+              ? requestedLayerType
+              : '',
+
+          layerOverrideYear:
+            hasManualLayer
+              ? requestedLayerYear
+              : '',
+
+          source:
+            String(
+              input.source ||
+              ''
+            )
+              .trim(),
+
+          sourceUrl:
+            normalizeSourceUrl(
+              input.sourceUrl
+            ),
+
+          imageUrl:
+            normalizeSourceUrl(
+              input.imageUrl
+            ),
+
+          sources:
+            Array.isArray(
+              input.sources
+            )
+              ? input.sources
+              : undefined,
+
+          active:
+            typeof input.active ===
+              'boolean'
+              ? input.active
+              : payload.publish ===
+                  true,
+
+          createdAt:
+            input.createdAt ||
+            now,
+
+          updatedAt:
+            now,
+        }
+
+
+        const automaticLayers =
+          getAutomaticHistoricLayers({
+            city,
+            record,
+          })
+
+
+        if (
+          !hasManualLayer &&
+          automaticLayers.length ===
+            0
+        ) {
+          unresolved.push(
+            `${title} · no historic view`
+          )
+
+          continue
+        }
+
+
+        record = {
+          ...record,
+
+          autoLayers:
+            automaticLayers.map(
+              (historicLayer) => ({
+                year:
+                  historicLayer.year,
+
+                layerType:
+                  historicLayer.layerType,
+              })
+            ),
+        }
+
+
+        imported.push(
+          normalizeHistoricRecord(
+            record
+          )
+        )
+
+
+        existingTitles.add(
+          normalizeTitle(
+            title
+          )
+        )
+      }
+
+
+      if (
+        imported.length ===
+          0
+      ) {
+        const detail =
+          unresolved.length >
+            0
+            ? (
+                ' · ' +
+                unresolved
+                  .slice(
+                    0,
+                    5
+                  )
+                  .join(
+                    ' | '
+                  )
+              )
+            : ''
+
+
+        setHistoricBulkImportStatus(
+          (
+            'NOTHING IMPORTED' +
+            detail
+          )
+        )
+
+        return
+      }
+
+
+      saveHistoricCategories(
+        nextCategories
+      )
+
+
+      saveHistoricLayers(
+        nextLayers
+      )
+
+
+      const nextHistoric = [
+        ...imported,
+        ...currentHistoric,
+      ]
+
+
+      saveHistoricItems(
+        nextHistoric
+      )
+
+
+      setAllHistoricItems(
+        nextHistoric
+      )
+
+
+      const statusParts = [
+        `IMPORTED ${imported.length}`,
+      ]
+
+
+      if (
+        skipped.length >
+          0
+      ) {
+        statusParts.push(
+          `SKIPPED ${skipped.length} DUPLICATE`
+        )
+      }
+
+
+      if (
+        unresolved.length >
+          0
+      ) {
+        statusParts.push(
+          `UNRESOLVED ${unresolved.length}`
+        )
+      }
+
+
+      statusParts.push(
+        (
+          `${category.title.toUpperCase()} → ` +
+          `${layer.title.toUpperCase()}`
+        )
+      )
+
+
+      statusParts.push(
+        payload.publish ===
+          true
+          ? 'PUBLISHED'
+          : 'DRAFTS'
+      )
+
+
+      setHistoricBulkImportStatus(
+        statusParts.join(
+          ' · '
+        ) +
+        (
+          unresolved.length >
+            0
+            ? (
+                ' · CHECK: ' +
+                unresolved
+                  .slice(
+                    0,
+                    5
+                  )
+                  .join(
+                    ' | '
+                  )
+              )
+            : ''
+        )
+      )
+    }
+    catch (
+      error
+    ) {
+      console.error(
+        'HISTORIC BULK IMPORT FAILED:',
+        error
+      )
+
+
+      setHistoricBulkImportStatus(
+        (
+          'IMPORT FAILED · ' +
+          (
+            error?.message ||
+            'UNKNOWN ERROR'
+          )
+        )
+      )
+    }
+    finally {
+      setHistoricBulkImportRunning(
+        false
+      )
+    }
+  }
+
+
+  // ==========================================================
   // PERSIST PUBLISHED
   // ==========================================================
 
@@ -15126,6 +16349,185 @@ function AdminRoom() {
               city.name
             }
           </div>
+
+
+          {tab ===
+            'historic' && (
+            <div
+              style={{
+                border:
+                  '1px solid rgba(0,0,0,0.18)',
+
+                padding:
+                  '12px',
+
+                marginBottom:
+                  '12px',
+
+                background:
+                  '#fff',
+              }}
+            >
+              <div
+                style={{
+                  display:
+                    'flex',
+
+                  alignItems:
+                    'center',
+
+                  justifyContent:
+                    'space-between',
+
+                  gap:
+                    '12px',
+
+                  flexWrap:
+                    'wrap',
+                }}
+              >
+                <div>
+                  <div
+                    className="admin-record-meta"
+                    style={{
+                      fontWeight:
+                        700,
+                    }}
+                  >
+                    HISTORIC BULK IMPORT
+                  </div>
+
+                  <div className="admin-record-meta">
+                    JSON → CATEGORY → LAYER → PINS · SAME LOCATION SEARCH + HISTORIC SNAP LOGIC
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="admin-save"
+                  onClick={() =>
+                    setHistoricBulkImportOpen(
+                      (
+                        current
+                      ) =>
+                        !current
+                    )
+                  }
+                >
+                  {historicBulkImportOpen
+                    ? 'CLOSE IMPORTER'
+                    : 'BULK IMPORT'}
+                </button>
+              </div>
+
+
+              {historicBulkImportOpen && (
+                <div
+                  style={{
+                    marginTop:
+                      '12px',
+                  }}
+                >
+                  <textarea
+                    value={
+                      historicBulkImportText
+                    }
+                    onChange={
+                      (event) => {
+                        setHistoricBulkImportText(
+                          event.target.value
+                        )
+
+                        setHistoricBulkImportStatus(
+                          ''
+                        )
+                      }
+                    }
+                    rows={
+                      14
+                    }
+                    spellCheck={
+                      false
+                    }
+                    placeholder={'{\n  "category": "PEOPLE",\n  "layer": "FAMOUS HOMES",\n  "publish": true,\n  "pins": [\n    {\n      "title": "Example Home",\n      "location": "123 Example St, Toronto",\n      "year": 1947,\n      "source": "Source",\n      "sourceUrl": "https://..."\n    }\n  ]\n}'}
+                    style={{
+                      width:
+                        '100%',
+
+                      minHeight:
+                        '260px',
+
+                      resize:
+                        'vertical',
+
+                      boxSizing:
+                        'border-box',
+
+                      fontFamily:
+                        'monospace',
+
+                      fontSize:
+                        '12px',
+                    }}
+                  />
+
+
+                  <div
+                    className="admin-record-meta"
+                    style={{
+                      marginTop:
+                        '8px',
+                    }}
+                  >
+                    {'IF COORDINATES ARE MISSING, THE EXISTING ADMIN LOCATION SEARCH RESOLVES THEM. ADD "storyLayer": {"type":"aerial","year":1947} ONLY WHEN YOU WANT A SPECIFIC VIEW; OTHERWISE YEAR PICKS THE CLOSEST AVAILABLE HISTORIC VIEW AUTOMATICALLY.'}
+                  </div>
+
+
+                  <div
+                    style={{
+                      display:
+                        'flex',
+
+                      alignItems:
+                        'center',
+
+                      gap:
+                        '10px',
+
+                      flexWrap:
+                        'wrap',
+
+                      marginTop:
+                        '10px',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="admin-save"
+                      disabled={
+                        historicBulkImportRunning
+                      }
+                      onClick={
+                        importHistoricBulkJson
+                      }
+                    >
+                      {historicBulkImportRunning
+                        ? 'IMPORTING…'
+                        : 'IMPORT HISTORIC JSON'}
+                    </button>
+
+                    {historicBulkImportStatus && (
+                      <div className="admin-record-meta">
+                        {
+                          historicBulkImportStatus
+                        }
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
 
           <form
