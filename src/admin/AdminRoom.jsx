@@ -5387,6 +5387,15 @@ function AdminRoom() {
     })
 
 
+  const historicDraftCount =
+    historicItems.filter(
+      (record) =>
+        record.active ===
+        false
+    )
+      .length
+
+
   const historicPublishedCount =
     historicItems.filter(
       (record) =>
@@ -5873,18 +5882,7 @@ function AdminRoom() {
               next.filter(
                 (record) =>
                   record.active ===
-                    false &&
-                  (
-                    !selectedHistoricIssueId ||
-                    (
-                      Array.isArray(
-                        record.issueIds
-                      ) &&
-                      record.issueIds.includes(
-                        selectedHistoricIssueId
-                      )
-                    )
-                  )
+                    false
               )
           }
           else {
@@ -6170,7 +6168,6 @@ function AdminRoom() {
         publishedNewsSort,
         publishedNewsSearch,
         historicRecordFilter,
-        selectedHistoricIssueId,
         historicArchiveCategoryFilter,
         historicArchiveLayerFilter,
         historicArchiveSort,
@@ -12045,32 +12042,6 @@ function AdminRoom() {
       record = {
         ...record,
 
-        issueIds:
-          Array.isArray(
-            record.issueIds
-          ) &&
-          record.issueIds.length >
-            0
-            ? record.issueIds
-            : (
-                (
-                  selectedHistoricIssue?.id ||
-                  selectedHistoricIssueId
-                )
-                  ? [
-                      (
-                        selectedHistoricIssue?.id ||
-                        selectedHistoricIssueId
-                      ),
-                    ]
-                  : []
-              ),
-
-        issueSection:
-          record.issueSection ||
-          selectedHistoricIssueSections[0]?.id ||
-          '',
-
         editorialStatus:
           record.editorialStatus ||
           'researching',
@@ -12689,20 +12660,6 @@ function AdminRoom() {
               normalizedRecord
             )
           : normalizedRecord.description,
-    }
-
-
-    if (
-      tab ===
-        'historic' &&
-      Array.isArray(
-        editableRecord.issueIds
-      ) &&
-      editableRecord.issueIds[0]
-    ) {
-      setSelectedHistoricIssueId(
-        editableRecord.issueIds[0]
-      )
     }
 
 
@@ -14693,46 +14650,6 @@ function AdminRoom() {
         false
 
 
-    if (
-      tab ===
-        'historic' &&
-      nextActive &&
-      Array.isArray(
-        target.issueIds
-      ) &&
-      target.issueIds.length >
-        0
-    ) {
-      const hasPublishedIssue =
-        target.issueIds.some(
-          (
-            issueId
-          ) =>
-            historicIssues.some(
-              (
-                issue
-              ) =>
-                issue.id ===
-                  issueId &&
-                issue.status ===
-                  'published'
-            )
-        )
-
-
-      if (
-        !hasPublishedIssue
-      ) {
-        window.alert(
-          'Publish the Historic issue to make this story public.'
-        )
-
-
-        return
-      }
-    }
-
-
     let updatedRecord = {
       ...target,
 
@@ -16353,722 +16270,6 @@ function AdminRoom() {
             {tab ===
               'historic' && (
               <>
-                <div className="admin-field admin-field-wide">
-                  <span>
-                    ISSUE WORKSPACE
-                  </span>
-
-                  <div
-                    style={{
-                      border:
-                        '1px solid rgba(0,0,0,0.18)',
-
-                      padding:
-                        '14px',
-                    }}
-                  >
-                    <strong>
-                      {selectedHistoricIssue
-                        ? (
-                            `HISTORIC ${selectedHistoricIssue.number} · ` +
-                            selectedHistoricIssue.title
-                          )
-                        : 'NO ISSUE SELECTED'}
-                    </strong>
-
-                    {selectedHistoricIssue?.subtitle && (
-                      <div
-                        style={{
-                          marginTop:
-                            '4px',
-                        }}
-                      >
-                        {selectedHistoricIssue.subtitle}
-                      </div>
-                    )}
-
-                    <div
-                      className="admin-record-meta"
-                      style={{
-                        marginTop:
-                          '8px',
-                      }}
-                    >
-                      {String(
-                        selectedHistoricIssue?.status ||
-                        'draft'
-                      )
-                        .toUpperCase()}
-                      {' · '}
-                      {selectedHistoricIssueDraftCount} DRAFTS
-                      {' · '}
-                      {selectedHistoricIssuePublishedCount} PUBLISHED
-                    </div>
-
-
-                    {selectedHistoricIssue?.publicationDate && (
-                      <div
-                        className="admin-record-meta"
-                        style={{
-                          marginTop:
-                            '4px',
-                        }}
-                      >
-                        PUBLICATION · {
-                          selectedHistoricIssue.publicationDate
-                        }
-                      </div>
-                    )}
-
-
-                    {selectedHistoricIssue?.description && (
-                      <p
-                        style={{
-                          margin:
-                            '10px 0 0',
-                        }}
-                      >
-                        {
-                          selectedHistoricIssue.description
-                        }
-                      </p>
-                    )}
-
-
-                    <div
-                      className="admin-form-actions"
-                      style={{
-                        marginTop:
-                          '12px',
-                      }}
-                    >
-                      <button
-                        type="button"
-                        className="admin-save"
-                        onClick={
-                          startNewHistoricIssue
-                        }
-                      >
-                        + NEW ISSUE
-                      </button>
-
-                      <button
-                        type="button"
-                        className="admin-cancel"
-                        disabled={
-                          !selectedHistoricIssue
-                        }
-                        onClick={
-                          startEditHistoricIssue
-                        }
-                      >
-                        EDIT ISSUE
-                      </button>
-
-
-                      {selectedHistoricIssue?.status ===
-                        'published'
-                        ? (
-                            <button
-                              type="button"
-                              className="admin-review-reject"
-                              onClick={
-                                unpublishHistoricIssue
-                              }
-                            >
-                              UNPUBLISH ISSUE
-                            </button>
-                          )
-                        : (
-                            <button
-                              type="button"
-                              className="admin-review-approve"
-                              disabled={
-                                !selectedHistoricIssue ||
-                                selectedHistoricIssueRecords.length ===
-                                  0
-                              }
-                              onClick={
-                                publishHistoricIssue
-                              }
-                            >
-                              PUBLISH ISSUE
-                            </button>
-                          )}
-                    </div>
-                  </div>
-                </div>
-
-
-                {historicIssueEditorOpen && (
-                  <>
-                    <div className="admin-field admin-field-wide">
-                      <span>
-                        {historicIssueEditingId
-                          ? 'EDIT ISSUE DETAILS'
-                          : 'CREATE NEW ISSUE'}
-                      </span>
-
-                      <div
-                        style={{
-                          border:
-                            '1px solid rgba(0,0,0,0.18)',
-
-                          padding:
-                            '14px',
-                        }}
-                      >
-                        {historicIssueEditingId
-                          ? (
-                              `Editing HISTORIC ${historicIssueDraft.number || ''}`
-                            )
-                          : 'Build a private Historic issue workspace.'}
-                      </div>
-                    </div>
-
-
-                    <label className="admin-field">
-                      <span>
-                        ISSUE NUMBER
-                      </span>
-
-                      <input
-                        value={
-                          historicIssueDraft.number
-                        }
-                        onChange={
-                          (event) =>
-                            updateHistoricIssueDraft(
-                              'number',
-                              event.target.value
-                            )
-                        }
-                        placeholder="002"
-                      />
-                    </label>
-
-
-                    <label className="admin-field">
-                      <span>
-                        STATUS
-                      </span>
-
-                      <select
-                        value={
-                          historicIssueDraft.status ||
-                          'draft'
-                        }
-                        onChange={
-                          (event) =>
-                            updateHistoricIssueDraft(
-                              'status',
-                              event.target.value
-                            )
-                        }
-                      >
-                        <option value="draft">
-                          DRAFT
-                        </option>
-
-                        <option value="ready">
-                          READY
-                        </option>
-
-                        <option
-                          value="published"
-                          disabled
-                        >
-                          PUBLISHED · USE PUBLISH ISSUE
-                        </option>
-
-                        <option value="archived">
-                          ARCHIVED
-                        </option>
-                      </select>
-                    </label>
-
-
-                    <label className="admin-field admin-field-wide">
-                      <span>
-                        ISSUE TITLE
-                      </span>
-
-                      <input
-                        value={
-                          historicIssueDraft.title
-                        }
-                        onChange={
-                          (event) =>
-                            updateHistoricIssueDraft(
-                              'title',
-                              event.target.value
-                            )
-                        }
-                        placeholder="MURDER. MYSTERY. MISSING."
-                      />
-                    </label>
-
-
-                    <label className="admin-field admin-field-wide">
-                      <span>
-                        SUBTITLE
-                      </span>
-
-                      <input
-                        value={
-                          historicIssueDraft.subtitle
-                        }
-                        onChange={
-                          (event) =>
-                            updateHistoricIssueDraft(
-                              'subtitle',
-                              event.target.value
-                            )
-                        }
-                        placeholder="A TORONTO HALLOWEEN SPECIAL"
-                      />
-                    </label>
-
-
-                    <label className="admin-field admin-field-wide">
-                      <span>
-                        DESCRIPTION
-                      </span>
-
-                      <textarea
-                        value={
-                          historicIssueDraft.description
-                        }
-                        onChange={
-                          (event) =>
-                            updateHistoricIssueDraft(
-                              'description',
-                              event.target.value
-                            )
-                        }
-                        rows="4"
-                        placeholder="Editorial description, theme, scope, notes..."
-                      />
-                    </label>
-
-
-                    <div className="admin-field admin-field-wide">
-                      <span>
-                        ISSUE SECTIONS
-                      </span>
-
-
-                      <div
-                        style={{
-                          border:
-                            '1px solid rgba(0,0,0,0.18)',
-
-                          padding:
-                            '12px',
-                        }}
-                      >
-                        {normalizeHistoricIssueSections(
-                          historicIssueDraft.sections
-                        )
-                          .map(
-                            (
-                              section,
-                              index
-                            ) => (
-                              <div
-                                key={
-                                  section.id
-                                }
-                                style={{
-                                  display:
-                                    'grid',
-
-                                  gridTemplateColumns:
-                                    'minmax(0, 1fr) auto auto auto',
-
-                                  gap:
-                                    '6px',
-
-                                  alignItems:
-                                    'center',
-
-                                  marginTop:
-                                    index ===
-                                      0
-                                      ? '0'
-                                      : '6px',
-                                }}
-                              >
-                                <input
-                                  value={
-                                    section.title
-                                  }
-                                  onChange={
-                                    (event) =>
-                                      updateHistoricIssueSectionTitle(
-                                        section.id,
-                                        event.target.value
-                                      )
-                                  }
-                                  aria-label="Historic issue section title"
-                                />
-
-                                <button
-                                  type="button"
-                                  className="admin-cancel"
-                                  disabled={
-                                    index ===
-                                    0
-                                  }
-                                  onClick={() =>
-                                    moveHistoricIssueSection(
-                                      section.id,
-                                      -1
-                                    )
-                                  }
-                                  title="Move section up"
-                                >
-                                  ↑
-                                </button>
-
-                                <button
-                                  type="button"
-                                  className="admin-cancel"
-                                  disabled={
-                                    index ===
-                                    normalizeHistoricIssueSections(
-                                      historicIssueDraft.sections
-                                    ).length -
-                                      1
-                                  }
-                                  onClick={() =>
-                                    moveHistoricIssueSection(
-                                      section.id,
-                                      1
-                                    )
-                                  }
-                                  title="Move section down"
-                                >
-                                  ↓
-                                </button>
-
-                                <button
-                                  type="button"
-                                  className="admin-cancel"
-                                  onClick={() =>
-                                    removeHistoricIssueSection(
-                                      section.id
-                                    )
-                                  }
-                                >
-                                  REMOVE
-                                </button>
-                              </div>
-                            )
-                          )}
-
-
-                        {normalizeHistoricIssueSections(
-                          historicIssueDraft.sections
-                        ).length ===
-                          0 && (
-                          <div className="admin-record-meta">
-                            NO SECTIONS YET
-                          </div>
-                        )}
-
-
-                        <div
-                          style={{
-                            display:
-                              'grid',
-
-                            gridTemplateColumns:
-                              'minmax(0, 1fr) auto',
-
-                            gap:
-                              '6px',
-
-                            marginTop:
-                              '10px',
-                          }}
-                        >
-                          <input
-                            value={
-                              historicIssueNewSectionTitle
-                            }
-                            onChange={
-                              (event) =>
-                                setHistoricIssueNewSectionTitle(
-                                  event.target.value
-                                )
-                            }
-                            onKeyDown={
-                              (event) => {
-                                if (
-                                  event.key ===
-                                  'Enter'
-                                ) {
-                                  event.preventDefault()
-
-                                  addHistoricIssueSection()
-                                }
-                              }
-                            }
-                            placeholder="e.g. GHOSTS & HAUNTINGS"
-                          />
-
-                          <button
-                            type="button"
-                            className="admin-save"
-                            onClick={
-                              addHistoricIssueSection
-                            }
-                          >
-                            + ADD SECTION
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-
-                    <label className="admin-field admin-field-wide">
-                      <span>
-                        COVER IMAGE URL
-                      </span>
-
-                      <input
-                        value={
-                          historicIssueDraft.coverImageUrl
-                        }
-                        onChange={
-                          (event) =>
-                            updateHistoricIssueDraft(
-                              'coverImageUrl',
-                              event.target.value
-                            )
-                        }
-                        placeholder="https://..."
-                      />
-                    </label>
-
-
-                    <label className="admin-field">
-                      <span>
-                        PUBLICATION DATE
-                      </span>
-
-                      <input
-                        type="date"
-                        value={
-                          historicIssueDraft.publicationDate
-                        }
-                        onChange={
-                          (event) =>
-                            updateHistoricIssueDraft(
-                              'publicationDate',
-                              event.target.value
-                            )
-                        }
-                      />
-                    </label>
-
-
-                    <div
-                      className="admin-form-actions"
-                      style={{
-                        gridColumn:
-                          '1 / -1',
-                      }}
-                    >
-                      <button
-                        type="button"
-                        className="admin-save"
-                        onClick={
-                          saveHistoricIssue
-                        }
-                      >
-                        {historicIssueEditingId
-                          ? 'SAVE ISSUE CHANGES'
-                          : 'CREATE ISSUE'}
-                      </button>
-
-                      <button
-                        type="button"
-                        className="admin-cancel"
-                        onClick={
-                          cancelHistoricIssueEdit
-                        }
-                      >
-                        CANCEL
-                      </button>
-
-                      {historicIssueEditingId && (
-                        <button
-                          type="button"
-                          className="admin-cancel"
-                          onClick={
-                            deleteHistoricIssue
-                          }
-                        >
-                          DELETE ISSUE
-                        </button>
-                      )}
-                    </div>
-                  </>
-                )}
-
-
-                <label className="admin-field">
-                  <span>
-                    ISSUE
-                  </span>
-
-                  <select
-                    value={
-                      draft.issueIds?.[0] ||
-                      selectedHistoricIssue?.id ||
-                      ''
-                    }
-                    onChange={
-                      (event) => {
-                        const issueId =
-                          event.target.value
-
-
-                        const nextIssue =
-                          cityHistoricIssues.find(
-                            (issue) =>
-                              issue.id ===
-                              issueId
-                          ) ||
-                          null
-
-
-                        const nextIssueRecords =
-                          nextIssue
-                            ? historicItems.filter(
-                                (record) =>
-                                  Array.isArray(
-                                    record.issueIds
-                                  ) &&
-                                  record.issueIds.includes(
-                                    nextIssue.id
-                                  )
-                              )
-                            : []
-
-
-                        const nextSections =
-                          getHistoricIssueSections({
-                            issue:
-                              nextIssue,
-
-                            records:
-                              nextIssueRecords,
-                          })
-
-
-                        setSelectedHistoricIssueId(
-                          issueId
-                        )
-
-
-                        updateDraft(
-                          'issueIds',
-                          issueId
-                            ? [
-                                issueId,
-                              ]
-                            : []
-                        )
-
-
-                        updateDraft(
-                          'issueSection',
-                          nextSections.some(
-                            (section) =>
-                              section.id ===
-                              draft.issueSection
-                          )
-                            ? draft.issueSection
-                            : (
-                                nextSections[0]?.id ||
-                                ''
-                              )
-                        )
-                      }
-                    }
-                  >
-                    <option value="">
-                      NO ISSUE
-                    </option>
-
-                    {cityHistoricIssues.map(
-                      (issue) => (
-                        <option
-                          key={
-                            issue.id
-                          }
-                          value={
-                            issue.id
-                          }
-                        >
-                          {
-                            `HISTORIC ${issue.number} · ${issue.title}`
-                          }
-                        </option>
-                      )
-                    )}
-                  </select>
-                </label>
-
-
-                <label className="admin-field">
-                  <span>
-                    ISSUE SECTION
-                  </span>
-
-                  <select
-                    value={
-                      draft.issueSection ||
-                      selectedHistoricIssueSections[0]?.id ||
-                      ''
-                    }
-                    onChange={
-                      (event) =>
-                        updateDraft(
-                          'issueSection',
-                          event.target.value
-                        )
-                    }
-                  >
-                    {selectedHistoricIssueSections.length ===
-                      0 && (
-                      <option value="">
-                        NO SECTIONS · EDIT ISSUE TO ADD
-                      </option>
-                    )}
-
-
-                    {selectedHistoricIssueSections.map(
-                      (section) => (
-                        <option
-                          key={
-                            section.id
-                          }
-                          value={
-                            section.id
-                          }
-                        >
-                          {section.title}
-                        </option>
-                      )
-                    )}
-                  </select>
-                </label>
-
-
                 <label className="admin-field">
                   <span>
                     EDITORIAL STATUS
@@ -17876,16 +17077,13 @@ function AdminRoom() {
             >
               {tab ===
                 'historic'
-                ? 'WORKSPACE'
+                ? 'ARCHIVE'
                 : 'PUBLISHED'}
               <span>
                 {
                   tab ===
                     'historic'
-                    ? (
-                        selectedHistoricIssueDraftCount +
-                        historicPublishedCount
-                      )
+                    ? historicItems.length
                     : records.length
                 }
               </span>
@@ -19406,10 +18604,10 @@ function AdminRoom() {
                       )
                     }
                   >
-                    ISSUE DRAFTS
+                    DRAFTS
                     <span>
                       {
-                        selectedHistoricIssueDraftCount
+                        historicDraftCount
                       }
                     </span>
                   </button>
@@ -19596,7 +18794,7 @@ function AdminRoom() {
                 ? (
                     historicRecordFilter ===
                       'drafts'
-                      ? 'ISSUE DRAFTS'
+                      ? 'DRAFTS'
                       : 'PUBLISHED ARCHIVE'
                   )
                 : 'PUBLISHED'} · {
@@ -19824,7 +19022,7 @@ function AdminRoom() {
                   'historic' &&
                 historicRecordFilter ===
                   'drafts'
-                  ? 'NO ISSUE DRAFTS YET.'
+                  ? 'NO DRAFTS YET.'
                   : 'NOTHING PUBLISHED YET.'}
               </div>
             )}
@@ -20011,16 +19209,6 @@ function AdminRoom() {
                             record
                           )
                         }
-                        {' · '}
-                        {String(
-                          record.issueSection ||
-                          'archive'
-                        )
-                          .replace(
-                            /-/g,
-                            ' '
-                          )
-                          .toUpperCase()}
                         {' · '}
                         {String(
                           record.editorialStatus ||
