@@ -174,6 +174,160 @@ const TPS_NEWSROOM_PROCESSED_KEY =
   'elppa-geographic-tps-newsroom-processed-v1'
 
 
+const HISTORIC_LAST_BATCH_STORAGE_KEY =
+  'elppa-geographic-historic-last-batch-v1'
+
+
+function readHistoricLastBatchIds(
+  cityKey
+) {
+  try {
+    const raw =
+      window.localStorage.getItem(
+        HISTORIC_LAST_BATCH_STORAGE_KEY
+      )
+
+
+    if (
+      !raw
+    ) {
+      return []
+    }
+
+
+    const parsed =
+      JSON.parse(
+        raw
+      )
+
+
+    const ids =
+      parsed &&
+      typeof parsed ===
+        'object' &&
+      !Array.isArray(
+        parsed
+      )
+        ? parsed[
+            cityKey
+          ]
+        : []
+
+
+    return Array.isArray(
+      ids
+    )
+      ? ids
+          .map(
+            (id) =>
+              String(
+                id ||
+                ''
+              )
+                .trim()
+          )
+          .filter(
+            Boolean
+          )
+      : []
+  }
+  catch (
+    error
+  ) {
+    console.warn(
+      'HISTORIC LAST BATCH READ FAILED:',
+      error
+    )
+
+
+    return []
+  }
+}
+
+
+function writeHistoricLastBatchIds(
+  cityKey,
+  ids
+) {
+  try {
+    const raw =
+      window.localStorage.getItem(
+        HISTORIC_LAST_BATCH_STORAGE_KEY
+      )
+
+
+    let parsed =
+      {}
+
+
+    if (
+      raw
+    ) {
+      try {
+        const existing =
+          JSON.parse(
+            raw
+          )
+
+
+        if (
+          existing &&
+          typeof existing ===
+            'object' &&
+          !Array.isArray(
+            existing
+          )
+        ) {
+          parsed =
+            existing
+        }
+      }
+      catch {
+        parsed =
+          {}
+      }
+    }
+
+
+    const nextIds =
+      Array.isArray(
+        ids
+      )
+        ? ids
+            .map(
+              (id) =>
+                String(
+                  id ||
+                  ''
+                )
+                  .trim()
+            )
+            .filter(
+              Boolean
+            )
+        : []
+
+
+    window.localStorage.setItem(
+      HISTORIC_LAST_BATCH_STORAGE_KEY,
+      JSON.stringify({
+        ...parsed,
+        [cityKey]:
+          nextIds,
+      })
+    )
+  }
+  catch (
+    error
+  ) {
+    console.warn(
+      'HISTORIC LAST BATCH WRITE FAILED:',
+      error
+    )
+  }
+}
+
+
 function isTpsNewsroomRecord(
   record
 ) {
@@ -5208,6 +5362,18 @@ function AdminRoom() {
 
 
   const [
+    historicLastBatchIds,
+    setHistoricLastBatchIds,
+  ] =
+    useState(
+      () =>
+        readHistoricLastBatchIds(
+          initialCityKey
+        )
+    )
+
+
+  const [
     selectedHistoricIssueId,
     setSelectedHistoricIssueId,
   ] =
@@ -5358,6 +5524,20 @@ function AdminRoom() {
       }
     },
     []
+  )
+
+
+  useEffect(
+    () => {
+      setHistoricLastBatchIds(
+        readHistoricLastBatchIds(
+          cityKey
+        )
+      )
+    },
+    [
+      cityKey,
+    ]
   )
 
 
@@ -5695,6 +5875,18 @@ function AdminRoom() {
       (record) =>
         record.active !==
         false
+    )
+      .length
+
+
+  const historicLastBatchExistingCount =
+    historicLastBatchIds.filter(
+      (id) =>
+        historicItems.some(
+          (record) =>
+            record.id ===
+              id
+        )
     )
       .length
 
@@ -6179,73 +6371,120 @@ function AdminRoom() {
         ) {
           if (
             historicRecordFilter ===
-              'drafts'
+              'last-batch'
           ) {
-            next =
-              next.filter(
-                (record) =>
-                  record.active ===
-                    false
+            const batchOrder =
+              new Map(
+                historicLastBatchIds.map(
+                  (
+                    id,
+                    index
+                  ) => [
+                    id,
+                    index,
+                  ]
+                )
               )
+
+
+            next =
+              next
+                .filter(
+                  (record) =>
+                    batchOrder.has(
+                      record.id
+                    )
+                )
+                .sort(
+                  (
+                    a,
+                    b
+                  ) =>
+                    (
+                      batchOrder.get(
+                        a.id
+                      ) ??
+                      Number.MAX_SAFE_INTEGER
+                    ) -
+                    (
+                      batchOrder.get(
+                        b.id
+                      ) ??
+                      Number.MAX_SAFE_INTEGER
+                    )
+                )
           }
           else {
-            next =
-              next.filter(
-                (record) =>
-                  record.active !==
-                  false
-              )
-          }
+            if (
+              historicRecordFilter ===
+                'drafts'
+            ) {
+              next =
+                next.filter(
+                  (record) =>
+                    record.active ===
+                      false
+                )
+            }
+            else {
+              next =
+                next.filter(
+                  (record) =>
+                    record.active !==
+                    false
+                )
+            }
 
 
-          if (
-            selectedHistoricCategoryId
-          ) {
-            next =
-              next.filter(
-                (record) =>
-                  record.historicCategoryId ===
-                  selectedHistoricCategoryId
-              )
-          }
+            if (
+              selectedHistoricCategoryId
+            ) {
+              next =
+                next.filter(
+                  (record) =>
+                    record.historicCategoryId ===
+                    selectedHistoricCategoryId
+                )
+            }
 
 
-          if (
-            selectedHistoricLayerId
-          ) {
-            next =
-              next.filter(
-                (record) =>
-                  record.historicLayerId ===
-                  selectedHistoricLayerId
-              )
-          }
+            if (
+              selectedHistoricLayerId
+            ) {
+              next =
+                next.filter(
+                  (record) =>
+                    record.historicLayerId ===
+                    selectedHistoricLayerId
+                )
+            }
 
 
-          next.sort(
-            (
-              a,
-              b
-            ) =>
+            next.sort(
               (
-                new Date(
-                  b.createdAt ||
-                  b.updatedAt ||
+                a,
+                b
+              ) =>
+                (
+                  new Date(
+                    b.createdAt ||
+                    b.updatedAt ||
+                    0
+                  )
+                    .getTime() ||
+                  0
+                ) -
+                (
+                  new Date(
+                    a.createdAt ||
+                    a.updatedAt ||
+                    0
+                  )
+                    .getTime() ||
                   0
                 )
-                  .getTime() ||
-                0
-              ) -
-              (
-                new Date(
-                  a.createdAt ||
-                  a.updatedAt ||
-                  0
-                )
-                  .getTime() ||
-                0
-              )
-          )
+            )
+          }
         }
 
 
@@ -6450,6 +6689,7 @@ function AdminRoom() {
         publishedNewsSort,
         publishedNewsSearch,
         historicRecordFilter,
+        historicLastBatchIds,
         selectedHistoricCategoryId,
         selectedHistoricLayerId,
       ]
@@ -13780,6 +14020,38 @@ function AdminRoom() {
 
       setAllHistoricItems(
         nextHistoric
+      )
+
+
+      const importedIds =
+        imported
+          .map(
+            (record) =>
+              record.id
+          )
+          .filter(
+            Boolean
+          )
+
+
+      writeHistoricLastBatchIds(
+        cityKey,
+        importedIds
+      )
+
+
+      setHistoricLastBatchIds(
+        importedIds
+      )
+
+
+      setHistoricRecordFilter(
+        'last-batch'
+      )
+
+
+      setRecordsPanel(
+        'published'
       )
 
 
@@ -22184,6 +22456,32 @@ function AdminRoom() {
                       }
                     </span>
                   </button>
+
+                  <button
+                    type="button"
+                    className={
+                      historicRecordFilter ===
+                        'last-batch'
+                        ? 'admin-review-type-filter admin-review-type-filter-active'
+                        : 'admin-review-type-filter'
+                    }
+                    disabled={
+                      historicLastBatchExistingCount ===
+                        0
+                    }
+                    onClick={() =>
+                      setHistoricRecordFilter(
+                        'last-batch'
+                      )
+                    }
+                  >
+                    LAST BATCH ADDED
+                    <span>
+                      {
+                        historicLastBatchExistingCount
+                      }
+                    </span>
+                  </button>
                 </div>
               )}
 
@@ -22314,7 +22612,10 @@ function AdminRoom() {
                     historicRecordFilter ===
                       'drafts'
                       ? 'DRAFTS'
-                      : 'PUBLISHED ARCHIVE'
+                      : historicRecordFilter ===
+                          'last-batch'
+                        ? 'LAST BATCH ADDED'
+                        : 'PUBLISHED ARCHIVE'
                   )
                 : 'PUBLISHED'} · {
                 filteredPublishedRecords.length
@@ -22538,10 +22839,16 @@ function AdminRoom() {
               0 && (
               <div className="admin-empty">
                 {tab ===
-                  'historic' &&
-                historicRecordFilter ===
-                  'drafts'
-                  ? 'NO ISSUE DRAFTS YET.'
+                  'historic'
+                  ? (
+                      historicRecordFilter ===
+                        'drafts'
+                        ? 'NO HISTORIC DRAFTS YET.'
+                        : historicRecordFilter ===
+                            'last-batch'
+                          ? 'NO SAVED LAST BATCH YET.'
+                          : 'NOTHING PUBLISHED YET.'
+                    )
                   : 'NOTHING PUBLISHED YET.'}
               </div>
             )}
