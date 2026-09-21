@@ -13775,6 +13775,11 @@ function AdminRoom() {
       )
 
 
+      setHistoricBulkImportText(
+        ''
+      )
+
+
       setHistoricBulkImportStatus(
         statusParts.join(
           ' · '
@@ -14951,6 +14956,30 @@ function AdminRoom() {
       city:
         cityKey,
     })
+
+
+    if (
+      tab ===
+        'historic'
+    ) {
+      window.requestAnimationFrame(
+        () => {
+          document
+            .getElementById(
+              'historic-entry-editor'
+            )
+            ?.scrollIntoView({
+              behavior:
+                'smooth',
+
+              block:
+                'start',
+            })
+        }
+      )
+
+      return
+    }
 
 
     window.scrollTo({
@@ -17488,6 +17517,1235 @@ function AdminRoom() {
 
       <div className="admin-layout">
         <section className="admin-editor">
+          {tab ===
+            'historic' && (
+            <>
+                <div className="admin-field admin-field-wide">
+                  <span>
+                    HISTORIC COLLECTIONS · CATEGORY → LAYER → ENTRIES
+                  </span>
+
+                  <div
+                    style={{
+                      border:
+                        '1px solid rgba(0,0,0,0.18)',
+
+                      padding:
+                        '14px',
+
+                      display:
+                        'grid',
+
+                      gap:
+                        '14px',
+                    }}
+                  >
+                    <div className="admin-record-meta">
+                      {
+                        historicItems.length
+                      } PINS · {
+                        cityHistoricCategories.length
+                      } CATEGORIES · {
+                        cityHistoricLayers.length
+                      } LAYERS
+                    </div>
+
+
+                    <div className="admin-record-meta">
+                      PICK A CATEGORY, THEN A LAYER. ONLY THAT LAYER'S ENTRIES APPEAR BELOW. JSON IMPORTS AUTO-OPEN THE CATEGORY + LAYER THEY JUST CREATED OR UPDATED.
+                    </div>
+
+
+                    <div className="admin-form-actions">
+                      <button
+                        type="button"
+                        className="admin-save"
+                        onClick={
+                          startNewHistoricCategory
+                        }
+                      >
+                        + NEW CATEGORY
+                      </button>
+
+                      <button
+                        type="button"
+                        className="admin-save"
+                        disabled={
+                          !selectedHistoricCategoryKey
+                        }
+                        onClick={
+                          startNewHistoricLayer
+                        }
+                      >
+                        + NEW LAYER
+                      </button>
+
+                      <button
+                        type="button"
+                        className="admin-save"
+                        onClick={() =>
+                          setHistoricBulkImportOpen(
+                            (
+                              current
+                            ) =>
+                              !current
+                          )
+                        }
+                      >
+                        {historicBulkImportOpen
+                          ? 'CLOSE JSON IMPORT'
+                          : 'JSON BULK IMPORT'}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="admin-cancel"
+                        onClick={
+                          downloadHistoricMigrationSnapshot
+                        }
+                      >
+                        DOWNLOAD HISTORIC BACKUP
+                      </button>
+                    </div>
+
+
+                    {historicBulkImportOpen && (
+                      <div
+                        style={{
+                          border:
+                            '1px solid rgba(0,0,0,0.18)',
+
+                          padding:
+                            '12px',
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontWeight:
+                              700,
+
+                            marginBottom:
+                              '6px',
+                          }}
+                        >
+                          HISTORIC JSON IMPORT
+                        </div>
+
+                        <div
+                          className="admin-record-meta"
+                          style={{
+                            marginBottom:
+                              '8px',
+                          }}
+                        >
+                          JSON → CATEGORY → LAYER → PINS. IMPORTED COLLECTIONS APPEAR IN THIS LIBRARY IMMEDIATELY.
+                        </div>
+
+                        <textarea
+                          value={
+                            historicBulkImportText
+                          }
+                          onChange={
+                            (
+                              event
+                            ) => {
+                              setHistoricBulkImportText(
+                                event.target.value
+                              )
+
+                              setHistoricBulkImportStatus(
+                                ''
+                              )
+                            }
+                          }
+                          rows={
+                            12
+                          }
+                          placeholder='{"category":{"title":"CITY / INDUSTRY","pinIcon":"factory"},"layer":{"title":"INDUSTRIAL TORONTO","pinIcon":"factory"},"publish":true,"publishCollection":true,"pins":[]}'
+                          style={{
+                            width:
+                              '100%',
+
+                            boxSizing:
+                              'border-box',
+                          }}
+                        />
+
+                        <div
+                          className="admin-form-actions"
+                          style={{
+                            marginTop:
+                              '8px',
+                          }}
+                        >
+                          <button
+                            type="button"
+                            className="admin-save"
+                            disabled={
+                              historicBulkImportRunning
+                            }
+                            onClick={
+                              importHistoricBulkJson
+                            }
+                          >
+                            {historicBulkImportRunning
+                              ? 'IMPORTING…'
+                              : 'IMPORT HISTORIC JSON'}
+                          </button>
+                        </div>
+
+                        {historicBulkImportStatus && (
+                          <div
+                            className="admin-record-meta"
+                            style={{
+                              marginTop:
+                                '8px',
+                            }}
+                          >
+                            {
+                              historicBulkImportStatus
+                            }
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+
+                    {historicCategoryEditorOpen && (
+                      <div
+                        style={{
+                          border:
+                            '1px solid rgba(0,0,0,0.18)',
+
+                          padding:
+                            '12px',
+
+                          display:
+                            'grid',
+
+                          gridTemplateColumns:
+                            'repeat(2, minmax(0, 1fr))',
+
+                          gap:
+                            '8px',
+                        }}
+                      >
+                        <div
+                          style={{
+                            gridColumn:
+                              '1 / -1',
+
+                            fontWeight:
+                              700,
+                          }}
+                        >
+                          {historicCategoryEditingId
+                            ? 'EDIT CATEGORY'
+                            : 'NEW CATEGORY'}
+                        </div>
+
+                        <label className="admin-field">
+                          <span>
+                            CATEGORY NAME
+                          </span>
+
+                          <input
+                            value={
+                              historicCategoryDraft.title
+                            }
+                            onChange={
+                              (
+                                event
+                              ) =>
+                                setHistoricCategoryDraft(
+                                  (
+                                    current
+                                  ) => ({
+                                    ...current,
+
+                                    title:
+                                      event.target.value,
+                                  })
+                                )
+                            }
+                          />
+                        </label>
+
+                        <label className="admin-field">
+                          <span>
+                            CATEGORY ICON
+                          </span>
+
+                          <select
+                            value={
+                              historicCategoryDraft.pinIcon
+                            }
+                            onChange={
+                              (
+                                event
+                              ) =>
+                                setHistoricCategoryDraft(
+                                  (
+                                    current
+                                  ) => ({
+                                    ...current,
+
+                                    pinIcon:
+                                      event.target.value,
+                                  })
+                                )
+                            }
+                          >
+                            {HISTORIC_PIN_ICONS.map(
+                              (
+                                icon
+                              ) => (
+                                <option
+                                  key={
+                                    icon.id
+                                  }
+                                  value={
+                                    icon.id
+                                  }
+                                >
+                                  {
+                                    `${icon.emoji} ${icon.label}`
+                                  }
+                                </option>
+                              )
+                            )}
+                          </select>
+                        </label>
+
+                        <label className="admin-field">
+                          <span>
+                            STATUS
+                          </span>
+
+                          <select
+                            value={
+                              historicCategoryDraft.status
+                            }
+                            onChange={
+                              (
+                                event
+                              ) =>
+                                setHistoricCategoryDraft(
+                                  (
+                                    current
+                                  ) => ({
+                                    ...current,
+
+                                    status:
+                                      event.target.value,
+                                  })
+                                )
+                            }
+                          >
+                            <option value="published">
+                              PUBLISHED
+                            </option>
+
+                            <option value="draft">
+                              DRAFT
+                            </option>
+                          </select>
+                        </label>
+
+                        <label className="admin-field">
+                          <span>
+                            DISPLAY ORDER
+                          </span>
+
+                          <input
+                            type="number"
+                            value={
+                              historicCategoryDraft.displayOrder
+                            }
+                            onChange={
+                              (
+                                event
+                              ) =>
+                                setHistoricCategoryDraft(
+                                  (
+                                    current
+                                  ) => ({
+                                    ...current,
+
+                                    displayOrder:
+                                      event.target.value,
+                                  })
+                                )
+                            }
+                          />
+                        </label>
+
+                        <label className="admin-field admin-field-wide">
+                          <span>
+                            DESCRIPTION
+                          </span>
+
+                          <textarea
+                            rows="2"
+                            value={
+                              historicCategoryDraft.description
+                            }
+                            onChange={
+                              (
+                                event
+                              ) =>
+                                setHistoricCategoryDraft(
+                                  (
+                                    current
+                                  ) => ({
+                                    ...current,
+
+                                    description:
+                                      event.target.value,
+                                  })
+                                )
+                            }
+                          />
+                        </label>
+
+                        <div
+                          className="admin-form-actions"
+                          style={{
+                            gridColumn:
+                              '1 / -1',
+                          }}
+                        >
+                          <button
+                            type="button"
+                            className="admin-save"
+                            onClick={
+                              saveHistoricCategoryDefinition
+                            }
+                          >
+                            SAVE CATEGORY
+                          </button>
+
+                          <button
+                            type="button"
+                            className="admin-cancel"
+                            onClick={
+                              resetHistoricCategoryDraft
+                            }
+                          >
+                            CANCEL
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+
+                    <div>
+                      <div
+                        style={{
+                          fontWeight:
+                            700,
+
+                          marginBottom:
+                            '6px',
+                        }}
+                      >
+                        CATEGORIES
+                      </div>
+
+                      <div
+                        style={{
+                          display:
+                            'grid',
+
+                          gridTemplateColumns:
+                            'repeat(auto-fill, minmax(220px, 1fr))',
+
+                          gap:
+                            '8px',
+                        }}
+                      >
+                        <div
+                          style={{
+                            border:
+                              selectedHistoricCategoryKey
+                                ? '1px solid rgba(0,0,0,0.18)'
+                                : '2px solid currentColor',
+
+                            padding:
+                              '10px',
+                          }}
+                        >
+                          <button
+                            type="button"
+                            className="admin-cancel"
+                            onClick={() =>
+                              chooseHistoricCategoryForLibrary(
+                                ''
+                              )
+                            }
+                          >
+                            ALL CATEGORIES
+                          </button>
+
+                          <div
+                            className="admin-record-meta"
+                            style={{
+                              marginTop:
+                                '6px',
+                            }}
+                          >
+                            {
+                              historicItems.length
+                            } PINS
+                          </div>
+                        </div>
+
+                        {cityHistoricCategories.map(
+                          (
+                            category
+                          ) => {
+                            const categoryLayers =
+                              cityHistoricLayers.filter(
+                                (layer) =>
+                                  layer.categoryId ===
+                                  category.id
+                              )
+
+                            const categoryPins =
+                              historicItems.filter(
+                                (record) =>
+                                  record.historicCategoryId ===
+                                    category.id
+                              )
+
+                            return (
+                              <div
+                                key={
+                                  category.id
+                                }
+                                style={{
+                                  border:
+                                    selectedHistoricCategoryKey ===
+                                      category.id
+                                      ? '2px solid currentColor'
+                                      : '1px solid rgba(0,0,0,0.18)',
+
+                                  padding:
+                                    '10px',
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  className="admin-cancel"
+                                  onClick={() =>
+                                    chooseHistoricCategoryForLibrary(
+                                      category.id
+                                    )
+                                  }
+                                >
+                                  {
+                                    getHistoricPinIcon(
+                                      category.pinIcon ||
+                                      'map-pin'
+                                    ).emoji
+                                  } {
+                                    category.title
+                                  }
+                                </button>
+
+                                <div
+                                  className="admin-record-meta"
+                                  style={{
+                                    marginTop:
+                                      '6px',
+                                  }}
+                                >
+                                  {String(
+                                    category.status ||
+                                    'draft'
+                                  )
+                                    .toUpperCase()}
+                                  {' · '}
+                                  {
+                                    categoryLayers.length
+                                  } LAYERS
+                                  {' · '}
+                                  {
+                                    categoryPins.length
+                                  } PINS
+                                </div>
+
+                                <div
+                                  className="admin-form-actions"
+                                  style={{
+                                    marginTop:
+                                      '8px',
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      startEditHistoricCategory(
+                                        category
+                                      )
+                                    }
+                                  >
+                                    EDIT
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className="admin-review-reject"
+                                    onClick={() =>
+                                      deleteHistoricCategoryDefinition(
+                                        category
+                                      )
+                                    }
+                                  >
+                                    DELETE
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          }
+                        )}
+                      </div>
+                    </div>
+
+
+                    {historicLayerEditorOpen && (
+                      <div
+                        style={{
+                          border:
+                            '1px solid rgba(0,0,0,0.18)',
+
+                          padding:
+                            '12px',
+
+                          display:
+                            'grid',
+
+                          gridTemplateColumns:
+                            'repeat(2, minmax(0, 1fr))',
+
+                          gap:
+                            '8px',
+                        }}
+                      >
+                        <div
+                          style={{
+                            gridColumn:
+                              '1 / -1',
+
+                            fontWeight:
+                              700,
+                          }}
+                        >
+                          {historicLayerEditingId
+                            ? 'EDIT LAYER'
+                            : 'NEW LAYER'}
+                          {' · '}
+                          {
+                            selectedHistoricCategory?.title ||
+                            'NO CATEGORY'
+                          }
+                        </div>
+
+                        <label className="admin-field">
+                          <span>
+                            LAYER NAME
+                          </span>
+
+                          <input
+                            value={
+                              historicLayerDraft.title
+                            }
+                            onChange={
+                              (
+                                event
+                              ) =>
+                                setHistoricLayerDraft(
+                                  (
+                                    current
+                                  ) => ({
+                                    ...current,
+
+                                    title:
+                                      event.target.value,
+                                  })
+                                )
+                            }
+                          />
+                        </label>
+
+                        <label className="admin-field">
+                          <span>
+                            LAYER ICON
+                          </span>
+
+                          <select
+                            value={
+                              historicLayerDraft.pinIcon
+                            }
+                            onChange={
+                              (
+                                event
+                              ) =>
+                                setHistoricLayerDraft(
+                                  (
+                                    current
+                                  ) => ({
+                                    ...current,
+
+                                    pinIcon:
+                                      event.target.value,
+                                  })
+                                )
+                            }
+                          >
+                            {HISTORIC_PIN_ICONS.map(
+                              (
+                                icon
+                              ) => (
+                                <option
+                                  key={
+                                    icon.id
+                                  }
+                                  value={
+                                    icon.id
+                                  }
+                                >
+                                  {
+                                    `${icon.emoji} ${icon.label}`
+                                  }
+                                </option>
+                              )
+                            )}
+                          </select>
+                        </label>
+
+                        <label className="admin-field">
+                          <span>
+                            STATUS
+                          </span>
+
+                          <select
+                            value={
+                              historicLayerDraft.status
+                            }
+                            onChange={
+                              (
+                                event
+                              ) =>
+                                setHistoricLayerDraft(
+                                  (
+                                    current
+                                  ) => ({
+                                    ...current,
+
+                                    status:
+                                      event.target.value,
+                                  })
+                                )
+                            }
+                          >
+                            <option value="published">
+                              PUBLISHED
+                            </option>
+
+                            <option value="draft">
+                              DRAFT
+                            </option>
+                          </select>
+                        </label>
+
+                        <label className="admin-field">
+                          <span>
+                            DISPLAY ORDER
+                          </span>
+
+                          <input
+                            type="number"
+                            value={
+                              historicLayerDraft.displayOrder
+                            }
+                            onChange={
+                              (
+                                event
+                              ) =>
+                                setHistoricLayerDraft(
+                                  (
+                                    current
+                                  ) => ({
+                                    ...current,
+
+                                    displayOrder:
+                                      event.target.value,
+                                  })
+                                )
+                            }
+                          />
+                        </label>
+
+                        <label className="admin-field admin-field-wide">
+                          <span>
+                            DESCRIPTION
+                          </span>
+
+                          <textarea
+                            rows="2"
+                            value={
+                              historicLayerDraft.description
+                            }
+                            onChange={
+                              (
+                                event
+                              ) =>
+                                setHistoricLayerDraft(
+                                  (
+                                    current
+                                  ) => ({
+                                    ...current,
+
+                                    description:
+                                      event.target.value,
+                                  })
+                                )
+                            }
+                          />
+                        </label>
+
+                        <div
+                          className="admin-form-actions"
+                          style={{
+                            gridColumn:
+                              '1 / -1',
+                          }}
+                        >
+                          <button
+                            type="button"
+                            className="admin-save"
+                            onClick={
+                              saveHistoricLayerDefinition
+                            }
+                          >
+                            SAVE LAYER
+                          </button>
+
+                          <button
+                            type="button"
+                            className="admin-cancel"
+                            onClick={
+                              resetHistoricLayerDraft
+                            }
+                          >
+                            CANCEL
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+
+                    <div>
+                      <div
+                        style={{
+                          fontWeight:
+                            700,
+
+                          marginBottom:
+                            '6px',
+                        }}
+                      >
+                        LAYERS {
+                          selectedHistoricCategory
+                            ? `· ${selectedHistoricCategory.title}`
+                            : '· ALL CATEGORIES'
+                        }
+                      </div>
+
+                      <div
+                        style={{
+                          display:
+                            'flex',
+
+                          flexWrap:
+                            'wrap',
+
+                          gap:
+                            '8px',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className={
+                            selectedHistoricLayerKey
+                              ? 'admin-review-type-filter'
+                              : 'admin-review-type-filter admin-review-type-filter-active'
+                          }
+                          onClick={() =>
+                            chooseHistoricLayerForLibrary(
+                              ''
+                            )
+                          }
+                        >
+                          ALL LAYERS
+                        </button>
+
+                        {selectedCategoryHistoricLayers.map(
+                          (
+                            layer
+                          ) => {
+                            const layerPins =
+                              historicItems.filter(
+                                (record) =>
+                                  record.historicLayerId ===
+                                  layer.id
+                              )
+
+                            return (
+                              <div
+                                key={
+                                  layer.id
+                                }
+                                style={{
+                                  border:
+                                    selectedHistoricLayerKey ===
+                                      layer.id
+                                      ? '2px solid currentColor'
+                                      : '1px solid rgba(0,0,0,0.18)',
+
+                                  padding:
+                                    '8px',
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  className="admin-cancel"
+                                  onClick={() =>
+                                    chooseHistoricLayerForLibrary(
+                                      layer.id
+                                    )
+                                  }
+                                >
+                                  {
+                                    getHistoricPinIcon(
+                                      layer.pinIcon ||
+                                      selectedHistoricCategory?.pinIcon ||
+                                      'map-pin'
+                                    ).emoji
+                                  } {
+                                    layer.title
+                                  }
+                                </button>
+
+                                <div
+                                  className="admin-record-meta"
+                                  style={{
+                                    marginTop:
+                                      '5px',
+                                  }}
+                                >
+                                  {String(
+                                    layer.status ||
+                                    'draft'
+                                  )
+                                    .toUpperCase()}
+                                  {' · '}
+                                  {
+                                    layerPins.length
+                                  } PINS
+                                </div>
+
+                                <div
+                                  className="admin-form-actions"
+                                  style={{
+                                    marginTop:
+                                      '6px',
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (
+                                        layer.categoryId &&
+                                        layer.categoryId !==
+                                          selectedHistoricCategoryId
+                                      ) {
+                                        setSelectedHistoricCategoryId(
+                                          layer.categoryId
+                                        )
+                                      }
+
+                                      startEditHistoricLayer(
+                                        layer
+                                      )
+                                    }}
+                                  >
+                                    EDIT
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className="admin-review-reject"
+                                    onClick={() =>
+                                      deleteHistoricLayerDefinition(
+                                        layer
+                                      )
+                                    }
+                                  >
+                                    DELETE
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          }
+                        )}
+                      </div>
+                    </div>
+
+
+                    <div
+                      style={{
+                        border:
+                          '2px solid currentColor',
+
+                        padding:
+                          '10px 12px',
+
+                        fontWeight:
+                          700,
+                      }}
+                    >
+                      VIEWING · {
+                        selectedHistoricCategory?.title ||
+                        'ALL CATEGORIES'
+                      } {
+                        selectedHistoricLayer
+                          ? `→ ${selectedHistoricLayer.title}`
+                          : ''
+                      }
+                    </div>
+
+
+                    <div>
+                      <div
+                        style={{
+                          display:
+                            'grid',
+
+                          gridTemplateColumns:
+                            'minmax(180px, 1fr) auto',
+
+                          gap:
+                            '8px',
+
+                          alignItems:
+                            'center',
+
+                          marginBottom:
+                            '8px',
+                        }}
+                      >
+                        <input
+                          type="search"
+                          value={
+                            historicLibrarySearch
+                          }
+                          onChange={
+                            (
+                              event
+                            ) =>
+                              setHistoricLibrarySearch(
+                                event.target.value
+                              )
+                          }
+                          placeholder="Search Historic pins…"
+                          aria-label="Search Historic pins"
+                        />
+
+                        <strong>
+                          {
+                            historicLibraryRecords.length
+                          } PINS
+                        </strong>
+                      </div>
+
+                      <div
+                        style={{
+                          display:
+                            'grid',
+
+                          gap:
+                            '8px',
+
+                          maxHeight:
+                            '560px',
+
+                          overflowY:
+                            'auto',
+                        }}
+                      >
+                        {historicLibraryRecords.length ===
+                          0 && (
+                          <div className="admin-empty">
+                            NO HISTORIC PINS IN THIS VIEW.
+                          </div>
+                        )}
+
+                        {historicLibraryRecords.map(
+                          (
+                            record
+                          ) => {
+                            const category =
+                              historicCategories.find(
+                                (item) =>
+                                  item.id ===
+                                  record.historicCategoryId
+                              ) ||
+                              null
+
+                            const layer =
+                              historicLayers.find(
+                                (item) =>
+                                  item.id ===
+                                  record.historicLayerId
+                              ) ||
+                              null
+
+                            return (
+                              <article
+                                className={
+                                  record.active ===
+                                    false
+                                    ? 'admin-record admin-record-inactive'
+                                    : 'admin-record'
+                                }
+                                key={
+                                  record.id
+                                }
+                              >
+                                <div className="admin-record-top">
+                                  <span className="admin-record-type">
+                                    {
+                                      getHistoricPinIcon(
+                                        record.pinIcon ||
+                                        layer?.pinIcon ||
+                                        category?.pinIcon ||
+                                        'map-pin'
+                                      ).emoji
+                                    } {
+                                      category?.title ||
+                                      'UNCATEGORIZED'
+                                    } → {
+                                      layer?.title ||
+                                      'NO LAYER'
+                                    }
+                                  </span>
+
+                                  <span className="admin-record-status">
+                                    {record.active ===
+                                      false
+                                      ? 'DRAFT'
+                                      : 'LIVE'}
+                                  </span>
+                                </div>
+
+                                <h2>
+                                  {
+                                    record.title
+                                  }
+                                </h2>
+
+                                <div className="admin-record-meta">
+                                  {
+                                    historicDateLabel(
+                                      record
+                                    )
+                                  }
+                                  {' · '}
+                                  {String(
+                                    record.editorialStatus ||
+                                    'researching'
+                                  )
+                                    .replace(
+                                      /-/g,
+                                      ' '
+                                    )
+                                    .toUpperCase()}
+                                </div>
+
+                                {(record.location ||
+                                  record.intersection) && (
+                                  <div className="admin-record-location">
+                                    {
+                                      record.location ||
+                                      record.intersection
+                                    }
+                                  </div>
+                                )}
+
+                                <div
+                                  className="admin-record-actions"
+                                  style={{
+                                    marginTop:
+                                      '8px',
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      editRecord(
+                                        record
+                                      )
+                                    }
+                                  >
+                                    EDIT ENTRY
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className={
+                                      record.active ===
+                                        false
+                                        ? 'admin-review-approve'
+                                        : 'admin-review-reject'
+                                    }
+                                    onClick={() =>
+                                      toggleRecord(
+                                        record.id
+                                      )
+                                    }
+                                  >
+                                    {record.active ===
+                                      false
+                                      ? 'PUBLISH'
+                                      : 'UNPUBLISH'}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className="admin-review-reject"
+                                    onClick={() =>
+                                      deleteRecord(
+                                        record.id
+                                      )
+                                    }
+                                  >
+                                    DELETE ENTRY
+                                  </button>
+                                </div>
+                              </article>
+                            )
+                          }
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+            </>
+          )}
+
+
           <div className="admin-section-heading">
             {
               formHeading()
@@ -17502,6 +18760,12 @@ function AdminRoom() {
 
 
           <form
+            id={
+              tab ===
+                'historic'
+                ? 'historic-entry-editor'
+                : undefined
+            }
             className="admin-form"
             onSubmit={
               saveDraft
@@ -18587,1202 +19851,6 @@ function AdminRoom() {
             {tab ===
               'historic' && (
               <>
-
-                <div className="admin-field admin-field-wide">
-                  <span>
-                    HISTORIC LIBRARY
-                  </span>
-
-                  <div
-                    style={{
-                      border:
-                        '1px solid rgba(0,0,0,0.18)',
-
-                      padding:
-                        '14px',
-
-                      display:
-                        'grid',
-
-                      gap:
-                        '14px',
-                    }}
-                  >
-                    <div className="admin-record-meta">
-                      {
-                        historicItems.length
-                      } PINS · {
-                        cityHistoricCategories.length
-                      } CATEGORIES · {
-                        cityHistoricLayers.length
-                      } LAYERS
-                    </div>
-
-
-                    <div className="admin-form-actions">
-                      <button
-                        type="button"
-                        className="admin-save"
-                        onClick={
-                          startNewHistoricCategory
-                        }
-                      >
-                        + NEW CATEGORY
-                      </button>
-
-                      <button
-                        type="button"
-                        className="admin-save"
-                        disabled={
-                          !selectedHistoricCategoryKey
-                        }
-                        onClick={
-                          startNewHistoricLayer
-                        }
-                      >
-                        + NEW LAYER
-                      </button>
-
-                      <button
-                        type="button"
-                        className="admin-save"
-                        onClick={() =>
-                          setHistoricBulkImportOpen(
-                            (
-                              current
-                            ) =>
-                              !current
-                          )
-                        }
-                      >
-                        {historicBulkImportOpen
-                          ? 'CLOSE JSON IMPORT'
-                          : 'JSON BULK IMPORT'}
-                      </button>
-
-                      <button
-                        type="button"
-                        className="admin-cancel"
-                        onClick={
-                          downloadHistoricMigrationSnapshot
-                        }
-                      >
-                        DOWNLOAD HISTORIC BACKUP
-                      </button>
-                    </div>
-
-
-                    {historicBulkImportOpen && (
-                      <div
-                        style={{
-                          border:
-                            '1px solid rgba(0,0,0,0.18)',
-
-                          padding:
-                            '12px',
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontWeight:
-                              700,
-
-                            marginBottom:
-                              '6px',
-                          }}
-                        >
-                          HISTORIC JSON IMPORT
-                        </div>
-
-                        <div
-                          className="admin-record-meta"
-                          style={{
-                            marginBottom:
-                              '8px',
-                          }}
-                        >
-                          JSON → CATEGORY → LAYER → PINS. IMPORTED COLLECTIONS APPEAR IN THIS LIBRARY IMMEDIATELY.
-                        </div>
-
-                        <textarea
-                          value={
-                            historicBulkImportText
-                          }
-                          onChange={
-                            (
-                              event
-                            ) => {
-                              setHistoricBulkImportText(
-                                event.target.value
-                              )
-
-                              setHistoricBulkImportStatus(
-                                ''
-                              )
-                            }
-                          }
-                          rows={
-                            12
-                          }
-                          placeholder='{"category":{"title":"CITY / INDUSTRY","pinIcon":"factory"},"layer":{"title":"INDUSTRIAL TORONTO","pinIcon":"factory"},"publish":true,"publishCollection":true,"pins":[]}'
-                          style={{
-                            width:
-                              '100%',
-
-                            boxSizing:
-                              'border-box',
-                          }}
-                        />
-
-                        <div
-                          className="admin-form-actions"
-                          style={{
-                            marginTop:
-                              '8px',
-                          }}
-                        >
-                          <button
-                            type="button"
-                            className="admin-save"
-                            disabled={
-                              historicBulkImportRunning
-                            }
-                            onClick={
-                              importHistoricBulkJson
-                            }
-                          >
-                            {historicBulkImportRunning
-                              ? 'IMPORTING…'
-                              : 'IMPORT HISTORIC JSON'}
-                          </button>
-                        </div>
-
-                        {historicBulkImportStatus && (
-                          <div
-                            className="admin-record-meta"
-                            style={{
-                              marginTop:
-                                '8px',
-                            }}
-                          >
-                            {
-                              historicBulkImportStatus
-                            }
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-
-                    {historicCategoryEditorOpen && (
-                      <div
-                        style={{
-                          border:
-                            '1px solid rgba(0,0,0,0.18)',
-
-                          padding:
-                            '12px',
-
-                          display:
-                            'grid',
-
-                          gridTemplateColumns:
-                            'repeat(2, minmax(0, 1fr))',
-
-                          gap:
-                            '8px',
-                        }}
-                      >
-                        <div
-                          style={{
-                            gridColumn:
-                              '1 / -1',
-
-                            fontWeight:
-                              700,
-                          }}
-                        >
-                          {historicCategoryEditingId
-                            ? 'EDIT CATEGORY'
-                            : 'NEW CATEGORY'}
-                        </div>
-
-                        <label className="admin-field">
-                          <span>
-                            CATEGORY NAME
-                          </span>
-
-                          <input
-                            value={
-                              historicCategoryDraft.title
-                            }
-                            onChange={
-                              (
-                                event
-                              ) =>
-                                setHistoricCategoryDraft(
-                                  (
-                                    current
-                                  ) => ({
-                                    ...current,
-
-                                    title:
-                                      event.target.value,
-                                  })
-                                )
-                            }
-                          />
-                        </label>
-
-                        <label className="admin-field">
-                          <span>
-                            CATEGORY ICON
-                          </span>
-
-                          <select
-                            value={
-                              historicCategoryDraft.pinIcon
-                            }
-                            onChange={
-                              (
-                                event
-                              ) =>
-                                setHistoricCategoryDraft(
-                                  (
-                                    current
-                                  ) => ({
-                                    ...current,
-
-                                    pinIcon:
-                                      event.target.value,
-                                  })
-                                )
-                            }
-                          >
-                            {HISTORIC_PIN_ICONS.map(
-                              (
-                                icon
-                              ) => (
-                                <option
-                                  key={
-                                    icon.id
-                                  }
-                                  value={
-                                    icon.id
-                                  }
-                                >
-                                  {
-                                    `${icon.emoji} ${icon.label}`
-                                  }
-                                </option>
-                              )
-                            )}
-                          </select>
-                        </label>
-
-                        <label className="admin-field">
-                          <span>
-                            STATUS
-                          </span>
-
-                          <select
-                            value={
-                              historicCategoryDraft.status
-                            }
-                            onChange={
-                              (
-                                event
-                              ) =>
-                                setHistoricCategoryDraft(
-                                  (
-                                    current
-                                  ) => ({
-                                    ...current,
-
-                                    status:
-                                      event.target.value,
-                                  })
-                                )
-                            }
-                          >
-                            <option value="published">
-                              PUBLISHED
-                            </option>
-
-                            <option value="draft">
-                              DRAFT
-                            </option>
-                          </select>
-                        </label>
-
-                        <label className="admin-field">
-                          <span>
-                            DISPLAY ORDER
-                          </span>
-
-                          <input
-                            type="number"
-                            value={
-                              historicCategoryDraft.displayOrder
-                            }
-                            onChange={
-                              (
-                                event
-                              ) =>
-                                setHistoricCategoryDraft(
-                                  (
-                                    current
-                                  ) => ({
-                                    ...current,
-
-                                    displayOrder:
-                                      event.target.value,
-                                  })
-                                )
-                            }
-                          />
-                        </label>
-
-                        <label className="admin-field admin-field-wide">
-                          <span>
-                            DESCRIPTION
-                          </span>
-
-                          <textarea
-                            rows="2"
-                            value={
-                              historicCategoryDraft.description
-                            }
-                            onChange={
-                              (
-                                event
-                              ) =>
-                                setHistoricCategoryDraft(
-                                  (
-                                    current
-                                  ) => ({
-                                    ...current,
-
-                                    description:
-                                      event.target.value,
-                                  })
-                                )
-                            }
-                          />
-                        </label>
-
-                        <div
-                          className="admin-form-actions"
-                          style={{
-                            gridColumn:
-                              '1 / -1',
-                          }}
-                        >
-                          <button
-                            type="button"
-                            className="admin-save"
-                            onClick={
-                              saveHistoricCategoryDefinition
-                            }
-                          >
-                            SAVE CATEGORY
-                          </button>
-
-                          <button
-                            type="button"
-                            className="admin-cancel"
-                            onClick={
-                              resetHistoricCategoryDraft
-                            }
-                          >
-                            CANCEL
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-
-                    <div>
-                      <div
-                        style={{
-                          fontWeight:
-                            700,
-
-                          marginBottom:
-                            '6px',
-                        }}
-                      >
-                        CATEGORIES
-                      </div>
-
-                      <div
-                        style={{
-                          display:
-                            'grid',
-
-                          gridTemplateColumns:
-                            'repeat(auto-fill, minmax(220px, 1fr))',
-
-                          gap:
-                            '8px',
-                        }}
-                      >
-                        <div
-                          style={{
-                            border:
-                              selectedHistoricCategoryKey
-                                ? '1px solid rgba(0,0,0,0.18)'
-                                : '2px solid currentColor',
-
-                            padding:
-                              '10px',
-                          }}
-                        >
-                          <button
-                            type="button"
-                            className="admin-cancel"
-                            onClick={() =>
-                              chooseHistoricCategoryForLibrary(
-                                ''
-                              )
-                            }
-                          >
-                            ALL CATEGORIES
-                          </button>
-
-                          <div
-                            className="admin-record-meta"
-                            style={{
-                              marginTop:
-                                '6px',
-                            }}
-                          >
-                            {
-                              historicItems.length
-                            } PINS
-                          </div>
-                        </div>
-
-                        {cityHistoricCategories.map(
-                          (
-                            category
-                          ) => {
-                            const categoryLayers =
-                              cityHistoricLayers.filter(
-                                (layer) =>
-                                  layer.categoryId ===
-                                  category.id
-                              )
-
-                            const categoryPins =
-                              historicItems.filter(
-                                (record) =>
-                                  record.historicCategoryId ===
-                                    category.id
-                              )
-
-                            return (
-                              <div
-                                key={
-                                  category.id
-                                }
-                                style={{
-                                  border:
-                                    selectedHistoricCategoryKey ===
-                                      category.id
-                                      ? '2px solid currentColor'
-                                      : '1px solid rgba(0,0,0,0.18)',
-
-                                  padding:
-                                    '10px',
-                                }}
-                              >
-                                <button
-                                  type="button"
-                                  className="admin-cancel"
-                                  onClick={() =>
-                                    chooseHistoricCategoryForLibrary(
-                                      category.id
-                                    )
-                                  }
-                                >
-                                  {
-                                    getHistoricPinIcon(
-                                      category.pinIcon ||
-                                      'map-pin'
-                                    ).emoji
-                                  } {
-                                    category.title
-                                  }
-                                </button>
-
-                                <div
-                                  className="admin-record-meta"
-                                  style={{
-                                    marginTop:
-                                      '6px',
-                                  }}
-                                >
-                                  {String(
-                                    category.status ||
-                                    'draft'
-                                  )
-                                    .toUpperCase()}
-                                  {' · '}
-                                  {
-                                    categoryLayers.length
-                                  } LAYERS
-                                  {' · '}
-                                  {
-                                    categoryPins.length
-                                  } PINS
-                                </div>
-
-                                <div
-                                  className="admin-form-actions"
-                                  style={{
-                                    marginTop:
-                                      '8px',
-                                  }}
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      startEditHistoricCategory(
-                                        category
-                                      )
-                                    }
-                                  >
-                                    EDIT
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    className="admin-review-reject"
-                                    onClick={() =>
-                                      deleteHistoricCategoryDefinition(
-                                        category
-                                      )
-                                    }
-                                  >
-                                    DELETE
-                                  </button>
-                                </div>
-                              </div>
-                            )
-                          }
-                        )}
-                      </div>
-                    </div>
-
-
-                    {historicLayerEditorOpen && (
-                      <div
-                        style={{
-                          border:
-                            '1px solid rgba(0,0,0,0.18)',
-
-                          padding:
-                            '12px',
-
-                          display:
-                            'grid',
-
-                          gridTemplateColumns:
-                            'repeat(2, minmax(0, 1fr))',
-
-                          gap:
-                            '8px',
-                        }}
-                      >
-                        <div
-                          style={{
-                            gridColumn:
-                              '1 / -1',
-
-                            fontWeight:
-                              700,
-                          }}
-                        >
-                          {historicLayerEditingId
-                            ? 'EDIT LAYER'
-                            : 'NEW LAYER'}
-                          {' · '}
-                          {
-                            selectedHistoricCategory?.title ||
-                            'NO CATEGORY'
-                          }
-                        </div>
-
-                        <label className="admin-field">
-                          <span>
-                            LAYER NAME
-                          </span>
-
-                          <input
-                            value={
-                              historicLayerDraft.title
-                            }
-                            onChange={
-                              (
-                                event
-                              ) =>
-                                setHistoricLayerDraft(
-                                  (
-                                    current
-                                  ) => ({
-                                    ...current,
-
-                                    title:
-                                      event.target.value,
-                                  })
-                                )
-                            }
-                          />
-                        </label>
-
-                        <label className="admin-field">
-                          <span>
-                            LAYER ICON
-                          </span>
-
-                          <select
-                            value={
-                              historicLayerDraft.pinIcon
-                            }
-                            onChange={
-                              (
-                                event
-                              ) =>
-                                setHistoricLayerDraft(
-                                  (
-                                    current
-                                  ) => ({
-                                    ...current,
-
-                                    pinIcon:
-                                      event.target.value,
-                                  })
-                                )
-                            }
-                          >
-                            {HISTORIC_PIN_ICONS.map(
-                              (
-                                icon
-                              ) => (
-                                <option
-                                  key={
-                                    icon.id
-                                  }
-                                  value={
-                                    icon.id
-                                  }
-                                >
-                                  {
-                                    `${icon.emoji} ${icon.label}`
-                                  }
-                                </option>
-                              )
-                            )}
-                          </select>
-                        </label>
-
-                        <label className="admin-field">
-                          <span>
-                            STATUS
-                          </span>
-
-                          <select
-                            value={
-                              historicLayerDraft.status
-                            }
-                            onChange={
-                              (
-                                event
-                              ) =>
-                                setHistoricLayerDraft(
-                                  (
-                                    current
-                                  ) => ({
-                                    ...current,
-
-                                    status:
-                                      event.target.value,
-                                  })
-                                )
-                            }
-                          >
-                            <option value="published">
-                              PUBLISHED
-                            </option>
-
-                            <option value="draft">
-                              DRAFT
-                            </option>
-                          </select>
-                        </label>
-
-                        <label className="admin-field">
-                          <span>
-                            DISPLAY ORDER
-                          </span>
-
-                          <input
-                            type="number"
-                            value={
-                              historicLayerDraft.displayOrder
-                            }
-                            onChange={
-                              (
-                                event
-                              ) =>
-                                setHistoricLayerDraft(
-                                  (
-                                    current
-                                  ) => ({
-                                    ...current,
-
-                                    displayOrder:
-                                      event.target.value,
-                                  })
-                                )
-                            }
-                          />
-                        </label>
-
-                        <label className="admin-field admin-field-wide">
-                          <span>
-                            DESCRIPTION
-                          </span>
-
-                          <textarea
-                            rows="2"
-                            value={
-                              historicLayerDraft.description
-                            }
-                            onChange={
-                              (
-                                event
-                              ) =>
-                                setHistoricLayerDraft(
-                                  (
-                                    current
-                                  ) => ({
-                                    ...current,
-
-                                    description:
-                                      event.target.value,
-                                  })
-                                )
-                            }
-                          />
-                        </label>
-
-                        <div
-                          className="admin-form-actions"
-                          style={{
-                            gridColumn:
-                              '1 / -1',
-                          }}
-                        >
-                          <button
-                            type="button"
-                            className="admin-save"
-                            onClick={
-                              saveHistoricLayerDefinition
-                            }
-                          >
-                            SAVE LAYER
-                          </button>
-
-                          <button
-                            type="button"
-                            className="admin-cancel"
-                            onClick={
-                              resetHistoricLayerDraft
-                            }
-                          >
-                            CANCEL
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-
-                    <div>
-                      <div
-                        style={{
-                          fontWeight:
-                            700,
-
-                          marginBottom:
-                            '6px',
-                        }}
-                      >
-                        LAYERS {
-                          selectedHistoricCategory
-                            ? `· ${selectedHistoricCategory.title}`
-                            : '· ALL CATEGORIES'
-                        }
-                      </div>
-
-                      <div
-                        style={{
-                          display:
-                            'flex',
-
-                          flexWrap:
-                            'wrap',
-
-                          gap:
-                            '8px',
-                        }}
-                      >
-                        <button
-                          type="button"
-                          className={
-                            selectedHistoricLayerKey
-                              ? 'admin-review-type-filter'
-                              : 'admin-review-type-filter admin-review-type-filter-active'
-                          }
-                          onClick={() =>
-                            chooseHistoricLayerForLibrary(
-                              ''
-                            )
-                          }
-                        >
-                          ALL LAYERS
-                        </button>
-
-                        {selectedCategoryHistoricLayers.map(
-                          (
-                            layer
-                          ) => {
-                            const layerPins =
-                              historicItems.filter(
-                                (record) =>
-                                  record.historicLayerId ===
-                                  layer.id
-                              )
-
-                            return (
-                              <div
-                                key={
-                                  layer.id
-                                }
-                                style={{
-                                  border:
-                                    selectedHistoricLayerKey ===
-                                      layer.id
-                                      ? '2px solid currentColor'
-                                      : '1px solid rgba(0,0,0,0.18)',
-
-                                  padding:
-                                    '8px',
-                                }}
-                              >
-                                <button
-                                  type="button"
-                                  className="admin-cancel"
-                                  onClick={() =>
-                                    chooseHistoricLayerForLibrary(
-                                      layer.id
-                                    )
-                                  }
-                                >
-                                  {
-                                    getHistoricPinIcon(
-                                      layer.pinIcon ||
-                                      selectedHistoricCategory?.pinIcon ||
-                                      'map-pin'
-                                    ).emoji
-                                  } {
-                                    layer.title
-                                  }
-                                </button>
-
-                                <div
-                                  className="admin-record-meta"
-                                  style={{
-                                    marginTop:
-                                      '5px',
-                                  }}
-                                >
-                                  {String(
-                                    layer.status ||
-                                    'draft'
-                                  )
-                                    .toUpperCase()}
-                                  {' · '}
-                                  {
-                                    layerPins.length
-                                  } PINS
-                                </div>
-
-                                <div
-                                  className="admin-form-actions"
-                                  style={{
-                                    marginTop:
-                                      '6px',
-                                  }}
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (
-                                        layer.categoryId &&
-                                        layer.categoryId !==
-                                          selectedHistoricCategoryId
-                                      ) {
-                                        setSelectedHistoricCategoryId(
-                                          layer.categoryId
-                                        )
-                                      }
-
-                                      startEditHistoricLayer(
-                                        layer
-                                      )
-                                    }}
-                                  >
-                                    EDIT
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    className="admin-review-reject"
-                                    onClick={() =>
-                                      deleteHistoricLayerDefinition(
-                                        layer
-                                      )
-                                    }
-                                  >
-                                    DELETE
-                                  </button>
-                                </div>
-                              </div>
-                            )
-                          }
-                        )}
-                      </div>
-                    </div>
-
-
-                    <div>
-                      <div
-                        style={{
-                          display:
-                            'grid',
-
-                          gridTemplateColumns:
-                            'minmax(180px, 1fr) auto',
-
-                          gap:
-                            '8px',
-
-                          alignItems:
-                            'center',
-
-                          marginBottom:
-                            '8px',
-                        }}
-                      >
-                        <input
-                          type="search"
-                          value={
-                            historicLibrarySearch
-                          }
-                          onChange={
-                            (
-                              event
-                            ) =>
-                              setHistoricLibrarySearch(
-                                event.target.value
-                              )
-                          }
-                          placeholder="Search Historic pins…"
-                          aria-label="Search Historic pins"
-                        />
-
-                        <strong>
-                          {
-                            historicLibraryRecords.length
-                          } PINS
-                        </strong>
-                      </div>
-
-                      <div
-                        style={{
-                          display:
-                            'grid',
-
-                          gap:
-                            '8px',
-
-                          maxHeight:
-                            '560px',
-
-                          overflowY:
-                            'auto',
-                        }}
-                      >
-                        {historicLibraryRecords.length ===
-                          0 && (
-                          <div className="admin-empty">
-                            NO HISTORIC PINS IN THIS VIEW.
-                          </div>
-                        )}
-
-                        {historicLibraryRecords.map(
-                          (
-                            record
-                          ) => {
-                            const category =
-                              historicCategories.find(
-                                (item) =>
-                                  item.id ===
-                                  record.historicCategoryId
-                              ) ||
-                              null
-
-                            const layer =
-                              historicLayers.find(
-                                (item) =>
-                                  item.id ===
-                                  record.historicLayerId
-                              ) ||
-                              null
-
-                            return (
-                              <article
-                                className={
-                                  record.active ===
-                                    false
-                                    ? 'admin-record admin-record-inactive'
-                                    : 'admin-record'
-                                }
-                                key={
-                                  record.id
-                                }
-                              >
-                                <div className="admin-record-top">
-                                  <span className="admin-record-type">
-                                    {
-                                      getHistoricPinIcon(
-                                        record.pinIcon ||
-                                        layer?.pinIcon ||
-                                        category?.pinIcon ||
-                                        'map-pin'
-                                      ).emoji
-                                    } {
-                                      category?.title ||
-                                      'UNCATEGORIZED'
-                                    } → {
-                                      layer?.title ||
-                                      'NO LAYER'
-                                    }
-                                  </span>
-
-                                  <span className="admin-record-status">
-                                    {record.active ===
-                                      false
-                                      ? 'DRAFT'
-                                      : 'LIVE'}
-                                  </span>
-                                </div>
-
-                                <h2>
-                                  {
-                                    record.title
-                                  }
-                                </h2>
-
-                                <div className="admin-record-meta">
-                                  {
-                                    historicDateLabel(
-                                      record
-                                    )
-                                  }
-                                  {' · '}
-                                  {String(
-                                    record.editorialStatus ||
-                                    'researching'
-                                  )
-                                    .replace(
-                                      /-/g,
-                                      ' '
-                                    )
-                                    .toUpperCase()}
-                                </div>
-
-                                {(record.location ||
-                                  record.intersection) && (
-                                  <div className="admin-record-location">
-                                    {
-                                      record.location ||
-                                      record.intersection
-                                    }
-                                  </div>
-                                )}
-
-                                <div
-                                  className="admin-record-actions"
-                                  style={{
-                                    marginTop:
-                                      '8px',
-                                  }}
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      editRecord(
-                                        record
-                                      )
-                                    }
-                                  >
-                                    EDIT ENTRY
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    className={
-                                      record.active ===
-                                        false
-                                        ? 'admin-review-approve'
-                                        : 'admin-review-reject'
-                                    }
-                                    onClick={() =>
-                                      toggleRecord(
-                                        record.id
-                                      )
-                                    }
-                                  >
-                                    {record.active ===
-                                      false
-                                      ? 'PUBLISH'
-                                      : 'UNPUBLISH'}
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    className="admin-review-reject"
-                                    onClick={() =>
-                                      deleteRecord(
-                                        record.id
-                                      )
-                                    }
-                                  >
-                                    DELETE ENTRY
-                                  </button>
-                                </div>
-                              </article>
-                            )
-                          }
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
 
                 <div className="admin-field admin-field-wide">
                   <span>
