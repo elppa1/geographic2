@@ -2180,6 +2180,46 @@ const GeographicMap =
             null
 
 
+          if (
+            result.pinType ===
+              'historic' &&
+            activePinFilter !==
+              'historic'
+          ) {
+            onChangePinFilter?.(
+              'historic'
+            )
+          }
+          else if (
+            result.pinType ===
+              'new'
+          ) {
+            if (
+              activePinFilter !==
+                'new'
+            ) {
+              onChangePinFilter?.(
+                'new'
+              )
+            }
+
+
+            onChangeNewSubtypeFilter?.(
+              'all'
+            )
+          }
+          else if (
+            result.pinType ===
+              'news' &&
+            activePinFilter !==
+              'news'
+          ) {
+            onChangePinFilter?.(
+              'news'
+            )
+          }
+
+
           setSelectedPinId(
             result.id
           )

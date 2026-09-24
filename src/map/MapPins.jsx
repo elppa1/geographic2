@@ -60,6 +60,10 @@ const PUBLISHED_NEW_SPORTS_ENDPOINT =
   '/api/geographic/toronto/new/sports/published?status=all'
 
 
+const PUBLISHED_NEW_REAL_ESTATE_ENDPOINT =
+  '/api/geographic/toronto/new/real-estate/published?status=all'
+
+
 const PUBLISHED_NEW_REFRESH_MS =
   15 * 1000
 
@@ -101,6 +105,16 @@ const SPORTS_CATEGORIES = [
   'sports',
   'game',
   'match',
+]
+
+
+const REAL_ESTATE_CATEGORIES = [
+  'condo',
+  'house',
+  'rental',
+  'commercial',
+  'land',
+  'real-estate-other',
 ]
 
 
@@ -235,6 +249,18 @@ function newPinMatchesSubtype(
     )
       .toLowerCase()
 
+
+  const realEstatePin =
+    explicitType ===
+      'real-estate' ||
+    (
+      !explicitType &&
+      REAL_ESTATE_CATEGORIES.includes(
+        category
+      )
+    )
+
+
   if (
     subtype ===
       'all'
@@ -244,8 +270,7 @@ function newPinMatchesSubtype(
         'business' ||
       explicitType ===
         'events' ||
-      explicitType ===
-        'sports' ||
+      realEstatePin ||
       (
         !explicitType &&
         (
@@ -253,9 +278,6 @@ function newPinMatchesSubtype(
             category
           ) ||
           EVENT_CATEGORIES.includes(
-            category
-          ) ||
-          SPORTS_CATEGORIES.includes(
             category
           )
         )
@@ -324,6 +346,68 @@ function newPinMatchesSubtype(
           category
         )
       )
+    )
+  }
+
+
+  if (
+    subtype ===
+      'real-estate' ||
+    subtype.startsWith(
+      'real-estate:'
+    )
+  ) {
+    if (
+      !realEstatePin
+    ) {
+      return false
+    }
+
+
+    const requestedCategory =
+      subtype.includes(
+        ':'
+      )
+        ? subtype
+            .slice(
+              subtype.indexOf(
+                ':'
+              ) +
+              1
+            )
+            .trim()
+        : 'all'
+
+
+    if (
+      !requestedCategory ||
+      requestedCategory ===
+        'all'
+    ) {
+      return true
+    }
+
+
+    if (
+      requestedCategory ===
+        'other'
+    ) {
+      return (
+        category ===
+          'real-estate-other' ||
+        (
+          explicitType ===
+            'real-estate' &&
+          category ===
+            'other'
+        )
+      )
+    }
+
+
+    return (
+      category ===
+      requestedCategory
     )
   }
 
@@ -938,9 +1022,20 @@ function newPinIsCurrent(
   if (
     pin.expiresAt
   ) {
+    const rawExpiry =
+      String(
+        pin.expiresAt
+      )
+        .trim()
+
+
     const explicitExpiry =
       new Date(
-        `${pin.expiresAt}T23:59:59`
+        rawExpiry.includes(
+          'T'
+        )
+          ? rawExpiry
+          : `${rawExpiry}T23:59:59`
       )
 
     if (
@@ -5010,6 +5105,93 @@ function applyMarkerActivityPulse({
 
 
 // ============================================================
+// HISTORIC LAYER SELECTION PULSE
+// ============================================================
+
+function applyHistoricLayerSelectionPulse({
+  element,
+  active,
+}) {
+  if (
+    !active ||
+    typeof window ===
+      'undefined' ||
+    !element
+  ) {
+    return
+  }
+
+
+  const target =
+    element.firstElementChild ||
+    element
+
+
+  if (
+    window.matchMedia(
+      '(prefers-reduced-motion: reduce)'
+    )
+      .matches
+  ) {
+    target.style.filter =
+      'drop-shadow(0 0 6px rgba(20, 20, 20, 0.72))'
+
+    return
+  }
+
+
+  if (
+    typeof target.animate !==
+      'function'
+  ) {
+    return
+  }
+
+
+  target.animate(
+    [
+      {
+        transform:
+          'scale(1)',
+
+        opacity:
+          1,
+      },
+
+      {
+        transform:
+          'scale(1.16)',
+
+        opacity:
+          0.62,
+
+        filter:
+          'drop-shadow(0 0 8px rgba(20, 20, 20, 0.66))',
+      },
+
+      {
+        transform:
+          'scale(1)',
+
+        opacity:
+          1,
+      },
+    ],
+    {
+      duration:
+        1000,
+
+      iterations:
+        8,
+
+      easing:
+        'ease-in-out',
+    }
+  )
+}
+
+
+// ============================================================
 // TTC MARKER VISIBILITY
 // ============================================================
 //
@@ -5280,21 +5462,23 @@ function spreadActiveTtcMarkers({
 
 
 // ============================================================
-// HISTORIC STACKED MARKERS
+// HISTORIC SAME-LOCATION MARKERS
 // ============================================================
 //
-// Historic stories can legitimately share one exact venue
-// (Rogers Centre, Scotiabank Arena, Maple Leaf Gardens, etc.).
-// Keep every stored coordinate true to the event location, but
-// collapse same-location stories into one count marker. Clicking
-// that marker fans the real story markers out around the venue.
+// Historic stories can legitimately share one exact venue.
+// Keep every story as its own marker: the first pin stays on the
+// true coordinate and the rest fan out in roomy rings around it.
+// The geographic data itself is never changed.
 //
 
 const HISTORIC_STACK_COORDINATE_PRECISION =
   4
 
 const HISTORIC_STACK_RADIUS_PX =
-  27
+  52
+
+const HISTORIC_STACK_RING_GAP_PX =
+  44
 
 
 function getHistoricStackKey(
@@ -5355,53 +5539,45 @@ function getHistoricStackOffsets(
   }
 
 
-  if (
-    count ===
-      2
+  const offsets = [
+    [0, 0],
+  ]
+
+
+  let remaining =
+    count -
+    1
+
+  let ring =
+    0
+
+
+  while (
+    remaining >
+      0
   ) {
-    return [
-      [-20, 0],
-      [20, 0],
-    ]
-  }
+    const itemsInRing =
+      Math.min(
+        8,
+        remaining
+      )
+
+    const radius =
+      HISTORIC_STACK_RADIUS_PX +
+      (
+        ring *
+        HISTORIC_STACK_RING_GAP_PX
+      )
 
 
-  return Array.from(
-    {
-      length:
-        count,
-    },
-    (
-      _,
-      index
-    ) => {
-      const ring =
-        Math.floor(
-          index /
-          8
-        )
-
-      const positionInRing =
-        index %
-        8
-
-      const itemsInRing =
-        Math.min(
-          8,
-          count -
-          (
-            ring *
-            8
-          )
-        )
-
-      const radius =
-        HISTORIC_STACK_RADIUS_PX +
-        (
-          ring *
-          16
-        )
-
+    for (
+      let positionInRing =
+        0;
+      positionInRing <
+        itemsInRing;
+      positionInRing +=
+        1
+    ) {
       const angle =
         (
           -Math.PI /
@@ -5419,7 +5595,7 @@ function getHistoricStackOffsets(
         )
 
 
-      return [
+      offsets.push([
         Math.round(
           Math.cos(
             angle
@@ -5432,9 +5608,19 @@ function getHistoricStackOffsets(
           ) *
           radius
         ),
-      ]
+      ])
     }
-  )
+
+
+    remaining -=
+      itemsInRing
+
+    ring +=
+      1
+  }
+
+
+  return offsets
 }
 
 
@@ -5649,6 +5835,8 @@ function createMarker({
   historicIssueFilter,
   historicCategoryFilter,
   historicLayerFilter,
+  historicLayerPulse =
+    false,
   onDirections,
   onSeeItThen,
   onReturnToHistoricIssueHome,
@@ -5786,6 +5974,14 @@ function createMarker({
       element,
       historicIcon.emoji
     )
+
+
+    applyHistoricLayerSelectionPulse({
+      element,
+
+      active:
+        historicLayerPulse,
+    })
   }
   else if (
     newsEmoji
@@ -7742,6 +7938,16 @@ function MapPins({
     )
 
 
+  const historicLayerPulseRef =
+    useRef({
+      layerId:
+        '',
+
+      pulseUntil:
+        0,
+    })
+
+
   const ttcRouteArtifactsRef =
     useRef(
       []
@@ -7792,54 +7998,82 @@ function MapPins({
     )
 
 
-  const historicCollectionActive =
+  const historicModeActive =
     activePinFilter ===
-      'historic' &&
-    (
-      historicIssueFilter !==
-        'all' ||
-      historicCategoryFilter !==
-        'all' ||
-      historicLayerFilter !==
-        'all'
-    )
+      'historic'
 
 
-  // When a Historic collection is open, changing the historical
-  // basemap must not rebuild its markers. The collection owns the
-  // pins; SEE IT THEN only changes the map underneath them.
+  useEffect(
+    () => {
+      if (
+        activePinFilter ===
+          'historic' &&
+        historicLayerFilter !==
+          'all'
+      ) {
+        historicLayerPulseRef.current = {
+          layerId:
+            historicLayerFilter,
+
+          pulseUntil:
+            Date.now() +
+            8000,
+        }
+
+        return
+      }
+
+
+      historicLayerPulseRef.current = {
+        layerId:
+          '',
+
+        pulseUntil:
+          0,
+      }
+    },
+    [
+      activePinFilter,
+      historicLayerFilter,
+    ]
+  )
+
+
+  // Historic pins belong to the selected story collection, not to the
+  // basemap year. SEE IT THEN may swap historical imagery underneath
+  // them, but it must never make the story markers disappear.
   const markerSelectedLayerKey =
-    historicCollectionActive
-      ? 'historic-collection'
+    historicModeActive
+      ? 'historic-persistent'
       : `${selectedLayer?.layerType || ''}:${selectedLayer?.year || ''}`
 
 
   const markerSelectedPinKey =
-    historicCollectionActive
+    historicModeActive
       ? ''
       : selectedPinId
 
 
   const markerViewportRevision =
-    historicCollectionActive
+    historicModeActive
       ? 0
       : viewportRevision
 
 
   const markerActivityRevision =
-    historicCollectionActive
+    historicModeActive
       ? 0
       : activityRevision
 
 
   const markerServerNewsItems =
-    historicCollectionActive
+    historicModeActive
       ? null
       : serverNewsItems
 
 
   const markerServerNewItems =
-    historicCollectionActive
+    historicModeActive
       ? null
       : serverNewItems
 
@@ -8082,6 +8316,11 @@ function MapPins({
             loadPublishedNewEndpoint(
               PUBLISHED_NEW_SPORTS_ENDPOINT,
               'Published NEW sports'
+            ),
+
+            loadPublishedNewEndpoint(
+              PUBLISHED_NEW_REAL_ESTATE_ENDPOINT,
+              'Published NEW real estate'
             ),
           ])
 
@@ -8430,32 +8669,8 @@ function MapPins({
                 historicLayerFilter
           )
           .filter(
-            (pin) => {
-              if (
-                historicIssueFilter !==
-                  'all' ||
-                historicCategoryFilter !==
-                  'all' ||
-                historicLayerFilter !==
-                  'all'
-              ) {
-                return true
-              }
-
-
-              if (
-                landingLayer
-              ) {
-                return true
-              }
-
-
-              return historicPinIsVisible({
-                pin,
-                city,
-                selectedLayer,
-              })
-            }
+            () =>
+              true
           )
           .map(
             (pin) => {
@@ -8699,68 +8914,54 @@ function MapPins({
     }
 
 
-    const renderedHistoricStacks =
-      new Set()
-
-
-    const renderExpandedHistoricStack =
-      (
-        group
-      ) => {
-        const offsets =
-          getHistoricStackOffsets(
-            group.length
-          )
-
-
-        group.forEach(
-          (
-            {
-              pin,
-              pinType,
-            },
-            groupIndex
-          ) => {
-            const marker =
-              createMarker({
-                map,
-                pin,
-                pinType,
-                markerOffset:
-                  offsets[
-                    groupIndex
-                  ] ||
-                  [0, 0],
-                city,
-                selectedLayer,
-                homeLayer,
-                historicIssueFilter,
-                historicCategoryFilter,
-                historicLayerFilter,
-                onDirections,
-                onSeeItThen,
-                onReturnToHistoricIssueHome,
-              })
-
-
-            if (
-              !marker
-            ) {
-              return
-            }
-
-
-            markersRef.current.push(
-              marker
-            )
-
-            markerByIdRef.current.set(
-              pin.id,
-              marker
-            )
+    if (
+      activePinFilter ===
+        'historic'
+    ) {
+      historicStackGroups.forEach(
+        (
+          group
+        ) => {
+          if (
+            group.length <=
+              1
+          ) {
+            return
           }
-        )
-      }
+
+
+          const offsets =
+            getHistoricStackOffsets(
+              group.length
+            )
+
+
+          group.forEach(
+            (
+              item,
+              index
+            ) => {
+              item.markerOffset =
+                offsets[
+                  index
+                ] ||
+                [0, 0]
+            }
+          )
+        }
+      )
+    }
+
+
+    const historicLayerPulseActive =
+      activePinFilter ===
+        'historic' &&
+      historicLayerFilter !==
+        'all' &&
+      historicLayerPulseRef.current.layerId ===
+        historicLayerFilter &&
+      Date.now() <
+        historicLayerPulseRef.current.pulseUntil
 
 
     visiblePins.forEach(
@@ -8771,99 +8972,6 @@ function MapPins({
       },
       visibleIndex
       ) => {
-        if (
-          pinType ===
-            'historic'
-        ) {
-          const stackKey =
-            getHistoricStackKey({
-              pin,
-              pinType,
-            })
-
-          const stackGroup =
-            stackKey
-              ? historicStackGroups.get(
-                  stackKey
-                )
-              : null
-
-
-          if (
-            stackGroup?.length >
-              1
-          ) {
-            if (
-              renderedHistoricStacks.has(
-                stackKey
-              )
-            ) {
-              return
-            }
-
-
-            renderedHistoricStacks.add(
-              stackKey
-            )
-
-
-            const selectedStoryInStack =
-              Boolean(
-                selectedPinId &&
-                stackGroup.some(
-                  (item) =>
-                    item?.pin?.id ===
-                    selectedPinId
-                )
-              )
-
-
-            if (
-              selectedStoryInStack
-            ) {
-              renderExpandedHistoricStack(
-                stackGroup
-              )
-
-              return
-            }
-
-
-            let stackMarker =
-              null
-
-
-            stackMarker =
-              createHistoricStackMarker({
-                map,
-                items:
-                  stackGroup,
-
-                onExpand:
-                  () => {
-                    stackMarker?.remove()
-
-                    renderExpandedHistoricStack(
-                      stackGroup
-                    )
-                  },
-              })
-
-
-            if (
-              stackMarker
-            ) {
-              markersRef.current.push(
-                stackMarker
-              )
-            }
-
-
-            return
-          }
-        }
-
-
         if (
           pinType ===
             'news' &&
@@ -9006,6 +9114,12 @@ function MapPins({
             historicIssueFilter,
             historicCategoryFilter,
             historicLayerFilter,
+
+            historicLayerPulse:
+              pinType ===
+                'historic' &&
+              historicLayerPulseActive,
+
             onDirections,
             onSeeItThen,
             onReturnToHistoricIssueHome,
@@ -9123,7 +9237,8 @@ function MapPins({
 
 
     if (
-      !historicCollectionActive
+      activePinFilter !==
+        'historic'
     ) {
       return
     }
@@ -9171,7 +9286,6 @@ function MapPins({
     newSubtypeFilter,
     selectedLayer?.year,
     selectedLayer?.layerType,
-    historicCollectionActive,
   ])
 
 

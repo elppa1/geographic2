@@ -6,6 +6,12 @@ import {
   PINS,
 } from '../content/pins.js'
 
+import {
+  getHistoricItems,
+  getNewsItems,
+  getNewItems,
+} from '../admin/adminStore.js'
+
 
 const TORONTO_BOUNDS = {
   south:
@@ -78,26 +84,129 @@ function SearchControl({
         .trim()
 
 
-    return PINS
+    const searchablePins = [
+      ...PINS.map(
+        (pin) => ({
+          pin,
+
+          pinType:
+            pin.type ||
+            pin.kind ||
+            'historic',
+        })
+      ),
+
+      ...getHistoricItems()
+        .map(
+          (pin) => ({
+            pin,
+
+            pinType:
+              'historic',
+          })
+        ),
+
+      ...getNewItems()
+        .map(
+          (pin) => ({
+            pin,
+
+            pinType:
+              'new',
+          })
+        ),
+
+      ...getNewsItems()
+        .map(
+          (pin) => ({
+            pin,
+
+            pinType:
+              'news',
+          })
+        ),
+    ]
+
+
+    const seenIds =
+      new Set()
+
+
+    return searchablePins
       .filter(
-        (pin) =>
-          pin.city === cityKey &&
-          pin.active !== false
+        ({
+          pin,
+        }) =>
+          pin &&
+          (
+            pin.city ||
+            'toronto'
+          ) ===
+            cityKey &&
+          pin.active !==
+            false
       )
       .filter(
-        (pin) => {
+        ({
+          pin,
+        }) => {
+          const id =
+            String(
+              pin.id ||
+              ''
+            )
+
+
+          if (
+            id &&
+            seenIds.has(
+              id
+            )
+          ) {
+            return false
+          }
+
+
+          if (
+            id
+          ) {
+            seenIds.add(
+              id
+            )
+          }
+
+
+          return true
+        }
+      )
+      .filter(
+        ({
+          pin,
+        }) => {
           const searchableText =
             [
               pin.title,
               pin.description,
+              pin.location,
+              pin.intersection,
               pin.year,
+              pin.startYear,
+              pin.endYear,
+              pin.eventDate,
               pin.kind,
+              pin.type,
+              pin.newType,
+              pin.category,
+              pin.issueSection,
+              pin.venue,
               pin.source,
             ]
               .filter(
                 Boolean
               )
-              .join(' ')
+              .join(
+                ' '
+              )
               .toLowerCase()
 
 
@@ -106,12 +215,30 @@ function SearchControl({
           )
         }
       )
+      .filter(
+        ({
+          pin,
+        }) =>
+          Number.isFinite(
+            Number(
+              pin.longitude
+            )
+          ) &&
+          Number.isFinite(
+            Number(
+              pin.latitude
+            )
+          )
+      )
       .slice(
         0,
         5
       )
       .map(
-        (pin) => ({
+        ({
+          pin,
+          pinType,
+        }) => ({
           id:
             pin.id,
 
@@ -120,13 +247,18 @@ function SearchControl({
 
           subtitle:
             [
-              pin.year,
-              pin.kind,
+              pin.year ||
+                pin.eventDate,
+              pin.category ||
+                pin.kind ||
+                pin.newType,
             ]
               .filter(
                 Boolean
               )
-              .join(' · '),
+              .join(
+                ' · '
+              ),
 
           description:
             pin.description,
@@ -152,6 +284,12 @@ function SearchControl({
 
           type:
             'geographic',
+
+          pinType,
+
+          newSubtype:
+            pin.newType ||
+            '',
 
           pin,
         })

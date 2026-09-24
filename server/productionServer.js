@@ -71,6 +71,10 @@ import {
 } from './feeds/toronto/new/sports.js'
 
 import {
+  torontoNewRealEstateFeed,
+} from './feeds/toronto/new/realEstate.js'
+
+import {
   torontoHistoricFeed,
 } from './feeds/toronto/historic.js'
 
@@ -1373,6 +1377,7 @@ const plugins = [
   torontoNewDevelopmentFeed(),
   torontoNewEventsFeed(),
   torontoNewSportsFeed(),
+  torontoNewRealEstateFeed(),
   torontoHistoricFeed(),
 ]
 
