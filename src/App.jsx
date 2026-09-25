@@ -2059,22 +2059,72 @@ function GeographicApp() {
               EVENTS
             </button>
 
-            <button
-              type="button"
+            <select
               className={
-                newSubtypeFilter ===
-                  'sports'
+                String(
+                  newSubtypeFilter ||
+                  ''
+                )
+                  .startsWith(
+                    'real-estate'
+                  )
                   ? 'content-subfilter content-subfilter-active'
                   : 'content-subfilter'
               }
-              onClick={() =>
+              value={
+                String(
+                  newSubtypeFilter ||
+                  ''
+                )
+                  .startsWith(
+                    'real-estate'
+                  )
+                  ? newSubtypeFilter
+                  : ''
+              }
+              onChange={(event) =>
                 setNewSubtypeFilter(
-                  'sports'
+                  event.target.value
                 )
               }
+              aria-label="Real Estate filter"
+              title="REAL ESTATE"
             >
-              SPORTS
-            </button>
+              <option
+                value=""
+                disabled
+              >
+                REAL ESTATE ▾
+              </option>
+
+              <option value="real-estate:all">
+                ALL REAL ESTATE
+              </option>
+
+              <option value="real-estate:condo">
+                CONDOS
+              </option>
+
+              <option value="real-estate:house">
+                HOUSES
+              </option>
+
+              <option value="real-estate:rental">
+                RENTALS
+              </option>
+
+              <option value="real-estate:commercial">
+                COMMERCIAL
+              </option>
+
+              <option value="real-estate:land">
+                LAND
+              </option>
+
+              <option value="real-estate:other">
+                OTHER
+              </option>
+            </select>
           </div>
         )}
 
