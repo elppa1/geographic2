@@ -1451,7 +1451,7 @@ const EMPTY_NEW = {
     'new',
 
   category:
-    'development',
+    'store',
 
   expiresAt:
     '',
@@ -2912,14 +2912,6 @@ function newRecordMatchesType(
   record,
   filter
 ) {
-  if (
-    filter ===
-    'all'
-  ) {
-    return true
-  }
-
-
   const category =
     String(
       record.category ||
@@ -2937,6 +2929,25 @@ function newRecordMatchesType(
       .toLowerCase()
 
 
+  const isDevelopment =
+    explicitType ===
+      'development' ||
+    (
+      !explicitType &&
+      NEW_DEVELOPMENT_CATEGORIES.includes(
+        category
+      )
+    )
+
+
+  if (
+    filter ===
+      'all'
+  ) {
+    return !isDevelopment
+  }
+
+
   if (
     explicitType
   ) {
@@ -2949,7 +2960,7 @@ function newRecordMatchesType(
 
   if (
     filter ===
-    'business'
+      'business'
   ) {
     return NEW_BUSINESS_CATEGORIES.includes(
       category
@@ -2959,17 +2970,7 @@ function newRecordMatchesType(
 
   if (
     filter ===
-    'development'
-  ) {
-    return NEW_DEVELOPMENT_CATEGORIES.includes(
-      category
-    )
-  }
-
-
-  if (
-    filter ===
-    'events'
+      'events'
   ) {
     return NEW_EVENT_CATEGORIES.includes(
       category
@@ -2979,7 +2980,7 @@ function newRecordMatchesType(
 
   if (
     filter ===
-    'sports'
+      'sports'
   ) {
     return NEW_SPORTS_CATEGORIES.includes(
       category
@@ -2989,7 +2990,7 @@ function newRecordMatchesType(
 
   if (
     filter ===
-    'real-estate'
+      'real-estate'
   ) {
     return NEW_REAL_ESTATE_CATEGORIES.includes(
       category
@@ -2997,7 +2998,7 @@ function newRecordMatchesType(
   }
 
 
-  return true
+  return false
 }
 
 
@@ -6822,6 +6823,19 @@ function AdminRoom() {
             )
           }
         }
+        if (
+          tab ===
+            'new'
+        ) {
+          next =
+            next.filter(
+              (record) =>
+                newRecordMatchesType(
+                  record,
+                  newTypeFilter
+                )
+            )
+        }
 
 
         if (
@@ -7028,6 +7042,7 @@ function AdminRoom() {
         historicLastBatchIds,
         selectedHistoricCategoryId,
         selectedHistoricLayerId,
+        newTypeFilter,
       ]
     )
 
@@ -7337,121 +7352,194 @@ function AdminRoom() {
   const newTypeCounts =
     useMemo(
       () => {
+        const emptyCounts = {
+          all:
+            0,
+
+          business:
+            0,
+
+          'real-estate':
+            0,
+
+          events:
+            0,
+
+          sports:
+            0,
+        }
+
+
         if (
           tab !==
           'new'
         ) {
-          return {
-            all:
-              0,
-
-            development:
-              0,
-
-            business:
-              0,
-
-            events:
-              0,
-
-            sports:
-              0,
-
-            'real-estate':
-              0,
-          }
+          return emptyCounts
         }
 
 
         const dateFiltered =
-          reviewItems.filter(
-            (record) =>
-              reviewRecordMatchesRange({
-                record,
+          reviewItems
+            .filter(
+              (record) =>
+                reviewRecordMatchesRange({
+                  record,
 
-                tab,
+                  tab,
 
-                range:
-                  reviewRange,
-              })
-          )
-
-
-        const business =
-          dateFiltered.filter(
-            (record) =>
-              newRecordMatchesType(
-                record,
-                'business'
-              )
-          )
-            .length
-
-
-        const development =
-          dateFiltered.filter(
-            (record) =>
-              newRecordMatchesType(
-                record,
-                'development'
-              )
-          )
-            .length
-
-
-        const events =
-          dateFiltered.filter(
-            (record) =>
-              newRecordMatchesType(
-                record,
-                'events'
-              )
-          )
-            .length
-
-
-        const sports =
-          dateFiltered.filter(
-            (record) =>
-              newRecordMatchesType(
-                record,
-                'sports'
-              )
-          )
-            .length
-
-
-        const realEstate =
-          dateFiltered.filter(
-            (record) =>
-              newRecordMatchesType(
-                record,
-                'real-estate'
-              )
-          )
-            .length
+                  range:
+                    reviewRange,
+                })
+            )
+            .filter(
+              (record) =>
+                newRecordMatchesType(
+                  record,
+                  'all'
+                )
+            )
 
 
         return {
           all:
             dateFiltered.length,
 
-          development,
-
-          business,
-
-          events,
-
-          sports,
+          business:
+            dateFiltered.filter(
+              (record) =>
+                newRecordMatchesType(
+                  record,
+                  'business'
+                )
+            )
+              .length,
 
           'real-estate':
-            realEstate,
+            dateFiltered.filter(
+              (record) =>
+                newRecordMatchesType(
+                  record,
+                  'real-estate'
+                )
+            )
+              .length,
+
+          events:
+            dateFiltered.filter(
+              (record) =>
+                newRecordMatchesType(
+                  record,
+                  'events'
+                )
+            )
+              .length,
+
+          sports:
+            dateFiltered.filter(
+              (record) =>
+                newRecordMatchesType(
+                  record,
+                  'sports'
+                )
+            )
+              .length,
         }
       },
       [
         tab,
         reviewItems,
         reviewRange,
+      ]
+    )
+
+
+  const publishedNewTypeCounts =
+    useMemo(
+      () => {
+        const emptyCounts = {
+          all:
+            0,
+
+          business:
+            0,
+
+          'real-estate':
+            0,
+
+          events:
+            0,
+
+          sports:
+            0,
+        }
+
+
+        if (
+          tab !==
+          'new'
+        ) {
+          return emptyCounts
+        }
+
+
+        const visibleRecords =
+          sortedRecords.filter(
+            (record) =>
+              newRecordMatchesType(
+                record,
+                'all'
+              )
+          )
+
+
+        return {
+          all:
+            visibleRecords.length,
+
+          business:
+            visibleRecords.filter(
+              (record) =>
+                newRecordMatchesType(
+                  record,
+                  'business'
+                )
+            )
+              .length,
+
+          'real-estate':
+            visibleRecords.filter(
+              (record) =>
+                newRecordMatchesType(
+                  record,
+                  'real-estate'
+                )
+            )
+              .length,
+
+          events:
+            visibleRecords.filter(
+              (record) =>
+                newRecordMatchesType(
+                  record,
+                  'events'
+                )
+            )
+              .length,
+
+          sports:
+            visibleRecords.filter(
+              (record) =>
+                newRecordMatchesType(
+                  record,
+                  'sports'
+                )
+            )
+              .length,
+        }
+      },
+      [
+        tab,
+        sortedRecords,
       ]
     )
 
@@ -18568,108 +18656,70 @@ function AdminRoom() {
                     )}
 
 
-                    <div>
-                      <div
-                        style={{
-                          fontWeight:
-                            700,
+                    <div
+                      style={{
+                        display:
+                          'grid',
 
-                          marginBottom:
-                            '6px',
-                        }}
-                      >
-                        CATEGORIES
-                      </div>
+                        gridTemplateColumns:
+                          'minmax(0, 1fr) auto',
 
-                      <div
-                        style={{
-                          display:
-                            'grid',
+                        gap:
+                          '8px',
 
-                          gridTemplateColumns:
-                            'repeat(auto-fill, minmax(220px, 1fr))',
+                        alignItems:
+                          'end',
+                      }}
+                    >
+                      <label className="admin-field">
+                        <span>
+                          CATEGORY
+                        </span>
 
-                          gap:
-                            '8px',
-                        }}
-                      >
-                        <div
-                          style={{
-                            border:
-                              selectedHistoricCategoryKey
-                                ? '1px solid rgba(0,0,0,0.18)'
-                                : '2px solid currentColor',
-
-                            padding:
-                              '10px',
-                          }}
-                        >
-                          <button
-                            type="button"
-                            className="admin-cancel"
-                            onClick={() =>
+                        <select
+                          value={
+                            selectedHistoricCategoryId
+                          }
+                          onChange={
+                            (
+                              event
+                            ) =>
                               chooseHistoricCategoryForLibrary(
-                                ''
+                                event.target.value
                               )
-                            }
-                          >
-                            ALL CATEGORIES
-                          </button>
+                          }
+                        >
+                          <option value="">
+                            ALL CATEGORIES · {historicItems.length} PINS
+                          </option>
 
-                          <div
-                            className="admin-record-meta"
-                            style={{
-                              marginTop:
-                                '6px',
-                            }}
-                          >
-                            {
-                              historicItems.length
-                            } PINS
-                          </div>
-                        </div>
+                          {cityHistoricCategories.map(
+                            (
+                              category
+                            ) => {
+                              const categoryLayers =
+                                cityHistoricLayers.filter(
+                                  (layer) =>
+                                    layer.categoryId ===
+                                      category.id
+                                )
+                                  .length
 
-                        {cityHistoricCategories.map(
-                          (
-                            category
-                          ) => {
-                            const categoryLayers =
-                              cityHistoricLayers.filter(
-                                (layer) =>
-                                  layer.categoryId ===
-                                  category.id
-                              )
+                              const categoryPins =
+                                historicItems.filter(
+                                  (record) =>
+                                    record.historicCategoryId ===
+                                      category.id
+                                )
+                                  .length
 
-                            const categoryPins =
-                              historicItems.filter(
-                                (record) =>
-                                  record.historicCategoryId ===
+                              return (
+                                <option
+                                  key={
                                     category.id
-                              )
-
-                            return (
-                              <div
-                                key={
-                                  category.id
-                                }
-                                style={{
-                                  border:
-                                    selectedHistoricCategoryKey ===
-                                      category.id
-                                      ? '2px solid currentColor'
-                                      : '1px solid rgba(0,0,0,0.18)',
-
-                                  padding:
-                                    '10px',
-                                }}
-                              >
-                                <button
-                                  type="button"
-                                  className="admin-cancel"
-                                  onClick={() =>
-                                    chooseHistoricCategoryForLibrary(
-                                      category.id
-                                    )
+                                  }
+                                  value={
+                                    category.id
                                   }
                                 >
                                   {
@@ -18679,66 +18729,41 @@ function AdminRoom() {
                                     ).emoji
                                   } {
                                     category.title
-                                  }
-                                </button>
+                                  } · {categoryLayers} LAYERS · {categoryPins} PINS
+                                </option>
+                              )
+                            }
+                          )}
+                        </select>
+                      </label>
 
-                                <div
-                                  className="admin-record-meta"
-                                  style={{
-                                    marginTop:
-                                      '6px',
-                                  }}
-                                >
-                                  {String(
-                                    category.status ||
-                                    'draft'
-                                  )
-                                    .toUpperCase()}
-                                  {' · '}
-                                  {
-                                    categoryLayers.length
-                                  } LAYERS
-                                  {' · '}
-                                  {
-                                    categoryPins.length
-                                  } PINS
-                                </div>
 
-                                <div
-                                  className="admin-form-actions"
-                                  style={{
-                                    marginTop:
-                                      '8px',
-                                  }}
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      startEditHistoricCategory(
-                                        category
-                                      )
-                                    }
-                                  >
-                                    EDIT
-                                  </button>
+                      {selectedHistoricCategory && (
+                        <div className="admin-form-actions">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              startEditHistoricCategory(
+                                selectedHistoricCategory
+                              )
+                            }
+                          >
+                            EDIT
+                          </button>
 
-                                  <button
-                                    type="button"
-                                    className="admin-review-reject"
-                                    onClick={() =>
-                                      deleteHistoricCategoryDefinition(
-                                        category
-                                      )
-                                    }
-                                  >
-                                    DELETE
-                                  </button>
-                                </div>
-                              </div>
-                            )
-                          }
-                        )}
-                      </div>
+                          <button
+                            type="button"
+                            className="admin-review-reject"
+                            onClick={() =>
+                              deleteHistoricCategoryDefinition(
+                                selectedHistoricCategory
+                              )
+                            }
+                          >
+                            DELETE
+                          </button>
+                        </div>
+                      )}
                     </div>
 
 
@@ -18975,85 +19000,62 @@ function AdminRoom() {
                     )}
 
 
-                    <div>
-                      <div
-                        style={{
-                          fontWeight:
-                            700,
+                    <div
+                      style={{
+                        display:
+                          'grid',
 
-                          marginBottom:
-                            '6px',
-                        }}
-                      >
-                        LAYERS {
-                          selectedHistoricCategory
-                            ? `· ${selectedHistoricCategory.title}`
-                            : '· ALL CATEGORIES'
-                        }
-                      </div>
+                        gridTemplateColumns:
+                          'minmax(0, 1fr) auto',
 
-                      <div
-                        style={{
-                          display:
-                            'flex',
+                        gap:
+                          '8px',
 
-                          flexWrap:
-                            'wrap',
+                        alignItems:
+                          'end',
+                      }}
+                    >
+                      <label className="admin-field">
+                        <span>
+                          SUBCATEGORY / LAYER
+                        </span>
 
-                          gap:
-                            '8px',
-                        }}
-                      >
-                        <button
-                          type="button"
-                          className={
-                            selectedHistoricLayerKey
-                              ? 'admin-review-type-filter'
-                              : 'admin-review-type-filter admin-review-type-filter-active'
+                        <select
+                          value={
+                            selectedHistoricLayerId
                           }
-                          onClick={() =>
-                            chooseHistoricLayerForLibrary(
-                              ''
-                            )
+                          onChange={
+                            (
+                              event
+                            ) =>
+                              chooseHistoricLayerForLibrary(
+                                event.target.value
+                              )
                           }
                         >
-                          ALL LAYERS
-                        </button>
+                          <option value="">
+                            ALL LAYERS
+                          </option>
 
-                        {selectedCategoryHistoricLayers.map(
-                          (
-                            layer
-                          ) => {
-                            const layerPins =
-                              historicItems.filter(
-                                (record) =>
-                                  record.historicLayerId ===
-                                  layer.id
-                              )
-
-                            return (
-                              <div
-                                key={
-                                  layer.id
-                                }
-                                style={{
-                                  border:
-                                    selectedHistoricLayerKey ===
+                          {selectedCategoryHistoricLayers.map(
+                            (
+                              layer
+                            ) => {
+                              const layerPins =
+                                historicItems.filter(
+                                  (record) =>
+                                    record.historicLayerId ===
                                       layer.id
-                                      ? '2px solid currentColor'
-                                      : '1px solid rgba(0,0,0,0.18)',
+                                )
+                                  .length
 
-                                  padding:
-                                    '8px',
-                                }}
-                              >
-                                <button
-                                  type="button"
-                                  className="admin-cancel"
-                                  onClick={() =>
-                                    chooseHistoricLayerForLibrary(
-                                      layer.id
-                                    )
+                              return (
+                                <option
+                                  key={
+                                    layer.id
+                                  }
+                                  value={
+                                    layer.id
                                   }
                                 >
                                   {
@@ -19064,96 +19066,44 @@ function AdminRoom() {
                                     ).emoji
                                   } {
                                     layer.title
-                                  }
-                                </button>
+                                  } · {layerPins} PINS
+                                </option>
+                              )
+                            }
+                          )}
+                        </select>
+                      </label>
 
-                                <div
-                                  className="admin-record-meta"
-                                  style={{
-                                    marginTop:
-                                      '5px',
-                                  }}
-                                >
-                                  {String(
-                                    layer.status ||
-                                    'draft'
-                                  )
-                                    .toUpperCase()}
-                                  {' · '}
-                                  {
-                                    layerPins.length
-                                  } PINS
-                                </div>
 
-                                <div
-                                  className="admin-form-actions"
-                                  style={{
-                                    marginTop:
-                                      '6px',
-                                  }}
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (
-                                        layer.categoryId &&
-                                        layer.categoryId !==
-                                          selectedHistoricCategoryId
-                                      ) {
-                                        setSelectedHistoricCategoryId(
-                                          layer.categoryId
-                                        )
-                                      }
+                      {selectedHistoricLayer && (
+                        <div className="admin-form-actions">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              startEditHistoricLayer(
+                                selectedHistoricLayer
+                              )
+                            }
+                          >
+                            EDIT
+                          </button>
 
-                                      startEditHistoricLayer(
-                                        layer
-                                      )
-                                    }}
-                                  >
-                                    EDIT
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    className="admin-review-reject"
-                                    onClick={() =>
-                                      deleteHistoricLayerDefinition(
-                                        layer
-                                      )
-                                    }
-                                  >
-                                    DELETE
-                                  </button>
-                                </div>
-                              </div>
-                            )
-                          }
-                        )}
-                      </div>
+                          <button
+                            type="button"
+                            className="admin-review-reject"
+                            onClick={() =>
+                              deleteHistoricLayerDefinition(
+                                selectedHistoricLayer
+                              )
+                            }
+                          >
+                            DELETE
+                          </button>
+                        </div>
+                      )}
                     </div>
 
 
-                    <div
-                      style={{
-                        border:
-                          '2px solid currentColor',
-
-                        padding:
-                          '10px 12px',
-
-                        fontWeight:
-                          700,
-                      }}
-                    >
-                      VIEWING · {
-                        selectedHistoricCategory?.title ||
-                        'ALL CATEGORIES'
-                      } {
-                        selectedHistoricLayer
-                          ? `→ ${selectedHistoricLayer.title}`
-                          : ''
-                      }
-                    </div>
 
 
                     <div>
@@ -20010,33 +19960,6 @@ function AdminRoom() {
                         )
                     }
                   >
-                    <option value="development">
-                      DEVELOPMENT
-                    </option>
-
-                    <option value="store">
-                      STORE / BUSINESS
-                    </option>
-
-                    <option value="restaurant">
-                      RESTAURANT
-                    </option>
-
-                    <option value="construction">
-                      CONSTRUCTION
-                    </option>
-
-                    <option value="transit">
-                      TRANSIT
-                    </option>
-
-                    <option value="public-space">
-                      PUBLIC SPACE
-                    </option>
-
-                    <option value="housing">
-                      HOUSING
-                    </option>
 
                     <option value="event">
                       EVENT
@@ -21732,119 +21655,66 @@ function AdminRoom() {
               {tab ===
                 'new' && (
                 <div className="admin-review-type-filters">
-                  <button
-                    type="button"
-                    className={
-                      newTypeFilter ===
-                      'all'
-                        ? 'admin-review-type-filter admin-review-type-filter-active'
-                        : 'admin-review-type-filter'
-                    }
-                    onClick={() =>
-                      setNewTypeFilter(
-                        'all'
-                      )
-                    }
-                  >
-                    ALL
-                    <span>
-                      {
-                        newTypeCounts.all
-                      }
-                    </span>
-                  </button>
+                  {[
+                    [
+                      'all',
+                      'ALL',
+                    ],
 
+                    [
+                      'business',
+                      'BUSINESSES',
+                    ],
 
-                  <button
-                    type="button"
-                    className={
-                      newTypeFilter ===
-                      'development'
-                        ? 'admin-review-type-filter admin-review-type-filter-active'
-                        : 'admin-review-type-filter'
-                    }
-                    onClick={() =>
-                      setNewTypeFilter(
-                        'development'
-                      )
-                    }
-                  >
-                    DEVELOPMENTS
-                    <span>
-                      {
-                        newTypeCounts.development
-                      }
-                    </span>
-                  </button>
+                    [
+                      'real-estate',
+                      'REAL ESTATE',
+                    ],
 
+                    [
+                      'events',
+                      'EVENTS',
+                    ],
 
-                  <button
-                    type="button"
-                    className={
-                      newTypeFilter ===
-                      'business'
-                        ? 'admin-review-type-filter admin-review-type-filter-active'
-                        : 'admin-review-type-filter'
-                    }
-                    onClick={() =>
-                      setNewTypeFilter(
-                        'business'
-                      )
-                    }
-                  >
-                    BUSINESSES
-                    <span>
-                      {
-                        newTypeCounts.business
-                      }
-                    </span>
-                  </button>
+                    [
+                      'sports',
+                      'SPORTS',
+                    ],
+                  ].map(
+                    ([
+                      value,
+                      label,
+                    ]) => (
+                      <button
+                        type="button"
+                        className={
+                          newTypeFilter ===
+                          value
+                            ? 'admin-review-type-filter admin-review-type-filter-active'
+                            : 'admin-review-type-filter'
+                        }
+                        key={
+                          value
+                        }
+                        onClick={() =>
+                          setNewTypeFilter(
+                            value
+                          )
+                        }
+                      >
+                        {label}
 
-
-                  <button
-                    type="button"
-                    className={
-                      newTypeFilter ===
-                      'events'
-                        ? 'admin-review-type-filter admin-review-type-filter-active'
-                        : 'admin-review-type-filter'
-                    }
-                    onClick={() =>
-                      setNewTypeFilter(
-                        'events'
-                      )
-                    }
-                  >
-                    EVENTS
-                    <span>
-                      {
-                        newTypeCounts.events
-                      }
-                    </span>
-                  </button>
-
-
-                  <button
-                    type="button"
-                    className={
-                      newTypeFilter ===
-                      'sports'
-                        ? 'admin-review-type-filter admin-review-type-filter-active'
-                        : 'admin-review-type-filter'
-                    }
-                    onClick={() =>
-                      setNewTypeFilter(
-                        'sports'
-                      )
-                    }
-                  >
-                    SPORTS
-                    <span>
-                      {
-                        newTypeCounts.sports
-                      }
-                    </span>
-                  </button>
+                        <span>
+                          {
+                            newTypeCounts[
+                              value
+                            ] ||
+                            0
+                          }
+                        </span>
+                      </button>
+                    )
+                  )}
                 </div>
               )}
 
@@ -21914,81 +21784,6 @@ function AdminRoom() {
 
               {/* NEW STATUS */}
 
-              {tab ===
-                'new' && (
-                <div className="admin-review-type-filters">
-                  {[
-                    [
-                      'all',
-                      'ALL STATUS',
-                    ],
-
-                    [
-                      'proposed',
-                      'PROPOSED',
-                    ],
-
-                    [
-                      'approved',
-                      'APPROVED',
-                    ],
-
-                    [
-                      'construction',
-                      'CONSTRUCTION',
-                    ],
-
-                    [
-                      'cancelled',
-                      'CANCELLED',
-                    ],
-
-                    [
-                      'opening-soon',
-                      'OPENING SOON',
-                    ],
-
-                    [
-                      'open',
-                      'OPEN',
-                    ],
-                  ].map(
-                    ([
-                      value,
-                      label,
-                    ]) => (
-                      <button
-                        type="button"
-                        className={
-                          newStatusFilter ===
-                          value
-                            ? 'admin-review-type-filter admin-review-type-filter-active'
-                            : 'admin-review-type-filter'
-                        }
-                        key={
-                          value
-                        }
-                        onClick={() =>
-                          setNewStatusFilter(
-                            value
-                          )
-                        }
-                      >
-                        {label}
-
-                        <span>
-                          {
-                            newStatusCounts[
-                              value
-                            ] ||
-                            0
-                          }
-                        </span>
-                      </button>
-                    )
-                  )}
-                </div>
-              )}
 
 
               {/* DATE */}
@@ -22927,29 +22722,71 @@ function AdminRoom() {
                   </button>
 
 
-                  <button
-                    type="button"
-                    className={
-                      newTypeFilter ===
-                      'real-estate'
-                        ? 'admin-review-type-filter admin-review-type-filter-active'
-                        : 'admin-review-type-filter'
-                    }
-                    onClick={() =>
-                      setNewTypeFilter(
-                        'real-estate'
-                      )
-                    }
-                  >
-                    REAL ESTATE
-                    <span>
-                      {
-                        newTypeCounts[
-                          'real-estate'
-                        ]
-                      }
-                    </span>
-                  </button>
+                </div>
+              )}
+              {tab ===
+                'new' && (
+                <div className="admin-review-type-filters">
+                  {[
+                    [
+                      'all',
+                      'ALL',
+                    ],
+
+                    [
+                      'business',
+                      'BUSINESSES',
+                    ],
+
+                    [
+                      'real-estate',
+                      'REAL ESTATE',
+                    ],
+
+                    [
+                      'events',
+                      'EVENTS',
+                    ],
+
+                    [
+                      'sports',
+                      'SPORTS',
+                    ],
+                  ].map(
+                    ([
+                      value,
+                      label,
+                    ]) => (
+                      <button
+                        type="button"
+                        className={
+                          newTypeFilter ===
+                          value
+                            ? 'admin-review-type-filter admin-review-type-filter-active'
+                            : 'admin-review-type-filter'
+                        }
+                        key={
+                          value
+                        }
+                        onClick={() =>
+                          setNewTypeFilter(
+                            value
+                          )
+                        }
+                      >
+                        {label}
+
+                        <span>
+                          {
+                            publishedNewTypeCounts[
+                              value
+                            ] ||
+                            0
+                          }
+                        </span>
+                      </button>
+                    )
+                  )}
                 </div>
               )}
 
