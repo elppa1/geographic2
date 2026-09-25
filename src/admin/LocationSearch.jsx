@@ -4,7 +4,9 @@ import {
 } from 'react'
 
 import {
-  searchLocation,
+  parseIntersection,
+  searchIntersection,
+  searchPlaces,
 } from './locationSearchUtils.js'
 
 
@@ -21,6 +23,11 @@ import {
 //
 // The Admin can finish/correct the search text first.
 // A request is made only when FIND is pressed.
+//
+// IMPORTANT:
+// If the Admin types an intersection, intersection lookup wins.
+// We do NOT fall back to businesses / places for an intersection
+// query. This keeps Police / Fire pins on the requested crossing.
 //
 // ============================================================
 
@@ -171,16 +178,31 @@ function LocationSearch({
 
 
     try {
+      const intersection =
+        parseIntersection(
+          clean
+        )
+
+
       const nextResults =
-        await searchLocation({
-          value:
-            clean,
+        intersection
+          ? await searchIntersection({
+              intersection,
 
-          city,
+              city,
 
-          signal:
-            controller.signal,
-        })
+              signal:
+                controller.signal,
+            })
+          : await searchPlaces({
+              query:
+                clean,
+
+              city,
+
+              signal:
+                controller.signal,
+            })
 
 
       if (
@@ -201,7 +223,9 @@ function LocationSearch({
         0
       ) {
         setMessage(
-          'NO LOCATIONS FOUND'
+          intersection
+            ? 'INTERSECTION NOT FOUND'
+            : 'NO LOCATIONS FOUND'
         )
       }
     }
@@ -225,7 +249,11 @@ function LocationSearch({
 
 
       setMessage(
-        'LOCATION SEARCH UNAVAILABLE'
+        parseIntersection(
+          clean
+        )
+          ? 'INTERSECTION SEARCH UNAVAILABLE'
+          : 'LOCATION SEARCH UNAVAILABLE'
       )
     }
     finally {
