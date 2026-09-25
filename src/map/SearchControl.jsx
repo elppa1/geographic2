@@ -230,6 +230,39 @@ function SearchControl({
             )
           )
       )
+      .sort(
+        (
+          a,
+          b
+        ) => {
+          const priority = {
+            news:
+              0,
+
+            new:
+              1,
+
+            historic:
+              2,
+          }
+
+
+          return (
+            (
+              priority[
+                a.pinType
+              ] ??
+              3
+            ) -
+            (
+              priority[
+                b.pinType
+              ] ??
+              3
+            )
+          )
+        }
+      )
       .slice(
         0,
         5
@@ -977,6 +1010,42 @@ function SearchControl({
   }
 
 
+  const currentNewsResults =
+    geographicResults.filter(
+      (result) =>
+        result.pinType ===
+        'news'
+    )
+
+
+  const newResults =
+    geographicResults.filter(
+      (result) =>
+        result.pinType ===
+        'new'
+    )
+
+
+  const historicResults =
+    geographicResults.filter(
+      (result) =>
+        result.pinType ===
+        'historic'
+    )
+
+
+  const otherGeographicResults =
+    geographicResults.filter(
+      (result) =>
+        result.pinType !==
+          'news' &&
+        result.pinType !==
+          'new' &&
+        result.pinType !==
+          'historic'
+    )
+
+
   // ============================================================
   // RENDER
   // ============================================================
@@ -1050,14 +1119,56 @@ function SearchControl({
           </form>
 
 
-          {geographicResults.length > 0 && (
+          {placeResults.length > 0 && (
             <div className="search-results">
               <div className="search-section-title">
-                GEOGRAPHIC
+                LOCATION
               </div>
 
 
-              {geographicResults.map(
+              {placeResults.map(
+                (result) => (
+                  <button
+                    type="button"
+                    className="search-result"
+                    key={
+                      result.id
+                    }
+                    onClick={() =>
+                      selectResult(
+                        result
+                      )
+                    }
+                  >
+                    <span className="search-result-name">
+                      {
+                        result.name
+                      }
+                    </span>
+
+
+                    {result.subtitle && (
+                      <span className="search-result-subtitle">
+                        {
+                          result.subtitle
+                        }
+                      </span>
+                    )}
+                  </button>
+                )
+              )}
+            </div>
+          )}
+
+
+          {currentNewsResults.length > 0 && (
+            <div className="search-results">
+              <div className="search-section-title">
+                CURRENT NEWS
+              </div>
+
+
+              {currentNewsResults.map(
                 (result) => (
                   <button
                     type="button"
@@ -1101,14 +1212,14 @@ function SearchControl({
           )}
 
 
-          {placeResults.length > 0 && (
+          {newResults.length > 0 && (
             <div className="search-results">
               <div className="search-section-title">
-                PLACES
+                NEW
               </div>
 
 
-              {placeResults.map(
+              {newResults.map(
                 (result) => (
                   <button
                     type="button"
@@ -1133,6 +1244,117 @@ function SearchControl({
                       <span className="search-result-subtitle">
                         {
                           result.subtitle
+                        }
+                      </span>
+                    )}
+
+
+                    {result.description && (
+                      <span className="search-result-description">
+                        {
+                          result.description
+                        }
+                      </span>
+                    )}
+                  </button>
+                )
+              )}
+            </div>
+          )}
+
+
+          {historicResults.length > 0 && (
+            <div className="search-results">
+              <div className="search-section-title">
+                HISTORIC STORIES
+              </div>
+
+
+              {historicResults.map(
+                (result) => (
+                  <button
+                    type="button"
+                    className="search-result"
+                    key={
+                      result.id
+                    }
+                    onClick={() =>
+                      selectResult(
+                        result
+                      )
+                    }
+                  >
+                    <span className="search-result-name">
+                      {
+                        result.name
+                      }
+                    </span>
+
+
+                    {result.subtitle && (
+                      <span className="search-result-subtitle">
+                        {
+                          result.subtitle
+                        }
+                      </span>
+                    )}
+
+
+                    {result.description && (
+                      <span className="search-result-description">
+                        {
+                          result.description
+                        }
+                      </span>
+                    )}
+                  </button>
+                )
+              )}
+            </div>
+          )}
+
+
+          {otherGeographicResults.length > 0 && (
+            <div className="search-results">
+              <div className="search-section-title">
+                GEOGRAPHIC
+              </div>
+
+
+              {otherGeographicResults.map(
+                (result) => (
+                  <button
+                    type="button"
+                    className="search-result"
+                    key={
+                      result.id
+                    }
+                    onClick={() =>
+                      selectResult(
+                        result
+                      )
+                    }
+                  >
+                    <span className="search-result-name">
+                      {
+                        result.name
+                      }
+                    </span>
+
+
+                    {result.subtitle && (
+                      <span className="search-result-subtitle">
+                        {
+                          result.subtitle
+                        }
+                      </span>
+                    )}
+
+
+                    {result.description && (
+                      <span className="search-result-description">
+                        {
+                          result.description
                         }
                       </span>
                     )}
