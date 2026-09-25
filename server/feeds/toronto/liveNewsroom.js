@@ -1131,6 +1131,182 @@ async function addEvent({
 
 
 // ============================================================
+// FIRE NEWSROOM RULES
+// ============================================================
+//
+// Fire incidents are editorial leads, not disposable live-feed alerts.
+//
+// - An unpublished Fire incident stays pending until the editor acts.
+// - Ordinary CAD churn (units, description, area, etc.) does not create
+//   UPDATE cards.
+// - A higher alarm level is the only automatic Fire UPDATE trigger after
+//   publication.
+// - While still unpublished, the existing NEW card is refreshed in place.
+//
+// ============================================================
+
+function fireAlarmLevelNumber(
+  value
+) {
+  const match =
+    cleanText(
+      value
+    )
+      .match(
+        /\d+/
+      )
+
+
+  if (
+    !match
+  ) {
+    return 0
+  }
+
+
+  const level =
+    Number(
+      match[0]
+    )
+
+
+  return Number.isFinite(
+    level
+  )
+    ? level
+    : 0
+}
+
+
+function fireAlarmRaised({
+  previousRecord,
+  incomingRecord,
+}) {
+  return (
+    fireAlarmLevelNumber(
+      incomingRecord?.alarmLevel
+    ) >
+    fireAlarmLevelNumber(
+      previousRecord?.alarmLevel
+    )
+  )
+}
+
+
+function findPendingFireNewEvent(
+  externalId
+) {
+  return store.events.find(
+    (
+      event
+    ) =>
+      event.status ===
+        'pending' &&
+      event.sourceKey ===
+        'fire' &&
+      event.newsroomAction ===
+        'new' &&
+      event.externalId ===
+        externalId
+  ) ||
+  null
+}
+
+
+function refreshPendingFireNewEvent({
+  externalId,
+  record,
+  alarmRaised =
+    false,
+}) {
+  const index =
+    store.events.findIndex(
+      (
+        event
+      ) =>
+        event.status ===
+          'pending' &&
+        event.sourceKey ===
+          'fire' &&
+        event.newsroomAction ===
+          'new' &&
+        event.externalId ===
+          externalId
+    )
+
+
+  if (
+    index <
+      0
+  ) {
+    return false
+  }
+
+
+  const existingEvent =
+    store.events[
+      index
+    ]
+
+
+  store.events[
+    index
+  ] = {
+    ...existingEvent,
+    ...record,
+
+    id:
+      existingEvent.id,
+
+    serverQueueId:
+      existingEvent.serverQueueId ||
+      existingEvent.id,
+
+    sourceKey:
+      'fire',
+
+    newsroomAction:
+      'new',
+
+    reviewStatus:
+      'pending',
+
+    active:
+      false,
+
+    status:
+      'pending',
+
+    incomingRecord:
+      record,
+
+    changedFields:
+      alarmRaised
+        ? [
+            'alarmLevel',
+          ]
+        : (
+            existingEvent.changedFields ||
+            []
+          ),
+
+    queuedAt:
+      existingEvent.queuedAt,
+
+    receivedAt:
+      existingEvent.receivedAt ||
+      record.receivedAt ||
+      record.firstSeenAt ||
+      new Date()
+        .toISOString(),
+  }
+
+
+  return true
+}
+
+
+// ============================================================
 // SOURCE UPSERT
 // ============================================================
 
@@ -1193,6 +1369,32 @@ async function observeRecord({
     forceAction
 
 
+  const isFire =
+    sourceKey ===
+      'fire'
+
+
+  const pendingFireNewEvent =
+    isFire
+      ? findPendingFireNewEvent(
+          externalId
+        )
+      : null
+
+
+  const fireRaised =
+    isFire &&
+    existing
+      ? fireAlarmRaised({
+          previousRecord:
+            existing,
+
+          incomingRecord:
+            record,
+        })
+      : false
+
+
   if (
     !action
   ) {
@@ -1201,6 +1403,29 @@ async function observeRecord({
     ) {
       action =
         'new'
+    }
+    else if (
+      isFire
+    ) {
+      if (
+        existing.published ===
+          true
+      ) {
+        action =
+          fireRaised
+            ? 'update'
+            : 'seen'
+      }
+      else {
+        // An unpublished Fire incident must remain one approvable NEW card.
+        // If an older automatic-expiry bug removed that card, requeue it.
+        // A deliberate editor action such as REJECT still counts as final.
+        action =
+          pendingFireNewEvent ||
+          existing.lastEditorialAction
+            ? 'seen'
+            : 'new'
+      }
     }
     else if (
       previousFingerprint !==
@@ -1348,6 +1573,24 @@ async function observeRecord({
 
 
   if (
+    isFire &&
+    existing?.published !==
+      true &&
+    pendingFireNewEvent
+  ) {
+    refreshPendingFireNewEvent({
+      externalId,
+
+      record:
+        observed,
+
+      alarmRaised:
+        fireRaised,
+    })
+  }
+
+
+  if (
     action ===
       'new'
   ) {
@@ -1376,10 +1619,14 @@ async function observeRecord({
       incomingRecord:
         observed,
       changes:
-        changedFields(
-          existing,
-          record
-        ),
+        isFire
+          ? [
+              'alarmLevel',
+            ]
+          : changedFields(
+              existing,
+              record
+            ),
     })
   }
   else if (
@@ -2772,6 +3019,17 @@ async function resolveMissing({
     if (
       missingPolls <
         MISSING_POLLS_TO_RESOLVE
+    ) {
+      continue
+    }
+
+
+    // Fire newsroom cards are editorial leads. A Fire incident disappearing
+    // from Live CAD must never remove an unpublished approvable card, and a
+    // published Fire pin is already allowed to run to its normal NEWS expiry.
+    if (
+      sourceKey ===
+        'fire'
     ) {
       continue
     }
@@ -4284,6 +4542,8 @@ async function pendingEvents() {
         if (
           event.status !==
             'pending' ||
+          event.sourceKey ===
+            'fire' ||
           newsRecordIsCurrent(
             event
           )
