@@ -16,6 +16,7 @@ import {
   getHistoricCategories,
   getHistoricIssues,
   getHistoricLayers,
+  loadPublishedHistoricSnapshot,
 } from './admin/adminStore.js'
 
 import {
@@ -591,6 +592,22 @@ function GeographicApp() {
           refreshHistoricArchive
         )
       }
+    },
+    []
+  )
+
+
+  useEffect(
+    () => {
+      loadPublishedHistoricSnapshot()
+        .catch(
+          (error) => {
+            console.error(
+              'HISTORIC PUBLIC LOAD ERROR:',
+              error
+            )
+          }
+        )
     },
     []
   )
@@ -2042,72 +2059,22 @@ function GeographicApp() {
               EVENTS
             </button>
 
-            <select
+            <button
+              type="button"
               className={
-                String(
-                  newSubtypeFilter ||
-                  ''
-                )
-                  .startsWith(
-                    'real-estate'
-                  )
+                newSubtypeFilter ===
+                  'sports'
                   ? 'content-subfilter content-subfilter-active'
                   : 'content-subfilter'
               }
-              value={
-                String(
-                  newSubtypeFilter ||
-                  ''
-                )
-                  .startsWith(
-                    'real-estate'
-                  )
-                  ? newSubtypeFilter
-                  : ''
-              }
-              onChange={(event) =>
+              onClick={() =>
                 setNewSubtypeFilter(
-                  event.target.value
+                  'sports'
                 )
               }
-              aria-label="Real Estate filter"
-              title="REAL ESTATE"
             >
-              <option
-                value=""
-                disabled
-              >
-                REAL ESTATE ▾
-              </option>
-
-              <option value="real-estate:all">
-                ALL REAL ESTATE
-              </option>
-
-              <option value="real-estate:condo">
-                CONDOS
-              </option>
-
-              <option value="real-estate:house">
-                HOUSES
-              </option>
-
-              <option value="real-estate:rental">
-                RENTALS
-              </option>
-
-              <option value="real-estate:commercial">
-                COMMERCIAL
-              </option>
-
-              <option value="real-estate:land">
-                LAND
-              </option>
-
-              <option value="real-estate:other">
-                OTHER
-              </option>
-            </select>
+              SPORTS
+            </button>
           </div>
         )}
 
