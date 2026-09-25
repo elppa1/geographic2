@@ -5115,6 +5115,157 @@ function normalizeSourceUrl(
 
 
 // ============================================================
+// ADMIN VIDEO PREVIEW
+// ============================================================
+
+function getVideoEmbedUrl(
+  value
+) {
+  const href =
+    normalizeSourceUrl(
+      value
+    )
+
+
+  if (
+    !href
+  ) {
+    return ''
+  }
+
+
+  try {
+    const url =
+      new URL(
+        href
+      )
+
+
+    const host =
+      url.hostname
+        .toLowerCase()
+        .replace(
+          /^www\./,
+          ''
+        )
+
+
+    let youtubeId =
+      ''
+
+
+    if (
+      host ===
+        'youtu.be'
+    ) {
+      youtubeId =
+        url.pathname
+          .split(
+            '/'
+          )
+          .filter(
+            Boolean
+          )[0] ||
+        ''
+    }
+    else if (
+      host ===
+        'youtube.com' ||
+      host.endsWith(
+        '.youtube.com'
+      )
+    ) {
+      if (
+        url.pathname ===
+          '/watch'
+      ) {
+        youtubeId =
+          url.searchParams.get(
+            'v'
+          ) ||
+          ''
+      }
+      else {
+        youtubeId =
+          url.pathname.match(
+            /^\/(?:embed|shorts|live)\/([^/?#]+)/
+          )?.[1] ||
+          ''
+      }
+    }
+
+
+    if (
+      youtubeId
+    ) {
+      return (
+        'https://www.youtube.com/embed/' +
+        encodeURIComponent(
+          youtubeId
+        )
+      )
+    }
+
+
+    if (
+      host ===
+        'vimeo.com' ||
+      host.endsWith(
+        '.vimeo.com'
+      )
+    ) {
+      const vimeoId =
+        url.pathname
+          .split(
+            '/'
+          )
+          .filter(
+            Boolean
+          )
+          .find(
+            (part) =>
+              /^\d+$/.test(
+                part
+              )
+          ) ||
+        ''
+
+
+      if (
+        vimeoId
+      ) {
+        return (
+          'https://player.vimeo.com/video/' +
+          vimeoId
+        )
+      }
+    }
+  }
+  catch {
+    return ''
+  }
+
+
+  return ''
+}
+
+
+function isDirectVideoUrl(
+  value
+) {
+  const href =
+    normalizeSourceUrl(
+      value
+    )
+
+
+  return /\.(?:mp4|webm|ogg)(?:[?#].*)?$/i.test(
+    href
+  )
+}
+
+
+// ============================================================
 // TTC ROUTE STOPS
 // ============================================================
 
@@ -5204,6 +5355,11 @@ function normalizePinRecord(
     imageUrl:
       normalizeSourceUrl(
         record.imageUrl
+      ),
+
+    videoUrl:
+      normalizeSourceUrl(
+        record.videoUrl
       ),
 
     businessUrl:
@@ -14863,6 +15019,11 @@ function AdminRoom() {
           draft.imageUrl
         ),
 
+      videoUrl:
+        normalizeSourceUrl(
+          draft.videoUrl
+        ),
+
       longitude:
         isUsableCoordinate(
           draft.longitude
@@ -21083,6 +21244,241 @@ function AdminRoom() {
                   placeholder="Official website or Instagram"
                 />
               </label>
+            )}
+
+
+            {(
+              tab ===
+                'historic' ||
+              (
+                tab ===
+                  'new' &&
+                getNewServerSubtype(
+                  draft
+                ) ===
+                  'real-estate'
+              )
+            ) && (
+              <>
+                <div className="admin-field admin-field-wide">
+                  <span>
+                    IMAGE URL
+                  </span>
+
+                  <input
+                    type="url"
+                    value={
+                      draft.imageUrl ||
+                      ''
+                    }
+                    onChange={
+                      (event) =>
+                        updateDraft(
+                          'imageUrl',
+                          event.target.value
+                        )
+                    }
+                    placeholder="Paste direct image URL"
+                  />
+
+                  {draft.imageUrl && (
+                    <img
+                      key={
+                        draft.imageUrl
+                      }
+                      src={
+                        normalizeSourceUrl(
+                          draft.imageUrl
+                        )
+                      }
+                      alt={
+                        tab ===
+                          'historic'
+                          ? 'Historic preview'
+                          : 'Real estate preview'
+                      }
+                      loading="lazy"
+                      onError={
+                        (event) => {
+                          event.currentTarget.style.display =
+                            'none'
+                        }
+                      }
+                      style={{
+                        display:
+                          'block',
+
+                        width:
+                          '100%',
+
+                        maxWidth:
+                          '520px',
+
+                        maxHeight:
+                          '340px',
+
+                        objectFit:
+                          'contain',
+
+                        marginTop:
+                          '12px',
+
+                        borderRadius:
+                          '4px',
+                      }}
+                    />
+                  )}
+                </div>
+
+
+                <div className="admin-field admin-field-wide">
+                  <span>
+                    VIDEO URL
+                  </span>
+
+                  <input
+                    type="url"
+                    value={
+                      draft.videoUrl ||
+                      ''
+                    }
+                    onChange={
+                      (event) =>
+                        updateDraft(
+                          'videoUrl',
+                          event.target.value
+                        )
+                    }
+                    placeholder="Paste YouTube, Vimeo, MP4, WebM or OGG URL"
+                  />
+
+                  {draft.videoUrl &&
+                    getVideoEmbedUrl(
+                      draft.videoUrl
+                    ) && (
+                    <iframe
+                      key={
+                        draft.videoUrl
+                      }
+                      src={
+                        getVideoEmbedUrl(
+                          draft.videoUrl
+                        )
+                      }
+                      title={
+                        tab ===
+                          'historic'
+                          ? 'Historic video preview'
+                          : 'Real estate video preview'
+                      }
+                      loading="lazy"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                      style={{
+                        display:
+                          'block',
+
+                        width:
+                          '100%',
+
+                        maxWidth:
+                          '520px',
+
+                        aspectRatio:
+                          '16 / 9',
+
+                        marginTop:
+                          '12px',
+
+                        border:
+                          '0',
+
+                        borderRadius:
+                          '4px',
+                      }}
+                    />
+                  )}
+
+                  {draft.videoUrl &&
+                    !getVideoEmbedUrl(
+                      draft.videoUrl
+                    ) &&
+                    isDirectVideoUrl(
+                      draft.videoUrl
+                    ) && (
+                    <video
+                      key={
+                        draft.videoUrl
+                      }
+                      src={
+                        normalizeSourceUrl(
+                          draft.videoUrl
+                        )
+                      }
+                      controls
+                      preload="metadata"
+                      style={{
+                        display:
+                          'block',
+
+                        width:
+                          '100%',
+
+                        maxWidth:
+                          '520px',
+
+                        maxHeight:
+                          '340px',
+
+                        marginTop:
+                          '12px',
+
+                        borderRadius:
+                          '4px',
+                      }}
+                    />
+                  )}
+
+                  {draft.videoUrl &&
+                    !getVideoEmbedUrl(
+                      draft.videoUrl
+                    ) &&
+                    !isDirectVideoUrl(
+                      draft.videoUrl
+                    ) && (
+                    <a
+                      href={
+                        normalizeSourceUrl(
+                          draft.videoUrl
+                        )
+                      }
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        display:
+                          'inline-block',
+
+                        marginTop:
+                          '10px',
+
+                        fontSize:
+                          '12px',
+
+                        fontWeight:
+                          700,
+
+                        letterSpacing:
+                          '0.06em',
+
+                        textDecoration:
+                          'underline',
+                      }}
+                    >
+                      OPEN VIDEO ↗
+                    </a>
+                  )}
+                </div>
+              </>
             )}
 
 

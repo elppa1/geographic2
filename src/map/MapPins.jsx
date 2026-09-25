@@ -6676,8 +6676,52 @@ function createMarker({
 
 
     if (
-      pin.category
+      pin.category ||
+      (
+        pinType ===
+          'historic' &&
+        (
+          pin.historicCategoryTitle ||
+          pin.historicLayerTitle
+        )
+      )
     ) {
+      const categoryLabel =
+        String(
+          pinType ===
+            'historic'
+            ? (
+                pin.historicCategoryTitle ||
+                pin.category ||
+                ''
+              )
+            : (
+                pin.category ||
+                ''
+              )
+        )
+          .replace(
+            /-/g,
+            ' '
+          )
+          .toUpperCase()
+
+
+      const historicLayerLabel =
+        pinType ===
+          'historic'
+          ? String(
+              pin.historicLayerTitle ||
+              ''
+            )
+              .replace(
+                /-/g,
+                ' '
+              )
+              .toUpperCase()
+          : ''
+
+
       appendText({
         parent:
           popupContent,
@@ -6686,14 +6730,16 @@ function createMarker({
           'geographic-pin-category',
 
         text:
-          String(
-            pin.category
-          )
-            .replace(
-              /-/g,
-              ' '
+          [
+            categoryLabel,
+            historicLayerLabel,
+          ]
+            .filter(
+              Boolean
             )
-            .toUpperCase(),
+            .join(
+              ' · '
+            ),
       })
     }
 
@@ -8712,6 +8758,15 @@ function MapPins({
                   ...pin,
 
                   pinIcon,
+
+                  historicCategoryTitle:
+                    category?.title ||
+                    pin.category ||
+                    '',
+
+                  historicLayerTitle:
+                    layer?.title ||
+                    '',
                 },
 
                 pinType:
