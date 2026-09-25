@@ -420,20 +420,97 @@ export async function searchIntersection({
     })
 
 
-  const response =
-    await fetch(
-      `/api/geographic/location-search/intersection?${params.toString()}`,
-      {
-        signal,
+  const requestUrl =
+    `/api/geographic/location-search/intersection?${params.toString()}`
+
+
+  let response =
+    null
+
+
+  let lastError =
+    null
+
+
+  for (
+    let attempt = 0;
+    attempt < 2;
+    attempt++
+  ) {
+    try {
+      response =
+        await fetch(
+          requestUrl,
+          {
+            signal,
+          }
+        )
+
+
+      if (
+        response.ok
+      ) {
+        break
+      }
+
+
+      const retryable =
+        response.status === 502 ||
+        response.status === 503 ||
+        response.status === 504
+
+
+      if (
+        !retryable ||
+        attempt === 1
+      ) {
+        throw new Error(
+          `Intersection search unavailable: ${response.status}`
+        )
+      }
+    }
+    catch (
+      error
+    ) {
+      if (
+        error?.name ===
+          'AbortError'
+      ) {
+        throw error
+      }
+
+
+      lastError =
+        error
+
+
+      if (
+        attempt === 1
+      ) {
+        throw error
+      }
+    }
+
+
+    await new Promise(
+      (resolve) => {
+        setTimeout(
+          resolve,
+          350
+        )
       }
     )
+  }
 
 
   if (
-    !response.ok
+    !response?.ok
   ) {
-    throw new Error(
-      `Intersection search unavailable: ${response.status}`
+    throw (
+      lastError ||
+      new Error(
+        'Intersection search unavailable'
+      )
     )
   }
 

@@ -9,9 +9,9 @@
 //   /api/geographic/location-search/intersection
 //
 // Server:
-//   City of Toronto centreline intersections first
-//   Overpass as intersection fallback
-//   Nominatim for places and final intersection fallback
+//   Nominatim full-string intersection lookup first
+//   City of Toronto centreline lookup as a short fallback
+//   Overpass geometry as the final intersection fallback
 //
 // External requests stay server-side so the browser never calls
 // Overpass or Nominatim directly.
@@ -2859,39 +2859,72 @@ export function locationSearchApi() {
               }
 
 
+              const intersectionCacheKey =
+                (
+                  'intersection-final:' +
+                  [
+                    cleanIntersectionStreet(
+                      streetA
+                    )
+                      .toLowerCase(),
+
+                    cleanIntersectionStreet(
+                      streetB
+                    )
+                      .toLowerCase(),
+                  ]
+                    .sort()
+                    .join('|')
+                )
+
+
+              const cachedIntersection =
+                getLocationCache(
+                  intersectionCacheKey
+                )
+
+
+              if (
+                cachedIntersection !==
+                  null
+              ) {
+                sendLocationJson(
+                  res,
+                  200,
+                  {
+                    ok:
+                      true,
+
+                    elements:
+                      cachedIntersection,
+                  }
+                )
+
+                return
+              }
+
+
               let elements =
                 []
 
 
               // --------------------------------------------------
-              // 1. CITY OF TORONTO INTERSECTION DATA
+              // 1. FULL-STRING INTERSECTION GEOCODE
               // --------------------------------------------------
               //
-              // This is the authoritative Toronto source. Give it its
-              // own timeout. A failure here must NOT consume the entire
-              // fallback budget.
+              // Start with the complete street names exactly as parsed.
+              // This is the path that is actually succeeding in production.
+              // Do not make every Admin search wait on the City GIS service
+              // before trying the geocoder that already knows the crossing.
               //
               // --------------------------------------------------
 
               try {
-                const cityDeadline =
-                  Date.now() +
-                  4500
-
-
                 elements =
-                  await waitForSearch({
-                    promise:
-                      searchTorontoIntersection({
-                        streetA,
-                        streetB,
-                        deadline:
-                          cityDeadline,
-                      }),
-
-                    deadline:
-                      cityDeadline,
-
+                  await searchNominatimIntersection({
+                    streetA,
+                    streetB,
+                    searchOptions,
                     signal:
                       requestController.signal,
                   })
@@ -2908,7 +2941,7 @@ export function locationSearchApi() {
 
 
                 console.warn(
-                  'LOCATION SEARCH · TORONTO INTERSECTION FAILED, USING NOMINATIM:',
+                  'LOCATION SEARCH · NOMINATIM INTERSECTION FAILED, USING TORONTO DATA:',
                   String(
                     error?.message ||
                     error
@@ -2918,13 +2951,12 @@ export function locationSearchApi() {
 
 
               // --------------------------------------------------
-              // 2. FULL INTERSECTION GEOCODE
+              // 2. CITY OF TORONTO INTERSECTION DATA
               // --------------------------------------------------
               //
-              // Keep BOTH complete street names intact. Try normal
-              // intersection wording before geometry reconstruction.
-              // This also means & / and / at all resolve to the same
-              // server-side street pair.
+              // The production tests showed this upstream taking roughly
+              // four seconds before the working fallback ran. Keep it only
+              // as a short fallback so it can never stall every lookup.
               //
               // --------------------------------------------------
 
@@ -2933,11 +2965,24 @@ export function locationSearchApi() {
                   0
               ) {
                 try {
+                  const cityDeadline =
+                    Date.now() +
+                    1500
+
+
                   elements =
-                    await searchNominatimIntersection({
-                      streetA,
-                      streetB,
-                      searchOptions,
+                    await waitForSearch({
+                      promise:
+                        searchTorontoIntersection({
+                          streetA,
+                          streetB,
+                          deadline:
+                            cityDeadline,
+                        }),
+
+                      deadline:
+                        cityDeadline,
+
                       signal:
                         requestController.signal,
                     })
@@ -2954,7 +2999,7 @@ export function locationSearchApi() {
 
 
                   console.warn(
-                    'LOCATION SEARCH · NOMINATIM INTERSECTION FAILED, USING OVERPASS:',
+                    'LOCATION SEARCH · TORONTO INTERSECTION FAILED, USING OVERPASS:',
                     String(
                       error?.message ||
                       error
@@ -2966,11 +3011,6 @@ export function locationSearchApi() {
 
               // --------------------------------------------------
               // 3. OVERPASS GEOMETRY FALLBACK
-              // --------------------------------------------------
-              //
-              // Last resort only. It gets a fresh timeout instead of
-              // inheriting whatever time the earlier services consumed.
-              //
               // --------------------------------------------------
 
               if (
@@ -3032,6 +3072,17 @@ export function locationSearchApi() {
                     )
                   )
                 }
+              }
+
+
+              if (
+                elements.length >
+                  0
+              ) {
+                setLocationCache(
+                  intersectionCacheKey,
+                  elements
+                )
               }
 
 
