@@ -1231,6 +1231,164 @@ function nominatimResultMatchesIntersection(
 }
 
 
+async function searchNominatimIntersection({
+  streetA,
+  streetB,
+  searchOptions,
+  signal,
+}) {
+  const deadline =
+    Date.now() +
+    8000
+
+
+  const fallbackStreetA =
+    getIntersectionStreetSearch(
+      streetA
+    )
+      .name
+
+
+  const fallbackStreetB =
+    getIntersectionStreetSearch(
+      streetB
+    )
+      .name
+
+
+  const queries = [
+    `${fallbackStreetA} & ${fallbackStreetB}`,
+    `${fallbackStreetA} and ${fallbackStreetB}`,
+    `${fallbackStreetA} at ${fallbackStreetB}`,
+  ]
+
+
+  for (
+    const query
+    of queries
+  ) {
+    if (
+      remainingTime(
+        deadline,
+        0
+      ) <=
+        0
+    ) {
+      break
+    }
+
+
+    try {
+      const params =
+        makeNominatimParams({
+          ...searchOptions,
+
+          query,
+        })
+
+
+      const results =
+        await waitForSearch({
+          promise:
+            fetchNominatim(
+              params,
+              {
+                deadline,
+              }
+            ),
+
+          deadline,
+
+          signal,
+        })
+
+
+      const elements =
+        results
+          .filter(
+            (item) =>
+              Number.isFinite(
+                Number(
+                  item?.lon
+                )
+              ) &&
+              Number.isFinite(
+                Number(
+                  item?.lat
+                )
+              ) &&
+              nominatimResultMatchesIntersection(
+                item,
+                streetA,
+                streetB
+              )
+          )
+          .slice(
+            0,
+            6
+          )
+          .map(
+            (
+              item,
+              index
+            ) => ({
+              type:
+                'node',
+
+              id:
+                (
+                  item.osm_id ||
+                  item.place_id ||
+                  index
+                ),
+
+              lon:
+                Number(
+                  item.lon
+                ),
+
+              lat:
+                Number(
+                  item.lat
+                ),
+            })
+          )
+
+
+      if (
+        elements.length >
+          0
+      ) {
+        return elements
+      }
+    }
+    catch (
+      error
+    ) {
+      if (
+        error?.name ===
+          'AbortError'
+      ) {
+        throw error
+      }
+
+
+      console.warn(
+        'LOCATION SEARCH · NOMINATIM INTERSECTION ATTEMPT FAILED:',
+        query,
+        String(
+          error?.message ||
+          error
+        )
+      )
+    }
+  }
+
+
+  return []
+}
+
+
 async function searchTorontoIntersection({
   streetA,
   streetB,
@@ -2597,11 +2755,6 @@ export function locationSearchApi() {
             url.pathname ===
             '/api/geographic/location-search/intersection'
           ) {
-            const deadline =
-              Date.now() +
-              INTERSECTION_TIME_BUDGET_MS
-
-
             const requestController =
               new AbortController()
 
@@ -2710,17 +2863,34 @@ export function locationSearchApi() {
                 []
 
 
+              // --------------------------------------------------
+              // 1. CITY OF TORONTO INTERSECTION DATA
+              // --------------------------------------------------
+              //
+              // This is the authoritative Toronto source. Give it its
+              // own timeout. A failure here must NOT consume the entire
+              // fallback budget.
+              //
+              // --------------------------------------------------
+
               try {
+                const cityDeadline =
+                  Date.now() +
+                  4500
+
+
                 elements =
                   await waitForSearch({
                     promise:
                       searchTorontoIntersection({
                         streetA,
                         streetB,
-                        deadline,
+                        deadline:
+                          cityDeadline,
                       }),
 
-                    deadline,
+                    deadline:
+                      cityDeadline,
 
                     signal:
                       requestController.signal,
@@ -2729,8 +2899,16 @@ export function locationSearchApi() {
               catch (
                 error
               ) {
+                if (
+                  error?.name ===
+                    'AbortError'
+                ) {
+                  throw error
+                }
+
+
                 console.warn(
-                  'LOCATION SEARCH · TORONTO INTERSECTION FAILED, USING OVERPASS:',
+                  'LOCATION SEARCH · TORONTO INTERSECTION FAILED, USING NOMINATIM:',
                   String(
                     error?.message ||
                     error
@@ -2739,11 +2917,72 @@ export function locationSearchApi() {
               }
 
 
+              // --------------------------------------------------
+              // 2. FULL INTERSECTION GEOCODE
+              // --------------------------------------------------
+              //
+              // Keep BOTH complete street names intact. Try normal
+              // intersection wording before geometry reconstruction.
+              // This also means & / and / at all resolve to the same
+              // server-side street pair.
+              //
+              // --------------------------------------------------
+
               if (
                 elements.length ===
-                0
+                  0
               ) {
                 try {
+                  elements =
+                    await searchNominatimIntersection({
+                      streetA,
+                      streetB,
+                      searchOptions,
+                      signal:
+                        requestController.signal,
+                    })
+                }
+                catch (
+                  error
+                ) {
+                  if (
+                    error?.name ===
+                      'AbortError'
+                  ) {
+                    throw error
+                  }
+
+
+                  console.warn(
+                    'LOCATION SEARCH · NOMINATIM INTERSECTION FAILED, USING OVERPASS:',
+                    String(
+                      error?.message ||
+                      error
+                    )
+                  )
+                }
+              }
+
+
+              // --------------------------------------------------
+              // 3. OVERPASS GEOMETRY FALLBACK
+              // --------------------------------------------------
+              //
+              // Last resort only. It gets a fresh timeout instead of
+              // inheriting whatever time the earlier services consumed.
+              //
+              // --------------------------------------------------
+
+              if (
+                elements.length ===
+                  0
+              ) {
+                try {
+                  const overpassDeadline =
+                    Date.now() +
+                    5000
+
+
                   elements =
                     await waitForSearch({
                       promise:
@@ -2763,10 +3002,12 @@ export function locationSearchApi() {
                           south:
                             searchOptions.south,
 
-                          deadline,
+                          deadline:
+                            overpassDeadline,
                         }),
 
-                      deadline,
+                      deadline:
+                        overpassDeadline,
 
                       signal:
                         requestController.signal,
@@ -2775,8 +3016,16 @@ export function locationSearchApi() {
                 catch (
                   error
                 ) {
+                  if (
+                    error?.name ===
+                      'AbortError'
+                  ) {
+                    throw error
+                  }
+
+
                   console.warn(
-                    'LOCATION SEARCH · OVERPASS INTERSECTION FAILED, USING NOMINATIM:',
+                    'LOCATION SEARCH · OVERPASS INTERSECTION FAILED:',
                     String(
                       error?.message ||
                       error
@@ -2786,134 +3035,9 @@ export function locationSearchApi() {
               }
 
 
-              if (
-                elements.length ===
-                0
-              ) {
-                const fallbackStreetA =
-                  getIntersectionStreetSearch(
-                    streetA
-                  )
-                    .name
-
-
-                const fallbackStreetB =
-                  getIntersectionStreetSearch(
-                    streetB
-                  )
-                    .name
-
-
-                const ampersandParams =
-                  makeNominatimParams({
-                    ...searchOptions,
-
-                    query:
-                      `${fallbackStreetA} & ${fallbackStreetB}`,
-                  })
-
-
-                let results =
-                  await waitForSearch({
-                    promise:
-                      fetchNominatim(
-                        ampersandParams,
-                        {
-                          deadline,
-                        }
-                      ),
-
-                    deadline,
-
-                    signal:
-                      requestController.signal,
-                  })
-
-
-                if (
-                  results.length ===
-                  0
-                ) {
-                  const andParams =
-                    makeNominatimParams({
-                      ...searchOptions,
-
-                      query:
-                        `${fallbackStreetA} and ${fallbackStreetB}`,
-                    })
-
-
-                  results =
-                    await waitForSearch({
-                      promise:
-                        fetchNominatim(
-                          andParams,
-                          {
-                            deadline,
-                          }
-                        ),
-
-                      deadline,
-
-                      signal:
-                        requestController.signal,
-                    })
-                }
-
-
-                elements =
-                  results
-                    .filter(
-                      (item) =>
-                        Number.isFinite(
-                          Number(
-                            item?.lon
-                          )
-                        ) &&
-                        Number.isFinite(
-                          Number(
-                            item?.lat
-                          )
-                        ) &&
-                        nominatimResultMatchesIntersection(
-                          item,
-                          streetA,
-                          streetB
-                        )
-                    )
-                    .slice(
-                      0,
-                      6
-                    )
-                    .map(
-                      (
-                        item,
-                        index
-                      ) => ({
-                        type:
-                          'node',
-
-                        id:
-                          (
-                            item.osm_id ||
-                            item.place_id ||
-                            index
-                          ),
-
-                        lon:
-                          Number(
-                            item.lon
-                          ),
-
-                        lat:
-                          Number(
-                            item.lat
-                          ),
-                      })
-                    )
-              }
-
-
+              // External lookup failures are not a broken API response.
+              // Return an empty successful result so Admin can say
+              // INTERSECTION NOT FOUND instead of throwing a 502.
               sendLocationJson(
                 res,
                 200,
@@ -2946,7 +3070,7 @@ export function locationSearchApi() {
 
               sendLocationJson(
                 res,
-                502,
+                500,
                 {
                   ok:
                     false,
