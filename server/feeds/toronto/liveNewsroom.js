@@ -1668,6 +1668,332 @@ async function observeRecord({
 
 
 // ============================================================
+// TPS MISSING-PERSON RESOLUTION MATCHING
+// ============================================================
+//
+// TPS can publish a LOCATED / FOUND bulletin under a different externalId
+// from the original missing-person bulletin. The newsroom must resolve the
+// ORIGINAL missing-person story, not create an unrelated second story.
+//
+// Matching priority:
+//   1. same normalized TPS case / GO number in police source history
+//   2. same normalized TPS case / GO number in published NEWS history
+//
+// The incoming bulletin externalId is preserved as resolutionNoticeExternalId
+// while the newsroom event is rebound to the original missing-person
+// externalId so Admin can update / resolve the existing public pin.
+//
+// ============================================================
+
+function normalizePoliceCaseNumber(
+  value
+) {
+  const clean =
+    cleanText(
+      value
+    )
+      .toUpperCase()
+      .replace(
+        /^GO\s*/i,
+        ''
+      )
+      .replace(
+        /[^A-Z0-9]/g,
+        ''
+      )
+
+
+  return clean
+}
+
+
+function policeCaseNumberFromRecord(
+  record
+) {
+  const direct =
+    cleanText(
+      record?.caseNumber ||
+      record?.policeCaseNumber ||
+      record?.goNumber ||
+      record?.go ||
+      ''
+    )
+
+
+  if (
+    direct
+  ) {
+    return direct
+  }
+
+
+  const text =
+    cleanText(
+      [
+        record?.title,
+        record?.description,
+      ]
+        .filter(
+          Boolean
+        )
+        .join(
+          ' '
+        )
+    )
+
+
+  const goMatch =
+    text.match(
+      /\bGO\s*[-:#]?\s*([0-9]{6,12})\b/i
+    )
+
+
+  if (
+    goMatch?.[1]
+  ) {
+    return (
+      'GO' +
+      goMatch[1]
+    )
+  }
+
+
+  const caseMatch =
+    text.match(
+      /\b(?:case|occurrence)\s*(?:number|no\.?|#)?\s*[:#-]?\s*([A-Z0-9-]{6,20})\b/i
+    )
+
+
+  return caseMatch?.[1] ||
+    ''
+}
+
+
+function policeRecordIsMissingPersonResolution({
+  record,
+  rawAction =
+    '',
+}) {
+  if (
+    rawAction ===
+      'resolve'
+  ) {
+    return true
+  }
+
+
+  const category =
+    cleanText(
+      record?.category
+    )
+      .toLowerCase()
+
+
+  if (
+    category ===
+      'located' ||
+    category ===
+      'found'
+  ) {
+    return true
+  }
+
+
+  const text =
+    cleanText(
+      [
+        record?.title,
+        record?.description,
+      ]
+        .filter(
+          Boolean
+        )
+        .join(
+          ' '
+        )
+    )
+      .toLowerCase()
+
+
+  const resolutionLanguage =
+    /\b(?:located|found|has been located|has been found|safely located)\b/i
+      .test(
+        text
+      )
+
+
+  const missingPersonContext =
+    category ===
+      'missing-person' ||
+    category ===
+      'missing person' ||
+    category ===
+      'missing_person' ||
+    category ===
+      'missing' ||
+    /\bmissing\s+(?:person|man|woman|boy|girl|child|teen|teenager|youth|adult|senior)\b/i
+      .test(
+        text
+      )
+
+
+  return (
+    resolutionLanguage &&
+    missingPersonContext
+  )
+}
+
+
+function findPoliceMissingPersonResolutionTarget(
+  record
+) {
+  const requestedCaseNumber =
+    normalizePoliceCaseNumber(
+      policeCaseNumberFromRecord(
+        record
+      )
+    )
+
+
+  if (
+    !requestedCaseNumber
+  ) {
+    return null
+  }
+
+
+  const incomingExternalId =
+    cleanText(
+      record?.externalId
+    )
+
+
+  const sourceMatches =
+    Object.values(
+      store.sources?.police ||
+      {}
+    )
+      .filter(
+        (candidate) => {
+          const candidateExternalId =
+            cleanText(
+              candidate?.externalId
+            )
+
+
+          const candidateCaseNumber =
+            normalizePoliceCaseNumber(
+              policeCaseNumberFromRecord(
+                candidate
+              )
+            )
+
+
+          return (
+            candidateExternalId &&
+            candidateExternalId !==
+              incomingExternalId &&
+            candidateCaseNumber ===
+              requestedCaseNumber
+          )
+        }
+      )
+      .sort(
+        (a, b) => {
+          const publishedDifference =
+            Number(
+              b?.published ===
+                true
+            ) -
+            Number(
+              a?.published ===
+                true
+            )
+
+
+          if (
+            publishedDifference !==
+              0
+          ) {
+            return publishedDifference
+          }
+
+
+          return (
+            new Date(
+              b?.lastSeenAt ||
+              b?.firstSeenAt ||
+              0
+            )
+              .getTime() -
+            new Date(
+              a?.lastSeenAt ||
+              a?.firstSeenAt ||
+              0
+            )
+              .getTime()
+          )
+        }
+      )
+
+
+  if (
+    sourceMatches.length >
+      0
+  ) {
+    return sourceMatches[0]
+  }
+
+
+  const publishedMatches =
+    Object.values(
+      store.publishedNews ||
+      {}
+    )
+      .filter(
+        (candidate) => {
+          const candidateExternalId =
+            cleanText(
+              candidate?.externalId
+            )
+
+
+          const candidateCaseNumber =
+            normalizePoliceCaseNumber(
+              policeCaseNumberFromRecord(
+                candidate
+              )
+            )
+
+
+          return (
+            candidateExternalId &&
+            candidateExternalId !==
+              incomingExternalId &&
+            candidateCaseNumber ===
+              requestedCaseNumber
+          )
+        }
+      )
+      .sort(
+        (a, b) =>
+          Number(
+            b?.active !==
+              false
+          ) -
+          Number(
+            a?.active !==
+              false
+          )
+      )
+
+
+  return publishedMatches[0] ||
+    null
+}
+
+
+// ============================================================
 // PUBLIC TPS HOOK
 // ============================================================
 
@@ -1687,11 +2013,93 @@ export async function queueLiveNewsroomRecord({
       .toLowerCase()
 
 
+  const isPolice =
+    sourceKey ===
+      'police'
+
+
+  const isMissingPersonResolution =
+    isPolice &&
+    policeRecordIsMissingPersonResolution({
+      record,
+      rawAction,
+    })
+
+
+  if (
+    isMissingPersonResolution
+  ) {
+    await ensureLoaded()
+
+
+    const target =
+      findPoliceMissingPersonResolutionTarget(
+        record
+      )
+
+
+    if (
+      target?.externalId
+    ) {
+      const incomingExternalId =
+        cleanText(
+          record?.externalId
+        )
+
+
+      const reboundRecord = {
+        ...target,
+        ...record,
+
+        externalId:
+          target.externalId,
+
+        caseNumber:
+          policeCaseNumberFromRecord(
+            record
+          ) ||
+          target.caseNumber ||
+          target.policeCaseNumber ||
+          '',
+
+        targetExternalId:
+          target.externalId,
+
+        targetId:
+          target.id ||
+          '',
+
+        resolutionNoticeExternalId:
+          incomingExternalId &&
+          incomingExternalId !==
+            target.externalId
+            ? incomingExternalId
+            : (
+                record?.resolutionNoticeExternalId ||
+                ''
+              ),
+
+        resolutionReason:
+          record?.resolutionReason ||
+          'police-missing-person-located',
+      }
+
+
+      return observeRecord({
+        sourceKey,
+        record:
+          reboundRecord,
+        forceAction:
+          'resolve',
+      })
+    }
+  }
+
+
   const requestedAction =
     rawAction ===
       'resolve' ||
-    record?.category ===
-      'located'
+    isMissingPersonResolution
       ? 'resolve'
       : ''
 
