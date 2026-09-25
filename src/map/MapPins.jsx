@@ -1998,6 +1998,390 @@ function appendNewsImage({
 
 
 // ============================================================
+// HISTORIC VIDEO
+// ============================================================
+
+function getHistoricVideoPreview(
+  value
+) {
+  const videoUrl =
+    normalizeUrl(
+      value
+    )
+
+
+  if (
+    !videoUrl
+  ) {
+    return null
+  }
+
+
+  let parsedUrl
+
+
+  try {
+    parsedUrl =
+      new URL(
+        videoUrl
+      )
+  }
+  catch {
+    return {
+      type:
+        'link',
+
+      url:
+        videoUrl,
+    }
+  }
+
+
+  const host =
+    parsedUrl.hostname
+      .replace(
+        /^www\./,
+        ''
+      )
+      .toLowerCase()
+
+
+  let youtubeId =
+    ''
+
+
+  if (
+    host ===
+      'youtu.be'
+  ) {
+    youtubeId =
+      parsedUrl.pathname
+        .split(
+          '/'
+        )
+        .filter(
+          Boolean
+        )[0] ||
+      ''
+  }
+  else if (
+    host ===
+      'youtube.com' ||
+    host.endsWith(
+      '.youtube.com'
+    )
+  ) {
+    youtubeId =
+      parsedUrl.searchParams.get(
+        'v'
+      ) ||
+      ''
+
+
+    if (
+      !youtubeId
+    ) {
+      const pieces =
+        parsedUrl.pathname
+          .split(
+            '/'
+          )
+          .filter(
+            Boolean
+          )
+
+
+      if (
+        [
+          'embed',
+          'shorts',
+          'live',
+        ].includes(
+          pieces[0]
+        )
+      ) {
+        youtubeId =
+          pieces[1] ||
+          ''
+      }
+    }
+  }
+
+
+  if (
+    youtubeId
+  ) {
+    return {
+      type:
+        'iframe',
+
+      url:
+        (
+          'https://www.youtube.com/embed/' +
+          encodeURIComponent(
+            youtubeId
+          )
+        ),
+    }
+  }
+
+
+  if (
+    host ===
+      'vimeo.com' ||
+    host.endsWith(
+      '.vimeo.com'
+    )
+  ) {
+    const vimeoId =
+      parsedUrl.pathname
+        .split(
+          '/'
+        )
+        .filter(
+          Boolean
+        )
+        .reverse()
+        .find(
+          (piece) =>
+            /^\d+$/.test(
+              piece
+            )
+        ) ||
+      ''
+
+
+    if (
+      vimeoId
+    ) {
+      return {
+        type:
+          'iframe',
+
+        url:
+          (
+            'https://player.vimeo.com/video/' +
+            encodeURIComponent(
+              vimeoId
+            )
+          ),
+      }
+    }
+  }
+
+
+  if (
+    /\.(?:mp4|webm|ogg)(?:$|[?#])/i.test(
+      videoUrl
+    )
+  ) {
+    return {
+      type:
+        'video',
+
+      url:
+        videoUrl,
+    }
+  }
+
+
+  return {
+    type:
+      'link',
+
+    url:
+      videoUrl,
+  }
+}
+
+
+function appendHistoricVideo({
+  parent,
+  pin,
+}) {
+  const preview =
+    getHistoricVideoPreview(
+      pin?.videoUrl
+    )
+
+
+  if (
+    !preview
+  ) {
+    return
+  }
+
+
+  const compactMobileCard =
+    typeof window !==
+      'undefined' &&
+    window.matchMedia(
+      '(max-width: 700px)'
+    )
+      .matches
+
+
+  if (
+    preview.type ===
+      'iframe'
+  ) {
+    const iframe =
+      document.createElement(
+        'iframe'
+      )
+
+
+    iframe.src =
+      preview.url
+
+    iframe.title =
+      pin?.title
+        ? `${pin.title} video`
+        : 'Historic video'
+
+    iframe.loading =
+      'lazy'
+
+    iframe.allow =
+      (
+        'accelerometer; autoplay; clipboard-write; ' +
+        'encrypted-media; gyroscope; picture-in-picture; web-share'
+      )
+
+    iframe.allowFullscreen =
+      true
+
+    iframe.style.display =
+      'block'
+
+    iframe.style.width =
+      '100%'
+
+    iframe.style.height =
+      compactMobileCard
+        ? '130px'
+        : '180px'
+
+    iframe.style.border =
+      '0'
+
+    iframe.style.borderRadius =
+      '4px'
+
+    iframe.style.margin =
+      compactMobileCard
+        ? '6px 0'
+        : '10px 0'
+
+
+    parent.appendChild(
+      iframe
+    )
+
+    return
+  }
+
+
+  if (
+    preview.type ===
+      'video'
+  ) {
+    const video =
+      document.createElement(
+        'video'
+      )
+
+
+    video.src =
+      preview.url
+
+    video.controls =
+      true
+
+    video.preload =
+      'metadata'
+
+    video.playsInline =
+      true
+
+    video.style.display =
+      'block'
+
+    video.style.width =
+      '100%'
+
+    video.style.maxHeight =
+      compactMobileCard
+        ? '130px'
+        : '220px'
+
+    video.style.borderRadius =
+      '4px'
+
+    video.style.margin =
+      compactMobileCard
+        ? '6px 0'
+        : '10px 0'
+
+
+    parent.appendChild(
+      video
+    )
+
+    return
+  }
+
+
+  const shell =
+    document.createElement(
+      'div'
+    )
+
+  shell.className =
+    'geographic-pin-source'
+
+
+  const link =
+    document.createElement(
+      'a'
+    )
+
+  link.href =
+    preview.url
+
+  link.target =
+    '_blank'
+
+  link.rel =
+    'noopener noreferrer'
+
+  link.className =
+    'geographic-pin-source-link'
+
+  link.textContent =
+    'WATCH VIDEO ↗'
+
+  link.addEventListener(
+    'click',
+    (
+      event
+    ) => {
+      event.stopPropagation()
+    }
+  )
+
+
+  shell.appendChild(
+    link
+  )
+
+  parent.appendChild(
+    shell
+  )
+}
+
+
+// ============================================================
 // SOURCE / WEBSITE
 // ============================================================
 
@@ -6647,6 +7031,19 @@ function createMarker({
         'historic'
     ) {
       appendNewsImage({
+        parent:
+          popupContent,
+
+        pin,
+      })
+    }
+
+
+    if (
+      pinType ===
+        'historic'
+    ) {
+      appendHistoricVideo({
         parent:
           popupContent,
 
