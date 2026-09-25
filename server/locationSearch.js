@@ -473,7 +473,7 @@ function stripStreetSuffix(
   )
     .trim()
     .replace(
-      /\b(street|st|avenue|ave|road|rd|boulevard|blvd|drive|dr|lane|ln|court|ct|place|pl)\b\.?/gi,
+      /\s+(street|st|avenue|ave|road|rd|boulevard|blvd|drive|dr|lane|ln|court|ct|place|pl|crescent|cres|trail|trl|terrace|terr|parkway|pkwy|circle|cir|highway|hwy|expressway|expy|way|square|sq|gardens|garden|gdns|grove|grv|heights|hts|hill|path|row|gate|mews|close|cl)\.?$/i,
       ''
     )
     .replace(
@@ -509,7 +509,7 @@ function getStreetDirection(
 
   const match =
     clean.match(
-      /\s+(East|West|North|South|E|W|N|S)$/i
+      /\s+(East|West|North|South|E|W|N|S)\.?$/i
     )
 
 
@@ -550,6 +550,10 @@ function makeDirectionRegex(
       ''
     )
       .toLowerCase()
+      .replace(
+        /\./g,
+        ''
+      )
 
 
   if (
@@ -558,7 +562,7 @@ function makeDirectionRegex(
     clean ===
       'e'
   ) {
-    return '(East|E)'
+    return '(East|E\\.?)'
   }
 
 
@@ -568,7 +572,7 @@ function makeDirectionRegex(
     clean ===
       'w'
   ) {
-    return '(West|W)'
+    return '(West|W\\.?)'
   }
 
 
@@ -578,7 +582,7 @@ function makeDirectionRegex(
     clean ===
       'n'
   ) {
-    return '(North|N)'
+    return '(North|N\\.?)'
   }
 
 
@@ -588,11 +592,11 @@ function makeDirectionRegex(
     clean ===
       's'
   ) {
-    return '(South|S)'
+    return '(South|S\\.?)'
   }
 
 
-  return '(East|West|North|South|E|W|N|S)'
+  return '(East|West|North|South|E\\.?|W\\.?|N\\.?|S\\.?)'
 }
 
 
@@ -674,9 +678,14 @@ function makeStreetRegex(
 
   const streetType =
     (
-      '( (Street|St|Avenue|Ave|Road|Rd|' +
-      'Boulevard|Blvd|Drive|Dr|Lane|Ln|' +
-      'Court|Ct|Place|Pl))?'
+      '( (Street|St\\.?|Avenue|Ave\\.?|Road|Rd\\.?|' +
+      'Boulevard|Blvd\\.?|Drive|Dr\\.?|Lane|Ln\\.?|' +
+      'Court|Ct\\.?|Place|Pl\\.?|Crescent|Cres\\.?|' +
+      'Trail|Trl\\.?|Terrace|Terr\\.?|Parkway|Pkwy\\.?|' +
+      'Circle|Cir\\.?|Highway|Hwy\\.?|Expressway|Expy\\.?|' +
+      'Way|Square|Sq\\.?|Gardens|Garden|Gdns\\.?|' +
+      'Grove|Grv\\.?|Heights|Hts\\.?|Hill|Path|Row|' +
+      'Gate|Mews|Close|Cl\\.?))?'
     )
 
 
@@ -689,7 +698,7 @@ function makeStreetRegex(
           )
         )
       : (
-          '( (East|West|North|South|E|W|N|S))?'
+          '( (East|West|North|South|E\\.?|W\\.?|N\\.?|S\\.?))?'
         )
 
 
@@ -803,7 +812,198 @@ function getIntersectionStreetSearch(
 }
 
 
-function intersectionLookupToken(
+const STREET_TYPE_ALIASES =
+  new Map(
+    Object.entries({
+      street: 'street',
+      st: 'street',
+      avenue: 'avenue',
+      ave: 'avenue',
+      road: 'road',
+      rd: 'road',
+      boulevard: 'boulevard',
+      blvd: 'boulevard',
+      drive: 'drive',
+      dr: 'drive',
+      lane: 'lane',
+      ln: 'lane',
+      court: 'court',
+      ct: 'court',
+      place: 'place',
+      pl: 'place',
+      crescent: 'crescent',
+      cres: 'crescent',
+      trail: 'trail',
+      trl: 'trail',
+      terrace: 'terrace',
+      terr: 'terrace',
+      parkway: 'parkway',
+      pkwy: 'parkway',
+      circle: 'circle',
+      cir: 'circle',
+      highway: 'highway',
+      hwy: 'highway',
+      expressway: 'expressway',
+      expy: 'expressway',
+      way: 'way',
+      square: 'square',
+      sq: 'square',
+      gardens: 'gardens',
+      garden: 'gardens',
+      gdns: 'gardens',
+      grove: 'grove',
+      grv: 'grove',
+      heights: 'heights',
+      hts: 'heights',
+      hill: 'hill',
+      path: 'path',
+      row: 'row',
+      gate: 'gate',
+      mews: 'mews',
+      close: 'close',
+      cl: 'close',
+    })
+  )
+
+
+const DIRECTION_ALIASES =
+  new Map([
+    ['e', 'east'],
+    ['east', 'east'],
+    ['w', 'west'],
+    ['west', 'west'],
+    ['n', 'north'],
+    ['north', 'north'],
+    ['s', 'south'],
+    ['south', 'south'],
+  ])
+
+
+function streetWords(
+  value
+) {
+  return String(
+    value ||
+    ''
+  )
+    .toLowerCase()
+    .replace(
+      /[’']/g,
+      ''
+    )
+    .replace(
+      /\./g,
+      ''
+    )
+    .match(
+      /[a-z0-9]+/g
+    ) ||
+    []
+}
+
+
+function getStreetParts(
+  value
+) {
+  const words =
+    streetWords(
+      value
+    )
+
+
+  let direction =
+    ''
+
+
+  if (
+    words.length >
+      0
+  ) {
+    const maybeDirection =
+      DIRECTION_ALIASES.get(
+        words[
+          words.length -
+          1
+        ]
+      ) ||
+      ''
+
+
+    if (
+      maybeDirection
+    ) {
+      direction =
+        maybeDirection
+
+      words.pop()
+    }
+  }
+
+
+  let streetType =
+    ''
+
+
+  if (
+    words.length >
+      0
+  ) {
+    const maybeType =
+      STREET_TYPE_ALIASES.get(
+        words[
+          words.length -
+          1
+        ]
+      ) ||
+      ''
+
+
+    if (
+      maybeType
+    ) {
+      streetType =
+        maybeType
+
+      words.pop()
+    }
+  }
+
+
+  if (
+    words[0] ===
+      'st'
+  ) {
+    words[0] =
+      'saint'
+  }
+
+
+  if (
+    words[0] ===
+      'the' &&
+    words.length >
+      1
+  ) {
+    words.shift()
+  }
+
+
+  return {
+    core:
+      words,
+
+    coreText:
+      words.join(
+        ' '
+      ),
+
+    direction,
+    streetType,
+  }
+}
+
+
+function intersectionSearchTerms(
   value
 ) {
   const search =
@@ -812,57 +1012,25 @@ function intersectionLookupToken(
     )
 
 
-  const genericTokens =
-    new Set([
-      'the',
-      'street',
-      'st',
-      'avenue',
-      'ave',
-      'road',
-      'rd',
-      'boulevard',
-      'blvd',
-      'drive',
-      'dr',
-      'lane',
-      'ln',
-      'court',
-      'ct',
-      'place',
-      'pl',
-      'way',
-      'highway',
-      'hwy',
-      'route',
-      'parkway',
-      'expressway',
-      'north',
-      'south',
-      'east',
-      'west',
-      'n',
-      's',
-      'e',
-      'w',
-    ])
-
-
-  const tokens =
-    String(
-      search.name ||
-      value ||
-      ''
+  const parts =
+    getStreetParts(
+      search.name
     )
-      .toLowerCase()
-      .match(
-        /[a-z0-9]+/g
-      ) ||
-    []
 
 
-  const routeNumber =
-    tokens.find(
+  const useful =
+    parts.core
+      .filter(
+        (token) =>
+          token !==
+            'saint' &&
+          token !==
+            'the'
+      )
+
+
+  const numeric =
+    useful.find(
       (token) =>
         /\d/.test(
           token
@@ -871,39 +1039,195 @@ function intersectionLookupToken(
 
 
   if (
-    routeNumber
+    numeric
   ) {
-    return routeNumber
+    return [
+      numeric,
+    ]
   }
 
 
-  const useful =
-    tokens.filter(
-      (token) =>
-        !genericTokens.has(
-          token
-        )
+  return useful
+    .slice(
+      0,
+      3
+    )
+}
+
+
+function escapeArcSqlText(
+  value
+) {
+  return String(
+    value ||
+    ''
+  )
+    .replace(
+      /'/g,
+      "''"
+    )
+    .toUpperCase()
+}
+
+
+function splitIntersectionDescription(
+  value
+) {
+  return String(
+    value ||
+    ''
+  )
+    .trim()
+    .split(
+      /\s*\/\s*|\s+&\s+|\s+@\s+|\s+AT\s+|\s+AND\s+/i
+    )
+    .map(
+      (part) =>
+        part.trim()
+    )
+    .filter(
+      Boolean
+    )
+}
+
+
+function intersectionDescriptionMatches({
+  description,
+  streetA,
+  streetB,
+}) {
+  const parts =
+    splitIntersectionDescription(
+      description
     )
 
 
-  const candidates =
-    useful.length >
+  if (
+    parts.length <
+      2
+  ) {
+    // The City service has changed description formatting before.
+    // The SQL query already required the meaningful words from both
+    // streets, so do not throw away a plausible point solely because
+    // its display separator is unfamiliar.
+    return true
+  }
+
+
+  for (
+    let aIndex =
+      0;
+    aIndex <
+      parts.length;
+    aIndex++
+  ) {
+    for (
+      let bIndex =
+        0;
+      bIndex <
+        parts.length;
+      bIndex++
+    ) {
+      if (
+        aIndex ===
+          bIndex
+      ) {
+        continue
+      }
+
+
+      if (
+        streetNamesMatch(
+          parts[aIndex],
+          streetA
+        ) &&
+        streetNamesMatch(
+          parts[bIndex],
+          streetB
+        )
+      ) {
+        return true
+      }
+    }
+  }
+
+
+  return false
+}
+
+
+function textContainsStreetCore(
+  text,
+  requested
+) {
+  const haystack =
+    streetWords(
+      text
+    )
+
+
+  const requestedParts =
+    getStreetParts(
+      requested
+    )
+
+
+  if (
+    requestedParts.core.length ===
       0
-      ? useful
-      : tokens
+  ) {
+    return false
+  }
 
 
-  return candidates
-    .slice()
-    .sort(
-      (
-        a,
-        b
-      ) =>
-        b.length -
-        a.length
-    )[0] ||
-    ''
+  return requestedParts.core.every(
+    (token) => {
+      if (
+        token ===
+          'saint'
+      ) {
+        return (
+          haystack.includes(
+            'saint'
+          ) ||
+          haystack.includes(
+            'st'
+          )
+        )
+      }
+
+
+      return haystack.includes(
+        token
+      )
+    }
+  )
+}
+
+
+function nominatimResultMatchesIntersection(
+  item,
+  streetA,
+  streetB
+) {
+  const text =
+    (
+      item?.display_name ||
+      item?.name ||
+      ''
+    )
+
+
+  return (
+    textContainsStreetCore(
+      text,
+      streetA
+    ) &&
+    textContainsStreetCore(
+      text,
+      streetB
+    )
+  )
 }
 
 
@@ -912,21 +1236,23 @@ async function searchTorontoIntersection({
   streetB,
   deadline,
 }) {
-  const tokenA =
-    intersectionLookupToken(
+  const termsA =
+    intersectionSearchTerms(
       streetA
     )
 
 
-  const tokenB =
-    intersectionLookupToken(
+  const termsB =
+    intersectionSearchTerms(
       streetB
     )
 
 
   if (
-    !tokenA ||
-    !tokenB
+    termsA.length ===
+      0 ||
+    termsB.length ===
+      0
   ) {
     return []
   }
@@ -935,9 +1261,15 @@ async function searchTorontoIntersection({
   const cacheKey =
     (
       'toronto-intersection:' +
-      tokenA.toLowerCase() +
+      cleanIntersectionStreet(
+        streetA
+      )
+        .toLowerCase() +
       '|' +
-      tokenB.toLowerCase()
+      cleanIntersectionStreet(
+        streetB
+      )
+        .toLowerCase()
     )
 
 
@@ -971,21 +1303,27 @@ async function searchTorontoIntersection({
   const request =
     (
       async () => {
-        const upperA =
-          tokenA.toUpperCase()
-
-
-        const upperB =
-          tokenB.toUpperCase()
+        const clauses =
+          [
+            ...termsA,
+            ...termsB,
+          ]
+            .map(
+              (term) =>
+                (
+                  "UPPER(INTERSECTION_DESC) LIKE '%" +
+                  escapeArcSqlText(
+                    term
+                  ) +
+                  "%'")
+            )
 
 
         const params =
           new URLSearchParams({
             where:
-              (
-                `UPPER(INTERSECTION_DESC) LIKE '%${upperA}%'` +
-                ' AND ' +
-                `UPPER(INTERSECTION_DESC) LIKE '%${upperB}%'`
+              clauses.join(
+                ' AND '
               ),
 
             outFields:
@@ -1000,7 +1338,7 @@ async function searchTorontoIntersection({
               'false',
 
             resultRecordCount:
-              '12',
+              '100',
 
             f:
               'json',
@@ -1114,7 +1452,14 @@ async function searchTorontoIntersection({
                 ) &&
                 Number.isFinite(
                   item.lat
-                )
+                ) &&
+                intersectionDescriptionMatches({
+                  description:
+                    item.description,
+
+                  streetA,
+                  streetB,
+                })
             )
             .slice(
               0,
@@ -1444,36 +1789,22 @@ async function fetchOverpass(
 function normalizeStreetForMatch(
   value
 ) {
-  return String(
-    value ||
-    ''
-  )
-    .toLowerCase()
-    .replace(
-      /\./g,
-      ''
+  const parts =
+    getStreetParts(
+      value
     )
-    .replace(
-      /^st\s+/,
-      'saint '
-    )
-    .replace(
-      /\s+(east|west|north|south|e|w|n|s)$/,
-      ''
-    )
-    .replace(
-      /\s+(street|st|avenue|ave|road|rd|boulevard|blvd|drive|dr|lane|ln|court|ct|place|pl)$/,
-      ''
-    )
-    .replace(
-      /[^a-z0-9]+/g,
-      ' '
-    )
-    .replace(
-      /\s+/g,
-      ' '
-    )
-    .trim()
+
+
+  return {
+    core:
+      parts.coreText,
+
+    direction:
+      parts.direction,
+
+    streetType:
+      parts.streetType,
+  }
 }
 
 
@@ -1481,36 +1812,42 @@ function streetNamesMatch(
   actual,
   requested
 ) {
-  const actualClean =
+  const actualParts =
     normalizeStreetForMatch(
       actual
     )
 
 
-  const requestedClean =
+  const requestedParts =
     normalizeStreetForMatch(
       requested
     )
 
 
   if (
-    !actualClean ||
-    !requestedClean
+    !actualParts.core ||
+    !requestedParts.core ||
+    actualParts.core !==
+      requestedParts.core
   ) {
     return false
   }
 
 
-  return (
-    actualClean ===
-      requestedClean ||
-    actualClean.includes(
-      requestedClean
-    ) ||
-    requestedClean.includes(
-      actualClean
-    )
-  )
+  // E/W/N/S is part of the street identity when the source provides it.
+  // "W" and "West" normalize to the same value. If the requested street
+  // specifies a direction and the source also specifies one, they must match.
+  if (
+    requestedParts.direction &&
+    actualParts.direction &&
+    requestedParts.direction !==
+      actualParts.direction
+  ) {
+    return false
+  }
+
+
+  return true
 }
 
 
@@ -2537,6 +2874,11 @@ export function locationSearchApi() {
                           Number(
                             item?.lat
                           )
+                        ) &&
+                        nominatimResultMatchesIntersection(
+                          item,
+                          streetA,
+                          streetB
                         )
                     )
                     .slice(

@@ -73,7 +73,7 @@ export function stripStreetSuffix(
   )
     .trim()
     .replace(
-      /\b(street|st|avenue|ave|road|rd|boulevard|blvd|drive|dr|lane|ln|court|ct|place|pl)\b\.?/gi,
+      /\s+(street|st|avenue|ave|road|rd|boulevard|blvd|drive|dr|lane|ln|court|ct|place|pl|crescent|cres|trail|trl|terrace|terr|parkway|pkwy|circle|cir|highway|hwy|expressway|expy|way|square|sq|gardens|garden|gdns|grove|grv|heights|hts|hill|path|row|gate|mews|close|cl)\.?$/i,
       ''
     )
     .replace(
@@ -163,7 +163,7 @@ function makeDirectionRegex(
     clean === 'east' ||
     clean === 'e'
   ) {
-    return '(East|E)'
+    return '(East|E\\.?)'
   }
 
 
@@ -171,7 +171,7 @@ function makeDirectionRegex(
     clean === 'west' ||
     clean === 'w'
   ) {
-    return '(West|W)'
+    return '(West|W\\.?)'
   }
 
 
@@ -179,7 +179,7 @@ function makeDirectionRegex(
     clean === 'north' ||
     clean === 'n'
   ) {
-    return '(North|N)'
+    return '(North|N\\.?)'
   }
 
 
@@ -187,12 +187,12 @@ function makeDirectionRegex(
     clean === 'south' ||
     clean === 's'
   ) {
-    return '(South|S)'
+    return '(South|S\\.?)'
   }
 
 
   return (
-    '(East|West|North|South|E|W|N|S)'
+    '(East|West|North|South|E\\.?|W\\.?|N\\.?|S\\.?)'
   )
 }
 
@@ -263,9 +263,14 @@ export function makeStreetRegex(
 
   const streetType =
     (
-      '( (Street|St|Avenue|Ave|Road|Rd|' +
-      'Boulevard|Blvd|Drive|Dr|Lane|Ln|' +
-      'Court|Ct|Place|Pl))?'
+      '( (Street|St\\.?|Avenue|Ave\\.?|Road|Rd\\.?|' +
+      'Boulevard|Blvd\\.?|Drive|Dr\\.?|Lane|Ln\\.?|' +
+      'Court|Ct\\.?|Place|Pl\\.?|Crescent|Cres\\.?|' +
+      'Trail|Trl\\.?|Terrace|Terr\\.?|Parkway|Pkwy\\.?|' +
+      'Circle|Cir\\.?|Highway|Hwy\\.?|Expressway|Expy\\.?|' +
+      'Way|Square|Sq\\.?|Gardens|Garden|Gdns\\.?|' +
+      'Grove|Grv\\.?|Heights|Hts\\.?|Hill|Path|Row|' +
+      'Gate|Mews|Close|Cl\\.?))?'
     )
 
 
@@ -278,7 +283,7 @@ export function makeStreetRegex(
           )
         )
       : (
-          '( (East|West|North|South|E|W|N|S))?'
+          '( (East|West|North|South|E\\.?|W\\.?|N\\.?|S\\.?))?'
         )
 
 
