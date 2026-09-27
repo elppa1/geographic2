@@ -687,6 +687,12 @@ async function ensureLoaded() {
       )
     }
   }
+
+
+  // One-time catch-up for LOCATED / FOUND notices processed by an older
+  // server version that marked source history resolved but left the public
+  // Police pin active.
+  await reconcilePublishedPoliceMissingPersonResolutions()
 }
 
 
@@ -1993,6 +1999,169 @@ function findPoliceMissingPersonResolutionTarget(
 }
 
 
+async function archivePublishedPoliceMissingPersonPin(
+  record
+) {
+  await ensureLoaded()
+
+
+  const externalId =
+    cleanText(
+      record?.targetExternalId ||
+      record?.externalId
+    )
+
+
+  if (
+    !externalId
+  ) {
+    return null
+  }
+
+
+  const publishedRecord =
+    Object.values(
+      store.publishedNews ||
+      {}
+    )
+      .find(
+        (candidate) =>
+          cleanText(
+            candidate?.externalId
+          ) ===
+            externalId
+      ) ||
+    null
+
+
+  if (
+    !publishedRecord ||
+    publishedRecord.active ===
+      false
+  ) {
+    return publishedRecord
+  }
+
+
+  const resolvedAt =
+    cleanText(
+      record?.resolvedAt
+    ) ||
+    new Date()
+      .toISOString()
+
+
+  const resolutionReason =
+    cleanText(
+      record?.resolutionReason
+    ) ||
+    'police-missing-person-located'
+
+
+  return archivePublishedNewsRecord({
+    id:
+      publishedRecord.id ||
+      '',
+
+    externalId:
+      publishedRecord.externalId ||
+      externalId,
+
+    record: {
+      ...publishedRecord,
+      ...record,
+
+      id:
+        publishedRecord.id ||
+        record?.id ||
+        '',
+
+      externalId:
+        publishedRecord.externalId ||
+        externalId,
+
+      // Never move a public pin while resolving it.
+      longitude:
+        publishedRecord.longitude,
+
+      latitude:
+        publishedRecord.latitude,
+
+      searchedLongitude:
+        publishedRecord.searchedLongitude,
+
+      searchedLatitude:
+        publishedRecord.searchedLatitude,
+
+      pinPositionMode:
+        publishedRecord.pinPositionMode,
+
+      active:
+        false,
+
+      resolved:
+        true,
+
+      resolvedAt,
+
+      resolutionReason,
+    },
+
+    reason:
+      resolutionReason,
+  })
+}
+
+
+async function reconcilePublishedPoliceMissingPersonResolutions() {
+  const sourceRecords =
+    Object.values(
+      store.sources?.police ||
+      {}
+    )
+
+
+  for (
+    const sourceRecord
+    of sourceRecords
+  ) {
+    if (
+      sourceRecord?.resolved !==
+        true
+    ) {
+      continue
+    }
+
+
+    const resolutionReason =
+      cleanText(
+        sourceRecord?.resolutionReason
+      )
+        .toLowerCase()
+
+
+    if (
+      resolutionReason !==
+        'police-missing-person-located' &&
+      !policeRecordIsMissingPersonResolution({
+        record:
+          sourceRecord,
+
+        rawAction:
+          '',
+      })
+    ) {
+      continue
+    }
+
+
+    await archivePublishedPoliceMissingPersonPin(
+      sourceRecord
+    )
+  }
+}
+
+
 // ============================================================
 // PUBLIC TPS HOOK
 // ============================================================
@@ -2038,61 +2207,97 @@ export async function queueLiveNewsroomRecord({
       )
 
 
-    if (
+    const incomingExternalId =
+      cleanText(
+        record?.externalId
+      )
+
+
+    const resolvedAt =
+      cleanText(
+        record?.resolvedAt
+      ) ||
+      new Date()
+        .toISOString()
+
+
+    const resolutionRecord =
       target?.externalId
-    ) {
-      const incomingExternalId =
-        cleanText(
-          record?.externalId
-        )
+        ? {
+            ...target,
+            ...record,
+
+            externalId:
+              target.externalId,
+
+            caseNumber:
+              policeCaseNumberFromRecord(
+                record
+              ) ||
+              target.caseNumber ||
+              target.policeCaseNumber ||
+              '',
+
+            targetExternalId:
+              target.externalId,
+
+            targetId:
+              target.id ||
+              '',
+
+            resolutionNoticeExternalId:
+              incomingExternalId &&
+              incomingExternalId !==
+                target.externalId
+                ? incomingExternalId
+                : (
+                    record?.resolutionNoticeExternalId ||
+                    ''
+                  ),
+
+            active:
+              false,
+
+            resolved:
+              true,
+
+            resolvedAt,
+
+            resolutionReason:
+              record?.resolutionReason ||
+              'police-missing-person-located',
+          }
+        : {
+            ...record,
+
+            active:
+              false,
+
+            resolved:
+              true,
+
+            resolvedAt,
+
+            resolutionReason:
+              record?.resolutionReason ||
+              'police-missing-person-located',
+          }
 
 
-      const reboundRecord = {
-        ...target,
-        ...record,
-
-        externalId:
-          target.externalId,
-
-        caseNumber:
-          policeCaseNumberFromRecord(
-            record
-          ) ||
-          target.caseNumber ||
-          target.policeCaseNumber ||
-          '',
-
-        targetExternalId:
-          target.externalId,
-
-        targetId:
-          target.id ||
-          '',
-
-        resolutionNoticeExternalId:
-          incomingExternalId &&
-          incomingExternalId !==
-            target.externalId
-            ? incomingExternalId
-            : (
-                record?.resolutionNoticeExternalId ||
-                ''
-              ),
-
-        resolutionReason:
-          record?.resolutionReason ||
-          'police-missing-person-located',
-      }
+    // TPS LOCATED / FOUND is authoritative. Remove the existing public pin
+    // immediately; the RESOLVE card remains only as an audit notice.
+    await archivePublishedPoliceMissingPersonPin(
+      resolutionRecord
+    )
 
 
-      return observeRecord({
-        sourceKey,
-        record:
-          reboundRecord,
-        forceAction:
-          'resolve',
-      })
-    }
+    return observeRecord({
+      sourceKey,
+      record:
+        resolutionRecord,
+      forceAction:
+        'resolve',
+    })
   }
 
 
@@ -5312,6 +5517,27 @@ async function acknowledgeEvents({
       const event
       of acknowledged
     ) {
+      // Backward compatibility for RESOLVE cards that were queued before
+      // automatic TPS located-person archiving was restored.
+      if (
+        event.sourceKey ===
+          'police' &&
+        event.newsroomAction ===
+          'resolve' &&
+        policeRecordIsMissingPersonResolution({
+          record:
+            event,
+
+          rawAction:
+            '',
+        })
+      ) {
+        await archivePublishedPoliceMissingPersonPin(
+          event
+        )
+      }
+
+
       await appendLedgerEvent({
         eventType:
           'editorial-action',
