@@ -39,7 +39,6 @@ import {
 
 import LocationSearch from './LocationSearch.jsx'
 import AdminPinMap from './AdminPinMap.jsx'
-import EventAdminCalendar from './EventAdminCalendar.jsx'
 
 import {
   searchLocation,
@@ -122,18 +121,6 @@ const PUBLISHED_NEW_BUSINESS_ARCHIVE_ENDPOINT =
   '/api/geographic/toronto/new/business/published/archive'
 
 
-const PUBLISHED_NEW_DEVELOPMENT_ENDPOINT =
-  '/api/geographic/toronto/new/development/published'
-
-
-const PUBLISHED_NEW_DEVELOPMENT_UPSERT_ENDPOINT =
-  '/api/geographic/toronto/new/development/published/upsert'
-
-
-const PUBLISHED_NEW_DEVELOPMENT_ARCHIVE_ENDPOINT =
-  '/api/geographic/toronto/new/development/published/archive'
-
-
 const PUBLISHED_NEW_EVENTS_ENDPOINT =
   '/api/geographic/toronto/new/events/published'
 
@@ -144,30 +131,6 @@ const PUBLISHED_NEW_EVENTS_UPSERT_ENDPOINT =
 
 const PUBLISHED_NEW_EVENTS_ARCHIVE_ENDPOINT =
   '/api/geographic/toronto/new/events/published/archive'
-
-
-const PUBLISHED_NEW_SPORTS_ENDPOINT =
-  '/api/geographic/toronto/new/sports/published'
-
-
-const PUBLISHED_NEW_SPORTS_UPSERT_ENDPOINT =
-  '/api/geographic/toronto/new/sports/published/upsert'
-
-
-const PUBLISHED_NEW_SPORTS_ARCHIVE_ENDPOINT =
-  '/api/geographic/toronto/new/sports/published/archive'
-
-
-const PUBLISHED_NEW_REAL_ESTATE_ENDPOINT =
-  '/api/geographic/toronto/new/real-estate/published'
-
-
-const PUBLISHED_NEW_REAL_ESTATE_UPSERT_ENDPOINT =
-  '/api/geographic/toronto/new/real-estate/published/upsert'
-
-
-const PUBLISHED_NEW_REAL_ESTATE_ARCHIVE_ENDPOINT =
-  '/api/geographic/toronto/new/real-estate/published/archive'
 
 
 const TORONTO_NEW_SERVER_MIGRATION_KEY =
@@ -1468,9 +1431,6 @@ const EMPTY_NEW = {
   eventPinIcon:
     '',
 
-  sportsPinIcon:
-    '',
-
   businessUrl:
     '',
 
@@ -1504,42 +1464,18 @@ const NEW_BUSINESS_CATEGORIES = [
 ]
 
 
-const NEW_DEVELOPMENT_CATEGORIES = [
-  'development',
-  'construction',
-  'housing',
-  'transit',
+const NEW_COMMUNITY_CATEGORIES = [
+  'community',
+  'community-place',
+  'library',
+  'community-centre',
+  'gallery',
+  'cinema',
+  'rink',
+  'pool',
+  'market',
+  'park',
   'public-space',
-]
-
-
-const NEW_EVENT_CATEGORIES = [
-  'event',
-  'theatre',
-  'comedy',
-  'concert',
-  'festival',
-  'exhibition',
-  'talk',
-  'screening',
-  'community-event',
-]
-
-
-const NEW_SPORTS_CATEGORIES = [
-  'sports',
-  'game',
-  'match',
-]
-
-
-const NEW_REAL_ESTATE_CATEGORIES = [
-  'condo',
-  'house',
-  'rental',
-  'commercial',
-  'land',
-  'real-estate-other',
 ]
 
 
@@ -1784,63 +1720,7 @@ const NEW_BUSINESS_ICON_OPTIONS = [
   },
 ]
 
-const NEW_EVENT_PIN_ICON_OPTIONS = [
-  {
-    value:
-      'music',
-
-    label:
-      '🎵 MUSIC / CONCERT',
-  },
-  {
-    value:
-      'food',
-
-    label:
-      '🍴 FOOD / POP-UP',
-  },
-  {
-    value:
-      'theatre',
-
-    label:
-      '🎭 THEATRE / PLAY',
-  },
-  {
-    value:
-      'comedy',
-
-    label:
-      '🎤 COMEDY',
-  },
-  {
-    value:
-      'art',
-
-    label:
-      '🎨 ART / EXHIBITION',
-  },
-  {
-    value:
-      'film',
-
-    label:
-      '🎬 FILM / SCREENING',
-  },
-  {
-    value:
-      'festival',
-
-    label:
-      '🎪 FESTIVAL',
-  },
-  {
-    value:
-      'talk',
-
-    label:
-      '💬 TALK / LECTURE',
-  },
+const NEW_COMMUNITY_PIN_ICON_OPTIONS = [
   {
     value:
       'community',
@@ -1848,103 +1728,70 @@ const NEW_EVENT_PIN_ICON_OPTIONS = [
     label:
       '📍 COMMUNITY / GENERAL',
   },
-]
-
-
-const NEW_SPORTS_PIN_ICON_OPTIONS = [
   {
     value:
-      'hockey',
+      'library',
 
     label:
-      '🏒 HOCKEY',
+      '📚 LIBRARY',
   },
   {
     value:
-      'basketball',
+      'community-centre',
 
     label:
-      '🏀 BASKETBALL',
+      '🏛️ COMMUNITY CENTRE',
   },
   {
     value:
-      'baseball',
+      'gallery',
 
     label:
-      '⚾ BASEBALL',
+      '🖼️ GALLERY',
   },
   {
     value:
-      'soccer',
+      'cinema',
 
     label:
-      '⚽ SOCCER',
+      '🎬 CINEMA',
   },
   {
     value:
-      'football',
+      'rink',
 
     label:
-      '🏈 FOOTBALL',
+      '⛸️ RINK',
   },
   {
     value:
-      'tennis',
+      'pool',
 
     label:
-      '🎾 TENNIS',
+      '🏊 POOL',
   },
   {
     value:
-      'golf',
+      'market',
 
     label:
-      '⛳ GOLF',
+      '🧺 MARKET',
   },
   {
     value:
-      'lacrosse',
+      'park',
 
     label:
-      '🥍 LACROSSE',
+      '🌳 PARK',
   },
   {
     value:
-      'boxing',
+      'public-space',
 
     label:
-      '🥊 BOXING',
-  },
-  {
-    value:
-      'running',
-
-    label:
-      '🏃 RUNNING / ROAD RACE',
-  },
-  {
-    value:
-      'cycling',
-
-    label:
-      '🚲 CYCLING',
-  },
-  {
-    value:
-      'motorsport',
-
-    label:
-      '🏁 MOTORSPORT',
-  },
-  {
-    value:
-      'general',
-
-    label:
-      '🏆 GENERAL SPORTS',
+      '🌐 PUBLIC SPACE',
   },
 ]
-
 
 
 function getNewServerSubtype(
@@ -1959,22 +1806,6 @@ function getNewServerSubtype(
       .toLowerCase()
 
 
-  if (
-    explicitType ===
-      'business' ||
-    explicitType ===
-      'development' ||
-    explicitType ===
-      'events' ||
-    explicitType ===
-      'sports' ||
-    explicitType ===
-      'real-estate'
-  ) {
-    return explicitType
-  }
-
-
   const category =
     String(
       record?.category ||
@@ -1985,6 +1816,21 @@ function getNewServerSubtype(
 
 
   if (
+    [
+      'development',
+      'sports',
+      'real-estate',
+    ].includes(
+      explicitType
+    )
+  ) {
+    return ''
+  }
+
+
+  if (
+    explicitType ===
+      'business' ||
     NEW_BUSINESS_CATEGORIES.includes(
       category
     )
@@ -1993,39 +1839,15 @@ function getNewServerSubtype(
   }
 
 
+  // COMMUNITY uses the existing /new/events server store internally.
+  // Category decides whether an item is a place, so legacy event pins do
+  // not become Community pins.
   if (
-    NEW_DEVELOPMENT_CATEGORIES.includes(
-      category
-    )
-  ) {
-    return 'development'
-  }
-
-
-  if (
-    NEW_EVENT_CATEGORIES.includes(
+    NEW_COMMUNITY_CATEGORIES.includes(
       category
     )
   ) {
     return 'events'
-  }
-
-
-  if (
-    NEW_SPORTS_CATEGORIES.includes(
-      category
-    )
-  ) {
-    return 'sports'
-  }
-
-
-  if (
-    NEW_REAL_ESTATE_CATEGORIES.includes(
-      category
-    )
-  ) {
-    return 'real-estate'
   }
 
 
@@ -2914,29 +2736,47 @@ function newRecordMatchesType(
 ) {
   const category =
     String(
-      record.category ||
-      ''
-    )
-      .toLowerCase()
-
-
-  const explicitType =
-    String(
-      record.newType ||
+      record?.category ||
       ''
     )
       .trim()
       .toLowerCase()
 
 
-  const isDevelopment =
-    explicitType ===
-      'development' ||
+  const explicitType =
+    String(
+      record?.newType ||
+      ''
+    )
+      .trim()
+      .toLowerCase()
+
+
+  const retiredType =
+    [
+      'development',
+      'sports',
+      'real-estate',
+    ].includes(
+      explicitType
+    )
+
+
+  const isBusiness =
+    !retiredType &&
     (
-      !explicitType &&
-      NEW_DEVELOPMENT_CATEGORIES.includes(
+      explicitType ===
+        'business' ||
+      NEW_BUSINESS_CATEGORIES.includes(
         category
       )
+    )
+
+
+  const isCommunity =
+    !retiredType &&
+    NEW_COMMUNITY_CATEGORIES.includes(
+      category
     )
 
 
@@ -2944,16 +2784,9 @@ function newRecordMatchesType(
     filter ===
       'all'
   ) {
-    return !isDevelopment
-  }
-
-
-  if (
-    explicitType
-  ) {
     return (
-      explicitType ===
-      filter
+      isBusiness ||
+      isCommunity
     )
   }
 
@@ -2962,39 +2795,15 @@ function newRecordMatchesType(
     filter ===
       'business'
   ) {
-    return NEW_BUSINESS_CATEGORIES.includes(
-      category
-    )
+    return isBusiness
   }
 
 
   if (
     filter ===
-      'events'
+      'community'
   ) {
-    return NEW_EVENT_CATEGORIES.includes(
-      category
-    )
-  }
-
-
-  if (
-    filter ===
-      'sports'
-  ) {
-    return NEW_SPORTS_CATEGORIES.includes(
-      category
-    )
-  }
-
-
-  if (
-    filter ===
-      'real-estate'
-  ) {
-    return NEW_REAL_ESTATE_CATEGORIES.includes(
-      category
-    )
+    return isCommunity
   }
 
 
@@ -7515,13 +7324,7 @@ function AdminRoom() {
           business:
             0,
 
-          'real-estate':
-            0,
-
-          events:
-            0,
-
-          sports:
+          community:
             0,
         }
 
@@ -7570,32 +7373,12 @@ function AdminRoom() {
             )
               .length,
 
-          'real-estate':
+          community:
             dateFiltered.filter(
               (record) =>
                 newRecordMatchesType(
                   record,
-                  'real-estate'
-                )
-            )
-              .length,
-
-          events:
-            dateFiltered.filter(
-              (record) =>
-                newRecordMatchesType(
-                  record,
-                  'events'
-                )
-            )
-              .length,
-
-          sports:
-            dateFiltered.filter(
-              (record) =>
-                newRecordMatchesType(
-                  record,
-                  'sports'
+                  'community'
                 )
             )
               .length,
@@ -7619,13 +7402,7 @@ function AdminRoom() {
           business:
             0,
 
-          'real-estate':
-            0,
-
-          events:
-            0,
-
-          sports:
+          community:
             0,
         }
 
@@ -7662,32 +7439,12 @@ function AdminRoom() {
             )
               .length,
 
-          'real-estate':
+          community:
             visibleRecords.filter(
               (record) =>
                 newRecordMatchesType(
                   record,
-                  'real-estate'
-                )
-            )
-              .length,
-
-          events:
-            visibleRecords.filter(
-              (record) =>
-                newRecordMatchesType(
-                  record,
-                  'events'
-                )
-            )
-              .length,
-
-          sports:
-            visibleRecords.filter(
-              (record) =>
-                newRecordMatchesType(
-                  record,
-                  'sports'
+                  'community'
                 )
             )
               .length,
@@ -9007,18 +8764,14 @@ function AdminRoom() {
   // TORONTO NEW · SERVER PERSISTENCE
   // ==========================================================
   //
-  // NEW is intentionally separate from NEWS.
+  // Product-facing NEW contains only BUSINESS + COMMUNITY.
   //
-  // Toronto NEW is split into:
-  //   /new/business
-  //   /new/development
-  //   /new/events
-  //   /new/sports
-  //   /new/real-estate
+  // BUSINESS uses /new/business.
+  // COMMUNITY uses the existing /new/events store internally so no server
+  // data migration is needed.
   //
-  // Existing browser pins are migrated once, idempotently, into the
-  // matching server store. Browser data remains as a fallback while the
-  // migration completes so existing pins never disappear.
+  // Development, Sports and Real Estate are not loaded, published or shown.
+  // Existing stored records are left untouched.
   //
   // ==========================================================
 
@@ -9044,23 +8797,6 @@ function AdminRoom() {
 
     if (
       subtype ===
-        'development'
-    ) {
-      return {
-        published:
-          PUBLISHED_NEW_DEVELOPMENT_ENDPOINT,
-
-        upsert:
-          PUBLISHED_NEW_DEVELOPMENT_UPSERT_ENDPOINT,
-
-        archive:
-          PUBLISHED_NEW_DEVELOPMENT_ARCHIVE_ENDPOINT,
-      }
-    }
-
-
-    if (
-      subtype ===
         'events'
     ) {
       return {
@@ -9072,40 +8808,6 @@ function AdminRoom() {
 
         archive:
           PUBLISHED_NEW_EVENTS_ARCHIVE_ENDPOINT,
-      }
-    }
-
-
-    if (
-      subtype ===
-        'sports'
-    ) {
-      return {
-        published:
-          PUBLISHED_NEW_SPORTS_ENDPOINT,
-
-        upsert:
-          PUBLISHED_NEW_SPORTS_UPSERT_ENDPOINT,
-
-        archive:
-          PUBLISHED_NEW_SPORTS_ARCHIVE_ENDPOINT,
-      }
-    }
-
-
-    if (
-      subtype ===
-        'real-estate'
-    ) {
-      return {
-        published:
-          PUBLISHED_NEW_REAL_ESTATE_ENDPOINT,
-
-        upsert:
-          PUBLISHED_NEW_REAL_ESTATE_UPSERT_ENDPOINT,
-
-        archive:
-          PUBLISHED_NEW_REAL_ESTATE_ARCHIVE_ENDPOINT,
       }
     }
 
@@ -9711,11 +9413,7 @@ function AdminRoom() {
     try {
       let [
         serverBusiness,
-        serverDevelopment,
-        serverEvents,
-        serverSports,
-        serverRealEstate,
-        legacyPublishedNew,
+        serverCommunity,
       ] =
         await Promise.all([
           fetchPublishedNewSubtype(
@@ -9723,22 +9421,8 @@ function AdminRoom() {
           ),
 
           fetchPublishedNewSubtype(
-            'development'
-          ),
-
-          fetchPublishedNewSubtype(
             'events'
           ),
-
-          fetchPublishedNewSubtype(
-            'sports'
-          ),
-
-          fetchPublishedNewSubtype(
-            'real-estate'
-          ),
-
-          fetchLegacyPublishedNew(),
         ])
 
 
@@ -9805,17 +9489,8 @@ function AdminRoom() {
         business:
           serverBusiness,
 
-        development:
-          serverDevelopment,
-
         events:
-          serverEvents,
-
-        sports:
-          serverSports,
-
-        'real-estate':
-          serverRealEstate,
+          serverCommunity,
       }
 
 
@@ -9826,10 +9501,7 @@ function AdminRoom() {
       for (
         const subtype of [
           'business',
-          'development',
           'events',
-          'sports',
-          'real-estate',
         ]
       ) {
         const localSubtype =
@@ -9974,14 +9646,8 @@ function AdminRoom() {
         serverBySubtype.business
 
 
-      serverDevelopment =
-        serverBySubtype.development
-
-
-      serverRealEstate =
-        serverBySubtype[
-          'real-estate'
-        ]
+      serverCommunity =
+        serverBySubtype.events
 
 
       const mergedManaged =
@@ -9989,8 +9655,7 @@ function AdminRoom() {
           localManaged,
           [
             ...serverBusiness,
-            ...serverDevelopment,
-            ...serverRealEstate,
+            ...serverCommunity,
           ]
         )
 
@@ -10014,8 +9679,7 @@ function AdminRoom() {
 
       return [
         ...serverBusiness,
-        ...serverDevelopment,
-        ...serverRealEstate,
+        ...serverCommunity,
       ]
     }
     catch (
@@ -15361,7 +15025,7 @@ function AdminRoom() {
           .trim()
       ) {
         window.alert(
-          'Choose a map location before saving this event.'
+          'Choose a map location before saving this Community place.'
         )
 
 
@@ -15375,7 +15039,7 @@ function AdminRoom() {
         )
       ) {
         window.alert(
-          'Confirm the map pin before saving this event.'
+          'Confirm the map pin before saving this Community place.'
         )
 
 
@@ -15712,112 +15376,7 @@ function AdminRoom() {
 
 
   // ==========================================================
-  // EVENT + SPORTS CALENDARS
-  // ==========================================================
-
-  function startNewEvent(
-    eventDate
-  ) {
-    setEditingId(
-      null
-    )
-
-
-    setEditingReviewId(
-      null
-    )
-
-
-    setNewTypeFilter(
-      'events'
-    )
-
-
-    setNewStatusFilter(
-      'all'
-    )
-
-
-    setDraft({
-      ...makeNewDraft(
-        cityKey
-      ),
-
-      newType:
-        'events',
-
-      category:
-        'event',
-
-      eventDate:
-        eventDate ||
-        today(),
-    })
-
-
-    window.scrollTo({
-      top:
-        0,
-
-      behavior:
-        'smooth',
-    })
-  }
-
-
-  function startNewSport(
-    eventDate
-  ) {
-    setEditingId(
-      null
-    )
-
-
-    setEditingReviewId(
-      null
-    )
-
-
-    setNewTypeFilter(
-      'sports'
-    )
-
-
-    setNewStatusFilter(
-      'all'
-    )
-
-
-    setDraft({
-      ...makeNewDraft(
-        cityKey
-      ),
-
-      newType:
-        'sports',
-
-      category:
-        'game',
-
-      active:
-        false,
-
-      eventDate:
-        eventDate ||
-        today(),
-    })
-
-
-    window.scrollTo({
-      top:
-        0,
-
-      behavior:
-        'smooth',
-    })
-  }
-
-
+  // EDIT
   // ==========================================================
   // EDIT
   // ==========================================================
@@ -20122,80 +19681,56 @@ function AdminRoom() {
                     }
                   >
 
-                    <option value="event">
-                      EVENT
+                    <option value="store">
+                      STORE
                     </option>
 
-                    <option value="theatre">
-                      THEATRE / PLAY
+                    <option value="restaurant">
+                      RESTAURANT
                     </option>
 
-                    <option value="comedy">
-                      COMEDY
+                    <option value="business">
+                      BUSINESS
                     </option>
 
-                    <option value="concert">
-                      CONCERT
+                    <option value="community-place">
+                      COMMUNITY PLACE
                     </option>
 
-                    <option value="festival">
-                      FESTIVAL
+                    <option value="library">
+                      LIBRARY
                     </option>
 
-                    <option value="exhibition">
-                      EXHIBITION
+                    <option value="community-centre">
+                      COMMUNITY CENTRE
                     </option>
 
-                    <option value="talk">
-                      TALK
+                    <option value="gallery">
+                      GALLERY
                     </option>
 
-                    <option value="screening">
-                      SCREENING
+                    <option value="cinema">
+                      CINEMA
                     </option>
 
-                    <option value="community-event">
-                      COMMUNITY EVENT
+                    <option value="rink">
+                      RINK
                     </option>
 
-                    <option value="sports">
-                      SPORTS
+                    <option value="pool">
+                      POOL
                     </option>
 
-                    <option value="game">
-                      SPORTS GAME
+                    <option value="market">
+                      MARKET
                     </option>
 
-                    <option value="match">
-                      SPORTS MATCH
+                    <option value="park">
+                      PARK
                     </option>
 
-                    <option value="condo">
-                      REAL ESTATE · CONDO
-                    </option>
-
-                    <option value="house">
-                      REAL ESTATE · HOUSE
-                    </option>
-
-                    <option value="rental">
-                      REAL ESTATE · RENTAL
-                    </option>
-
-                    <option value="commercial">
-                      REAL ESTATE · COMMERCIAL
-                    </option>
-
-                    <option value="land">
-                      REAL ESTATE · LAND
-                    </option>
-
-                    <option value="real-estate-other">
-                      REAL ESTATE · OTHER
-                    </option>
-
-                    <option value="other">
-                      OTHER
+                    <option value="public-space">
+                      PUBLIC SPACE
                     </option>
                   </select>
                 </label>
@@ -20275,230 +19810,51 @@ function AdminRoom() {
                 )}
 
 
-                {(getNewServerSubtype(
-                  draft
-                ) ===
-                  'events' ||
-                  getNewServerSubtype(
-                    draft
-                  ) ===
-                  'sports') && (
-                  <>
-                    {getNewServerSubtype(
-                      draft
-                    ) ===
-                      'events' && (
-                      <label className="admin-field">
-                        <span>
-                          EVENT PIN
-                        </span>
-
-                        <select
-                          value={
-                            draft.eventPinIcon ||
-                            ''
-                          }
-                          onChange={
-                            (event) =>
-                              updateDraft(
-                                'eventPinIcon',
-                                event.target.value
-                              )
-                          }
-                        >
-                          <option value="">
-                            STANDARD PIN
-                          </option>
-
-                          {NEW_EVENT_PIN_ICON_OPTIONS.map(
-                            (
-                              option
-                            ) => (
-                              <option
-                                key={
-                                  option.value
-                                }
-                                value={
-                                  option.value
-                                }
-                              >
-                                {
-                                  option.label
-                                }
-                              </option>
-                            )
-                          )}
-                        </select>
-                      </label>
-                    )}
-
-
-                    {getNewServerSubtype(
-                      draft
-                    ) ===
-                      'sports' && (
-                      <label className="admin-field">
-                        <span>
-                          SPORTS PIN
-                        </span>
-
-                        <select
-                          value={
-                            draft.sportsPinIcon ||
-                            ''
-                          }
-                          onChange={
-                            (event) =>
-                              updateDraft(
-                                'sportsPinIcon',
-                                event.target.value
-                              )
-                          }
-                        >
-                          <option value="">
-                            STANDARD PIN
-                          </option>
-
-                          {NEW_SPORTS_PIN_ICON_OPTIONS.map(
-                            (
-                              option
-                            ) => (
-                              <option
-                                key={
-                                  option.value
-                                }
-                                value={
-                                  option.value
-                                }
-                              >
-                                {
-                                  option.label
-                                }
-                              </option>
-                            )
-                          )}
-                        </select>
-                      </label>
-                    )}
-
-
-                    <label className="admin-field">
-                      <span>
-                        VENUE
-                      </span>
-
-                      <input
-                        value={
-                          draft.venue ||
-                          ''
-                        }
-                        onChange={
-                          (event) =>
-                            updateDraft(
-                              'venue',
-                              event.target.value
-                            )
-                        }
-                        placeholder="Massey Hall"
-                      />
-                    </label>
-
-
-                    <label className="admin-field">
-                      <span>
-                        EVENT DATE
-                      </span>
-
-                      <input
-                        type="date"
-                        value={
-                          draft.eventDate ||
-                          ''
-                        }
-                        onChange={
-                          (event) =>
-                            updateDraft(
-                              'eventDate',
-                              event.target.value
-                            )
-                        }
-                      />
-                    </label>
-
-
-                    <label className="admin-field">
-                      <span>
-                        START TIME
-                      </span>
-
-                      <input
-                        type="time"
-                        value={
-                          draft.startTime ||
-                          ''
-                        }
-                        onChange={
-                          (event) =>
-                            updateDraft(
-                              'startTime',
-                              event.target.value
-                            )
-                        }
-                      />
-                    </label>
-
-
-                    <label className="admin-field">
-                      <span>
-                        END TIME
-                      </span>
-
-                      <input
-                        type="time"
-                        value={
-                          draft.endTime ||
-                          ''
-                        }
-                        onChange={
-                          (event) =>
-                            updateDraft(
-                              'endTime',
-                              event.target.value
-                            )
-                        }
-                      />
-                    </label>
-                  </>
-                )}
-
-
                 {getNewServerSubtype(
                   draft
                 ) ===
-                  'real-estate' && (
+                  'events' && (
                   <label className="admin-field">
                     <span>
-                      EXPIRES AT
+                      COMMUNITY MAP ICON
                     </span>
 
-                    <input
-                      type="datetime-local"
-                      required
+                    <select
                       value={
-                        toTorontoDateTimeInputValue(
-                          draft.expiresAt
-                        )
+                        draft.eventPinIcon ||
+                        ''
                       }
                       onChange={
                         (event) =>
                           updateDraft(
-                            'expiresAt',
-                            torontoDateTimeInputToIso(
-                              event.target.value
-                            )
+                            'eventPinIcon',
+                            event.target.value
                           )
                       }
-                    />
+                    >
+                      <option value="">
+                        AUTO FROM PLACE TYPE
+                      </option>
+
+                      {NEW_COMMUNITY_PIN_ICON_OPTIONS.map(
+                        (
+                          option
+                        ) => (
+                          <option
+                            key={
+                              option.value
+                            }
+                            value={
+                              option.value
+                            }
+                          >
+                            {
+                              option.label
+                            }
+                          </option>
+                        )
+                      )}
+                    </select>
                   </label>
                 )}
 
@@ -21247,18 +20603,8 @@ function AdminRoom() {
             )}
 
 
-            {(
-              tab ===
-                'historic' ||
-              (
-                tab ===
-                  'new' &&
-                getNewServerSubtype(
-                  draft
-                ) ===
-                  'real-estate'
-              )
-            ) && (
+            {tab ===
+              'historic' && (
               <>
                 <div className="admin-field admin-field-wide">
                   <span>
@@ -21291,12 +20637,7 @@ function AdminRoom() {
                           draft.imageUrl
                         )
                       }
-                      alt={
-                        tab ===
-                          'historic'
-                          ? 'Historic preview'
-                          : 'Real estate preview'
-                      }
+                      alt="Historic preview"
                       loading="lazy"
                       onError={
                         (event) => {
@@ -21365,12 +20706,7 @@ function AdminRoom() {
                           draft.videoUrl
                         )
                       }
-                      title={
-                        tab ===
-                          'historic'
-                          ? 'Historic video preview'
-                          : 'Real estate video preview'
-                      }
+                      title="Historic video preview"
                       loading="lazy"
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                       allowFullScreen
@@ -22063,18 +21399,8 @@ function AdminRoom() {
                     ],
 
                     [
-                      'real-estate',
-                      'REAL ESTATE',
-                    ],
-
-                    [
-                      'events',
-                      'EVENTS',
-                    ],
-
-                    [
-                      'sports',
-                      'SPORTS',
+                      'community',
+                      'COMMUNITY',
                     ],
                   ].map(
                     ([
@@ -22113,69 +21439,6 @@ function AdminRoom() {
                   )}
                 </div>
               )}
-
-
-              {tab ===
-                'new' &&
-                newTypeFilter ===
-                  'events' && (
-                  <EventAdminCalendar
-                    records={
-                      newItems.filter(
-                        (record) =>
-                          newRecordMatchesType(
-                            record,
-                            'events'
-                          )
-                      )
-                    }
-                    onAddEvent={
-                      startNewEvent
-                    }
-                    onEditEvent={
-                      editRecord
-                    }
-                  />
-                )}
-
-
-              {tab ===
-                'new' &&
-                newTypeFilter ===
-                  'sports' && (
-                  <EventAdminCalendar
-                    records={
-                      newItems.filter(
-                        (record) =>
-                          newRecordMatchesType(
-                            record,
-                            'sports'
-                          )
-                      )
-                    }
-                    onAddEvent={
-                      startNewSport
-                    }
-                    onEditEvent={
-                      editRecord
-                    }
-                    onToggleVisibility={
-                      toggleRecord
-                    }
-                    includeInactive={
-                      true
-                    }
-                    showVisibilityControls={
-                      true
-                    }
-                    calendarLabel="SPORTS CALENDAR"
-                    singularLabel="GAME"
-                    pluralLabel="GAMES"
-                    addLabel="+ ADD GAME"
-                    emptyLabel="NO GAMES ON THIS DATE."
-                    untitledLabel="UNTITLED GAME"
-                  />
-                )}
 
 
               {/* NEW STATUS */}
@@ -23135,18 +22398,8 @@ function AdminRoom() {
                     ],
 
                     [
-                      'real-estate',
-                      'REAL ESTATE',
-                    ],
-
-                    [
-                      'events',
-                      'EVENTS',
-                    ],
-
-                    [
-                      'sports',
-                      'SPORTS',
+                      'community',
+                      'COMMUNITY',
                     ],
                   ].map(
                     ([

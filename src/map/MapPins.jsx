@@ -48,20 +48,8 @@ const PUBLISHED_NEW_BUSINESS_ENDPOINT =
   '/api/geographic/toronto/new/business/published?status=all'
 
 
-const PUBLISHED_NEW_DEVELOPMENT_ENDPOINT =
-  '/api/geographic/toronto/new/development/published?status=all'
-
-
 const PUBLISHED_NEW_EVENTS_ENDPOINT =
   '/api/geographic/toronto/new/events/published?status=all'
-
-
-const PUBLISHED_NEW_SPORTS_ENDPOINT =
-  '/api/geographic/toronto/new/sports/published?status=all'
-
-
-const PUBLISHED_NEW_REAL_ESTATE_ENDPOINT =
-  '/api/geographic/toronto/new/real-estate/published?status=all'
 
 
 const PUBLISHED_NEW_REFRESH_MS =
@@ -79,42 +67,18 @@ const BUSINESS_CATEGORIES = [
 ]
 
 
-const DEVELOPMENT_CATEGORIES = [
-  'development',
-  'construction',
-  'housing',
-  'transit',
+const COMMUNITY_CATEGORIES = [
+  'community',
+  'community-place',
+  'library',
+  'community-centre',
+  'gallery',
+  'cinema',
+  'rink',
+  'pool',
+  'market',
+  'park',
   'public-space',
-]
-
-
-const EVENT_CATEGORIES = [
-  'event',
-  'theatre',
-  'comedy',
-  'concert',
-  'festival',
-  'exhibition',
-  'talk',
-  'screening',
-  'community-event',
-]
-
-
-const SPORTS_CATEGORIES = [
-  'sports',
-  'game',
-  'match',
-]
-
-
-const REAL_ESTATE_CATEGORIES = [
-  'condo',
-  'house',
-  'rental',
-  'commercial',
-  'land',
-  'real-estate-other',
 ]
 
 
@@ -157,26 +121,6 @@ const NEW_LIFECYCLE_DAYS = {
 
     cancelled:
       14,
-  },
-
-  development: {
-    proposed:
-      180,
-
-    approved:
-      365,
-
-    construction:
-      365,
-
-    'opening-soon':
-      90,
-
-    open:
-      60,
-
-    cancelled:
-      30,
   },
 
   other: {
@@ -228,190 +172,89 @@ function newPinMatchesSubtype(
   pin,
   subtype
 ) {
-  if (
-    !subtype
-  ) {
-    return true
-  }
-
   const explicitType =
     String(
-      pin.newType ||
+      pin?.newType ||
       ''
     )
+      .trim()
       .toLowerCase()
 
 
   const category =
     String(
-      pin.category ||
+      pin?.category ||
       ''
     )
+      .trim()
       .toLowerCase()
 
 
-  const realEstatePin =
-    explicitType ===
-      'real-estate' ||
+  const retiredType =
+    [
+      'development',
+      'sports',
+      'real-estate',
+    ].includes(
+      explicitType
+    )
+
+
+  const isBusiness =
+    !retiredType &&
     (
-      !explicitType &&
-      REAL_ESTATE_CATEGORIES.includes(
+      explicitType ===
+        'business' ||
+      BUSINESS_CATEGORIES.includes(
         category
       )
     )
 
 
+  // Community is persisted through the old /new/events endpoint.
+  // Requiring that stored type prevents old Development public-space pins or
+  // old event pins from leaking into the Community layer.
+  const isCommunity =
+    (
+      explicitType ===
+        'events' ||
+      explicitType ===
+        'community'
+    ) &&
+    COMMUNITY_CATEGORIES.includes(
+      category
+    )
+
+
   if (
+    !subtype ||
     subtype ===
       'all'
   ) {
     return (
-      explicitType ===
-        'business' ||
-      explicitType ===
-        'events' ||
-      realEstatePin ||
-      (
-        !explicitType &&
-        (
-          BUSINESS_CATEGORIES.includes(
-            category
-          ) ||
-          EVENT_CATEGORIES.includes(
-            category
-          )
-        )
-      )
-    )
-  }
-
-  if (
-    subtype ===
-    'businesses'
-  ) {
-    return (
-      explicitType ===
-        'business' ||
-      (
-        !explicitType &&
-        BUSINESS_CATEGORIES.includes(
-          category
-        )
-      )
-    )
-  }
-
-  if (
-    subtype ===
-    'developments'
-  ) {
-    return (
-      explicitType ===
-        'development' ||
-      (
-        !explicitType &&
-        DEVELOPMENT_CATEGORIES.includes(
-          category
-        )
-      )
-    )
-  }
-
-  if (
-    subtype ===
-    'events'
-  ) {
-    return (
-      explicitType ===
-        'events' ||
-      (
-        !explicitType &&
-        EVENT_CATEGORIES.includes(
-          category
-        )
-      )
-    )
-  }
-
-  if (
-    subtype ===
-    'sports'
-  ) {
-    return (
-      explicitType ===
-        'sports' ||
-      (
-        !explicitType &&
-        SPORTS_CATEGORIES.includes(
-          category
-        )
-      )
+      isBusiness ||
+      isCommunity
     )
   }
 
 
   if (
     subtype ===
-      'real-estate' ||
-    subtype.startsWith(
-      'real-estate:'
-    )
+      'businesses'
   ) {
-    if (
-      !realEstatePin
-    ) {
-      return false
-    }
-
-
-    const requestedCategory =
-      subtype.includes(
-        ':'
-      )
-        ? subtype
-            .slice(
-              subtype.indexOf(
-                ':'
-              ) +
-              1
-            )
-            .trim()
-        : 'all'
-
-
-    if (
-      !requestedCategory ||
-      requestedCategory ===
-        'all'
-    ) {
-      return true
-    }
-
-
-    if (
-      requestedCategory ===
-        'other'
-    ) {
-      return (
-        category ===
-          'real-estate-other' ||
-        (
-          explicitType ===
-            'real-estate' &&
-          category ===
-            'other'
-        )
-      )
-    }
-
-
-    return (
-      category ===
-      requestedCategory
-    )
+    return isBusiness
   }
 
-  return true
+
+  if (
+    subtype ===
+      'community'
+  ) {
+    return isCommunity
+  }
+
+
+  return false
 }
 
 
@@ -823,11 +666,9 @@ function getNewLifecycleGroup(
 
   if (
     explicitType ===
-      'business' ||
-    explicitType ===
-      'development'
+      'business'
   ) {
-    return explicitType
+    return 'business'
   }
 
 
@@ -844,14 +685,6 @@ function getNewLifecycleGroup(
     )
   ) {
     return 'business'
-  }
-
-  if (
-    DEVELOPMENT_CATEGORIES.includes(
-      category
-    )
-  ) {
-    return 'development'
   }
 
   return 'other'
@@ -3299,90 +3132,92 @@ function getNewBusinessIcon(
 }
 
 
-const NEW_EVENT_ICONS = {
-  music: {
-    emoji:
-      '🎵',
-
-    label:
-      'Music / Concert',
-  },
-
-  food: {
-    emoji:
-      '🍴',
-
-    label:
-      'Food / Pop-up',
-  },
-
-  theatre: {
-    emoji:
-      '🎭',
-
-    label:
-      'Theatre / Play',
-  },
-
-  comedy: {
-    emoji:
-      '🎤',
-
-    label:
-      'Comedy',
-  },
-
-  art: {
-    emoji:
-      '🎨',
-
-    label:
-      'Art / Exhibition',
-  },
-
-  film: {
-    emoji:
-      '🎬',
-
-    label:
-      'Film / Screening',
-  },
-
-  festival: {
-    emoji:
-      '🎪',
-
-    label:
-      'Festival',
-  },
-
-  talk: {
-    emoji:
-      '💬',
-
-    label:
-      'Talk / Lecture',
-  },
-
+const NEW_COMMUNITY_ICONS = {
   community: {
     emoji:
       '📍',
 
     label:
-      'Community / General',
+      'Community',
+  },
+
+  library: {
+    emoji:
+      '📚',
+
+    label:
+      'Library',
+  },
+
+  'community-centre': {
+    emoji:
+      '🏛️',
+
+    label:
+      'Community Centre',
+  },
+
+  gallery: {
+    emoji:
+      '🖼️',
+
+    label:
+      'Gallery',
+  },
+
+  cinema: {
+    emoji:
+      '🎬',
+
+    label:
+      'Cinema',
+  },
+
+  rink: {
+    emoji:
+      '⛸️',
+
+    label:
+      'Rink',
+  },
+
+  pool: {
+    emoji:
+      '🏊',
+
+    label:
+      'Pool',
+  },
+
+  market: {
+    emoji:
+      '🧺',
+
+    label:
+      'Market',
+  },
+
+  park: {
+    emoji:
+      '🌳',
+
+    label:
+      'Park',
+  },
+
+  'public-space': {
+    emoji:
+      '🌐',
+
+    label:
+      'Public Space',
   },
 }
 
 
-function getNewEventIcon(
+function getNewCommunityIcon(
   pin
 ) {
-  const explicitType =
-    normalizeCompareText(
-      pin?.newType
-    )
-
-
   const category =
     normalizeCompareText(
       pin?.category
@@ -3390,9 +3225,7 @@ function getNewEventIcon(
 
 
   if (
-    explicitType !==
-      'events' &&
-    !EVENT_CATEGORIES.includes(
+    !COMMUNITY_CATEGORIES.includes(
       category
     )
   ) {
@@ -3403,313 +3236,16 @@ function getNewEventIcon(
   const iconKey =
     normalizeCompareText(
       pin?.eventPinIcon
-    )
-
-
-  if (
-    !iconKey
-  ) {
-    return null
-  }
+    ) ||
+    category
 
 
   return (
-    NEW_EVENT_ICONS[
+    NEW_COMMUNITY_ICONS[
       iconKey
     ] ||
-    null
+    NEW_COMMUNITY_ICONS.community
   )
-}
-
-
-const NEW_SPORTS_ICONS = {
-  hockey: {
-    emoji:
-      '🏒',
-
-    label:
-      'Hockey',
-  },
-
-  basketball: {
-    emoji:
-      '🏀',
-
-    label:
-      'Basketball',
-  },
-
-  baseball: {
-    emoji:
-      '⚾',
-
-    label:
-      'Baseball',
-  },
-
-  soccer: {
-    emoji:
-      '⚽',
-
-    label:
-      'Soccer',
-  },
-
-  football: {
-    emoji:
-      '🏈',
-
-    label:
-      'Football',
-  },
-
-  tennis: {
-    emoji:
-      '🎾',
-
-    label:
-      'Tennis',
-  },
-
-  golf: {
-    emoji:
-      '⛳',
-
-    label:
-      'Golf',
-  },
-
-  lacrosse: {
-    emoji:
-      '🥍',
-
-    label:
-      'Lacrosse',
-  },
-
-  boxing: {
-    emoji:
-      '🥊',
-
-    label:
-      'Boxing',
-  },
-
-  running: {
-    emoji:
-      '🏃',
-
-    label:
-      'Running / Road Race',
-  },
-
-  cycling: {
-    emoji:
-      '🚲',
-
-    label:
-      'Cycling',
-  },
-
-  motorsport: {
-    emoji:
-      '🏁',
-
-    label:
-      'Motorsport',
-  },
-
-  general: {
-    emoji:
-      '🏆',
-
-    label:
-      'General Sports',
-  },
-}
-
-
-function getNewSportsIcon(
-  pin
-) {
-  const explicitType =
-    normalizeCompareText(
-      pin?.newType
-    )
-
-
-  const category =
-    normalizeCompareText(
-      pin?.category
-    )
-
-
-  if (
-    explicitType !==
-      'sports' &&
-    !SPORTS_CATEGORIES.includes(
-      category
-    )
-  ) {
-    return null
-  }
-
-
-  const iconKey =
-    normalizeCompareText(
-      pin?.sportsPinIcon
-    )
-
-
-  if (
-    !iconKey
-  ) {
-    return null
-  }
-
-
-  return (
-    NEW_SPORTS_ICONS[
-      iconKey
-    ] ||
-    null
-  )
-}
-
-
-function formatEventCardDateTime(
-  pin
-) {
-  const dateText =
-    String(
-      pin?.eventDate ||
-      ''
-    )
-      .trim()
-
-
-  const timeText =
-    String(
-      pin?.startTime ||
-      ''
-    )
-      .trim()
-
-
-  let dateLabel =
-    ''
-
-
-  if (
-    dateText
-  ) {
-    const date =
-      new Date(
-        `${dateText}T12:00:00`
-      )
-
-
-    if (
-      !Number.isNaN(
-        date.getTime()
-      )
-    ) {
-      dateLabel =
-        date
-          .toLocaleDateString(
-            'en-CA',
-            {
-              weekday:
-                'short',
-
-              month:
-                'short',
-
-              day:
-                'numeric',
-            }
-          )
-          .toUpperCase()
-    } else {
-      dateLabel =
-        dateText.toUpperCase()
-    }
-  }
-
-
-  let timeLabel =
-    ''
-
-
-  if (
-    /^\d{2}:\d{2}$/.test(
-      timeText
-    )
-  ) {
-    const [
-      hourText,
-      minuteText,
-    ] =
-      timeText.split(
-        ':'
-      )
-
-
-    const hour =
-      Number(
-        hourText
-      )
-
-
-    const minute =
-      Number(
-        minuteText
-      )
-
-
-    if (
-      Number.isFinite(
-        hour
-      ) &&
-      Number.isFinite(
-        minute
-      )
-    ) {
-      const suffix =
-        hour >=
-          12
-          ? 'PM'
-          : 'AM'
-
-
-      const displayHour =
-        hour %
-          12 ||
-        12
-
-
-      timeLabel =
-        `${displayHour}:` +
-        `${String(
-          minute
-        ).padStart(
-          2,
-          '0'
-        )} ${suffix}`
-    }
-  }
-
-
-  return [
-    dateLabel,
-    timeLabel,
-  ]
-    .filter(
-      Boolean
-    )
-    .join(
-      ' · '
-    )
 }
 
 
@@ -4825,12 +4361,7 @@ function appendEmojiMarkerIcon(
 //   - Police pulse for their first 3 hours
 //   - Fire pulses for its first 8 hours
 //
-// NEW:
-//   - Events pulse only while their scheduled event is happening
-//   - Sports pulse only while their scheduled game/match is happening
-//   - Other NEW pins do not pulse
-//
-// Event and Sports times are interpreted in America/Toronto.
+// NEW pins do not use scheduled event/game pulse behavior.
 //
 // Reduced-motion users get a steady glow instead of animation.
 //
@@ -4850,367 +4381,6 @@ const FIRE_NEWS_MARKER_WINDOW_MS =
   1000
 
 
-function getTorontoWallClockNowMs() {
-  const parts =
-    new Intl.DateTimeFormat(
-      'en-CA',
-      {
-        timeZone:
-          'America/Toronto',
-
-        year:
-          'numeric',
-
-        month:
-          '2-digit',
-
-        day:
-          '2-digit',
-
-        hour:
-          '2-digit',
-
-        minute:
-          '2-digit',
-
-        second:
-          '2-digit',
-
-        hourCycle:
-          'h23',
-      }
-    )
-      .formatToParts(
-        new Date()
-      )
-
-
-  const values =
-    Object.fromEntries(
-      parts
-        .filter(
-          (part) =>
-            part.type !==
-              'literal'
-        )
-        .map(
-          (part) => [
-            part.type,
-            part.value,
-          ]
-        )
-    )
-
-
-  const year =
-    Number(
-      values.year
-    )
-
-  const month =
-    Number(
-      values.month
-    )
-
-  const day =
-    Number(
-      values.day
-    )
-
-  const hour =
-    Number(
-      values.hour
-    )
-
-  const minute =
-    Number(
-      values.minute
-    )
-
-  const second =
-    Number(
-      values.second
-    )
-
-
-  if (
-    !Number.isFinite(
-      year
-    ) ||
-    !Number.isFinite(
-      month
-    ) ||
-    !Number.isFinite(
-      day
-    ) ||
-    !Number.isFinite(
-      hour
-    ) ||
-    !Number.isFinite(
-      minute
-    ) ||
-    !Number.isFinite(
-      second
-    )
-  ) {
-    return Date.now()
-  }
-
-
-  return Date.UTC(
-    year,
-    month - 1,
-    day,
-    hour,
-    minute,
-    second
-  )
-}
-
-
-function parseScheduledWallClockMs({
-  eventDate,
-  time,
-}) {
-  const dateText =
-    String(
-      eventDate ||
-      ''
-    )
-      .trim()
-
-
-  const timeText =
-    String(
-      time ||
-      ''
-    )
-      .trim()
-
-
-  const dateMatch =
-    dateText.match(
-      /^(\d{4})-(\d{2})-(\d{2})$/
-    )
-
-
-  const timeMatch =
-    timeText.match(
-      /^(\d{2}):(\d{2})$/
-    )
-
-
-  if (
-    !dateMatch ||
-    !timeMatch
-  ) {
-    return null
-  }
-
-
-  const year =
-    Number(
-      dateMatch[1]
-    )
-
-  const month =
-    Number(
-      dateMatch[2]
-    )
-
-  const day =
-    Number(
-      dateMatch[3]
-    )
-
-  const hour =
-    Number(
-      timeMatch[1]
-    )
-
-  const minute =
-    Number(
-      timeMatch[2]
-    )
-
-
-  if (
-    !Number.isFinite(
-      year
-    ) ||
-    !Number.isFinite(
-      month
-    ) ||
-    month <
-      1 ||
-    month >
-      12 ||
-    !Number.isFinite(
-      day
-    ) ||
-    day <
-      1 ||
-    day >
-      31 ||
-    !Number.isFinite(
-      hour
-    ) ||
-    hour <
-      0 ||
-    hour >
-      23 ||
-    !Number.isFinite(
-      minute
-    ) ||
-    minute <
-      0 ||
-    minute >
-      59
-  ) {
-    return null
-  }
-
-
-  return Date.UTC(
-    year,
-    month - 1,
-    day,
-    hour,
-    minute,
-    0
-  )
-}
-
-
-function getLiveScheduledNewPulseState(
-  pin
-) {
-  if (
-    pin?.active ===
-      false
-  ) {
-    return {
-      pulse:
-        false,
-    }
-  }
-
-
-  const explicitType =
-    normalizeCompareText(
-      pin?.newType
-    )
-
-
-  const category =
-    normalizeCompareText(
-      pin?.category
-    )
-
-
-  const isEvent =
-    explicitType ===
-      'events' ||
-    EVENT_CATEGORIES.includes(
-      category
-    )
-
-
-  const isSport =
-    explicitType ===
-      'sports' ||
-    SPORTS_CATEGORIES.includes(
-      category
-    )
-
-
-  if (
-    !isEvent &&
-    !isSport
-  ) {
-    return {
-      pulse:
-        false,
-    }
-  }
-
-
-  const startMs =
-    parseScheduledWallClockMs({
-      eventDate:
-        pin?.eventDate,
-
-      time:
-        pin?.startTime,
-    })
-
-
-  let endMs =
-    parseScheduledWallClockMs({
-      eventDate:
-        pin?.eventDate,
-
-      time:
-        pin?.endTime,
-    })
-
-
-  if (
-    startMs ===
-      null ||
-    endMs ===
-      null
-  ) {
-    return {
-      pulse:
-        false,
-    }
-  }
-
-
-  if (
-    endMs <=
-      startMs
-  ) {
-    endMs +=
-      24 *
-      60 *
-      60 *
-      1000
-  }
-
-
-  const nowMs =
-    getTorontoWallClockNowMs()
-
-
-  if (
-    nowMs <
-      startMs ||
-    nowMs >=
-      endMs
-  ) {
-    return {
-      pulse:
-        false,
-    }
-  }
-
-
-  return {
-    pulse:
-      true,
-
-    forever:
-      false,
-
-    remainingMs:
-      endMs -
-      nowMs,
-  }
-}
-
-
 function getMarkerPulseState({
   pin,
   pinType,
@@ -5219,9 +4389,10 @@ function getMarkerPulseState({
     pinType ===
       'new'
   ) {
-    return getLiveScheduledNewPulseState(
-      pin
-    )
+    return {
+      pulse:
+        false,
+    }
   }
 
 
@@ -6281,19 +5452,10 @@ function createMarker({
       : null
 
 
-  const newEventIcon =
+  const newCommunityIcon =
     pinType ===
     'new'
-      ? getNewEventIcon(
-          pin
-        )
-      : null
-
-
-  const newSportsIcon =
-    pinType ===
-    'new'
-      ? getNewSportsIcon(
+      ? getNewCommunityIcon(
           pin
         )
       : null
@@ -6507,10 +5669,10 @@ function createMarker({
     })
   }
   else if (
-    newEventIcon
+    newCommunityIcon
   ) {
     element.className =
-      'geographic-pin-emoji-marker geographic-pin-new-event-emoji-marker'
+      'geographic-pin-emoji-marker geographic-pin-new-community-emoji-marker'
 
     element.style.width =
       '32px'
@@ -6557,80 +5719,13 @@ function createMarker({
     element.setAttribute(
       'aria-label',
       pin.title
-        ? `${newEventIcon.label} · ${pin.title}`
-        : `${newEventIcon.label} marker`
+        ? `${newCommunityIcon.label} · ${pin.title}`
+        : `${newCommunityIcon.label} marker`
     )
 
     appendEmojiMarkerIcon(
       element,
-      newEventIcon.emoji
-    )
-
-
-    applyMarkerActivityPulse({
-      element,
-      pin,
-      pinType,
-    })
-  }
-  else if (
-    newSportsIcon
-  ) {
-    element.className =
-      'geographic-pin-emoji-marker geographic-pin-new-sports-emoji-marker'
-
-    element.style.width =
-      '32px'
-
-    element.style.height =
-      '32px'
-
-    element.style.padding =
-      '0'
-
-    element.style.margin =
-      '0'
-
-    element.style.border =
-      'none'
-
-    element.style.borderRadius =
-      '0'
-
-    element.style.background =
-      'transparent'
-
-    element.style.boxShadow =
-      'none'
-
-    element.style.cursor =
-      'pointer'
-
-    element.style.display =
-      'flex'
-
-    element.style.alignItems =
-      'center'
-
-    element.style.justifyContent =
-      'center'
-
-    element.style.appearance =
-      'none'
-
-    element.style.WebkitAppearance =
-      'none'
-
-    element.setAttribute(
-      'aria-label',
-      pin.title
-        ? `${newSportsIcon.label} · ${pin.title}`
-        : `${newSportsIcon.label} marker`
-    )
-
-    appendEmojiMarkerIcon(
-      element,
-      newSportsIcon.emoji
+      newCommunityIcon.emoji
     )
 
 
@@ -6879,42 +5974,34 @@ function createMarker({
       pinType ===
       'new'
     ) {
-      const ageLabel =
-        BUSINESS_CATEGORIES.includes(
-          String(
-            pin.category ||
-            ''
-          )
-            .toLowerCase()
+      const category =
+        normalizeCompareText(
+          pin.category
         )
+
+
+      const isBusiness =
+        normalizeCompareText(
+          pin.newType
+        ) ===
+          'business' ||
+        BUSINESS_CATEGORIES.includes(
+          category
+        )
+
+
+      const isCommunity =
+        COMMUNITY_CATEGORIES.includes(
+          category
+        )
+
+
+      const ageLabel =
+        isBusiness
           ? getNewBusinessAgeLabel(
               pin
             )
           : ''
-
-
-      const isEvent =
-        normalizeCompareText(
-          pin.newType
-        ) ===
-          'events' ||
-        EVENT_CATEGORIES.includes(
-          normalizeCompareText(
-            pin.category
-          )
-        )
-
-
-      const isSport =
-        normalizeCompareText(
-          pin.newType
-        ) ===
-          'sports' ||
-        SPORTS_CATEGORIES.includes(
-          normalizeCompareText(
-            pin.category
-          )
-        )
 
 
       appendText({
@@ -6925,12 +6012,12 @@ function createMarker({
           'geographic-pin-year',
 
         text:
-          (
-            isEvent ||
-            isSport
-          )
-            ? formatEventCardDateTime(
-                pin
+          isCommunity
+            ? formatStatus(
+                category ===
+                  'community-place'
+                  ? 'community'
+                  : category
               )
             : [
                 formatStatus(
@@ -6969,56 +6056,25 @@ function createMarker({
 
       text:
         (
+          pinType ===
+            'new' &&
           (
-            pinType ===
-              'new' &&
-            (
+            normalizeCompareText(
+              pin.newType
+            ) ===
+              'business' ||
+            BUSINESS_CATEGORIES.includes(
               normalizeCompareText(
-                pin.newType
-              ) ===
-                'events' ||
-              normalizeCompareText(
-                pin.newType
-              ) ===
-                'sports' ||
-              EVENT_CATEGORIES.includes(
-                normalizeCompareText(
-                  pin.category
-                )
-              ) ||
-              SPORTS_CATEGORIES.includes(
-                normalizeCompareText(
-                  pin.category
-                )
+                pin.category
               )
             )
           )
-            ? (
-                pin.venue ||
-                pin.intersection ||
-                pin.location
+            ? getNewBusinessLocationLabel(
+                pin
               )
             : (
-                pinType ===
-                  'new' &&
-                (
-                  normalizeCompareText(
-                    pin.newType
-                  ) ===
-                    'business' ||
-                  BUSINESS_CATEGORIES.includes(
-                    normalizeCompareText(
-                      pin.category
-                    )
-                  )
-                )
-                  ? getNewBusinessLocationLabel(
-                      pin
-                    )
-                  : (
-                      pin.intersection ||
-                      pin.location
-                    )
+                pin.intersection ||
+                pin.location
               )
         ),
     })
@@ -8747,23 +7803,8 @@ function MapPins({
             ),
 
             loadPublishedNewEndpoint(
-              PUBLISHED_NEW_DEVELOPMENT_ENDPOINT,
-              'Published NEW development'
-            ),
-
-            loadPublishedNewEndpoint(
               PUBLISHED_NEW_EVENTS_ENDPOINT,
-              'Published NEW events'
-            ),
-
-            loadPublishedNewEndpoint(
-              PUBLISHED_NEW_SPORTS_ENDPOINT,
-              'Published NEW sports'
-            ),
-
-            loadPublishedNewEndpoint(
-              PUBLISHED_NEW_REAL_ESTATE_ENDPOINT,
-              'Published NEW real estate'
+              'Published NEW community'
             ),
           ])
 
