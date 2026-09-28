@@ -6381,10 +6381,10 @@ function appendEmojiMarkerIcon(
     'center'
 
   iconShell.style.flex =
-    '0 0 28px'
+    '0 0 24px'
 
-  // Mobile markers should read as map symbols, not white UI buttons.
-  // Keep every existing pin/category decision above intact; presentation only.
+  // Mobile markers should read as restrained map symbols rather than
+  // oversized emoji stickers. Keep all category/icon logic untouched.
   iconShell.style.border =
     '0'
 
@@ -6398,13 +6398,16 @@ function appendEmojiMarkerIcon(
     'none'
 
   iconShell.style.filter =
-    'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.52))'
+    'none'
 
   iconShell.style.fontSize =
-    '21px'
+    '19px'
 
   iconShell.style.lineHeight =
     '1'
+
+  iconShell.style.opacity =
+    '0.94'
 
   iconShell.style.pointerEvents =
     'none'
