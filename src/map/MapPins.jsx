@@ -48,8 +48,20 @@ const PUBLISHED_NEW_BUSINESS_ENDPOINT =
   '/api/geographic/toronto/new/business/published?status=all'
 
 
+const PUBLISHED_NEW_DEVELOPMENT_ENDPOINT =
+  '/api/geographic/toronto/new/development/published?status=all'
+
+
 const PUBLISHED_NEW_EVENTS_ENDPOINT =
   '/api/geographic/toronto/new/events/published?status=all'
+
+
+const PUBLISHED_NEW_SPORTS_ENDPOINT =
+  '/api/geographic/toronto/new/sports/published?status=all'
+
+
+const PUBLISHED_NEW_REAL_ESTATE_ENDPOINT =
+  '/api/geographic/toronto/new/real-estate/published?status=all'
 
 
 const PUBLISHED_NEW_REFRESH_MS =
@@ -67,24 +79,42 @@ const BUSINESS_CATEGORIES = [
 ]
 
 
-const COMMUNITY_CATEGORIES = [
-  'community',
-  'community-place',
-  'library',
-  'community-centre',
-  'gallery',
-  'cinema',
-  'rink',
-  'skatepark',
-  'basketball-court',
-  'tennis-court',
-  'pickleball-court',
-  'bike-park',
-  'sports-court',
-  'pool',
-  'market',
-  'park',
+const DEVELOPMENT_CATEGORIES = [
+  'development',
+  'construction',
+  'housing',
+  'transit',
   'public-space',
+]
+
+
+const EVENT_CATEGORIES = [
+  'event',
+  'theatre',
+  'comedy',
+  'concert',
+  'festival',
+  'exhibition',
+  'talk',
+  'screening',
+  'community-event',
+]
+
+
+const SPORTS_CATEGORIES = [
+  'sports',
+  'game',
+  'match',
+]
+
+
+const REAL_ESTATE_CATEGORIES = [
+  'condo',
+  'house',
+  'rental',
+  'commercial',
+  'land',
+  'real-estate-other',
 ]
 
 
@@ -127,6 +157,26 @@ const NEW_LIFECYCLE_DAYS = {
 
     cancelled:
       14,
+  },
+
+  development: {
+    proposed:
+      180,
+
+    approved:
+      365,
+
+    construction:
+      365,
+
+    'opening-soon':
+      90,
+
+    open:
+      60,
+
+    cancelled:
+      30,
   },
 
   other: {
@@ -178,89 +228,190 @@ function newPinMatchesSubtype(
   pin,
   subtype
 ) {
+  if (
+    !subtype
+  ) {
+    return true
+  }
+
   const explicitType =
     String(
-      pin?.newType ||
+      pin.newType ||
       ''
     )
-      .trim()
       .toLowerCase()
 
 
   const category =
     String(
-      pin?.category ||
+      pin.category ||
       ''
     )
-      .trim()
       .toLowerCase()
 
 
-  const retiredType =
-    [
-      'development',
-      'sports',
-      'real-estate',
-    ].includes(
-      explicitType
-    )
-
-
-  const isBusiness =
-    !retiredType &&
+  const realEstatePin =
+    explicitType ===
+      'real-estate' ||
     (
-      explicitType ===
-        'business' ||
-      BUSINESS_CATEGORIES.includes(
+      !explicitType &&
+      REAL_ESTATE_CATEGORIES.includes(
         category
       )
     )
 
 
-  // Community is persisted through the old /new/events endpoint.
-  // Requiring that stored type prevents old Development public-space pins or
-  // old event pins from leaking into the Community layer.
-  const isCommunity =
-    (
-      explicitType ===
-        'events' ||
-      explicitType ===
-        'community'
-    ) &&
-    COMMUNITY_CATEGORIES.includes(
-      category
-    )
-
-
   if (
-    !subtype ||
     subtype ===
       'all'
   ) {
     return (
-      isBusiness ||
-      isCommunity
+      explicitType ===
+        'business' ||
+      explicitType ===
+        'events' ||
+      realEstatePin ||
+      (
+        !explicitType &&
+        (
+          BUSINESS_CATEGORIES.includes(
+            category
+          ) ||
+          EVENT_CATEGORIES.includes(
+            category
+          )
+        )
+      )
+    )
+  }
+
+  if (
+    subtype ===
+    'businesses'
+  ) {
+    return (
+      explicitType ===
+        'business' ||
+      (
+        !explicitType &&
+        BUSINESS_CATEGORIES.includes(
+          category
+        )
+      )
+    )
+  }
+
+  if (
+    subtype ===
+    'developments'
+  ) {
+    return (
+      explicitType ===
+        'development' ||
+      (
+        !explicitType &&
+        DEVELOPMENT_CATEGORIES.includes(
+          category
+        )
+      )
+    )
+  }
+
+  if (
+    subtype ===
+    'events'
+  ) {
+    return (
+      explicitType ===
+        'events' ||
+      (
+        !explicitType &&
+        EVENT_CATEGORIES.includes(
+          category
+        )
+      )
+    )
+  }
+
+  if (
+    subtype ===
+    'sports'
+  ) {
+    return (
+      explicitType ===
+        'sports' ||
+      (
+        !explicitType &&
+        SPORTS_CATEGORIES.includes(
+          category
+        )
+      )
     )
   }
 
 
   if (
     subtype ===
-      'businesses'
+      'real-estate' ||
+    subtype.startsWith(
+      'real-estate:'
+    )
   ) {
-    return isBusiness
+    if (
+      !realEstatePin
+    ) {
+      return false
+    }
+
+
+    const requestedCategory =
+      subtype.includes(
+        ':'
+      )
+        ? subtype
+            .slice(
+              subtype.indexOf(
+                ':'
+              ) +
+              1
+            )
+            .trim()
+        : 'all'
+
+
+    if (
+      !requestedCategory ||
+      requestedCategory ===
+        'all'
+    ) {
+      return true
+    }
+
+
+    if (
+      requestedCategory ===
+        'other'
+    ) {
+      return (
+        category ===
+          'real-estate-other' ||
+        (
+          explicitType ===
+            'real-estate' &&
+          category ===
+            'other'
+        )
+      )
+    }
+
+
+    return (
+      category ===
+      requestedCategory
+    )
   }
 
-
-  if (
-    subtype ===
-      'community'
-  ) {
-    return isCommunity
-  }
-
-
-  return false
+  return true
 }
 
 
@@ -672,9 +823,11 @@ function getNewLifecycleGroup(
 
   if (
     explicitType ===
-      'business'
+      'business' ||
+    explicitType ===
+      'development'
   ) {
-    return 'business'
+    return explicitType
   }
 
 
@@ -691,6 +844,14 @@ function getNewLifecycleGroup(
     )
   ) {
     return 'business'
+  }
+
+  if (
+    DEVELOPMENT_CATEGORIES.includes(
+      category
+    )
+  ) {
+    return 'development'
   }
 
   return 'other'
@@ -2558,1044 +2719,6 @@ function appendMobileBusinessLink({
 }
 
 
-function formatCommunityProgramWhen(
-  value
-) {
-  const text =
-    String(
-      value ||
-      ''
-    )
-      .trim()
-
-
-  if (
-    !text
-  ) {
-    return ''
-  }
-
-
-  const date =
-    new Date(
-      text
-    )
-
-
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
-    return text
-  }
-
-
-  const dateText =
-    date.toLocaleDateString(
-      'en-CA',
-      {
-        timeZone:
-          'America/Toronto',
-
-        weekday:
-          'short',
-
-        month:
-          'short',
-
-        day:
-          'numeric',
-      }
-    )
-      .replace(
-        /,/g,
-        ''
-      )
-      .toUpperCase()
-
-
-  const timeText =
-    date.toLocaleTimeString(
-      'en-CA',
-      {
-        timeZone:
-          'America/Toronto',
-
-        hour:
-          'numeric',
-
-        minute:
-          '2-digit',
-
-        hour12:
-          true,
-      }
-    )
-      .replace(
-        /\s*a\.m\./i,
-        ' AM'
-      )
-      .replace(
-        /\s*p\.m\./i,
-        ' PM'
-      )
-      .replace(
-        /\./g,
-        ''
-      )
-      .toUpperCase()
-
-
-  return (
-    dateText +
-    ' · ' +
-    timeText
-  )
-}
-
-function formatCommunityProgramAge(
-  program
-) {
-  const rawMin =
-    program?.ageMin
-
-
-  const rawMax =
-    program?.ageMax
-
-
-  const hasMin =
-    rawMin !==
-      undefined &&
-    rawMin !==
-      null &&
-    String(
-      rawMin
-    )
-      .trim() !==
-      ''
-
-
-  const hasMax =
-    rawMax !==
-      undefined &&
-    rawMax !==
-      null &&
-    String(
-      rawMax
-    )
-      .trim() !==
-      ''
-
-
-  if (
-    !hasMin &&
-    !hasMax
-  ) {
-    return ''
-  }
-
-
-  const min =
-    hasMin
-      ? Number(
-          rawMin
-        )
-      : null
-
-
-  const max =
-    hasMax
-      ? Number(
-          rawMax
-        )
-      : null
-
-
-  const validMin =
-    min !==
-      null &&
-    Number.isFinite(
-      min
-    )
-
-
-  const validMax =
-    max !==
-      null &&
-    Number.isFinite(
-      max
-    )
-
-
-  if (
-    !validMin &&
-    !validMax
-  ) {
-    return ''
-  }
-
-
-  if (
-    validMin &&
-    validMax
-  ) {
-    if (
-      min ===
-        max
-    ) {
-      return `AGE ${min}`
-    }
-
-
-    return `AGES ${min}–${max}`
-  }
-
-
-  if (
-    validMin
-  ) {
-    return `AGES ${min}+`
-  }
-
-
-  return `AGES 0–${max}`
-}
-
-
-function formatCommunityProgramPrice(
-  program
-) {
-  const raw =
-    program?.price
-
-
-  if (
-    raw ===
-      undefined ||
-    raw ===
-      null ||
-    String(
-      raw
-    )
-      .trim() ===
-      ''
-  ) {
-    return ''
-  }
-
-
-  const numeric =
-    Number(
-      raw
-    )
-
-
-  if (
-    !Number.isFinite(
-      numeric
-    )
-  ) {
-    return String(
-      raw
-    )
-      .trim()
-  }
-
-
-  return (
-    '$' +
-    numeric.toLocaleString(
-      'en-CA',
-      {
-        minimumFractionDigits:
-          Number.isInteger(
-            numeric
-          )
-            ? 0
-            : 2,
-
-        maximumFractionDigits:
-          2,
-      }
-    )
-  )
-}
-
-
-function appendOutdoorRecreationUses({
-  parent,
-  pin,
-}) {
-  const activities =
-    Array.isArray(
-      pin?.outdoorActivities
-    )
-      ? pin.outdoorActivities
-          .map(
-            (value) =>
-              String(
-                value ||
-                ''
-              )
-                .trim()
-          )
-          .filter(
-            Boolean
-          )
-      : []
-
-
-  if (
-    activities.length ===
-      0
-  ) {
-    return
-  }
-
-
-  const shell =
-    document.createElement(
-      'div'
-    )
-
-
-  shell.style.marginTop =
-    '12px'
-
-
-  shell.style.paddingTop =
-    '10px'
-
-
-  shell.style.borderTop =
-    '1px solid rgba(0,0,0,0.12)'
-
-
-  const heading =
-    document.createElement(
-      'div'
-    )
-
-
-  heading.className =
-    'geographic-pin-category'
-
-
-  heading.textContent =
-    'FACILITIES'
-
-
-  heading.style.marginBottom =
-    '3px'
-
-
-  shell.appendChild(
-    heading
-  )
-
-
-  appendText({
-    parent:
-      shell,
-
-    className:
-      'geographic-pin-description',
-
-    text:
-      activities.join(
-        ' · '
-      ),
-  })
-
-
-  parent.appendChild(
-    shell
-  )
-}
-
-
-function appendAquaticsStatus({
-  parent,
-  pin,
-}) {
-  const facilities =
-    Array.isArray(
-      pin?.aquaticFacilities
-    )
-      ? pin.aquaticFacilities
-          .filter(
-            (facility) =>
-              Boolean(
-                facility?.typeLabel
-              )
-          )
-      : []
-
-
-  if (
-    facilities.length ===
-      0
-  ) {
-    return
-  }
-
-
-  const shell =
-    document.createElement(
-      'div'
-    )
-
-
-  shell.style.marginTop =
-    '12px'
-
-
-  shell.style.paddingTop =
-    '10px'
-
-
-  shell.style.borderTop =
-    '1px solid rgba(0,0,0,0.12)'
-
-
-  const heading =
-    document.createElement(
-      'div'
-    )
-
-
-  heading.className =
-    'geographic-pin-category'
-
-
-  heading.textContent =
-    'AQUATICS'
-
-
-  heading.style.marginBottom =
-    '3px'
-
-
-  shell.appendChild(
-    heading
-  )
-
-
-  facilities.forEach(
-    (
-      facility,
-      index
-    ) => {
-      if (
-        index >
-          0
-      ) {
-        const spacer =
-          document.createElement(
-            'div'
-          )
-
-
-        spacer.style.marginTop =
-          '6px'
-
-
-        shell.appendChild(
-          spacer
-        )
-      }
-
-
-      appendText({
-        parent:
-          shell,
-
-        className:
-          'geographic-pin-description',
-
-        text:
-          String(
-            facility?.typeLabel ||
-            ''
-          )
-            .trim(),
-      })
-
-
-      const status =
-        String(
-          facility?.currentStatus ||
-          ''
-        )
-          .trim()
-
-
-      if (
-        status
-      ) {
-        const statusElement =
-          document.createElement(
-            'div'
-          )
-
-
-        statusElement.className =
-          'geographic-pin-year'
-
-
-        statusElement.textContent =
-          status
-
-
-        statusElement.style.marginTop =
-          '2px'
-
-
-        statusElement.style.fontSize =
-          '10px'
-
-
-        statusElement.style.fontWeight =
-          '700'
-
-
-        shell.appendChild(
-          statusElement
-        )
-      }
-
-
-      const season =
-        String(
-          facility?.seasonLabel ||
-          ''
-        )
-          .trim()
-
-
-      if (
-        season
-      ) {
-        const seasonElement =
-          document.createElement(
-            'div'
-          )
-
-
-        seasonElement.className =
-          'geographic-pin-year'
-
-
-        seasonElement.textContent =
-          season
-
-
-        seasonElement.style.marginTop =
-          '2px'
-
-
-        seasonElement.style.fontSize =
-          '10px'
-
-
-        seasonElement.style.fontWeight =
-          '600'
-
-
-        shell.appendChild(
-          seasonElement
-        )
-      }
-    }
-  )
-
-
-  parent.appendChild(
-    shell
-  )
-}
-
-
-function appendRinkStatus({
-  parent,
-  pin,
-}) {
-  const facility =
-    pin?.rinkFacility
-
-
-  if (
-    !facility
-  ) {
-    return
-  }
-
-
-  const currentUse =
-    String(
-      facility?.currentUseLabel ||
-      ''
-    )
-      .trim()
-
-
-  const iceStatus =
-    String(
-      facility?.iceStatusLabel ||
-      ''
-    )
-      .trim()
-
-
-  const expectedIce =
-    String(
-      facility?.expectedIceLabel ||
-      ''
-    )
-      .trim()
-
-
-  if (
-    !currentUse &&
-    !iceStatus &&
-    !expectedIce
-  ) {
-    return
-  }
-
-
-  const shell =
-    document.createElement(
-      'div'
-    )
-
-
-  shell.style.marginTop =
-    '12px'
-
-
-  shell.style.paddingTop =
-    '10px'
-
-
-  shell.style.borderTop =
-    '1px solid rgba(0,0,0,0.12)'
-
-
-  const heading =
-    document.createElement(
-      'div'
-    )
-
-
-  heading.className =
-    'geographic-pin-category'
-
-
-  heading.textContent =
-    'CURRENT USE'
-
-
-  heading.style.marginBottom =
-    '3px'
-
-
-  shell.appendChild(
-    heading
-  )
-
-
-  if (
-    currentUse
-  ) {
-    appendText({
-      parent:
-        shell,
-
-      className:
-        'geographic-pin-description',
-
-      text:
-        currentUse,
-    })
-  }
-
-
-  if (
-    iceStatus
-  ) {
-    const status =
-      document.createElement(
-        'div'
-      )
-
-
-    status.className =
-      'geographic-pin-year'
-
-
-    status.textContent =
-      iceStatus
-
-
-    status.style.marginTop =
-      '3px'
-
-
-    status.style.fontSize =
-      '10px'
-
-
-    status.style.fontWeight =
-      '700'
-
-
-    shell.appendChild(
-      status
-    )
-  }
-
-
-  if (
-    expectedIce
-  ) {
-    const expected =
-      document.createElement(
-        'div'
-      )
-
-
-    expected.className =
-      'geographic-pin-year'
-
-
-    expected.textContent =
-      expectedIce
-
-
-    expected.style.marginTop =
-      '2px'
-
-
-    expected.style.fontSize =
-      '10px'
-
-
-    expected.style.fontWeight =
-      '600'
-
-
-    shell.appendChild(
-      expected
-    )
-  }
-
-
-  parent.appendChild(
-    shell
-  )
-}
-
-
-function appendCommunityPrograms({
-  parent,
-  pin,
-  programsOverride =
-    null,
-  headingText =
-    'UPCOMING',
-}) {
-  const sourcePrograms =
-    Array.isArray(
-      programsOverride
-    )
-      ? programsOverride
-      : pin?.upcomingPrograms
-
-
-  const programs =
-    Array.isArray(
-      sourcePrograms
-    )
-      ? sourcePrograms
-          .filter(
-            (program) =>
-              Boolean(
-                program?.title
-              )
-          )
-          .slice(
-            0,
-            3
-          )
-      : []
-
-
-  if (
-    programs.length ===
-      0
-  ) {
-    return
-  }
-
-
-  const shell =
-    document.createElement(
-      'div'
-    )
-
-
-  shell.style.marginTop =
-    '12px'
-
-
-  shell.style.paddingTop =
-    '10px'
-
-
-  shell.style.borderTop =
-    '1px solid rgba(0,0,0,0.12)'
-
-
-  const heading =
-    document.createElement(
-      'div'
-    )
-
-
-  heading.className =
-    'geographic-pin-category'
-
-
-  heading.textContent =
-    headingText
-
-
-  heading.style.marginBottom =
-    '2px'
-
-
-  shell.appendChild(
-    heading
-  )
-
-
-  programs.forEach(
-    (program) => {
-      const row =
-        document.createElement(
-          'div'
-        )
-
-
-      row.style.marginTop =
-        '9px'
-
-
-      const when =
-        formatCommunityProgramWhen(
-          program?.startTime ||
-          program?.date
-        )
-
-
-      if (
-        when
-      ) {
-        const whenElement =
-          document.createElement(
-            'div'
-          )
-
-
-        whenElement.className =
-          'geographic-pin-year'
-
-
-        whenElement.textContent =
-          when
-
-
-        whenElement.style.fontSize =
-          '10px'
-
-
-        whenElement.style.fontWeight =
-          '600'
-
-
-        whenElement.style.letterSpacing =
-          '0.06em'
-
-
-        whenElement.style.marginBottom =
-          '2px'
-
-
-        row.appendChild(
-          whenElement
-        )
-      }
-
-
-      const title =
-        document.createElement(
-          'div'
-        )
-
-
-      title.textContent =
-        String(
-          program?.title ||
-          ''
-        )
-          .trim()
-
-
-      title.style.fontSize =
-        '13px'
-
-
-      title.style.fontWeight =
-        '600'
-
-
-      title.style.lineHeight =
-        '1.25'
-
-
-      title.style.color =
-        '#111'
-
-
-      row.appendChild(
-        title
-      )
-
-
-      const ageLabel =
-        formatCommunityProgramAge(
-          program
-        )
-
-
-      if (
-        ageLabel
-      ) {
-        const age =
-          document.createElement(
-            'div'
-          )
-
-
-        age.className =
-          'geographic-pin-year'
-
-
-        age.textContent =
-          ageLabel
-
-
-        age.style.marginTop =
-          '2px'
-
-
-        age.style.fontSize =
-          '10px'
-
-
-        age.style.fontWeight =
-          '600'
-
-
-        row.appendChild(
-          age
-        )
-      }
-
-
-      const priceLabel =
-        formatCommunityProgramPrice(
-          program
-        )
-
-
-      if (
-        priceLabel
-      ) {
-        const price =
-          document.createElement(
-            'div'
-          )
-
-
-        price.className =
-          'geographic-pin-year'
-
-
-        price.textContent =
-          priceLabel
-
-
-        price.style.marginTop =
-          '2px'
-
-
-        price.style.fontSize =
-          '10px'
-
-
-        price.style.fontWeight =
-          '600'
-
-
-        row.appendChild(
-          price
-        )
-      }
-
-
-      if (
-        program?.isFull
-      ) {
-        const full =
-          document.createElement(
-            'div'
-          )
-
-
-        full.className =
-          'geographic-pin-year'
-
-
-        full.textContent =
-          'REGISTRATION FULL / CLOSED'
-
-
-        full.style.marginTop =
-          '2px'
-
-
-        row.appendChild(
-          full
-        )
-      }
-
-
-      shell.appendChild(
-        row
-      )
-    }
-  )
-
-
-  parent.appendChild(
-    shell
-  )
-}
-
 // ============================================================
 // SEE IT THEN
 // ============================================================
@@ -4176,77 +3299,136 @@ function getNewBusinessIcon(
 }
 
 
-const NEW_COMMUNITY_ICONS = {
+const NEW_EVENT_ICONS = {
+  music: {
+    emoji:
+      '🎵',
+
+    label:
+      'Music / Concert',
+  },
+
+  food: {
+    emoji:
+      '🍴',
+
+    label:
+      'Food / Pop-up',
+  },
+
+  theatre: {
+    emoji:
+      '🎭',
+
+    label:
+      'Theatre / Play',
+  },
+
+  comedy: {
+    emoji:
+      '🎤',
+
+    label:
+      'Comedy',
+  },
+
+  art: {
+    emoji:
+      '🎨',
+
+    label:
+      'Art / Exhibition',
+  },
+
+  film: {
+    emoji:
+      '🎬',
+
+    label:
+      'Film / Screening',
+  },
+
+  festival: {
+    emoji:
+      '🎪',
+
+    label:
+      'Festival',
+  },
+
+  talk: {
+    emoji:
+      '💬',
+
+    label:
+      'Talk / Lecture',
+  },
+
   community: {
     emoji:
       '📍',
 
     label:
-      'Community',
+      'Community / General',
   },
+}
 
-  library: {
+
+function getNewEventIcon(
+  pin
+) {
+  const explicitType =
+    normalizeCompareText(
+      pin?.newType
+    )
+
+
+  const category =
+    normalizeCompareText(
+      pin?.category
+    )
+
+
+  if (
+    explicitType !==
+      'events' &&
+    !EVENT_CATEGORIES.includes(
+      category
+    )
+  ) {
+    return null
+  }
+
+
+  const iconKey =
+    normalizeCompareText(
+      pin?.eventPinIcon
+    )
+
+
+  if (
+    !iconKey
+  ) {
+    return null
+  }
+
+
+  return (
+    NEW_EVENT_ICONS[
+      iconKey
+    ] ||
+    null
+  )
+}
+
+
+const NEW_SPORTS_ICONS = {
+  hockey: {
     emoji:
-      '📚',
+      '🏒',
 
     label:
-      'Library',
-  },
-
-  'community-centre': {
-    emoji:
-      '🏛️',
-
-    label:
-      'Community Centre',
-  },
-
-  learn4life: {
-    emoji:
-      '🏫',
-
-    label:
-      'Learn4Life',
-  },
-
-  gallery: {
-    emoji:
-      '🖼️',
-
-    label:
-      'Gallery',
-  },
-
-  cinema: {
-    emoji:
-      '🎬',
-
-    label:
-      'Cinema',
-  },
-
-  rink: {
-    emoji:
-      '⛸️',
-
-    label:
-      'Rink',
-  },
-
-  skateboard: {
-    emoji:
-      '🛹',
-
-    label:
-      'Skatepark',
-  },
-
-  'dry-pad': {
-    emoji:
-      '🏟️',
-
-    label:
-      'Dry Pad',
+      'Hockey',
   },
 
   basketball: {
@@ -4257,6 +3439,30 @@ const NEW_COMMUNITY_ICONS = {
       'Basketball',
   },
 
+  baseball: {
+    emoji:
+      '⚾',
+
+    label:
+      'Baseball',
+  },
+
+  soccer: {
+    emoji:
+      '⚽',
+
+    label:
+      'Soccer',
+  },
+
+  football: {
+    emoji:
+      '🏈',
+
+    label:
+      'Football',
+  },
+
   tennis: {
     emoji:
       '🎾',
@@ -4265,91 +3471,73 @@ const NEW_COMMUNITY_ICONS = {
       'Tennis',
   },
 
-  pickleball: {
+  golf: {
     emoji:
-      '🏓',
+      '⛳',
 
     label:
-      'Pickleball',
+      'Golf',
   },
 
-  'bike-park': {
+  lacrosse: {
+    emoji:
+      '🥍',
+
+    label:
+      'Lacrosse',
+  },
+
+  boxing: {
+    emoji:
+      '🥊',
+
+    label:
+      'Boxing',
+  },
+
+  running: {
+    emoji:
+      '🏃',
+
+    label:
+      'Running / Road Race',
+  },
+
+  cycling: {
     emoji:
       '🚲',
 
     label:
-      'Bike Park',
+      'Cycling',
   },
 
-  'sports-court': {
+  motorsport: {
     emoji:
-      '🏟️',
+      '🏁',
 
     label:
-      'Sports Court',
+      'Motorsport',
   },
 
-  pool: {
+  general: {
     emoji:
-      '🏊',
+      '🏆',
 
     label:
-      'Pool',
-  },
-
-  'splash-pad': {
-    emoji:
-      '💦',
-
-    label:
-      'Splash Pad',
-  },
-
-  'wading-pool': {
-    emoji:
-      '💧',
-
-    label:
-      'Wading Pool',
-  },
-
-  'water-park': {
-    emoji:
-      '🌊',
-
-    label:
-      'Water Park',
-  },
-
-  market: {
-    emoji:
-      '🧺',
-
-    label:
-      'Market',
-  },
-
-  park: {
-    emoji:
-      '🌳',
-
-    label:
-      'Park',
-  },
-
-  'public-space': {
-    emoji:
-      '🌐',
-
-    label:
-      'Public Space',
+      'General Sports',
   },
 }
 
 
-function getNewCommunityIcon(
+function getNewSportsIcon(
   pin
 ) {
+  const explicitType =
+    normalizeCompareText(
+      pin?.newType
+    )
+
+
   const category =
     normalizeCompareText(
       pin?.category
@@ -4357,7 +3545,9 @@ function getNewCommunityIcon(
 
 
   if (
-    !COMMUNITY_CATEGORIES.includes(
+    explicitType !==
+      'sports' &&
+    !SPORTS_CATEGORIES.includes(
       category
     )
   ) {
@@ -4365,30 +3555,161 @@ function getNewCommunityIcon(
   }
 
 
-  const communityType =
+  const iconKey =
     normalizeCompareText(
-      pin?.communityType
+      pin?.sportsPinIcon
     )
 
 
-  const iconKey =
-    communityType ===
-      'learn4life'
-      ? 'learn4life'
-      : (
-          normalizeCompareText(
-            pin?.eventPinIcon
-          ) ||
-          category
-        )
+  if (
+    !iconKey
+  ) {
+    return null
+  }
 
 
   return (
-    NEW_COMMUNITY_ICONS[
+    NEW_SPORTS_ICONS[
       iconKey
     ] ||
-    NEW_COMMUNITY_ICONS.community
+    null
   )
+}
+
+
+function formatEventCardDateTime(
+  pin
+) {
+  const dateText =
+    String(
+      pin?.eventDate ||
+      ''
+    )
+      .trim()
+
+
+  const timeText =
+    String(
+      pin?.startTime ||
+      ''
+    )
+      .trim()
+
+
+  let dateLabel =
+    ''
+
+
+  if (
+    dateText
+  ) {
+    const date =
+      new Date(
+        `${dateText}T12:00:00`
+      )
+
+
+    if (
+      !Number.isNaN(
+        date.getTime()
+      )
+    ) {
+      dateLabel =
+        date
+          .toLocaleDateString(
+            'en-CA',
+            {
+              weekday:
+                'short',
+
+              month:
+                'short',
+
+              day:
+                'numeric',
+            }
+          )
+          .toUpperCase()
+    } else {
+      dateLabel =
+        dateText.toUpperCase()
+    }
+  }
+
+
+  let timeLabel =
+    ''
+
+
+  if (
+    /^\d{2}:\d{2}$/.test(
+      timeText
+    )
+  ) {
+    const [
+      hourText,
+      minuteText,
+    ] =
+      timeText.split(
+        ':'
+      )
+
+
+    const hour =
+      Number(
+        hourText
+      )
+
+
+    const minute =
+      Number(
+        minuteText
+      )
+
+
+    if (
+      Number.isFinite(
+        hour
+      ) &&
+      Number.isFinite(
+        minute
+      )
+    ) {
+      const suffix =
+        hour >=
+          12
+          ? 'PM'
+          : 'AM'
+
+
+      const displayHour =
+        hour %
+          12 ||
+        12
+
+
+      timeLabel =
+        `${displayHour}:` +
+        `${String(
+          minute
+        ).padStart(
+          2,
+          '0'
+        )} ${suffix}`
+    }
+  }
+
+
+  return [
+    dateLabel,
+    timeLabel,
+  ]
+    .filter(
+      Boolean
+    )
+    .join(
+      ' · '
+    )
 }
 
 
@@ -5504,7 +4825,12 @@ function appendEmojiMarkerIcon(
 //   - Police pulse for their first 3 hours
 //   - Fire pulses for its first 8 hours
 //
-// NEW pins do not use scheduled event/game pulse behavior.
+// NEW:
+//   - Events pulse only while their scheduled event is happening
+//   - Sports pulse only while their scheduled game/match is happening
+//   - Other NEW pins do not pulse
+//
+// Event and Sports times are interpreted in America/Toronto.
 //
 // Reduced-motion users get a steady glow instead of animation.
 //
@@ -5524,6 +4850,367 @@ const FIRE_NEWS_MARKER_WINDOW_MS =
   1000
 
 
+function getTorontoWallClockNowMs() {
+  const parts =
+    new Intl.DateTimeFormat(
+      'en-CA',
+      {
+        timeZone:
+          'America/Toronto',
+
+        year:
+          'numeric',
+
+        month:
+          '2-digit',
+
+        day:
+          '2-digit',
+
+        hour:
+          '2-digit',
+
+        minute:
+          '2-digit',
+
+        second:
+          '2-digit',
+
+        hourCycle:
+          'h23',
+      }
+    )
+      .formatToParts(
+        new Date()
+      )
+
+
+  const values =
+    Object.fromEntries(
+      parts
+        .filter(
+          (part) =>
+            part.type !==
+              'literal'
+        )
+        .map(
+          (part) => [
+            part.type,
+            part.value,
+          ]
+        )
+    )
+
+
+  const year =
+    Number(
+      values.year
+    )
+
+  const month =
+    Number(
+      values.month
+    )
+
+  const day =
+    Number(
+      values.day
+    )
+
+  const hour =
+    Number(
+      values.hour
+    )
+
+  const minute =
+    Number(
+      values.minute
+    )
+
+  const second =
+    Number(
+      values.second
+    )
+
+
+  if (
+    !Number.isFinite(
+      year
+    ) ||
+    !Number.isFinite(
+      month
+    ) ||
+    !Number.isFinite(
+      day
+    ) ||
+    !Number.isFinite(
+      hour
+    ) ||
+    !Number.isFinite(
+      minute
+    ) ||
+    !Number.isFinite(
+      second
+    )
+  ) {
+    return Date.now()
+  }
+
+
+  return Date.UTC(
+    year,
+    month - 1,
+    day,
+    hour,
+    minute,
+    second
+  )
+}
+
+
+function parseScheduledWallClockMs({
+  eventDate,
+  time,
+}) {
+  const dateText =
+    String(
+      eventDate ||
+      ''
+    )
+      .trim()
+
+
+  const timeText =
+    String(
+      time ||
+      ''
+    )
+      .trim()
+
+
+  const dateMatch =
+    dateText.match(
+      /^(\d{4})-(\d{2})-(\d{2})$/
+    )
+
+
+  const timeMatch =
+    timeText.match(
+      /^(\d{2}):(\d{2})$/
+    )
+
+
+  if (
+    !dateMatch ||
+    !timeMatch
+  ) {
+    return null
+  }
+
+
+  const year =
+    Number(
+      dateMatch[1]
+    )
+
+  const month =
+    Number(
+      dateMatch[2]
+    )
+
+  const day =
+    Number(
+      dateMatch[3]
+    )
+
+  const hour =
+    Number(
+      timeMatch[1]
+    )
+
+  const minute =
+    Number(
+      timeMatch[2]
+    )
+
+
+  if (
+    !Number.isFinite(
+      year
+    ) ||
+    !Number.isFinite(
+      month
+    ) ||
+    month <
+      1 ||
+    month >
+      12 ||
+    !Number.isFinite(
+      day
+    ) ||
+    day <
+      1 ||
+    day >
+      31 ||
+    !Number.isFinite(
+      hour
+    ) ||
+    hour <
+      0 ||
+    hour >
+      23 ||
+    !Number.isFinite(
+      minute
+    ) ||
+    minute <
+      0 ||
+    minute >
+      59
+  ) {
+    return null
+  }
+
+
+  return Date.UTC(
+    year,
+    month - 1,
+    day,
+    hour,
+    minute,
+    0
+  )
+}
+
+
+function getLiveScheduledNewPulseState(
+  pin
+) {
+  if (
+    pin?.active ===
+      false
+  ) {
+    return {
+      pulse:
+        false,
+    }
+  }
+
+
+  const explicitType =
+    normalizeCompareText(
+      pin?.newType
+    )
+
+
+  const category =
+    normalizeCompareText(
+      pin?.category
+    )
+
+
+  const isEvent =
+    explicitType ===
+      'events' ||
+    EVENT_CATEGORIES.includes(
+      category
+    )
+
+
+  const isSport =
+    explicitType ===
+      'sports' ||
+    SPORTS_CATEGORIES.includes(
+      category
+    )
+
+
+  if (
+    !isEvent &&
+    !isSport
+  ) {
+    return {
+      pulse:
+        false,
+    }
+  }
+
+
+  const startMs =
+    parseScheduledWallClockMs({
+      eventDate:
+        pin?.eventDate,
+
+      time:
+        pin?.startTime,
+    })
+
+
+  let endMs =
+    parseScheduledWallClockMs({
+      eventDate:
+        pin?.eventDate,
+
+      time:
+        pin?.endTime,
+    })
+
+
+  if (
+    startMs ===
+      null ||
+    endMs ===
+      null
+  ) {
+    return {
+      pulse:
+        false,
+    }
+  }
+
+
+  if (
+    endMs <=
+      startMs
+  ) {
+    endMs +=
+      24 *
+      60 *
+      60 *
+      1000
+  }
+
+
+  const nowMs =
+    getTorontoWallClockNowMs()
+
+
+  if (
+    nowMs <
+      startMs ||
+    nowMs >=
+      endMs
+  ) {
+    return {
+      pulse:
+        false,
+    }
+  }
+
+
+  return {
+    pulse:
+      true,
+
+    forever:
+      false,
+
+    remainingMs:
+      endMs -
+      nowMs,
+  }
+}
+
+
 function getMarkerPulseState({
   pin,
   pinType,
@@ -5532,10 +5219,9 @@ function getMarkerPulseState({
     pinType ===
       'new'
   ) {
-    return {
-      pulse:
-        false,
-    }
+    return getLiveScheduledNewPulseState(
+      pin
+    )
   }
 
 
@@ -6595,10 +6281,19 @@ function createMarker({
       : null
 
 
-  const newCommunityIcon =
+  const newEventIcon =
     pinType ===
     'new'
-      ? getNewCommunityIcon(
+      ? getNewEventIcon(
+          pin
+        )
+      : null
+
+
+  const newSportsIcon =
+    pinType ===
+    'new'
+      ? getNewSportsIcon(
           pin
         )
       : null
@@ -6812,10 +6507,10 @@ function createMarker({
     })
   }
   else if (
-    newCommunityIcon
+    newEventIcon
   ) {
     element.className =
-      'geographic-pin-emoji-marker geographic-pin-new-community-emoji-marker'
+      'geographic-pin-emoji-marker geographic-pin-new-event-emoji-marker'
 
     element.style.width =
       '32px'
@@ -6862,13 +6557,80 @@ function createMarker({
     element.setAttribute(
       'aria-label',
       pin.title
-        ? `${newCommunityIcon.label} · ${pin.title}`
-        : `${newCommunityIcon.label} marker`
+        ? `${newEventIcon.label} · ${pin.title}`
+        : `${newEventIcon.label} marker`
     )
 
     appendEmojiMarkerIcon(
       element,
-      newCommunityIcon.emoji
+      newEventIcon.emoji
+    )
+
+
+    applyMarkerActivityPulse({
+      element,
+      pin,
+      pinType,
+    })
+  }
+  else if (
+    newSportsIcon
+  ) {
+    element.className =
+      'geographic-pin-emoji-marker geographic-pin-new-sports-emoji-marker'
+
+    element.style.width =
+      '32px'
+
+    element.style.height =
+      '32px'
+
+    element.style.padding =
+      '0'
+
+    element.style.margin =
+      '0'
+
+    element.style.border =
+      'none'
+
+    element.style.borderRadius =
+      '0'
+
+    element.style.background =
+      'transparent'
+
+    element.style.boxShadow =
+      'none'
+
+    element.style.cursor =
+      'pointer'
+
+    element.style.display =
+      'flex'
+
+    element.style.alignItems =
+      'center'
+
+    element.style.justifyContent =
+      'center'
+
+    element.style.appearance =
+      'none'
+
+    element.style.WebkitAppearance =
+      'none'
+
+    element.setAttribute(
+      'aria-label',
+      pin.title
+        ? `${newSportsIcon.label} · ${pin.title}`
+        : `${newSportsIcon.label} marker`
+    )
+
+    appendEmojiMarkerIcon(
+      element,
+      newSportsIcon.emoji
     )
 
 
@@ -7117,34 +6879,42 @@ function createMarker({
       pinType ===
       'new'
     ) {
-      const category =
-        normalizeCompareText(
-          pin.category
-        )
-
-
-      const isBusiness =
-        normalizeCompareText(
-          pin.newType
-        ) ===
-          'business' ||
-        BUSINESS_CATEGORIES.includes(
-          category
-        )
-
-
-      const isCommunity =
-        COMMUNITY_CATEGORIES.includes(
-          category
-        )
-
-
       const ageLabel =
-        isBusiness
+        BUSINESS_CATEGORIES.includes(
+          String(
+            pin.category ||
+            ''
+          )
+            .toLowerCase()
+        )
           ? getNewBusinessAgeLabel(
               pin
             )
           : ''
+
+
+      const isEvent =
+        normalizeCompareText(
+          pin.newType
+        ) ===
+          'events' ||
+        EVENT_CATEGORIES.includes(
+          normalizeCompareText(
+            pin.category
+          )
+        )
+
+
+      const isSport =
+        normalizeCompareText(
+          pin.newType
+        ) ===
+          'sports' ||
+        SPORTS_CATEGORIES.includes(
+          normalizeCompareText(
+            pin.category
+          )
+        )
 
 
       appendText({
@@ -7155,12 +6925,12 @@ function createMarker({
           'geographic-pin-year',
 
         text:
-          isCommunity
-            ? formatStatus(
-                category ===
-                  'community-place'
-                  ? 'community'
-                  : category
+          (
+            isEvent ||
+            isSport
+          )
+            ? formatEventCardDateTime(
+                pin
               )
             : [
                 formatStatus(
@@ -7190,33 +6960,15 @@ function createMarker({
     })
 
 
-    const hideNewsLocation =
-      pinType ===
-        'news' &&
-      (
-        isTorontoPolicePin(
-          pin
-        ) ||
-        isTorontoFirePin(
-          pin
-        ) ||
-        isTtcPin(
-          pin
-        )
-      )
+    appendText({
+      parent:
+        popupContent,
 
+      className:
+        'geographic-pin-location',
 
-    if (
-      !hideNewsLocation
-    ) {
-      appendText({
-        parent:
-          popupContent,
-
-        className:
-          'geographic-pin-location',
-
-        text:
+      text:
+        (
           (
             pinType ===
               'new' &&
@@ -7224,23 +6976,52 @@ function createMarker({
               normalizeCompareText(
                 pin.newType
               ) ===
-                'business' ||
-              BUSINESS_CATEGORIES.includes(
+                'events' ||
+              normalizeCompareText(
+                pin.newType
+              ) ===
+                'sports' ||
+              EVENT_CATEGORIES.includes(
+                normalizeCompareText(
+                  pin.category
+                )
+              ) ||
+              SPORTS_CATEGORIES.includes(
                 normalizeCompareText(
                   pin.category
                 )
               )
             )
-              ? getNewBusinessLocationLabel(
-                  pin
+          )
+            ? (
+                pin.venue ||
+                pin.intersection ||
+                pin.location
+              )
+            : (
+                pinType ===
+                  'new' &&
+                (
+                  normalizeCompareText(
+                    pin.newType
+                  ) ===
+                    'business' ||
+                  BUSINESS_CATEGORIES.includes(
+                    normalizeCompareText(
+                      pin.category
+                    )
+                  )
                 )
-              : (
-                  pin.intersection ||
-                  pin.location
-                )
-          ),
-      })
-    }
+                  ? getNewBusinessLocationLabel(
+                      pin
+                    )
+                  : (
+                      pin.intersection ||
+                      pin.location
+                    )
+              )
+        ),
+    })
 
 
     if (
@@ -7292,104 +7073,7 @@ function createMarker({
 
 
     if (
-      pinType ===
-        'new' &&
-      COMMUNITY_CATEGORIES.includes(
-        normalizeCompareText(
-          pin.category
-        )
-      )
-    ) {
-      appendRinkStatus({
-        parent:
-          popupContent,
-
-        pin,
-      })
-
-
-      appendOutdoorRecreationUses({
-        parent:
-          popupContent,
-
-        pin,
-      })
-
-
-      appendAquaticsStatus({
-        parent:
-          popupContent,
-
-        pin,
-      })
-
-
-      appendCommunityPrograms({
-        parent:
-          popupContent,
-
-        pin,
-      })
-
-
-      if (
-        Array.isArray(
-          pin?.poolPrograms
-        ) &&
-        pin.poolPrograms.length >
-          0
-      ) {
-        appendCommunityPrograms({
-          parent:
-            popupContent,
-
-          pin,
-
-          programsOverride:
-            pin.poolPrograms,
-
-          headingText:
-            'SWIM',
-        })
-      }
-
-
-      if (
-        Array.isArray(
-          pin?.rinkPrograms
-        ) &&
-        pin.rinkPrograms.length >
-          0
-      ) {
-        appendCommunityPrograms({
-          parent:
-            popupContent,
-
-          pin,
-
-          programsOverride:
-            pin.rinkPrograms,
-
-          headingText:
-            'SKATING',
-        })
-      }
-    }
-
-
-    if (
-      (
-        pin.category &&
-        !(
-          pinType ===
-            'new' &&
-          COMMUNITY_CATEGORIES.includes(
-            normalizeCompareText(
-              pin.category
-            )
-          )
-        )
-      ) ||
+      pin.category ||
       (
         pinType ===
           'historic' &&
@@ -7484,6 +7168,18 @@ function createMarker({
     }
 
 
+    if (
+      pinType !==
+        'news'
+    ) {
+      appendRouteActions({
+        popupContent,
+        pin,
+        longitude,
+        latitude,
+        onDirections,
+      })
+    }
   }
 
 
@@ -7576,6 +7272,17 @@ function createMarker({
 
       mobileTitle.style.marginBottom =
         '4px'
+
+
+      if (
+        pinType ===
+          'historic'
+      ) {
+        popupContent.insertBefore(
+          mobileTitle,
+          popupContent.firstChild
+        )
+      }
     }
 
 
@@ -7724,6 +7431,35 @@ function createMarker({
       .setDOMContent(
         popupContent
       )
+
+
+  popup.on(
+    'open',
+    () => {
+      window.requestAnimationFrame(
+        () => {
+          // Mobile story cards are internally scrollable. Always reset the
+          // card itself so a newly opened story starts at its title instead
+          // of inheriting an old mid-story scroll position.
+          popupContent.scrollTop =
+            0
+
+          const popupShell =
+            popupContent.closest(
+              '.maplibregl-popup-content'
+            )
+
+          if (
+            popupShell
+          ) {
+            popupShell.scrollTop =
+              0
+          }
+        }
+      )
+    }
+  )
+
 
   const marker =
     new Marker({
@@ -9051,8 +8787,23 @@ function MapPins({
             ),
 
             loadPublishedNewEndpoint(
+              PUBLISHED_NEW_DEVELOPMENT_ENDPOINT,
+              'Published NEW development'
+            ),
+
+            loadPublishedNewEndpoint(
               PUBLISHED_NEW_EVENTS_ENDPOINT,
-              'Published NEW community'
+              'Published NEW events'
+            ),
+
+            loadPublishedNewEndpoint(
+              PUBLISHED_NEW_SPORTS_ENDPOINT,
+              'Published NEW sports'
+            ),
+
+            loadPublishedNewEndpoint(
+              PUBLISHED_NEW_REAL_ESTATE_ENDPOINT,
+              'Published NEW real estate'
             ),
           ])
 

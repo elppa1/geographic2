@@ -721,8 +721,17 @@ const GeographicMap =
       const userPositionRef =
         useRef(null)
 
+      const displayedUserPositionRef =
+        useRef(null)
+
       const userWatchIdRef =
         useRef(null)
+
+      const followUserRef =
+        useRef(false)
+
+      const manualCameraUntilRef =
+        useRef(0)
 
       const compassHandlerRef =
         useRef(null)
@@ -731,6 +740,9 @@ const GeographicMap =
         useRef(null)
 
       const compassLastUpdateRef =
+        useRef(0)
+
+      const compassSensorLastSeenRef =
         useRef(0)
 
       const enhancedSourceRef =
@@ -1251,6 +1263,7 @@ const GeographicMap =
 
           stopLocationTracking()
 
+
           userMarkerRef.current?.remove()
 
           searchMarkerRef.current?.remove()
@@ -1451,7 +1464,7 @@ const GeographicMap =
 
 
       // ========================================================
-      // GPS + COMPASS
+      // GPS + WALKING FOLLOW + COMPASS
       // ========================================================
 
       function normalizeHeading(
@@ -1464,9 +1477,29 @@ const GeographicMap =
       }
 
 
+      function headingDelta(
+        from,
+        to
+      ) {
+        return (
+          (
+            to -
+            from +
+            540
+          ) % 360
+        ) -
+        180
+      }
+
+
       function smoothHeading(
         nextHeading
       ) {
+        const normalized =
+          normalizeHeading(
+            nextHeading
+          )
+
         const previous =
           compassHeadingRef.current
 
@@ -1478,29 +1511,35 @@ const GeographicMap =
           )
         ) {
           compassHeadingRef.current =
-            normalizeHeading(
-              nextHeading
-            )
+            normalized
 
-          return compassHeadingRef.current
+          return normalized
         }
 
 
         const delta =
-          (
-            (
-              nextHeading -
-              previous +
-              540
-            ) % 360
-          ) -
-          180
+          headingDelta(
+            previous,
+            normalized
+          )
+
+
+        // Ignore tiny hand tremors. This keeps the map from constantly
+        // twitching while the phone is being held still.
+        if (
+          Math.abs(
+            delta
+          ) <
+            3.5
+        ) {
+          return previous
+        }
 
 
         const smoothed =
           normalizeHeading(
             previous +
-            delta * 0.22
+            delta * 0.16
           )
 
 
@@ -1509,6 +1548,25 @@ const GeographicMap =
 
 
         return smoothed
+      }
+
+
+      function pauseAutomaticCamera(
+        milliseconds =
+          5000
+      ) {
+        manualCameraUntilRef.current =
+          Date.now() +
+          milliseconds
+      }
+
+
+      function automaticCameraAllowed() {
+        return (
+          followUserRef.current &&
+          Date.now() >=
+            manualCameraUntilRef.current
+        )
       }
 
 
@@ -1523,7 +1581,8 @@ const GeographicMap =
           !map ||
           !Number.isFinite(
             rawHeading
-          )
+          ) ||
+          !automaticCameraAllowed()
         ) {
           return
         }
@@ -1533,10 +1592,40 @@ const GeographicMap =
           performance.now()
 
 
+        // Device orientation can fire dozens of times each second.
+        // Throttling it makes pinch/zoom and drag gestures much calmer.
         if (
           now -
           compassLastUpdateRef.current <
-          70
+          220
+        ) {
+          return
+        }
+
+
+        const heading =
+          smoothHeading(
+            rawHeading
+          )
+
+        const currentBearing =
+          normalizeHeading(
+            map.getBearing()
+          )
+
+        const delta =
+          headingDelta(
+            currentBearing,
+            heading
+          )
+
+
+        // Do not animate for tiny bearing changes.
+        if (
+          Math.abs(
+            delta
+          ) <
+            5
         ) {
           return
         }
@@ -1546,18 +1635,12 @@ const GeographicMap =
           now
 
 
-        const heading =
-          smoothHeading(
-            rawHeading
-          )
-
-
         map.easeTo({
           bearing:
             heading,
 
           duration:
-            110,
+            280,
 
           easing:
             (value) =>
@@ -1618,23 +1701,20 @@ const GeographicMap =
 
 
         if (
-          !handler
+          handler
         ) {
-          return
+          window.removeEventListener(
+            'deviceorientationabsolute',
+            handler,
+            true
+          )
+
+          window.removeEventListener(
+            'deviceorientation',
+            handler,
+            true
+          )
         }
-
-
-        window.removeEventListener(
-          'deviceorientationabsolute',
-          handler,
-          true
-        )
-
-        window.removeEventListener(
-          'deviceorientation',
-          handler,
-          true
-        )
 
 
         compassHandlerRef.current =
@@ -1644,6 +1724,9 @@ const GeographicMap =
           null
 
         compassLastUpdateRef.current =
+          0
+
+        compassSensorLastSeenRef.current =
           0
       }
 
@@ -1711,6 +1794,10 @@ const GeographicMap =
             }
 
 
+            compassSensorLastSeenRef.current =
+              Date.now()
+
+
             applyMapHeading(
               heading
             )
@@ -1738,10 +1825,84 @@ const GeographicMap =
       }
 
 
-      function applyUserPosition(
-        position,
-        recenter =
-          false
+      function distanceMetres(
+        from,
+        to
+      ) {
+        if (
+          !from ||
+          !to
+        ) {
+          return Infinity
+        }
+
+
+        const earthRadius =
+          6371000
+
+        const toRadians =
+          (degrees) =>
+            degrees *
+            Math.PI /
+            180
+
+        const lat1 =
+          toRadians(
+            from.latitude
+          )
+
+        const lat2 =
+          toRadians(
+            to.latitude
+          )
+
+        const deltaLat =
+          toRadians(
+            to.latitude -
+            from.latitude
+          )
+
+        const deltaLng =
+          toRadians(
+            to.longitude -
+            from.longitude
+          )
+
+        const a =
+          Math.sin(
+            deltaLat /
+            2
+          ) ** 2 +
+          Math.cos(
+            lat1
+          ) *
+          Math.cos(
+            lat2
+          ) *
+          Math.sin(
+            deltaLng /
+            2
+          ) ** 2
+
+
+        return (
+          earthRadius *
+          2 *
+          Math.atan2(
+            Math.sqrt(
+              a
+            ),
+            Math.sqrt(
+              1 -
+              a
+            )
+          )
+        )
+      }
+
+
+      function updateUserMarker(
+        location
       ) {
         const map =
           mapRef.current
@@ -1749,46 +1910,9 @@ const GeographicMap =
 
         if (
           !map ||
-          !position?.coords
+          !location
         ) {
-          throw new Error(
-            'Location unavailable'
-          )
-        }
-
-
-        const longitude =
-          position.coords.longitude
-
-        const latitude =
-          position.coords.latitude
-
-
-        const location = {
-          longitude,
-          latitude,
-        }
-
-
-        userPositionRef.current =
-          location
-
-
-        if (
-          Number.isFinite(
-            position.coords.heading
-          ) &&
-          (
-            !Number.isFinite(
-              position.coords.speed
-            ) ||
-            position.coords.speed >
-              0.5
-          )
-        ) {
-          applyMapHeading(
-            position.coords.heading
-          )
+          return
         }
 
 
@@ -1813,8 +1937,8 @@ const GeographicMap =
                 'center',
             })
               .setLngLat([
-                longitude,
-                latitude,
+                location.longitude,
+                location.latitude,
               ])
               .addTo(
                 map
@@ -1822,30 +1946,274 @@ const GeographicMap =
         } else {
           userMarkerRef.current
             .setLngLat([
-              longitude,
-              latitude,
+              location.longitude,
+              location.latitude,
             ])
+        }
+
+
+        displayedUserPositionRef.current =
+          location
+      }
+
+
+      function locationNearScreenEdge(
+        location
+      ) {
+        const map =
+          mapRef.current
+
+
+        if (
+          !map ||
+          !location
+        ) {
+          return false
+        }
+
+
+        const canvas =
+          map.getCanvas()
+
+        const width =
+          canvas?.clientWidth ||
+          0
+
+        const height =
+          canvas?.clientHeight ||
+          0
+
+
+        if (
+          width <=
+            0 ||
+          height <=
+            0
+        ) {
+          return false
+        }
+
+
+        const point =
+          map.project([
+            location.longitude,
+            location.latitude,
+          ])
+
+
+        return (
+          point.x <
+            width * 0.22 ||
+          point.x >
+            width * 0.78 ||
+          point.y <
+            height * 0.24 ||
+          point.y >
+            height * 0.76
+        )
+      }
+
+
+      function gentlyFollowUser(
+        location
+      ) {
+        const map =
+          mapRef.current
+
+
+        if (
+          !map ||
+          !automaticCameraAllowed() ||
+          !locationNearScreenEdge(
+            location
+          )
+        ) {
+          return
+        }
+
+
+        // Re-centre only when the dot is actually drifting toward an edge.
+        // Critically, do NOT set zoom here. The user's pinch zoom wins.
+        map.easeTo({
+          center: [
+            location.longitude,
+            location.latitude,
+          ],
+
+          duration:
+            380,
+
+          essential:
+            true,
+        })
+      }
+
+
+      function applyUserPosition(
+        position,
+        recenter =
+          false,
+        walkingZoom =
+          false
+      ) {
+        const map =
+          mapRef.current
+
+
+        if (
+          !map ||
+          !position?.coords
+        ) {
+          throw new Error(
+            'Location unavailable'
+          )
+        }
+
+
+        const longitude =
+          Number(
+            position.coords.longitude
+          )
+
+        const latitude =
+          Number(
+            position.coords.latitude
+          )
+
+        const accuracy =
+          Number(
+            position.coords.accuracy
+          )
+
+
+        if (
+          !Number.isFinite(
+            longitude
+          ) ||
+          !Number.isFinite(
+            latitude
+          )
+        ) {
+          throw new Error(
+            'Location unavailable'
+          )
+        }
+
+
+        const location = {
+          longitude,
+          latitude,
+        }
+
+
+        // Always keep the newest real GPS reading for routing.
+        userPositionRef.current =
+          location
+
+
+        const previousDisplayed =
+          displayedUserPositionRef.current
+
+        const movement =
+          distanceMetres(
+            previousDisplayed,
+            location
+          )
+
+        const veryNoisyReading =
+          Boolean(
+            previousDisplayed
+          ) &&
+          Number.isFinite(
+            accuracy
+          ) &&
+          accuracy >
+            80
+
+        const tinyJitter =
+          Boolean(
+            previousDisplayed
+          ) &&
+          movement <
+            3 &&
+          (
+            !Number.isFinite(
+              accuracy
+            ) ||
+            accuracy <=
+              35
+          )
+
+
+        if (
+          !veryNoisyReading &&
+          !tinyJitter
+        ) {
+          updateUserMarker(
+            location
+          )
+        }
+
+
+        // GPS heading is only a fallback. If the phone compass has reported
+        // recently, do not let GPS course and compass fight each other.
+        if (
+          Number.isFinite(
+            position.coords.heading
+          ) &&
+          Number.isFinite(
+            position.coords.speed
+          ) &&
+          position.coords.speed >
+            1.2 &&
+          (
+            Date.now() -
+            compassSensorLastSeenRef.current
+          ) >
+            1500
+        ) {
+          applyMapHeading(
+            position.coords.heading
+          )
         }
 
 
         if (
           recenter
         ) {
-          map.flyTo({
+          map.stop()
+
+
+          map.easeTo({
             center: [
               longitude,
               latitude,
             ],
 
+            // Time Machine should begin at a real walking scale instead of
+            // the city-wide view. A normal GPS tap also gets this close view.
             zoom:
-              Math.max(
-                map.getZoom(),
-                16
-              ),
+              walkingZoom
+                ? 17.25
+                : Math.max(
+                    map.getZoom(),
+                    16
+                  ),
 
             duration:
-              900,
+              650,
+
+            essential:
+              true,
           })
+        }
+        else if (
+          !veryNoisyReading &&
+          !tinyJitter
+        ) {
+          gentlyFollowUser(
+            location
+          )
         }
 
 
@@ -1857,6 +2225,8 @@ const GeographicMap =
         useCallback(
           (
             recenter =
+              false,
+            walkingZoom =
               false
           ) => {
             return new Promise(
@@ -1890,7 +2260,8 @@ const GeographicMap =
                       resolve(
                         applyUserPosition(
                           position,
-                          recenter
+                          recenter,
+                          walkingZoom
                         )
                       )
                     } catch (
@@ -1909,10 +2280,10 @@ const GeographicMap =
                       true,
 
                     timeout:
-                      10000,
+                      12000,
 
                     maximumAge:
-                      15000,
+                      3000,
                   }
                 )
               }
@@ -1923,21 +2294,22 @@ const GeographicMap =
 
 
       function stopLocationTracking() {
+        followUserRef.current =
+          false
+
+
         stopCompassTracking()
 
 
         if (
-          userWatchIdRef.current ===
-            null ||
-          !navigator.geolocation
+          userWatchIdRef.current !==
+            null &&
+          navigator.geolocation
         ) {
-          return
+          navigator.geolocation.clearWatch(
+            userWatchIdRef.current
+          )
         }
-
-
-        navigator.geolocation.clearWatch(
-          userWatchIdRef.current
-        )
 
 
         userWatchIdRef.current =
@@ -1958,15 +2330,21 @@ const GeographicMap =
         stopLocationTracking()
 
 
-        // Request compass access immediately while this function is still
-        // running from the user's tap. iOS requires the permission request
-        // to happen inside a user gesture. GPS still works if compass access
-        // is unavailable or denied.
+        followUserRef.current =
+          true
+
+        manualCameraUntilRef.current =
+          0
+
+
+        // iOS requires compass permission to be requested from the same
+        // user gesture that starts the experience.
         await startCompassTracking()
 
 
         const location =
           await getUserLocation(
+            true,
             true
           )
 
@@ -1979,6 +2357,7 @@ const GeographicMap =
               try {
                 applyUserPosition(
                   position,
+                  false,
                   false
                 )
               } catch (
@@ -2005,16 +2384,91 @@ const GeographicMap =
                 true,
 
               maximumAge:
-                5000,
+                1000,
 
               timeout:
-                15000,
+                20000,
             }
           )
 
 
         return location
       }
+
+
+      useEffect(
+        () => {
+          const map =
+            mapRef.current
+
+
+          if (
+            !mapReady ||
+            !map
+          ) {
+            return undefined
+          }
+
+
+          const handleManualCamera =
+            (event) => {
+              if (
+                event?.originalEvent
+              ) {
+                pauseAutomaticCamera(
+                  5000
+                )
+              }
+            }
+
+
+          map.on(
+            'dragstart',
+            handleManualCamera
+          )
+
+          map.on(
+            'zoomstart',
+            handleManualCamera
+          )
+
+          map.on(
+            'rotatestart',
+            handleManualCamera
+          )
+
+          map.on(
+            'pitchstart',
+            handleManualCamera
+          )
+
+
+          return () => {
+            map.off(
+              'dragstart',
+              handleManualCamera
+            )
+
+            map.off(
+              'zoomstart',
+              handleManualCamera
+            )
+
+            map.off(
+              'rotatestart',
+              handleManualCamera
+            )
+
+            map.off(
+              'pitchstart',
+              handleManualCamera
+            )
+          }
+        },
+        [
+          mapReady,
+        ]
+      )
 
 
       function locateUser() {

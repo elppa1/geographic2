@@ -530,6 +530,15 @@ function GeographicApp() {
 
 
   const [
+    historicMobileMenuOpen,
+    setHistoricMobileMenuOpen,
+  ] =
+    useState(
+      false
+    )
+
+
+  const [
     aboutOpen,
     setAboutOpen,
   ] =
@@ -564,6 +573,23 @@ function GeographicApp() {
     },
     [
       selectedLayer,
+    ]
+  )
+
+
+  useEffect(
+    () => {
+      if (
+        activePinFilter !==
+          'historic'
+      ) {
+        setHistoricMobileMenuOpen(
+          false
+        )
+      }
+    },
+    [
+      activePinFilter,
     ]
   )
 
@@ -743,6 +769,92 @@ function GeographicApp() {
             'all'
           ? `category:${historicCategoryFilter}`
           : 'all'
+
+
+  const historicArchiveLabel =
+    useMemo(
+      () => {
+        if (
+          historicIssueFilter !==
+            'all'
+        ) {
+          const issue =
+            publishedHistoricIssues.find(
+              (item) =>
+                item.id ===
+                historicIssueFilter
+            )
+
+          return issue
+            ? `★ ISSUE ${issue.number || ''} — ${issue.title}`.trim()
+            : 'HISTORIC · ALL STORIES'
+        }
+
+
+        if (
+          historicLayerFilter !==
+            'all'
+        ) {
+          const layer =
+            publishedHistoricLayers.find(
+              (item) =>
+                item.id ===
+                historicLayerFilter
+            )
+
+          const category =
+            publishedHistoricCategories.find(
+              (item) =>
+                item.id ===
+                layer?.categoryId
+            )
+
+          const categoryIcon =
+            getHistoricPinIcon(
+              category?.pinIcon ||
+              'map-pin'
+            )
+
+          return layer
+            ? `${categoryIcon.emoji} ${category?.title || 'HISTORIC'} — ${layer.title}`
+            : 'HISTORIC · ALL STORIES'
+        }
+
+
+        if (
+          historicCategoryFilter !==
+            'all'
+        ) {
+          const category =
+            publishedHistoricCategories.find(
+              (item) =>
+                item.id ===
+                historicCategoryFilter
+            )
+
+          const categoryIcon =
+            getHistoricPinIcon(
+              category?.pinIcon ||
+              'map-pin'
+            )
+
+          return category
+            ? `${categoryIcon.emoji} ALL ${category.title}`
+            : 'HISTORIC · ALL STORIES'
+        }
+
+
+        return 'HISTORIC · ALL STORIES'
+      },
+      [
+        historicIssueFilter,
+        historicLayerFilter,
+        historicCategoryFilter,
+        publishedHistoricIssues,
+        publishedHistoricLayers,
+        publishedHistoricCategories,
+      ]
+    )
 
 
   const historicCollectionActive =
@@ -1180,6 +1292,95 @@ function GeographicApp() {
             display: none;
           }
 
+          .historic-mobile-picker {
+            display: none;
+          }
+
+          .historic-mobile-picker-button {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            border: 1px solid rgba(0,0,0,0.18);
+            padding: 6px 8px;
+            background: #fff;
+            color: #111;
+            font: inherit;
+            font-size: 8px;
+            font-weight: 800;
+            letter-spacing: 0.06em;
+            text-align: left;
+            cursor: pointer;
+          }
+
+          .historic-mobile-picker-label {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+
+          .historic-mobile-picker-arrow {
+            flex: 0 0 auto;
+            font-size: 10px;
+          }
+
+          .historic-mobile-picker-menu {
+            position: absolute;
+            top: calc(100% + 2px);
+            left: 0;
+            right: 0;
+            z-index: 120;
+            max-height: min(52vh, 360px);
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            border: 1px solid rgba(0,0,0,0.18);
+            background: rgba(255,255,255,0.99);
+            box-shadow: 0 10px 26px rgba(0,0,0,0.18);
+          }
+
+          .historic-mobile-picker-heading {
+            padding: 6px 8px 4px;
+            background: rgba(0,0,0,0.035);
+            border-top: 1px solid rgba(0,0,0,0.07);
+            font-size: 6px;
+            font-weight: 800;
+            letter-spacing: 0.09em;
+            opacity: 0.62;
+          }
+
+          .historic-mobile-picker-heading:first-child {
+            border-top: 0;
+          }
+
+          .historic-mobile-picker-option {
+            width: 100%;
+            min-height: 28px;
+            border: 0;
+            border-top: 1px solid rgba(0,0,0,0.055);
+            padding: 6px 8px;
+            background: #fff;
+            color: #111;
+            font: inherit;
+            font-size: 7px;
+            font-weight: 700;
+            line-height: 1.2;
+            letter-spacing: 0.04em;
+            text-align: left;
+            cursor: pointer;
+          }
+
+          .historic-mobile-picker-option-layer {
+            padding-left: 18px;
+            font-weight: 600;
+          }
+
+          .historic-mobile-picker-option-active {
+            background: #111;
+            color: #fff;
+          }
+
           .historic-issue-button {
             flex: 0 0 auto;
             min-width: 92px;
@@ -1354,12 +1555,49 @@ function GeographicApp() {
               letter-spacing: 0.045em !important;
             }
 
-            .historic-issue-nav select {
-              width: 100% !important;
-              min-width: 0 !important;
-              max-width: none !important;
-              padding: 5px 6px !important;
-              font-size: 6px !important;
+            .historic-issue-nav {
+              position: relative;
+              width: 100%;
+              overflow: visible !important;
+            }
+
+            .historic-issue-nav > select {
+              display: none !important;
+            }
+
+            .historic-mobile-picker {
+              position: relative;
+              display: block;
+              width: 100%;
+            }
+
+            .historic-mobile-picker-button {
+              min-height: 30px !important;
+              padding: 6px 8px !important;
+              font-size: 6.5px !important;
+              line-height: 1.15 !important;
+              letter-spacing: 0.05em !important;
+            }
+
+            .historic-mobile-picker-menu {
+              max-height: min(48vh, 340px);
+            }
+
+            .historic-mobile-picker-heading {
+              padding: 6px 8px 4px;
+              font-size: 5.5px;
+            }
+
+            .historic-mobile-picker-option {
+              min-height: 30px !important;
+              padding: 7px 8px !important;
+              font-size: 6.5px !important;
+              line-height: 1.2 !important;
+              letter-spacing: 0.04em !important;
+            }
+
+            .historic-mobile-picker-option-layer {
+              padding-left: 20px !important;
             }
 
 
@@ -1902,6 +2140,195 @@ function GeographicApp() {
                 </optgroup>
               )}
             </select>
+
+
+            <div className="historic-mobile-picker">
+              <button
+                type="button"
+                className="historic-mobile-picker-button"
+                onClick={() =>
+                  setHistoricMobileMenuOpen(
+                    (open) =>
+                      !open
+                  )
+                }
+                aria-expanded={
+                  historicMobileMenuOpen
+                }
+                aria-haspopup="listbox"
+              >
+                <span className="historic-mobile-picker-label">
+                  {historicArchiveLabel}
+                </span>
+
+                <span className="historic-mobile-picker-arrow">
+                  {historicMobileMenuOpen
+                    ? '▴'
+                    : '▾'}
+                </span>
+              </button>
+
+
+              {historicMobileMenuOpen && (
+                <div
+                  className="historic-mobile-picker-menu"
+                  role="listbox"
+                  aria-label="Historic archive"
+                >
+                  <button
+                    type="button"
+                    className={
+                      historicArchiveValue ===
+                        'all'
+                        ? 'historic-mobile-picker-option historic-mobile-picker-option-active'
+                        : 'historic-mobile-picker-option'
+                    }
+                    onClick={() => {
+                      changeHistoricArchive(
+                        'all'
+                      )
+
+                      setHistoricMobileMenuOpen(
+                        false
+                      )
+                    }}
+                  >
+                    HISTORIC · ALL STORIES
+                  </button>
+
+
+                  {publishedHistoricCategories.map(
+                    (category) => {
+                      const categoryIcon =
+                        getHistoricPinIcon(
+                          category.pinIcon ||
+                          'map-pin'
+                        )
+
+                      const categoryValue =
+                        `category:${category.id}`
+
+                      const categoryLayers =
+                        publishedHistoricLayers.filter(
+                          (layer) =>
+                            layer.categoryId ===
+                            category.id
+                        )
+
+
+                      return (
+                        <div
+                          key={
+                            category.id
+                          }
+                        >
+                          <div className="historic-mobile-picker-heading">
+                            {categoryIcon.emoji} {category.title}
+                          </div>
+
+                          <button
+                            type="button"
+                            className={
+                              historicArchiveValue ===
+                                categoryValue
+                                ? 'historic-mobile-picker-option historic-mobile-picker-option-active'
+                                : 'historic-mobile-picker-option'
+                            }
+                            onClick={() => {
+                              changeHistoricArchive(
+                                categoryValue
+                              )
+
+                              setHistoricMobileMenuOpen(
+                                false
+                              )
+                            }}
+                          >
+                            {categoryIcon.emoji} ALL {category.title}
+                          </button>
+
+                          {categoryLayers.map(
+                            (layer) => {
+                              const layerValue =
+                                `layer:${layer.id}`
+
+                              return (
+                                <button
+                                  type="button"
+                                  key={
+                                    layer.id
+                                  }
+                                  className={
+                                    historicArchiveValue ===
+                                      layerValue
+                                      ? 'historic-mobile-picker-option historic-mobile-picker-option-layer historic-mobile-picker-option-active'
+                                      : 'historic-mobile-picker-option historic-mobile-picker-option-layer'
+                                  }
+                                  onClick={() => {
+                                    changeHistoricArchive(
+                                      layerValue
+                                    )
+
+                                    setHistoricMobileMenuOpen(
+                                      false
+                                    )
+                                  }}
+                                >
+                                  {layer.title}
+                                </button>
+                              )
+                            }
+                          )}
+                        </div>
+                      )
+                    }
+                  )}
+
+
+                  {publishedHistoricIssues.length >
+                    0 && (
+                    <div>
+                      <div className="historic-mobile-picker-heading">
+                        SPECIAL ISSUES
+                      </div>
+
+                      {publishedHistoricIssues.map(
+                        (issue) => {
+                          const issueValue =
+                            `issue:${issue.id}`
+
+                          return (
+                            <button
+                              type="button"
+                              key={
+                                issue.id
+                              }
+                              className={
+                                historicArchiveValue ===
+                                  issueValue
+                                  ? 'historic-mobile-picker-option historic-mobile-picker-option-active'
+                                  : 'historic-mobile-picker-option'
+                              }
+                              onClick={() => {
+                                changeHistoricArchive(
+                                  issueValue
+                                )
+
+                                setHistoricMobileMenuOpen(
+                                  false
+                                )
+                              }}
+                            >
+                              ★ ISSUE {issue.number || ''} — {issue.title}
+                            </button>
+                          )
+                        }
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
 
           </div>
