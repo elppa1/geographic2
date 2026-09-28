@@ -79,6 +79,26 @@ const BUSINESS_CATEGORIES = [
 ]
 
 
+const COMMUNITY_CATEGORIES = [
+  'community',
+  'community-place',
+  'library',
+  'community-centre',
+  'gallery',
+  'cinema',
+  'rink',
+  'skatepark',
+  'basketball-court',
+  'tennis-court',
+  'pickleball-court',
+  'bike-park',
+  'sports-court',
+  'pool',
+  'market',
+  'park',
+  'public-space',
+]
+
 const DEVELOPMENT_CATEGORIES = [
   'development',
   'construction',
@@ -262,28 +282,7 @@ function newPinMatchesSubtype(
 
 
   const communityCategory =
-    [
-      'community',
-      'library',
-      'libraries',
-      'pool',
-      'pools',
-      'aquatic',
-      'aquatics',
-      'arena',
-      'arenas',
-      'rink',
-      'rinks',
-      'park',
-      'parks',
-      'playground',
-      'playgrounds',
-      'recreation',
-      'recreation-centre',
-      'recreation-center',
-      'community-centre',
-      'community-center',
-    ].includes(
+    COMMUNITY_CATEGORIES.includes(
       category
     ) ||
     category.startsWith(
@@ -2769,6 +2768,1095 @@ function appendMobileBusinessLink({
 }
 
 
+function formatCommunityProgramWhen(
+  value
+) {
+  const text =
+    String(
+      value ||
+      ''
+    )
+      .trim()
+
+
+  if (
+    !text
+  ) {
+    return ''
+  }
+
+
+  const date =
+    new Date(
+      text
+    )
+
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return text
+  }
+
+
+  const dateText =
+    date.toLocaleDateString(
+      'en-CA',
+      {
+        timeZone:
+          'America/Toronto',
+
+        weekday:
+          'short',
+
+        month:
+          'short',
+
+        day:
+          'numeric',
+      }
+    )
+      .replace(
+        /,/g,
+        ''
+      )
+      .toUpperCase()
+
+
+  const timeText =
+    date.toLocaleTimeString(
+      'en-CA',
+      {
+        timeZone:
+          'America/Toronto',
+
+        hour:
+          'numeric',
+
+        minute:
+          '2-digit',
+
+        hour12:
+          true,
+      }
+    )
+      .replace(
+        /\s*a\.m\./i,
+        ' AM'
+      )
+      .replace(
+        /\s*p\.m\./i,
+        ' PM'
+      )
+      .replace(
+        /\./g,
+        ''
+      )
+      .toUpperCase()
+
+
+  return (
+    dateText +
+    ' · ' +
+    timeText
+  )
+}
+
+function formatCommunityProgramAge(
+  program
+) {
+  const rawMin =
+    program?.ageMin
+
+
+  const rawMax =
+    program?.ageMax
+
+
+  const hasMin =
+    rawMin !==
+      undefined &&
+    rawMin !==
+      null &&
+    String(
+      rawMin
+    )
+      .trim() !==
+      ''
+
+
+  const hasMax =
+    rawMax !==
+      undefined &&
+    rawMax !==
+      null &&
+    String(
+      rawMax
+    )
+      .trim() !==
+      ''
+
+
+  if (
+    !hasMin &&
+    !hasMax
+  ) {
+    return ''
+  }
+
+
+  const min =
+    hasMin
+      ? Number(
+          rawMin
+        )
+      : null
+
+
+  const max =
+    hasMax
+      ? Number(
+          rawMax
+        )
+      : null
+
+
+  const validMin =
+    min !==
+      null &&
+    Number.isFinite(
+      min
+    )
+
+
+  const validMax =
+    max !==
+      null &&
+    Number.isFinite(
+      max
+    )
+
+
+  if (
+    !validMin &&
+    !validMax
+  ) {
+    return ''
+  }
+
+
+  if (
+    validMin &&
+    validMax
+  ) {
+    if (
+      min ===
+        max
+    ) {
+      return `AGE ${min}`
+    }
+
+
+    return `AGES ${min}–${max}`
+  }
+
+
+  if (
+    validMin
+  ) {
+    return `AGES ${min}+`
+  }
+
+
+  return `AGES 0–${max}`
+}
+
+
+function formatCommunityProgramPrice(
+  program
+) {
+  const raw =
+    program?.price
+
+
+  if (
+    raw ===
+      undefined ||
+    raw ===
+      null ||
+    String(
+      raw
+    )
+      .trim() ===
+      ''
+  ) {
+    return ''
+  }
+
+
+  const numeric =
+    Number(
+      raw
+    )
+
+
+  if (
+    !Number.isFinite(
+      numeric
+    )
+  ) {
+    return String(
+      raw
+    )
+      .trim()
+  }
+
+
+  return (
+    '$' +
+    numeric.toLocaleString(
+      'en-CA',
+      {
+        minimumFractionDigits:
+          Number.isInteger(
+            numeric
+          )
+            ? 0
+            : 2,
+
+        maximumFractionDigits:
+          2,
+      }
+    )
+  )
+}
+
+
+function appendOutdoorRecreationUses({
+  parent,
+  pin,
+}) {
+  const activities =
+    Array.isArray(
+      pin?.outdoorActivities
+    )
+      ? pin.outdoorActivities
+          .map(
+            (value) =>
+              String(
+                value ||
+                ''
+              )
+                .trim()
+          )
+          .filter(
+            Boolean
+          )
+      : []
+
+
+  if (
+    activities.length ===
+      0
+  ) {
+    return
+  }
+
+
+  const shell =
+    document.createElement(
+      'div'
+    )
+
+
+  shell.style.marginTop =
+    '12px'
+
+
+  shell.style.paddingTop =
+    '10px'
+
+
+  shell.style.borderTop =
+    '1px solid rgba(0,0,0,0.12)'
+
+
+  const heading =
+    document.createElement(
+      'div'
+    )
+
+
+  heading.className =
+    'geographic-pin-category'
+
+
+  heading.textContent =
+    'FACILITIES'
+
+
+  heading.style.marginBottom =
+    '3px'
+
+
+  shell.appendChild(
+    heading
+  )
+
+
+  appendText({
+    parent:
+      shell,
+
+    className:
+      'geographic-pin-description',
+
+    text:
+      activities.join(
+        ' · '
+      ),
+  })
+
+
+  parent.appendChild(
+    shell
+  )
+}
+
+
+function appendAquaticsStatus({
+  parent,
+  pin,
+}) {
+  const facilities =
+    Array.isArray(
+      pin?.aquaticFacilities
+    )
+      ? pin.aquaticFacilities
+          .filter(
+            (facility) =>
+              Boolean(
+                facility?.typeLabel
+              )
+          )
+      : []
+
+
+  if (
+    facilities.length ===
+      0
+  ) {
+    return
+  }
+
+
+  const shell =
+    document.createElement(
+      'div'
+    )
+
+
+  shell.style.marginTop =
+    '12px'
+
+
+  shell.style.paddingTop =
+    '10px'
+
+
+  shell.style.borderTop =
+    '1px solid rgba(0,0,0,0.12)'
+
+
+  const heading =
+    document.createElement(
+      'div'
+    )
+
+
+  heading.className =
+    'geographic-pin-category'
+
+
+  heading.textContent =
+    'AQUATICS'
+
+
+  heading.style.marginBottom =
+    '3px'
+
+
+  shell.appendChild(
+    heading
+  )
+
+
+  facilities.forEach(
+    (
+      facility,
+      index
+    ) => {
+      if (
+        index >
+          0
+      ) {
+        const spacer =
+          document.createElement(
+            'div'
+          )
+
+
+        spacer.style.marginTop =
+          '6px'
+
+
+        shell.appendChild(
+          spacer
+        )
+      }
+
+
+      appendText({
+        parent:
+          shell,
+
+        className:
+          'geographic-pin-description',
+
+        text:
+          String(
+            facility?.typeLabel ||
+            ''
+          )
+            .trim(),
+      })
+
+
+      const status =
+        String(
+          facility?.currentStatus ||
+          ''
+        )
+          .trim()
+
+
+      if (
+        status
+      ) {
+        const statusElement =
+          document.createElement(
+            'div'
+          )
+
+
+        statusElement.className =
+          'geographic-pin-year'
+
+
+        statusElement.textContent =
+          status
+
+
+        statusElement.style.marginTop =
+          '2px'
+
+
+        statusElement.style.fontSize =
+          '10px'
+
+
+        statusElement.style.fontWeight =
+          '700'
+
+
+        shell.appendChild(
+          statusElement
+        )
+      }
+
+
+      const season =
+        String(
+          facility?.seasonLabel ||
+          ''
+        )
+          .trim()
+
+
+      if (
+        season
+      ) {
+        const seasonElement =
+          document.createElement(
+            'div'
+          )
+
+
+        seasonElement.className =
+          'geographic-pin-year'
+
+
+        seasonElement.textContent =
+          season
+
+
+        seasonElement.style.marginTop =
+          '2px'
+
+
+        seasonElement.style.fontSize =
+          '10px'
+
+
+        seasonElement.style.fontWeight =
+          '600'
+
+
+        shell.appendChild(
+          seasonElement
+        )
+      }
+    }
+  )
+
+
+  parent.appendChild(
+    shell
+  )
+}
+
+
+function appendRinkStatus({
+  parent,
+  pin,
+}) {
+  const facility =
+    pin?.rinkFacility
+
+
+  if (
+    !facility
+  ) {
+    return
+  }
+
+
+  const currentUse =
+    String(
+      facility?.currentUseLabel ||
+      ''
+    )
+      .trim()
+
+
+  const iceStatus =
+    String(
+      facility?.iceStatusLabel ||
+      ''
+    )
+      .trim()
+
+
+  const expectedIce =
+    String(
+      facility?.expectedIceLabel ||
+      ''
+    )
+      .trim()
+
+
+  if (
+    !currentUse &&
+    !iceStatus &&
+    !expectedIce
+  ) {
+    return
+  }
+
+
+  const shell =
+    document.createElement(
+      'div'
+    )
+
+
+  shell.style.marginTop =
+    '12px'
+
+
+  shell.style.paddingTop =
+    '10px'
+
+
+  shell.style.borderTop =
+    '1px solid rgba(0,0,0,0.12)'
+
+
+  const heading =
+    document.createElement(
+      'div'
+    )
+
+
+  heading.className =
+    'geographic-pin-category'
+
+
+  heading.textContent =
+    'CURRENT USE'
+
+
+  heading.style.marginBottom =
+    '3px'
+
+
+  shell.appendChild(
+    heading
+  )
+
+
+  if (
+    currentUse
+  ) {
+    appendText({
+      parent:
+        shell,
+
+      className:
+        'geographic-pin-description',
+
+      text:
+        currentUse,
+    })
+  }
+
+
+  if (
+    iceStatus
+  ) {
+    const status =
+      document.createElement(
+        'div'
+      )
+
+
+    status.className =
+      'geographic-pin-year'
+
+
+    status.textContent =
+      iceStatus
+
+
+    status.style.marginTop =
+      '3px'
+
+
+    status.style.fontSize =
+      '10px'
+
+
+    status.style.fontWeight =
+      '700'
+
+
+    shell.appendChild(
+      status
+    )
+  }
+
+
+  if (
+    expectedIce
+  ) {
+    const expected =
+      document.createElement(
+        'div'
+      )
+
+
+    expected.className =
+      'geographic-pin-year'
+
+
+    expected.textContent =
+      expectedIce
+
+
+    expected.style.marginTop =
+      '2px'
+
+
+    expected.style.fontSize =
+      '10px'
+
+
+    expected.style.fontWeight =
+      '600'
+
+
+    shell.appendChild(
+      expected
+    )
+  }
+
+
+  parent.appendChild(
+    shell
+  )
+}
+
+
+function appendCommunityPrograms({
+  parent,
+  pin,
+  programsOverride =
+    null,
+  headingText =
+    'UPCOMING',
+}) {
+  const sourcePrograms =
+    Array.isArray(
+      programsOverride
+    )
+      ? programsOverride
+      : pin?.upcomingPrograms
+
+
+  const programs =
+    Array.isArray(
+      sourcePrograms
+    )
+      ? sourcePrograms
+          .filter(
+            (program) =>
+              Boolean(
+                program?.title
+              )
+          )
+          .slice(
+            0,
+            3
+          )
+      : []
+
+
+  if (
+    programs.length ===
+      0
+  ) {
+    return
+  }
+
+
+  const shell =
+    document.createElement(
+      'div'
+    )
+
+
+  shell.style.marginTop =
+    '12px'
+
+
+  shell.style.paddingTop =
+    '10px'
+
+
+  shell.style.borderTop =
+    '1px solid rgba(0,0,0,0.12)'
+
+
+  const heading =
+    document.createElement(
+      'div'
+    )
+
+
+  heading.className =
+    'geographic-pin-category'
+
+
+  heading.textContent =
+    headingText
+
+
+  heading.style.marginBottom =
+    '2px'
+
+
+  shell.appendChild(
+    heading
+  )
+
+
+  programs.forEach(
+    (program) => {
+      const row =
+        document.createElement(
+          'div'
+        )
+
+
+      row.style.marginTop =
+        '9px'
+
+
+      const when =
+        formatCommunityProgramWhen(
+          program?.startTime ||
+          program?.date
+        )
+
+
+      if (
+        when
+      ) {
+        const whenElement =
+          document.createElement(
+            'div'
+          )
+
+
+        whenElement.className =
+          'geographic-pin-year'
+
+
+        whenElement.textContent =
+          when
+
+
+        whenElement.style.fontSize =
+          '10px'
+
+
+        whenElement.style.fontWeight =
+          '600'
+
+
+        whenElement.style.letterSpacing =
+          '0.06em'
+
+
+        whenElement.style.marginBottom =
+          '2px'
+
+
+        row.appendChild(
+          whenElement
+        )
+      }
+
+
+      const title =
+        document.createElement(
+          'div'
+        )
+
+
+      title.textContent =
+        String(
+          program?.title ||
+          ''
+        )
+          .trim()
+
+
+      title.style.fontSize =
+        '13px'
+
+
+      title.style.fontWeight =
+        '600'
+
+
+      title.style.lineHeight =
+        '1.25'
+
+
+      title.style.color =
+        '#111'
+
+
+      row.appendChild(
+        title
+      )
+
+
+      const ageLabel =
+        formatCommunityProgramAge(
+          program
+        )
+
+
+      if (
+        ageLabel
+      ) {
+        const age =
+          document.createElement(
+            'div'
+          )
+
+
+        age.className =
+          'geographic-pin-year'
+
+
+        age.textContent =
+          ageLabel
+
+
+        age.style.marginTop =
+          '2px'
+
+
+        age.style.fontSize =
+          '10px'
+
+
+        age.style.fontWeight =
+          '600'
+
+
+        row.appendChild(
+          age
+        )
+      }
+
+
+      const priceLabel =
+        formatCommunityProgramPrice(
+          program
+        )
+
+
+      if (
+        priceLabel
+      ) {
+        const price =
+          document.createElement(
+            'div'
+          )
+
+
+        price.className =
+          'geographic-pin-year'
+
+
+        price.textContent =
+          priceLabel
+
+
+        price.style.marginTop =
+          '2px'
+
+
+        price.style.fontSize =
+          '10px'
+
+
+        price.style.fontWeight =
+          '600'
+
+
+        row.appendChild(
+          price
+        )
+      }
+
+
+      const seniorPriceLabel =
+        formatCommunityProgramPrice({
+          price:
+            program?.seniorPrice,
+        })
+
+
+      if (
+        seniorPriceLabel
+      ) {
+        const senior =
+          document.createElement(
+            'div'
+          )
+
+
+        senior.className =
+          'geographic-pin-year'
+
+
+        senior.textContent =
+          (
+            'SENIOR ' +
+            seniorPriceLabel +
+            (
+              program?.seniorDiscountText
+                ? ` · ${String(program.seniorDiscountText).trim()}`
+                : ''
+            )
+          )
+
+
+        senior.style.marginTop =
+          '2px'
+
+
+        senior.style.fontSize =
+          '10px'
+
+
+        senior.style.fontWeight =
+          '600'
+
+
+        row.appendChild(
+          senior
+        )
+      }
+
+
+      if (
+        program?.isFull
+      ) {
+        const full =
+          document.createElement(
+            'div'
+          )
+
+
+        full.className =
+          'geographic-pin-year'
+
+
+        full.textContent =
+          'REGISTRATION FULL / CLOSED'
+
+
+        full.style.marginTop =
+          '2px'
+
+
+        row.appendChild(
+          full
+        )
+      }
+
+
+      shell.appendChild(
+        row
+      )
+    }
+  )
+
+
+  parent.appendChild(
+    shell
+  )
+}
+
+
 // ============================================================
 // SEE IT THEN
 // ============================================================
@@ -3561,7 +4649,15 @@ function getNewEventIcon(
 }
 
 
-const COMMUNITY_ICONS = {
+const NEW_COMMUNITY_ICONS = {
+  community: {
+    emoji:
+      '📍',
+
+    label:
+      'Community',
+  },
+
   library: {
     emoji:
       '📚',
@@ -3570,31 +4666,7 @@ const COMMUNITY_ICONS = {
       'Library',
   },
 
-  pool: {
-    emoji:
-      '🏊',
-
-    label:
-      'Pool / Aquatics',
-  },
-
-  splash: {
-    emoji:
-      '💦',
-
-    label:
-      'Splash Pad',
-  },
-
-  arena: {
-    emoji:
-      '⛸️',
-
-    label:
-      'Arena / Rink',
-  },
-
-  centre: {
+  'community-centre': {
     emoji:
       '🏛️',
 
@@ -3602,28 +4674,52 @@ const COMMUNITY_ICONS = {
       'Community Centre',
   },
 
-  playground: {
+  learn4life: {
     emoji:
-      '🛝',
+      '🏫',
 
     label:
-      'Playground',
+      'Learn4Life',
   },
 
-  park: {
+  gallery: {
     emoji:
-      '🌳',
+      '🖼️',
 
     label:
-      'Park',
+      'Gallery',
   },
 
-  tennis: {
+  cinema: {
     emoji:
-      '🎾',
+      '🎬',
 
     label:
-      'Tennis',
+      'Cinema',
+  },
+
+  rink: {
+    emoji:
+      '⛸️',
+
+    label:
+      'Rink',
+  },
+
+  skateboard: {
+    emoji:
+      '🛹',
+
+    label:
+      'Skatepark',
+  },
+
+  'dry-pad': {
+    emoji:
+      '🏟️',
+
+    label:
+      'Dry Pad',
   },
 
   basketball: {
@@ -3634,227 +4730,138 @@ const COMMUNITY_ICONS = {
       'Basketball',
   },
 
-  baseball: {
+  tennis: {
     emoji:
-      '⚾',
+      '🎾',
 
     label:
-      'Baseball',
+      'Tennis',
   },
 
-  soccer: {
+  pickleball: {
     emoji:
-      '⚽',
+      '🏓',
 
     label:
-      'Soccer',
+      'Pickleball',
   },
 
-  skate: {
+  'bike-park': {
     emoji:
-      '🛹',
+      '🚲',
 
     label:
-      'Skate Park',
+      'Bike Park',
   },
 
-  community: {
+  'sports-court': {
     emoji:
-      '📍',
+      '🏟️',
 
     label:
-      'Community',
+      'Sports Court',
+  },
+
+  pool: {
+    emoji:
+      '🏊',
+
+    label:
+      'Pool',
+  },
+
+  'splash-pad': {
+    emoji:
+      '💦',
+
+    label:
+      'Splash Pad',
+  },
+
+  'wading-pool': {
+    emoji:
+      '💧',
+
+    label:
+      'Wading Pool',
+  },
+
+  'water-park': {
+    emoji:
+      '🌊',
+
+    label:
+      'Water Park',
+  },
+
+  market: {
+    emoji:
+      '🧺',
+
+    label:
+      'Market',
+  },
+
+  park: {
+    emoji:
+      '🌳',
+
+    label:
+      'Park',
+  },
+
+  'public-space': {
+    emoji:
+      '🌐',
+
+    label:
+      'Public Space',
   },
 }
 
 
-function getCommunityIcon(
+function getNewCommunityIcon(
   pin
 ) {
-  const explicitType =
-    normalizeCompareText(
-      pin?.newType
-    )
-
   const category =
     normalizeCompareText(
       pin?.category
     )
 
-  // Do not steal ordinary event markers just because an event happens to
-  // contain the word "community".
+
   if (
-    explicitType ===
-      'events' ||
-    EVENT_CATEGORIES.includes(
+    !COMMUNITY_CATEGORIES.includes(
       category
     )
   ) {
     return null
   }
 
-  const text =
+
+  const communityType =
     normalizeCompareText(
-      [
-        pin?.communityIcon,
-        pin?.communityType,
-        pin?.facilityType,
-        pin?.subcategory,
-        pin?.category,
-        pin?.title,
-        pin?.description,
-        pin?.source,
-      ]
-        .filter(
-          Boolean
+      pin?.communityType
+    )
+
+
+  const iconKey =
+    communityType ===
+      'learn4life'
+      ? 'learn4life'
+      : (
+          normalizeCompareText(
+            pin?.eventPinIcon
+          ) ||
+          category
         )
-        .join(
-          ' '
-        )
-    )
 
-  if (
-    text.includes(
-      'library'
-    )
-  ) {
-    return COMMUNITY_ICONS.library
-  }
 
-  if (
-    text.includes(
-      'splash pad'
-    ) ||
-    text.includes(
-      'splashpad'
-    )
-  ) {
-    return COMMUNITY_ICONS.splash
-  }
-
-  if (
-    text.includes(
-      'pool'
-    ) ||
-    text.includes(
-      'aquatic'
-    ) ||
-    text.includes(
-      'swimming'
-    )
-  ) {
-    return COMMUNITY_ICONS.pool
-  }
-
-  if (
-    text.includes(
-      'arena'
-    ) ||
-    text.includes(
-      'ice rink'
-    ) ||
-    text.includes(
-      'skating rink'
-    )
-  ) {
-    return COMMUNITY_ICONS.arena
-  }
-
-  if (
-    text.includes(
-      'community centre'
-    ) ||
-    text.includes(
-      'community center'
-    ) ||
-    text.includes(
-      'recreation centre'
-    ) ||
-    text.includes(
-      'recreation center'
-    ) ||
-    text.includes(
-      'recreation facility'
-    )
-  ) {
-    return COMMUNITY_ICONS.centre
-  }
-
-  if (
-    text.includes(
-      'playground'
-    )
-  ) {
-    return COMMUNITY_ICONS.playground
-  }
-
-  if (
-    text.includes(
-      'tennis'
-    )
-  ) {
-    return COMMUNITY_ICONS.tennis
-  }
-
-  if (
-    text.includes(
-      'basketball'
-    )
-  ) {
-    return COMMUNITY_ICONS.basketball
-  }
-
-  if (
-    text.includes(
-      'baseball'
-    ) ||
-    text.includes(
-      'ball diamond'
-    )
-  ) {
-    return COMMUNITY_ICONS.baseball
-  }
-
-  if (
-    text.includes(
-      'soccer'
-    )
-  ) {
-    return COMMUNITY_ICONS.soccer
-  }
-
-  if (
-    text.includes(
-      'skate park'
-    ) ||
-    text.includes(
-      'skatepark'
-    )
-  ) {
-    return COMMUNITY_ICONS.skate
-  }
-
-  if (
-    text.includes(
-      'park'
-    )
-  ) {
-    return COMMUNITY_ICONS.park
-  }
-
-  if (
-    explicitType ===
-      'community' ||
-    category ===
-      'community' ||
-    category.startsWith(
-      'community-'
-    )
-  ) {
-    return COMMUNITY_ICONS.community
-  }
-
-  return null
+  return (
+    NEW_COMMUNITY_ICONS[
+      iconKey
+    ] ||
+    NEW_COMMUNITY_ICONS.community
+  )
 }
 
 
@@ -6801,10 +7808,10 @@ function createMarker({
       : ''
 
 
-  const communityIcon =
+  const newCommunityIcon =
     pinType ===
     'new'
-      ? getCommunityIcon(
+      ? getNewCommunityIcon(
           pin
         )
       : null
@@ -6987,10 +7994,10 @@ function createMarker({
     })
   }
   else if (
-    communityIcon
+    newCommunityIcon
   ) {
     element.className =
-      'geographic-pin-emoji-marker geographic-pin-community-emoji-marker'
+      'geographic-pin-emoji-marker geographic-pin-new-community-emoji-marker'
 
     element.style.width =
       '32px'
@@ -7037,13 +8044,13 @@ function createMarker({
     element.setAttribute(
       'aria-label',
       pin.title
-        ? `${communityIcon.label} · ${pin.title}`
-        : `${communityIcon.label} marker`
+        ? `${newCommunityIcon.label} · ${pin.title}`
+        : `${newCommunityIcon.label} marker`
     )
 
     appendEmojiMarkerIcon(
       element,
-      communityIcon.emoji
+      newCommunityIcon.emoji
     )
   }
   else if (
@@ -7746,7 +8753,103 @@ function createMarker({
 
 
     if (
-      pin.category ||
+      pinType ===
+        'new' &&
+      COMMUNITY_CATEGORIES.includes(
+        normalizeCompareText(
+          pin.category
+        )
+      )
+    ) {
+      appendRinkStatus({
+        parent:
+          popupContent,
+
+        pin,
+      })
+
+
+      appendOutdoorRecreationUses({
+        parent:
+          popupContent,
+
+        pin,
+      })
+
+
+      appendAquaticsStatus({
+        parent:
+          popupContent,
+
+        pin,
+      })
+
+
+      appendCommunityPrograms({
+        parent:
+          popupContent,
+
+        pin,
+      })
+
+
+      if (
+        Array.isArray(
+          pin?.poolPrograms
+        ) &&
+        pin.poolPrograms.length >
+          0
+      ) {
+        appendCommunityPrograms({
+          parent:
+            popupContent,
+
+          pin,
+
+          programsOverride:
+            pin.poolPrograms,
+
+          headingText:
+            'SWIM',
+        })
+      }
+
+
+      if (
+        Array.isArray(
+          pin?.rinkPrograms
+        ) &&
+        pin.rinkPrograms.length >
+          0
+      ) {
+        appendCommunityPrograms({
+          parent:
+            popupContent,
+
+          pin,
+
+          programsOverride:
+            pin.rinkPrograms,
+
+          headingText:
+            'SKATING',
+        })
+      }
+    }
+
+    if (
+      (
+        pin.category &&
+        !(
+          pinType ===
+            'new' &&
+          COMMUNITY_CATEGORIES.includes(
+            normalizeCompareText(
+              pin.category
+            )
+          )
+        )
+      ) ||
       (
         pinType ===
           'historic' &&
