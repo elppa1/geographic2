@@ -3481,30 +3481,6 @@ function getNewEventIcon(
     )
 
 
-  const communityEvent =
-    category ===
-      'community-event' ||
-    category ===
-      'community' ||
-    category.startsWith(
-      'community-'
-    ) ||
-    explicitType ===
-      'community' ||
-    Boolean(
-      pin?.communityIcon ||
-      pin?.communityType ||
-      pin?.facilityType
-    )
-
-
-  if (
-    communityEvent
-  ) {
-    return null
-  }
-
-
   if (
     explicitType !==
       'events' &&
@@ -3682,14 +3658,6 @@ const COMMUNITY_ICONS = {
       'Skate Park',
   },
 
-  recreation: {
-    emoji:
-      '🏃',
-
-    label:
-      'Recreation Opportunity',
-  },
-
   community: {
     emoji:
       '📍',
@@ -3713,42 +3681,17 @@ function getCommunityIcon(
       pin?.category
     )
 
-
-  // Toronto's COMMUNITY feed is carried through NEW and some records are
-  // intentionally tagged as events (for example category "community-event").
-  // Those must still resolve to facility/activity icons instead of the generic
-  // event ticket.
-  const communityRecord =
-    explicitType ===
-      'community' ||
-    category ===
-      'community' ||
-    category ===
-      'community-event' ||
-    category.startsWith(
-      'community-'
-    ) ||
-    Boolean(
-      pin?.communityIcon ||
-      pin?.communityType ||
-      pin?.facilityType
-    )
-
-
-  // Only keep ordinary entertainment events out of this resolver.
+  // Do not steal ordinary event markers just because an event happens to
+  // contain the word "community".
   if (
-    !communityRecord &&
-    (
-      explicitType ===
-        'events' ||
-      EVENT_CATEGORIES.includes(
-        category
-      )
+    explicitType ===
+      'events' ||
+    EVENT_CATEGORIES.includes(
+      category
     )
   ) {
     return null
   }
-
 
   const text =
     normalizeCompareText(
@@ -3756,14 +3699,10 @@ function getCommunityIcon(
         pin?.communityIcon,
         pin?.communityType,
         pin?.facilityType,
-        pin?.programType,
-        pin?.eventPinIcon,
         pin?.subcategory,
         pin?.category,
         pin?.title,
         pin?.description,
-        pin?.venue,
-        pin?.location,
         pin?.source,
       ]
         .filter(
@@ -3774,7 +3713,6 @@ function getCommunityIcon(
         )
     )
 
-
   if (
     text.includes(
       'library'
@@ -3782,7 +3720,6 @@ function getCommunityIcon(
   ) {
     return COMMUNITY_ICONS.library
   }
-
 
   if (
     text.includes(
@@ -3794,7 +3731,6 @@ function getCommunityIcon(
   ) {
     return COMMUNITY_ICONS.splash
   }
-
 
   if (
     text.includes(
@@ -3810,19 +3746,6 @@ function getCommunityIcon(
     return COMMUNITY_ICONS.pool
   }
 
-
-  if (
-    text.includes(
-      'skate park'
-    ) ||
-    text.includes(
-      'skatepark'
-    )
-  ) {
-    return COMMUNITY_ICONS.skate
-  }
-
-
   if (
     text.includes(
       'arena'
@@ -3832,22 +3755,10 @@ function getCommunityIcon(
     ) ||
     text.includes(
       'skating rink'
-    ) ||
-    text.includes(
-      'outdoor rink'
-    ) ||
-    (
-      text.includes(
-        'rink'
-      ) &&
-      !text.includes(
-        'rinkeby'
-      )
     )
   ) {
     return COMMUNITY_ICONS.arena
   }
-
 
   if (
     text.includes(
@@ -3864,14 +3775,10 @@ function getCommunityIcon(
     ) ||
     text.includes(
       'recreation facility'
-    ) ||
-    text.includes(
-      'recreation complex'
     )
   ) {
     return COMMUNITY_ICONS.centre
   }
-
 
   if (
     text.includes(
@@ -3881,7 +3788,6 @@ function getCommunityIcon(
     return COMMUNITY_ICONS.playground
   }
 
-
   if (
     text.includes(
       'tennis'
@@ -3890,7 +3796,6 @@ function getCommunityIcon(
     return COMMUNITY_ICONS.tennis
   }
 
-
   if (
     text.includes(
       'basketball'
@@ -3898,7 +3803,6 @@ function getCommunityIcon(
   ) {
     return COMMUNITY_ICONS.basketball
   }
-
 
   if (
     text.includes(
@@ -3911,7 +3815,6 @@ function getCommunityIcon(
     return COMMUNITY_ICONS.baseball
   }
 
-
   if (
     text.includes(
       'soccer'
@@ -3920,33 +3823,16 @@ function getCommunityIcon(
     return COMMUNITY_ICONS.soccer
   }
 
-
   if (
     text.includes(
-      'recreation opportunity'
+      'skate park'
     ) ||
     text.includes(
-      'recreation program'
-    ) ||
-    text.includes(
-      'recreation activity'
-    ) ||
-    text.includes(
-      'drop-in'
-    ) ||
-    text.includes(
-      'drop in'
-    ) ||
-    text.includes(
-      'fitness'
-    ) ||
-    text.includes(
-      'recreation'
+      'skatepark'
     )
   ) {
-    return COMMUNITY_ICONS.recreation
+    return COMMUNITY_ICONS.skate
   }
-
 
   if (
     text.includes(
@@ -3956,13 +3842,17 @@ function getCommunityIcon(
     return COMMUNITY_ICONS.park
   }
 
-
   if (
-    communityRecord
+    explicitType ===
+      'community' ||
+    category ===
+      'community' ||
+    category.startsWith(
+      'community-'
+    )
   ) {
     return COMMUNITY_ICONS.community
   }
-
 
   return null
 }
