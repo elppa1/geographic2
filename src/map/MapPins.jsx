@@ -3965,7 +3965,59 @@ function appendSeeItThenAction({
     'button'
 
   button.className =
-    'geographic-route-action'
+    'geographic-route-action geographic-see-it-then-action'
+
+
+  button.style.display =
+    'block'
+
+  button.style.width =
+    '100%'
+
+  button.style.boxSizing =
+    'border-box'
+
+  button.style.marginTop =
+    '7px'
+
+  button.style.padding =
+    '8px 10px'
+
+  button.style.border =
+    '0'
+
+  button.style.borderRadius =
+    '0'
+
+  button.style.background =
+    '#111'
+
+  button.style.color =
+    '#fff'
+
+  button.style.fontFamily =
+    'inherit'
+
+  button.style.fontSize =
+    '8px'
+
+  button.style.fontWeight =
+    '800'
+
+  button.style.lineHeight =
+    '1.2'
+
+  button.style.letterSpacing =
+    '0.08em'
+
+  button.style.textAlign =
+    'center'
+
+  button.style.whiteSpace =
+    'nowrap'
+
+  button.style.cursor =
+    'pointer'
 
 
   const getReturnLabel =
