@@ -990,14 +990,14 @@ function GeographicApp() {
       timelineLayers.find(
         (layer) =>
           layer.year ===
-            1947 &&
+            1954 &&
           layer.layerType ===
             'aerial'
       ) ||
       timelineLayers.find(
         (layer) =>
           layer.year ===
-          1947
+          1954
       ) ||
       defaultLayer
 
@@ -1247,6 +1247,19 @@ function GeographicApp() {
             margin-top: 8px;
             font-size: 8px;
             line-height: 1.4;
+          }
+
+          .howto-tip {
+            margin-top: 7px !important;
+            padding: 7px 8px;
+            border: 1px solid rgba(0,0,0,0.14);
+            background: rgba(0,0,0,0.035);
+            font-weight: 650;
+          }
+
+          .howto-tip strong {
+            font-weight: 900;
+            letter-spacing: 0.08em;
           }
 
           .howto-sponsor {
@@ -1511,6 +1524,42 @@ function GeographicApp() {
               letter-spacing: 0.08em !important;
             }
 
+            /* Mobile: visually pair the top controls with the black Time Machine tray. */
+            .brand {
+              background: rgba(10,10,10,0.91) !important;
+              color: #fff !important;
+              border-color: rgba(255,255,255,0.20) !important;
+              box-shadow: 0 8px 24px rgba(0,0,0,0.20) !important;
+            }
+
+            .brand-title {
+              color: #fff !important;
+            }
+
+            .brand .brand-mode-button {
+              border-color: rgba(255,255,255,0.30) !important;
+              background: transparent !important;
+              color: #fff !important;
+              box-shadow: none !important;
+            }
+
+            .brand .brand-mode-button-active {
+              border-color: #fff !important;
+              background: #fff !important;
+              color: #111 !important;
+            }
+
+            .brand .mobile-brand-toggle {
+              color: #fff !important;
+            }
+
+            .map-utilities .map-utility-button {
+              border-color: transparent !important;
+              background: transparent !important;
+              color: #fff !important;
+              box-shadow: none !important;
+            }
+
             .brand-primary-filters {
               order: 3;
               width: 100%;
@@ -1574,6 +1623,9 @@ function GeographicApp() {
             .historic-mobile-picker-button {
               min-height: 30px !important;
               padding: 6px 8px !important;
+              border-color: rgba(255,255,255,0.28) !important;
+              background: rgba(255,255,255,0.06) !important;
+              color: #fff !important;
               font-size: 6.5px !important;
               line-height: 1.15 !important;
               letter-spacing: 0.05em !important;
@@ -1581,19 +1633,34 @@ function GeographicApp() {
 
             .historic-mobile-picker-menu {
               max-height: min(48vh, 340px);
+              border-color: rgba(255,255,255,0.24) !important;
+              background: rgba(10,10,10,0.98) !important;
+              box-shadow: 0 10px 28px rgba(0,0,0,0.36) !important;
             }
 
             .historic-mobile-picker-heading {
               padding: 6px 8px 4px;
+              border-top-color: rgba(255,255,255,0.10) !important;
+              background: rgba(255,255,255,0.07) !important;
+              color: rgba(255,255,255,0.72) !important;
+              opacity: 1 !important;
               font-size: 5.5px;
             }
 
             .historic-mobile-picker-option {
               min-height: 30px !important;
               padding: 7px 8px !important;
+              border-top-color: rgba(255,255,255,0.08) !important;
+              background: transparent !important;
+              color: #fff !important;
               font-size: 6.5px !important;
               line-height: 1.2 !important;
               letter-spacing: 0.04em !important;
+            }
+
+            .historic-mobile-picker-option-active {
+              background: #fff !important;
+              color: #111 !important;
             }
 
             .historic-mobile-picker-option-layer {
@@ -1840,6 +1907,12 @@ function GeographicApp() {
           >
             <button
               type="button"
+              className={
+                activePinFilter ===
+                  'historic'
+                  ? 'brand-mode-button brand-mode-button-active'
+                  : 'brand-mode-button'
+              }
               onClick={() =>
                 chooseContentMode(
                   'historic'
@@ -1886,6 +1959,12 @@ function GeographicApp() {
 
             <button
               type="button"
+              className={
+                activePinFilter ===
+                  'news'
+                  ? 'brand-mode-button brand-mode-button-active'
+                  : 'brand-mode-button'
+              }
               onClick={() =>
                 chooseContentMode(
                   'news'
@@ -1932,6 +2011,12 @@ function GeographicApp() {
 
             <button
               type="button"
+              className={
+                activePinFilter ===
+                  'new'
+                  ? 'brand-mode-button brand-mode-button-active'
+                  : 'brand-mode-button'
+              }
               onClick={() =>
                 chooseContentMode(
                   'new'
@@ -1978,7 +2063,7 @@ function GeographicApp() {
 
             <button
               type="button"
-              className="about-button"
+              className="about-button brand-mode-button"
               onClick={() =>
                 setAboutOpen(
                   true
@@ -2724,9 +2809,15 @@ function GeographicApp() {
               </h2>
 
               <p>
-                Turn on GPS and step into historic Toronto. We will open the
-                1947 aerial when available, centre the map on you, and show all
-                historic stories while your location moves with you.
+                Turn on GPS and step into Toronto in 1954. We will centre the
+                map on you and show all historic stories while your location
+                moves with you.
+              </p>
+
+              <p className="howto-tip">
+                <strong>TRY IT:</strong> Scroll through the years at the bottom
+                of the map to move backward and forward through Toronto as you
+                walk.
               </p>
             </section>
 
