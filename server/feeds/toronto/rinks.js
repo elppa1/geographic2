@@ -97,6 +97,19 @@ const DRY_PAD_CATEGORY =
   1113
 
 
+// Current City of Toronto skateboarding listings identify these as
+// seasonal skateparks associated with rink / ice-pad locations.
+// This supplements GIS because temporary wooden skate elements are not
+// always represented as permanent Skateboard Pad assets.
+const SEASONAL_SKATEPARK_NAMES =
+  new Set([
+    'dufferin grove',
+    'alexandra',
+    'dunbat',
+    'phil white',
+  ])
+
+
 const MAX_ALT_USE_DISTANCE_METRES =
   90
 
@@ -283,6 +296,42 @@ function normalizeName(
       ' '
     )
     .trim()
+}
+
+
+function isVerifiedSeasonalSkatepark(
+  site
+) {
+  const names =
+    [
+      site?.title,
+      site?.parentFacility?.name,
+    ]
+      .map(
+        normalizeName
+      )
+      .filter(
+        Boolean
+      )
+
+
+  return names.some(
+    (name) =>
+      [
+        ...SEASONAL_SKATEPARK_NAMES,
+      ]
+        .some(
+          (seasonalName) =>
+            name ===
+              seasonalName ||
+            name.includes(
+              seasonalName
+            ) ||
+            seasonalName.includes(
+              name
+            )
+        )
+  )
 }
 
 
@@ -2134,6 +2183,46 @@ function rinkPresentation(
       20
 
 
+  const seasonalSkatepark =
+    isVerifiedSeasonalSkatepark(
+      site
+    )
+
+
+  if (
+    seasonalSkatepark &&
+    !winterWindow
+  ) {
+    return {
+      currentUse:
+        'skateboarding',
+
+      currentUseLabel:
+        'SEASONAL SKATEPARK',
+
+      iceStatus:
+        'closed-for-season',
+
+      iceStatusLabel:
+        site.hasIndoorIce &&
+        !site.hasOutdoorIce
+          ? 'ICE DRAINED / OFF SEASON'
+          : 'ICE CLOSED FOR SEASON',
+
+      expectedIceLabel:
+        site.hasOutdoorIce
+          ? 'ICE EXPECTED LATE NOVEMBER'
+          : '',
+
+      eventPinIcon:
+        'skateboard',
+
+      seasonalSkatepark:
+        true,
+    }
+  }
+
+
   if (
     site.hasIndoorIce &&
     !site.hasOutdoorIce
@@ -2469,6 +2558,11 @@ function rinkFacilityPayload({
 
     hasDryPad:
       site.hasDryPad,
+
+    seasonalSkatepark:
+      Boolean(
+        presentation.seasonalSkatepark
+      ),
 
     currentUse:
       presentation.currentUse,
