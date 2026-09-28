@@ -2585,30 +2585,51 @@ function formatCommunityProgramWhen(
   }
 
 
-  return date.toLocaleString(
-    'en-CA',
-    {
-      timeZone:
-        'America/Toronto',
+  const dateText =
+    date.toLocaleDateString(
+      'en-CA',
+      {
+        timeZone:
+          'America/Toronto',
 
-      weekday:
-        'short',
+        weekday:
+          'short',
 
-      month:
-        'short',
+        month:
+          'short',
 
-      day:
-        'numeric',
+        day:
+          'numeric',
+      }
+    )
 
-      hour:
-        'numeric',
 
-      minute:
-        '2-digit',
-    }
+  const timeText =
+    date.toLocaleTimeString(
+      'en-CA',
+      {
+        timeZone:
+          'America/Toronto',
+
+        hour:
+          'numeric',
+
+        minute:
+          '2-digit',
+      }
+    )
+      .replace(
+        /\./g,
+        ''
+      )
+
+
+  return (
+    dateText +
+    ' · ' +
+    timeText
   )
 }
-
 
 function appendCommunityPrograms({
   parent,
@@ -2647,11 +2668,11 @@ function appendCommunityPrograms({
 
 
   shell.style.marginTop =
-    '9px'
+    '12px'
 
 
   shell.style.paddingTop =
-    '8px'
+    '10px'
 
 
   shell.style.borderTop =
@@ -2669,7 +2690,11 @@ function appendCommunityPrograms({
 
 
   heading.textContent =
-    'UPCOMING AT THIS BRANCH'
+    'UPCOMING'
+
+
+  heading.style.marginBottom =
+    '2px'
 
 
   shell.appendChild(
@@ -2686,7 +2711,7 @@ function appendCommunityPrograms({
 
 
       row.style.marginTop =
-        '7px'
+        '9px'
 
 
       const when =
@@ -2713,13 +2738,23 @@ function appendCommunityPrograms({
           when.toUpperCase()
 
 
+        whenElement.style.marginBottom =
+          '2px'
+
+
         row.appendChild(
           whenElement
         )
       }
 
 
-      const titleText =
+      const title =
+        document.createElement(
+          'div'
+        )
+
+
+      title.textContent =
         String(
           program?.title ||
           ''
@@ -2727,74 +2762,25 @@ function appendCommunityPrograms({
           .trim()
 
 
-      const href =
-        normalizeUrl(
-          program?.url
-        )
+      title.style.fontSize =
+        '13px'
 
 
-      if (
-        href
-      ) {
-        const link =
-          document.createElement(
-            'a'
-          )
+      title.style.fontWeight =
+        '600'
 
 
-        link.href =
-          href
+      title.style.lineHeight =
+        '1.25'
 
 
-        link.target =
-          '_blank'
+      title.style.color =
+        '#111'
 
 
-        link.rel =
-          'noopener noreferrer'
-
-
-        link.className =
-          'geographic-pin-source-link'
-
-
-        link.textContent =
-          titleText
-
-
-        link.addEventListener(
-          'click',
-          (
-            event
-          ) => {
-            event.stopPropagation()
-          }
-        )
-
-
-        row.appendChild(
-          link
-        )
-      }
-      else {
-        const title =
-          document.createElement(
-            'div'
-          )
-
-
-        title.className =
-          'geographic-pin-description'
-
-
-        title.textContent =
-          titleText
-
-
-        row.appendChild(
-          title
-        )
-      }
+      row.appendChild(
+        title
+      )
 
 
       if (
@@ -2814,6 +2800,10 @@ function appendCommunityPrograms({
           'REGISTRATION FULL / CLOSED'
 
 
+        full.style.marginTop =
+          '2px'
+
+
         row.appendChild(
           full
         )
@@ -2831,7 +2821,6 @@ function appendCommunityPrograms({
     shell
   )
 }
-
 
 // ============================================================
 // SEE IT THEN
@@ -6428,7 +6417,18 @@ function createMarker({
 
 
     if (
-      pin.category ||
+      (
+        pin.category &&
+        !(
+          pinType ===
+            'new' &&
+          COMMUNITY_CATEGORIES.includes(
+            normalizeCompareText(
+              pin.category
+            )
+          )
+        )
+      ) ||
       (
         pinType ===
           'historic' &&

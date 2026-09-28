@@ -1492,13 +1492,6 @@ export function buildTplCommunityRecords({
                 website ||
                 TPL_EVENTS_PAGE,
             },
-            {
-              name:
-                'Toronto Open Data · Programs',
-
-              url:
-                EVENTS_DATASET_PAGE,
-            },
           ],
 
           attribution:
