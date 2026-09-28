@@ -889,8 +889,8 @@
   .map-utilities {
     position: fixed;
 
-    top: 14px;
-    right: 110px;
+    top: 12px;
+    right: 34px;
 
     z-index: 80;
 
@@ -902,8 +902,8 @@
 
 
   .map-utility-button {
-    width: 22px;
-    height: 22px;
+    width: 28px;
+    height: 20px;
 
     border: 0;
 
@@ -911,11 +911,21 @@
 
     padding: 0;
 
-    font-size: 14px;
-    font-weight: 400;
+    font-size: 7px;
+    font-weight: 700;
     line-height: 1;
+    letter-spacing: 0.04em;
 
     box-shadow: none;
+  }
+
+
+  .search-control .map-utility-button {
+    width: 22px;
+
+    font-size: 13px;
+    font-weight: 400;
+    letter-spacing: 0;
   }
 
 
@@ -1016,9 +1026,9 @@
   .search-panel {
     position: fixed;
 
-    top: 42px;
-    left: 10px;
-    right: 10px;
+    top: 76px;
+    left: 8px;
+    right: 8px;
 
     z-index: 82;
 

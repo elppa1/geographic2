@@ -534,7 +534,25 @@ function GeographicApp() {
     setAboutOpen,
   ] =
     useState(
+      true
+    )
+
+
+  const [
+    timeMachineStarting,
+    setTimeMachineStarting,
+  ] =
+    useState(
       false
+    )
+
+
+  const [
+    timeMachineError,
+    setTimeMachineError,
+  ] =
+    useState(
+      ''
     )
 
 
@@ -855,6 +873,97 @@ function GeographicApp() {
   }
 
 
+  async function startTimeMachine() {
+    const timeMachineLayer =
+      timelineLayers.find(
+        (layer) =>
+          layer.year ===
+            1947 &&
+          layer.layerType ===
+            'aerial'
+      ) ||
+      timelineLayers.find(
+        (layer) =>
+          layer.year ===
+          1947
+      ) ||
+      defaultLayer
+
+
+    setActivePinFilter(
+      'historic'
+    )
+
+    setHistoricIssueFilter(
+      'all'
+    )
+
+    setHistoricCategoryFilter(
+      'all'
+    )
+
+    setHistoricLayerFilter(
+      'all'
+    )
+
+    if (
+      timeMachineLayer
+    ) {
+      setSelectedLayer(
+        timeMachineLayer
+      )
+    }
+
+
+    setTimeMachineError(
+      ''
+    )
+
+    setTimeMachineStarting(
+      true
+    )
+
+
+    try {
+      const mapApi =
+        geographicMapRef.current
+
+
+      if (
+        !mapApi?.startLocationTracking
+      ) {
+        throw new Error(
+          'GPS is not ready yet'
+        )
+      }
+
+
+      await mapApi
+        .startLocationTracking()
+
+
+      setAboutOpen(
+        false
+      )
+    } catch (
+      error
+    ) {
+      console.error(
+        'TIME MACHINE GPS ERROR:',
+        error
+      )
+
+      setTimeMachineError(
+        'GPS could not be turned on. Allow location access and try again.'
+      )
+    } finally {
+      setTimeMachineStarting(
+        false
+      )
+    }
+  }
+
+
   // ==========================================================
   // CONTENT MODE
   // ==========================================================
@@ -906,23 +1015,26 @@ function GeographicApp() {
             position: fixed;
             inset: 0;
             z-index: 80;
-            background: rgba(0,0,0,0.28);
-            backdrop-filter: blur(2px);
+            border: 0;
+            background: rgba(0,0,0,0.34);
+            backdrop-filter: blur(3px);
+            cursor: default;
           }
 
           .about-panel {
             position: fixed;
-            top: 12px;
-            right: 12px;
-            bottom: 12px;
+            top: 50%;
+            left: 50%;
             z-index: 81;
-            width: min(390px, calc(100vw - 24px));
+            width: min(430px, calc(100vw - 32px));
+            max-height: calc(100vh - 32px);
             overflow-y: auto;
-            padding: 18px 18px 20px;
-            border: 1px solid rgba(0,0,0,0.18);
+            transform: translate(-50%, -50%);
+            padding: 18px;
+            border: 1px solid rgba(0,0,0,0.20);
             background: rgba(255,255,255,0.98);
             color: #111;
-            box-shadow: 0 18px 60px rgba(0,0,0,0.18);
+            box-shadow: 0 18px 60px rgba(0,0,0,0.24);
           }
 
           .about-panel-header {
@@ -930,7 +1042,7 @@ function GeographicApp() {
             align-items: flex-start;
             justify-content: space-between;
             gap: 16px;
-            padding-bottom: 12px;
+            padding-bottom: 11px;
             border-bottom: 1px solid rgba(0,0,0,0.12);
           }
 
@@ -943,26 +1055,26 @@ function GeographicApp() {
 
           .about-panel-title {
             margin-top: 4px;
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 800;
             letter-spacing: 0.08em;
           }
 
           .about-close {
             flex: 0 0 auto;
-            width: 28px;
-            height: 28px;
+            width: 27px;
+            height: 27px;
             border: 1px solid rgba(0,0,0,0.16);
             background: #fff;
             color: #111;
             font: inherit;
-            font-size: 16px;
+            font-size: 15px;
             cursor: pointer;
           }
 
           .about-section {
-            padding: 14px 0;
-            border-bottom: 1px solid rgba(0,0,0,0.10);
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(0,0,0,0.09);
           }
 
           .about-section:last-of-type {
@@ -970,34 +1082,89 @@ function GeographicApp() {
           }
 
           .about-section h2 {
-            margin: 0 0 6px;
-            font-size: 8px;
+            margin: 0 0 4px;
+            font-size: 7px;
             letter-spacing: 0.12em;
           }
 
           .about-section p {
             margin: 0;
-            font-size: 10px;
-            line-height: 1.5;
+            font-size: 9px;
+            line-height: 1.45;
           }
 
           .about-section p + p {
-            margin-top: 7px;
+            margin-top: 6px;
+          }
+
+          .howto-actions {
+            display: grid;
+            gap: 6px;
+            margin-top: 13px;
+          }
+
+          .howto-primary,
+          .howto-secondary {
+            width: 100%;
+            min-height: 36px;
+            border: 1px solid #111;
+            padding: 8px 10px;
+            font: inherit;
+            font-size: 8px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            cursor: pointer;
+          }
+
+          .howto-primary {
+            background: #111;
+            color: #fff;
+          }
+
+          .howto-primary:disabled {
+            cursor: wait;
+            opacity: 0.65;
+          }
+
+          .howto-secondary {
+            background: #fff;
+            color: #111;
+          }
+
+          .howto-error {
+            margin-top: 8px;
+            font-size: 8px;
+            line-height: 1.4;
+          }
+
+          .howto-sponsor {
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(0,0,0,0.12);
+            font-size: 7px;
+            font-weight: 700;
+            letter-spacing: 0.09em;
+            text-align: center;
+          }
+
+          .howto-sponsor a {
+            color: #111;
+            text-decoration: none;
+            border-bottom: 1px solid rgba(0,0,0,0.28);
           }
 
           .about-made-by {
-            margin-top: 16px;
-            padding-top: 12px;
-            border-top: 1px solid rgba(0,0,0,0.12);
-            font-size: 8px;
+            margin-top: 8px;
+            font-size: 6px;
             font-weight: 700;
             letter-spacing: 0.10em;
+            text-align: center;
+            opacity: 0.55;
           }
 
           .about-made-by a {
             color: #111;
             text-decoration: none;
-            border-bottom: 1px solid rgba(0,0,0,0.35);
           }
 
           .historic-issue-nav {
@@ -1112,16 +1279,17 @@ function GeographicApp() {
             }
 
             .brand {
-              top: 10px !important;
-              left: 10px !important;
-              width: calc(100vw - 94px);
+              top: 8px !important;
+              left: 8px !important;
+              right: 8px !important;
+              width: auto !important;
               min-height: 30px;
-              padding: 6px 7px !important;
+              padding: 5px 6px !important;
               gap: 4px !important;
               scale: 1;
               transform-origin: top left;
-              font-size: 8px !important;
-              letter-spacing: 0.10em !important;
+              font-size: 7px !important;
+              letter-spacing: 0.08em !important;
             }
 
             .brand-main-row {
@@ -1129,21 +1297,23 @@ function GeographicApp() {
               display: flex !important;
               align-items: center !important;
               flex-wrap: wrap;
-              gap: 4px !important;
+              gap: 3px !important;
               width: 100%;
-              min-height: 18px;
-              padding-right: 18px;
+              min-height: 20px;
+              padding-right: 72px;
             }
 
             .brand-title {
               white-space: nowrap;
               line-height: 1;
+              font-size: 7px !important;
+              letter-spacing: 0.08em !important;
             }
 
             .brand-primary-filters {
               order: 3;
               width: 100%;
-              gap: 1px !important;
+              gap: 2px !important;
               margin-top: 2px;
             }
 
@@ -1177,38 +1347,49 @@ function GeographicApp() {
             }
 
             .brand button:not(.mobile-brand-toggle) {
-              min-height: 20px;
+              min-height: 19px;
               padding: 3px 5px !important;
+              font-size: 5.5px !important;
+              line-height: 1 !important;
+              letter-spacing: 0.045em !important;
+            }
+
+            .historic-issue-nav select {
+              width: 100% !important;
+              min-width: 0 !important;
+              max-width: none !important;
+              padding: 5px 6px !important;
               font-size: 6px !important;
-              line-height: 1.05 !important;
-              letter-spacing: 0.05em !important;
             }
 
 
             .about-panel {
-              top: 8px;
-              right: 8px;
-              bottom: 8px;
-              left: 8px;
-              width: auto;
-              padding: 14px 14px 18px;
+              width: calc(100vw - 24px);
+              max-height: calc(100vh - 24px);
+              padding: 13px;
             }
 
             .about-panel-title {
-              font-size: 13px;
+              font-size: 12px;
             }
 
             .about-section {
-              padding: 11px 0;
+              padding: 8px 0;
             }
 
             .about-section h2 {
-              font-size: 7px;
+              font-size: 6.5px;
             }
 
             .about-section p {
-              font-size: 9px;
-              line-height: 1.45;
+              font-size: 8px;
+              line-height: 1.4;
+            }
+
+            .howto-primary,
+            .howto-secondary {
+              min-height: 34px;
+              font-size: 7px;
             }
 
             .mobile-brand-toggle {
@@ -1234,13 +1415,6 @@ function GeographicApp() {
             .mobile-header-collapsed .brand-secondary-filters,
             .mobile-header-collapsed .brand-range-filters {
               display: none !important;
-            }
-
-            .geographic-sponsor {
-              top: 10px !important;
-              right: 10px !important;
-              scale: 0.62;
-              transform-origin: top right;
             }
 
             .timeline-shell {
@@ -1378,153 +1552,6 @@ function GeographicApp() {
         }
       />
 
-
-      <div
-        className="geographic-sponsor"
-        style={{
-          position:
-            'fixed',
-
-          right:
-            '12px',
-
-          top:
-            '12px',
-
-          zIndex:
-            30,
-
-          minWidth:
-            '104px',
-
-          padding:
-            '7px 9px',
-
-          border:
-            '1px solid rgba(0,0,0,0.16)',
-
-          background:
-            'rgba(255,255,255,0.92)',
-
-          backdropFilter:
-            'blur(8px)',
-
-          fontFamily:
-            'inherit',
-
-          textAlign:
-            'right',
-        }}
-      >
-        <div
-          style={{
-            fontSize:
-              '6px',
-
-            fontWeight:
-              700,
-
-            letterSpacing:
-              '0.14em',
-
-            opacity:
-              0.52,
-          }}
-        >
-          SPONSOR
-        </div>
-
-        {sponsorUrl
-          ? (
-              <a
-                href={
-                  sponsorUrl
-                }
-                target="_blank"
-                rel="noreferrer"
-                style={{
-                  display:
-                    'block',
-
-                  marginTop:
-                    '2px',
-
-                  color:
-                    '#111',
-
-                  fontSize:
-                    '8px',
-
-                  fontWeight:
-                    800,
-
-                  letterSpacing:
-                    '0.08em',
-
-                  textDecoration:
-                    'none',
-                }}
-              >
-                <span
-                  style={{
-                    display:
-                      'block',
-                  }}
-                >
-                  {sponsorName.toUpperCase()}
-                </span>
-
-                {sponsorUrl
-                  .toLowerCase()
-                  .includes(
-                    'progains.ca'
-                  ) && (
-                  <span
-                    style={{
-                      display:
-                        'block',
-
-                      marginTop:
-                        '3px',
-
-                      fontSize:
-                        '6px',
-
-                      fontWeight:
-                        700,
-
-                      letterSpacing:
-                        '0.08em',
-
-                      opacity:
-                        0.72,
-                    }}
-                  >
-                    PROGAINS.CA ↗
-                  </span>
-                )}
-              </a>
-            )
-          : (
-              <div
-                style={{
-                  marginTop:
-                    '2px',
-
-                  fontSize:
-                    '8px',
-
-                  fontWeight:
-                    800,
-
-                  letterSpacing:
-                    '0.08em',
-                }}
-              >
-                {sponsorName.toUpperCase()}
-              </div>
-            )}
-      </div>
 
 
       <div
@@ -1720,7 +1747,7 @@ function GeographicApp() {
                 )
               }
             >
-              ABOUT
+              HOW-TO
             </button>
           </div>
 
@@ -2225,7 +2252,7 @@ function GeographicApp() {
           <button
             type="button"
             className="about-backdrop"
-            aria-label="Close About"
+            aria-label="Close How-To"
             onClick={() =>
               setAboutOpen(
                 false
@@ -2237,7 +2264,7 @@ function GeographicApp() {
             className="about-panel"
             role="dialog"
             aria-modal="true"
-            aria-label="About Toronto Geographic"
+            aria-label="How to use Toronto Geographic"
           >
             <div className="about-panel-header">
               <div>
@@ -2246,7 +2273,7 @@ function GeographicApp() {
                 </div>
 
                 <div className="about-panel-title">
-                  ALL ABOUT THIS TOOL
+                  HOW TO USE THE MAP
                 </div>
               </div>
 
@@ -2258,7 +2285,7 @@ function GeographicApp() {
                     false
                   )
                 }
-                aria-label="Close About"
+                aria-label="Close How-To"
               >
                 ×
               </button>
@@ -2266,89 +2293,104 @@ function GeographicApp() {
 
             <section className="about-section">
               <h2>
-                ABOUT
+                TIME MACHINE
               </h2>
 
               <p>
-                Toronto Geographic is a living map of Toronto with current
-                news, and new and historical places, placed over maps and
-                aerial photography.
+                Turn on GPS and step into historic Toronto. We will open the
+                1947 aerial when available, centre the map on you, and show all
+                historic stories while your location moves with you.
               </p>
             </section>
 
             <section className="about-section">
               <h2>
-                HOW TO USE IT
+                NEWS
               </h2>
 
               <p>
-                Switch between HISTORIC, NEWS, and NEW at the top. Tap a pin
-                for details. Use search or GPS to find a place, and move
-                through the timeline at the bottom to see Toronto at different
-                points in time.
+                See current neighbourhood news, public-safety incidents and
+                transit information on the map. Use the NEWS history slider to
+                look back through recent stories.
               </p>
             </section>
 
             <section className="about-section">
               <h2>
-                HISTORIC PINS
+                COMMUNITY
               </h2>
 
               <p>
-                We release about ten pins a month usually under a theme. Once
-                the month disappears, the pin finds a permanent home on the
-                aerial closest to its occurrence.
+                Find neighbourhood events, sports and community activity under
+                NEW → COMMUNITY.
               </p>
             </section>
 
             <section className="about-section">
               <h2>
-                NEWS RULES
+                NEW BUSINESSES
               </h2>
 
               <p>
-                News pins come from public and official sources where
-                available. Fresh and important events are emphasized. Older
-                stories may disappear from the broad city view while still
-                remaining visible when you zoom into the neighbourhood or
-                street.
-              </p>
-
-              <p>
-                CURATED is the default NEWS view. It prioritizes what matters
-                now; use the time slider to look back through the available
-                news history.
-              </p>
-
-              <p>
-                Toronto Geographic is informational and is not an emergency
-                alerting service.
+                Discover recently found or verified businesses around Toronto
+                under NEW → BUSINESS.
               </p>
             </section>
 
-            <section className="about-section">
-              <h2>
-                NEW PLACES
-              </h2>
+            <div className="howto-actions">
+              <button
+                type="button"
+                className="howto-primary"
+                disabled={
+                  timeMachineStarting
+                }
+                onClick={
+                  startTimeMachine
+                }
+              >
+                {timeMachineStarting
+                  ? 'TURNING ON GPS…'
+                  : 'TURN ON TIME MACHINE'}
+              </button>
 
-              <p>
-                New businesses are shown when we discover or verify them.
-                “First seen” is not the same as an opening date unless the
-                opening date has been confirmed.
-              </p>
-            </section>
+              <button
+                type="button"
+                className="howto-secondary"
+                onClick={() =>
+                  setAboutOpen(
+                    false
+                  )
+                }
+              >
+                BROWSE THE MAP MYSELF
+              </button>
+            </div>
 
-            <section className="about-section">
-              <h2>
-                SOURCES + CORRECTIONS
-              </h2>
+            {timeMachineError && (
+              <div
+                className="howto-error"
+                role="status"
+              >
+                {timeMachineError}
+              </div>
+            )}
 
-              <p>
-                Where a source or story link exists, we link back to it. If
-                something looks wrong, outdated, or misplaced, let us know so
-                the map can be corrected.
-              </p>
-            </section>
+            <div className="howto-sponsor">
+              SPONSORED BY{' '}
+              {sponsorUrl
+                ? (
+                    <a
+                      href={
+                        sponsorUrl
+                      }
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {sponsorName.toUpperCase()}
+                    </a>
+                  )
+                : sponsorName.toUpperCase()}
+            </div>
 
             <div className="about-made-by">
               MADE BY{' '}

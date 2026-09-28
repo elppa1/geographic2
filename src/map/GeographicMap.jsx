@@ -721,6 +721,9 @@ const GeographicMap =
       const userPositionRef =
         useRef(null)
 
+      const userWatchIdRef =
+        useRef(null)
+
       const enhancedSourceRef =
         useRef(null)
 
@@ -797,6 +800,16 @@ const GeographicMap =
             setSelectedPinId(
               null
             )
+          },
+
+
+          startLocationTracking() {
+            return startLocationTracking()
+          },
+
+
+          stopLocationTracking() {
+            stopLocationTracking()
           },
         }),
         []
@@ -1227,6 +1240,8 @@ const GeographicMap =
           )
 
 
+          stopLocationTracking()
+
           userMarkerRef.current?.remove()
 
           searchMarkerRef.current?.remove()
@@ -1430,6 +1445,103 @@ const GeographicMap =
       // GPS
       // ========================================================
 
+      function applyUserPosition(
+        position,
+        recenter =
+          false
+      ) {
+        const map =
+          mapRef.current
+
+
+        if (
+          !map ||
+          !position?.coords
+        ) {
+          throw new Error(
+            'Location unavailable'
+          )
+        }
+
+
+        const longitude =
+          position.coords.longitude
+
+        const latitude =
+          position.coords.latitude
+
+
+        const location = {
+          longitude,
+          latitude,
+        }
+
+
+        userPositionRef.current =
+          location
+
+
+        if (
+          !userMarkerRef.current
+        ) {
+          const element =
+            document.createElement(
+              'div'
+            )
+
+
+          element.className =
+            'user-location-dot'
+
+
+          userMarkerRef.current =
+            new Marker({
+              element,
+
+              anchor:
+                'center',
+            })
+              .setLngLat([
+                longitude,
+                latitude,
+              ])
+              .addTo(
+                map
+              )
+        } else {
+          userMarkerRef.current
+            .setLngLat([
+              longitude,
+              latitude,
+            ])
+        }
+
+
+        if (
+          recenter
+        ) {
+          map.flyTo({
+            center: [
+              longitude,
+              latitude,
+            ],
+
+            zoom:
+              Math.max(
+                map.getZoom(),
+                16
+              ),
+
+            duration:
+              900,
+          })
+        }
+
+
+        return location
+      }
+
+
       const getUserLocation =
         useCallback(
           (
@@ -1463,83 +1575,20 @@ const GeographicMap =
                   (
                     position
                   ) => {
-                    const longitude =
-                      position.coords.longitude
-
-                    const latitude =
-                      position.coords.latitude
-
-
-                    const location = {
-                      longitude,
-                      latitude,
-                    }
-
-
-                    userPositionRef.current =
-                      location
-
-
-                    if (
-                      !userMarkerRef.current
-                    ) {
-                      const element =
-                        document.createElement(
-                          'div'
+                    try {
+                      resolve(
+                        applyUserPosition(
+                          position,
+                          recenter
                         )
-
-
-                      element.className =
-                        'user-location-dot'
-
-
-                      userMarkerRef.current =
-                        new Marker({
-                          element,
-
-                          anchor:
-                            'center',
-                        })
-                          .setLngLat([
-                            longitude,
-                            latitude,
-                          ])
-                          .addTo(
-                            map
-                          )
-                    } else {
-                      userMarkerRef.current
-                        .setLngLat([
-                          longitude,
-                          latitude,
-                        ])
-                    }
-
-
-                    if (
-                      recenter
+                      )
+                    } catch (
+                      error
                     ) {
-                      map.flyTo({
-                        center: [
-                          longitude,
-                          latitude,
-                        ],
-
-                        zoom:
-                          Math.max(
-                            map.getZoom(),
-                            16
-                          ),
-
-                        duration:
-                          900,
-                      })
+                      reject(
+                        error
+                      )
                     }
-
-
-                    resolve(
-                      location
-                    )
                   },
 
                   reject,
@@ -1560,6 +1609,91 @@ const GeographicMap =
           },
           []
         )
+
+
+      function stopLocationTracking() {
+        if (
+          userWatchIdRef.current ===
+            null ||
+          !navigator.geolocation
+        ) {
+          return
+        }
+
+
+        navigator.geolocation.clearWatch(
+          userWatchIdRef.current
+        )
+
+
+        userWatchIdRef.current =
+          null
+      }
+
+
+      async function startLocationTracking() {
+        if (
+          !navigator.geolocation
+        ) {
+          throw new Error(
+            'Location unavailable'
+          )
+        }
+
+
+        const location =
+          await getUserLocation(
+            true
+          )
+
+
+        stopLocationTracking()
+
+
+        userWatchIdRef.current =
+          navigator.geolocation.watchPosition(
+            (
+              position
+            ) => {
+              try {
+                applyUserPosition(
+                  position,
+                  false
+                )
+              } catch (
+                error
+              ) {
+                console.error(
+                  'GPS WATCH UPDATE ERROR:',
+                  error
+                )
+              }
+            },
+
+            (
+              error
+            ) => {
+              console.error(
+                'GPS WATCH ERROR:',
+                error
+              )
+            },
+
+            {
+              enableHighAccuracy:
+                true,
+
+              maximumAge:
+                5000,
+
+              timeout:
+                15000,
+            }
+          )
+
+
+        return location
+      }
 
 
       function locateUser() {
