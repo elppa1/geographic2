@@ -8785,20 +8785,37 @@ function createMarker({
       })
 
 
-      appendCommunityPrograms({
-        parent:
-          popupContent,
-
-        pin,
-      })
-
-
-      if (
+      const hasPoolPrograms =
         Array.isArray(
           pin?.poolPrograms
         ) &&
         pin.poolPrograms.length >
           0
+
+
+      const hasRinkPrograms =
+        Array.isArray(
+          pin?.rinkPrograms
+        ) &&
+        pin.rinkPrograms.length >
+          0
+
+
+      if (
+        !hasPoolPrograms &&
+        !hasRinkPrograms
+      ) {
+        appendCommunityPrograms({
+          parent:
+            popupContent,
+
+          pin,
+        })
+      }
+
+
+      if (
+        hasPoolPrograms
       ) {
         appendCommunityPrograms({
           parent:
@@ -8816,11 +8833,7 @@ function createMarker({
 
 
       if (
-        Array.isArray(
-          pin?.rinkPrograms
-        ) &&
-        pin.rinkPrograms.length >
-          0
+        hasRinkPrograms
       ) {
         appendCommunityPrograms({
           parent:
@@ -8944,18 +8957,6 @@ function createMarker({
     }
 
 
-    if (
-      pinType !==
-        'news'
-    ) {
-      appendRouteActions({
-        popupContent,
-        pin,
-        longitude,
-        latitude,
-        onDirections,
-      })
-    }
   }
 
 

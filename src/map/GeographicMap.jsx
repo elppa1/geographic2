@@ -26,9 +26,7 @@ import {
   addStreetLabels,
   setStreetLabelsVisible,
 } from './streetLabels.js'
-import MapControls from './MapControls.jsx'
 import MapPins from './MapPins.jsx'
-import DirectionsPanel from './DirectionsPanel.jsx'
 import {
   getDirectRoute,
 } from './routeService.js'
@@ -665,6 +663,16 @@ const GeographicMap =
           },
           stopLocationTracking() {
             stopLocationTracking()
+          },
+          toggleLocationTracking() {
+            return toggleLocationTracking()
+          },
+          handleSearchResult(
+            result
+          ) {
+            handleSearchResult(
+              result
+            )
           },
         }),
         []
@@ -2761,38 +2769,6 @@ const GeographicMap =
             subtitle
           )
         }
-        const actions =
-          document.createElement(
-            'div'
-          )
-        actions.className =
-          'geographic-route-actions'
-        const directionsButton =
-          document.createElement(
-            'button'
-          )
-        directionsButton.type =
-          'button'
-        directionsButton.className =
-          'geographic-route-action'
-        directionsButton.textContent =
-          'DIRECTIONS'
-        directionsButton.addEventListener(
-          'click',
-          () => {
-            handleDirections({
-              ...result,
-              longitude,
-              latitude,
-            })
-          }
-        )
-        actions.appendChild(
-          directionsButton
-        )
-        popupContent.appendChild(
-          actions
-        )
         const popup =
           new Popup({
             closeButton:
@@ -2898,9 +2874,6 @@ const GeographicMap =
               newBusinessRangeFilter={
                 newBusinessRangeFilter
               }
-              onDirections={
-                handleDirections
-              }
               homeLayer={
                 homeLayer
               }
@@ -2912,49 +2885,6 @@ const GeographicMap =
               }
             />
           )}
-          <MapControls
-            onLocate={
-              toggleLocationTracking
-            }
-            locationTrackingActive={
-              locationTrackingActive
-            }
-            onSearchResult={
-              handleSearchResult
-            }
-            activePinFilter={
-              activePinFilter
-            }
-            onChangePinFilter={
-              changePinFilter
-            }
-            newSubtypeFilter={
-              newSubtypeFilter
-            }
-            onChangeNewSubtypeFilter={
-              changeNewSubtypeFilter
-            }
-          />
-          <DirectionsPanel
-            route={
-              route
-            }
-            destination={
-              routeDestination
-            }
-            loading={
-              routeLoading
-            }
-            error={
-              routeError
-            }
-            onClear={
-              clearRoute
-            }
-            onStepChange={
-              handleStepChange
-            }
-          />
         </>
       )
     }

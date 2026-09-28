@@ -6,6 +6,7 @@ import {
 } from 'react'
 
 import GeographicMap from './map/GeographicMap.jsx'
+import MapControls from './map/MapControls.jsx'
 import TimeMachine from './map/TimeMachine.jsx'
 import LayerInfo from './map/LayerInfo.jsx'
 
@@ -126,6 +127,10 @@ function GeographicApp() {
 
 
   const geographicMapRef =
+    useRef(null)
+
+
+  const historicMenuRootRef =
     useRef(null)
 
 
@@ -530,6 +535,15 @@ function GeographicApp() {
 
 
   const [
+    locationTrackingActive,
+    setLocationTrackingActive,
+  ] =
+    useState(
+      false
+    )
+
+
+  const [
     historicMobileMenuOpen,
     setHistoricMobileMenuOpen,
   ] =
@@ -590,6 +604,59 @@ function GeographicApp() {
     },
     [
       activePinFilter,
+    ]
+  )
+
+
+  useEffect(
+    () => {
+      if (
+        !historicMobileMenuOpen
+      ) {
+        return undefined
+      }
+
+
+      const handleHistoricOutsidePointer =
+        (event) => {
+          const root =
+            historicMenuRootRef.current
+
+
+          if (
+            root &&
+            event.target &&
+            root.contains(
+              event.target
+            )
+          ) {
+            return
+          }
+
+
+          setHistoricMobileMenuOpen(
+            false
+          )
+        }
+
+
+      document.addEventListener(
+        'pointerdown',
+        handleHistoricOutsidePointer,
+        true
+      )
+
+
+      return () => {
+        document.removeEventListener(
+          'pointerdown',
+          handleHistoricOutsidePointer,
+          true
+        )
+      }
+    },
+    [
+      historicMobileMenuOpen,
     ]
   )
 
@@ -1058,6 +1125,11 @@ function GeographicApp() {
         .startLocationTracking()
 
 
+      setLocationTrackingActive(
+        true
+      )
+
+
       setAboutOpen(
         false
       )
@@ -1072,11 +1144,54 @@ function GeographicApp() {
       setTimeMachineError(
         'GPS could not be turned on. Allow location access and try again.'
       )
+
+
+      setLocationTrackingActive(
+        false
+      )
     } finally {
       setTimeMachineStarting(
         false
       )
     }
+  }
+
+
+  async function handleMainMenuLocate() {
+    const mapApi =
+      geographicMapRef.current
+
+
+    if (
+      !mapApi?.toggleLocationTracking
+    ) {
+      return false
+    }
+
+
+    const active =
+      await mapApi
+        .toggleLocationTracking()
+
+
+    setLocationTrackingActive(
+      Boolean(
+        active
+      )
+    )
+
+
+    return active
+  }
+
+
+  function handleMainMenuSearchResult(
+    result
+  ) {
+    geographicMapRef.current
+      ?.handleSearchResult?.(
+        result
+      )
   }
 
 
@@ -1854,6 +1969,265 @@ function GeographicApp() {
               scale: 0.66;
               transform-origin: right center;
             }
+
+          }
+
+
+          /* ======================================================
+             FINAL MAIN MENU MERGE
+             ====================================================== */
+
+          .brand-primary-filters {
+            position: relative;
+          }
+
+          .historic-menu-anchor {
+            position: relative;
+            display: flex;
+            align-items: stretch;
+          }
+
+          .historic-menu-anchor > .historic-issue-nav {
+            position: absolute !important;
+            top: calc(100% + 4px) !important;
+            left: 0 !important;
+            z-index: 180 !important;
+
+            width: min(360px, calc(100vw - 28px)) !important;
+            max-width: none !important;
+
+            display: block !important;
+            overflow: visible !important;
+
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+
+          .historic-menu-anchor .historic-issue-nav > select {
+            display: none !important;
+          }
+
+          .historic-menu-anchor .historic-mobile-picker {
+            position: relative !important;
+            display: block !important;
+            width: 100% !important;
+          }
+
+          .historic-menu-anchor .historic-mobile-picker-button {
+            display: none !important;
+          }
+
+          .historic-menu-anchor .historic-mobile-picker-menu {
+            position: static !important;
+            top: auto !important;
+            left: auto !important;
+            right: auto !important;
+
+            width: 100% !important;
+            max-height: min(60vh, 420px) !important;
+
+            overflow-y: auto !important;
+
+            border: 1px solid rgba(0,0,0,0.18) !important;
+            background: rgba(255,255,255,0.99) !important;
+            color: #111 !important;
+
+            box-shadow: 0 10px 26px rgba(0,0,0,0.22) !important;
+          }
+
+          .historic-menu-anchor .historic-mobile-picker-heading {
+            background: rgba(0,0,0,0.04) !important;
+            color: #111 !important;
+          }
+
+          .historic-menu-anchor .historic-mobile-picker-option {
+            background: #fff !important;
+            color: #111 !important;
+          }
+
+          .historic-menu-anchor .historic-mobile-picker-option-active {
+            background: #111 !important;
+            color: #fff !important;
+          }
+
+
+          /* GPS + Search are now part of the main menu, not floating map chrome. */
+          .brand-primary-filters > .map-utilities {
+            position: static !important;
+            inset: auto !important;
+
+            z-index: auto !important;
+
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: stretch !important;
+            gap: 2px !important;
+
+            padding: 0 !important;
+            margin: 0 !important;
+
+            border-radius: 0 !important;
+            background: transparent !important;
+
+            box-shadow: none !important;
+
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+          }
+
+          .brand-primary-filters .map-utility-button {
+            width: auto !important;
+            min-width: 30px !important;
+            height: auto !important;
+            min-height: 26px !important;
+
+            padding: 5px 8px !important;
+
+            border: 1px solid rgba(0,0,0,0.18) !important;
+            border-radius: 0 !important;
+
+            background: #fff !important;
+            color: #111 !important;
+
+            font-family: inherit !important;
+            font-size: 8px !important;
+            font-weight: 700 !important;
+            line-height: 1 !important;
+            letter-spacing: 0.08em !important;
+
+            box-shadow: none !important;
+
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+          }
+
+          .brand-primary-filters .gps-toggle-button {
+            min-width: 40px !important;
+          }
+
+          .brand-primary-filters .search-control {
+            position: relative !important;
+          }
+
+          .brand-primary-filters .search-control .map-utility-button {
+            width: 30px !important;
+            min-width: 30px !important;
+
+            padding: 0 !important;
+
+            font-size: 13px !important;
+            font-weight: 400 !important;
+            letter-spacing: 0 !important;
+          }
+
+          .brand-primary-filters .gps-toggle-button-active,
+          .brand-primary-filters .gps-toggle-button-active:hover {
+            border-color: #111 !important;
+            background: #111 !important;
+            color: #fff !important;
+          }
+
+          .brand-primary-filters .map-utility-button:hover {
+            background: rgba(0,0,0,0.045) !important;
+          }
+
+          .brand-primary-filters .gps-toggle-button-active:hover {
+            background: #111 !important;
+          }
+
+          .brand-primary-filters .search-panel {
+            top: calc(100% + 4px) !important;
+            right: 0 !important;
+            left: auto !important;
+
+            width: min(320px, calc(100vw - 24px)) !important;
+          }
+
+
+          @media (max-width: 700px) {
+            .brand-main-row {
+              padding-right: 22px !important;
+            }
+
+            .historic-menu-anchor > .historic-issue-nav {
+              width: min(340px, calc(100vw - 20px)) !important;
+            }
+
+            .historic-menu-anchor .historic-mobile-picker-menu {
+              border-color: rgba(255,255,255,0.24) !important;
+              background: rgba(10,10,10,0.98) !important;
+              color: #fff !important;
+            }
+
+            .historic-menu-anchor .historic-mobile-picker-heading {
+              border-top-color: rgba(255,255,255,0.10) !important;
+              background: rgba(255,255,255,0.07) !important;
+              color: rgba(255,255,255,0.72) !important;
+            }
+
+            .historic-menu-anchor .historic-mobile-picker-option {
+              border-top-color: rgba(255,255,255,0.08) !important;
+              background: transparent !important;
+              color: #fff !important;
+            }
+
+            .historic-menu-anchor .historic-mobile-picker-option-active {
+              background: #fff !important;
+              color: #111 !important;
+            }
+
+            .brand-primary-filters > .map-utilities {
+              position: static !important;
+              flex: 0 0 auto !important;
+              gap: 2px !important;
+            }
+
+            .brand-primary-filters .map-utility-button {
+              min-width: 28px !important;
+              min-height: 19px !important;
+
+              padding: 3px 5px !important;
+
+              border-color: rgba(255,255,255,0.30) !important;
+
+              background: transparent !important;
+              color: #fff !important;
+
+              font-size: 5.5px !important;
+
+              box-shadow: none !important;
+            }
+
+            .brand-primary-filters .gps-toggle-button {
+              min-width: 31px !important;
+            }
+
+            .brand-primary-filters .search-control .map-utility-button {
+              width: 24px !important;
+              min-width: 24px !important;
+
+              padding: 0 !important;
+
+              font-size: 11px !important;
+            }
+
+            .brand-primary-filters .gps-toggle-button-active,
+            .brand-primary-filters .gps-toggle-button-active:hover {
+              border-color: #fff !important;
+              background: #fff !important;
+              color: #111 !important;
+            }
+
+            .brand-primary-filters .search-panel {
+              position: fixed !important;
+
+              top: 58px !important;
+              left: 8px !important;
+              right: 8px !important;
+
+              width: auto !important;
+            }
+
           }
         `}
       </style>
@@ -1972,6 +2346,12 @@ function GeographicApp() {
                 '2px',
             }}
           >
+            <div
+              ref={
+                historicMenuRootRef
+              }
+              className="historic-menu-anchor"
+            >
             <button
               type="button"
               className={
@@ -1980,11 +2360,23 @@ function GeographicApp() {
                   ? 'brand-mode-button brand-mode-button-active'
                   : 'brand-mode-button'
               }
-              onClick={() =>
+              onClick={() => {
+                const alreadyHistoric =
+                  activePinFilter ===
+                    'historic'
+
+
                 chooseContentMode(
                   'historic'
                 )
-              }
+
+
+                setHistoricMobileMenuOpen(
+                  alreadyHistoric
+                    ? !historicMobileMenuOpen
+                    : true
+                )
+              }}
               style={{
                 border:
                   '1px solid rgba(0,0,0,0.18)',
@@ -2023,154 +2415,9 @@ function GeographicApp() {
               HISTORIC
             </button>
 
-
-            <button
-              type="button"
-              className={
-                activePinFilter ===
-                  'news'
-                  ? 'brand-mode-button brand-mode-button-active'
-                  : 'brand-mode-button'
-              }
-              onClick={() =>
-                chooseContentMode(
-                  'news'
-                )
-              }
-              style={{
-                border:
-                  '1px solid rgba(0,0,0,0.18)',
-
-                padding:
-                  '5px 8px',
-
-                background:
-                  activePinFilter ===
-                  'news'
-                    ? '#111'
-                    : '#fff',
-
-                color:
-                  activePinFilter ===
-                  'news'
-                    ? '#fff'
-                    : '#111',
-
-                font:
-                  'inherit',
-
-                fontSize:
-                  '8px',
-
-                fontWeight:
-                  '700',
-
-                letterSpacing:
-                  '0.08em',
-
-                cursor:
-                  'pointer',
-              }}
-            >
-              NEWS
-            </button>
-
-
-            <button
-              type="button"
-              className={
-                activePinFilter ===
-                  'new'
-                  ? 'brand-mode-button brand-mode-button-active'
-                  : 'brand-mode-button'
-              }
-              onClick={() =>
-                chooseContentMode(
-                  'new'
-                )
-              }
-              style={{
-                border:
-                  '1px solid rgba(0,0,0,0.18)',
-
-                padding:
-                  '5px 8px',
-
-                background:
-                  activePinFilter ===
-                  'new'
-                    ? '#111'
-                    : '#fff',
-
-                color:
-                  activePinFilter ===
-                  'new'
-                    ? '#fff'
-                    : '#111',
-
-                font:
-                  'inherit',
-
-                fontSize:
-                  '8px',
-
-                fontWeight:
-                  '700',
-
-                letterSpacing:
-                  '0.08em',
-
-                cursor:
-                  'pointer',
-              }}
-            >
-              NEW
-            </button>
-
-
-            <button
-              type="button"
-              className="about-button brand-mode-button"
-              onClick={() =>
-                setAboutOpen(
-                  true
-                )
-              }
-            >
-              HOW-TO
-            </button>
-          </div>
-
-
-          <button
-            type="button"
-            className="mobile-brand-toggle"
-            onClick={() =>
-              setMobileHeaderOpen(
-                (
-                  current
-                ) =>
-                  !current
-              )
-            }
-            aria-label={
-              mobileHeaderOpen
-                ? 'Collapse map controls'
-                : 'Expand map controls'
-            }
-            aria-expanded={
-              mobileHeaderOpen
-            }
-          >
-            {mobileHeaderOpen
-              ? '▴'
-              : '▾'}
-          </button>
-        </div>
-
-
         {activePinFilter ===
-          'historic' && (
+          'historic' &&
+          historicMobileMenuOpen && (
           <div className="historic-issue-nav">
             <select
               value={
@@ -2485,6 +2732,167 @@ function GeographicApp() {
 
           </div>
         )}
+
+
+            </div>
+
+
+            <button
+              type="button"
+              className={
+                activePinFilter ===
+                  'news'
+                  ? 'brand-mode-button brand-mode-button-active'
+                  : 'brand-mode-button'
+              }
+              onClick={() =>
+                chooseContentMode(
+                  'news'
+                )
+              }
+              style={{
+                border:
+                  '1px solid rgba(0,0,0,0.18)',
+
+                padding:
+                  '5px 8px',
+
+                background:
+                  activePinFilter ===
+                  'news'
+                    ? '#111'
+                    : '#fff',
+
+                color:
+                  activePinFilter ===
+                  'news'
+                    ? '#fff'
+                    : '#111',
+
+                font:
+                  'inherit',
+
+                fontSize:
+                  '8px',
+
+                fontWeight:
+                  '700',
+
+                letterSpacing:
+                  '0.08em',
+
+                cursor:
+                  'pointer',
+              }}
+            >
+              NEWS
+            </button>
+
+
+            <button
+              type="button"
+              className={
+                activePinFilter ===
+                  'new'
+                  ? 'brand-mode-button brand-mode-button-active'
+                  : 'brand-mode-button'
+              }
+              onClick={() =>
+                chooseContentMode(
+                  'new'
+                )
+              }
+              style={{
+                border:
+                  '1px solid rgba(0,0,0,0.18)',
+
+                padding:
+                  '5px 8px',
+
+                background:
+                  activePinFilter ===
+                  'new'
+                    ? '#111'
+                    : '#fff',
+
+                color:
+                  activePinFilter ===
+                  'new'
+                    ? '#fff'
+                    : '#111',
+
+                font:
+                  'inherit',
+
+                fontSize:
+                  '8px',
+
+                fontWeight:
+                  '700',
+
+                letterSpacing:
+                  '0.08em',
+
+                cursor:
+                  'pointer',
+              }}
+            >
+              NEW
+            </button>
+
+
+            <button
+              type="button"
+              className="about-button brand-mode-button"
+              onClick={() =>
+                setAboutOpen(
+                  true
+                )
+              }
+            >
+              HOW-TO
+            </button>
+
+
+            <MapControls
+              onLocate={
+                handleMainMenuLocate
+              }
+              locationTrackingActive={
+                locationTrackingActive
+              }
+              onSearchResult={
+                handleMainMenuSearchResult
+              }
+            />
+          </div>
+
+
+          <button
+            type="button"
+            className="mobile-brand-toggle"
+            onClick={() =>
+              setMobileHeaderOpen(
+                (
+                  current
+                ) =>
+                  !current
+              )
+            }
+            aria-label={
+              mobileHeaderOpen
+                ? 'Collapse map controls'
+                : 'Expand map controls'
+            }
+            aria-expanded={
+              mobileHeaderOpen
+            }
+          >
+            {mobileHeaderOpen
+              ? '▴'
+              : '▾'}
+          </button>
+        </div>
 
 
         {activePinFilter ===
