@@ -9259,6 +9259,10 @@ function createMarker({
       const mobileImageLink =
         mobileImage.parentElement
 
+      const historicMobileImage =
+        pinType ===
+          'historic'
+
 
       if (
         mobileImageLink
@@ -9267,16 +9271,29 @@ function createMarker({
           'block'
 
         mobileImageLink.style.width =
-          '88px'
+          historicMobileImage
+            ? '132px'
+            : '88px'
 
         mobileImageLink.style.height =
-          '66px'
+          historicMobileImage
+            ? '99px'
+            : '66px'
 
         mobileImageLink.style.float =
-          'right'
+          historicMobileImage
+            ? 'none'
+            : 'right'
 
         mobileImageLink.style.margin =
-          '0 0 5px 8px'
+          historicMobileImage
+            ? '8px auto 10px'
+            : '0 0 5px 8px'
+
+        mobileImageLink.style.clear =
+          historicMobileImage
+            ? 'both'
+            : 'none'
 
         mobileImageLink.style.overflow =
           'hidden'
@@ -9287,16 +9304,24 @@ function createMarker({
 
 
       mobileImage.style.width =
-        '88px'
+        historicMobileImage
+          ? '132px'
+          : '88px'
 
       mobileImage.style.height =
-        '66px'
+        historicMobileImage
+          ? '99px'
+          : '66px'
 
       mobileImage.style.maxHeight =
-        '66px'
+        historicMobileImage
+          ? '99px'
+          : '66px'
 
       mobileImage.style.margin =
-        '0'
+        historicMobileImage
+          ? '0 auto'
+          : '0'
 
       mobileImage.style.objectFit =
         'cover'
