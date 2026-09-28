@@ -3422,6 +3422,303 @@ function getNewEventIcon(
 }
 
 
+const COMMUNITY_ICONS = {
+  library: {
+    emoji:
+      '📚',
+
+    label:
+      'Library',
+  },
+
+  pool: {
+    emoji:
+      '🏊',
+
+    label:
+      'Pool / Aquatics',
+  },
+
+  splash: {
+    emoji:
+      '💦',
+
+    label:
+      'Splash Pad',
+  },
+
+  arena: {
+    emoji:
+      '⛸️',
+
+    label:
+      'Arena / Rink',
+  },
+
+  centre: {
+    emoji:
+      '🏛️',
+
+    label:
+      'Community Centre',
+  },
+
+  playground: {
+    emoji:
+      '🛝',
+
+    label:
+      'Playground',
+  },
+
+  park: {
+    emoji:
+      '🌳',
+
+    label:
+      'Park',
+  },
+
+  tennis: {
+    emoji:
+      '🎾',
+
+    label:
+      'Tennis',
+  },
+
+  basketball: {
+    emoji:
+      '🏀',
+
+    label:
+      'Basketball',
+  },
+
+  baseball: {
+    emoji:
+      '⚾',
+
+    label:
+      'Baseball',
+  },
+
+  soccer: {
+    emoji:
+      '⚽',
+
+    label:
+      'Soccer',
+  },
+
+  skate: {
+    emoji:
+      '🛹',
+
+    label:
+      'Skate Park',
+  },
+
+  community: {
+    emoji:
+      '📍',
+
+    label:
+      'Community',
+  },
+}
+
+
+function getCommunityIcon(
+  pin
+) {
+  const explicitType =
+    normalizeCompareText(
+      pin?.newType
+    )
+
+  const category =
+    normalizeCompareText(
+      pin?.category
+    )
+
+  // Do not steal ordinary event markers just because an event happens to
+  // contain the word "community".
+  if (
+    explicitType ===
+      'events' ||
+    EVENT_CATEGORIES.includes(
+      category
+    )
+  ) {
+    return null
+  }
+
+  const text =
+    normalizeCompareText(
+      [
+        pin?.communityIcon,
+        pin?.communityType,
+        pin?.facilityType,
+        pin?.subcategory,
+        pin?.category,
+        pin?.title,
+        pin?.description,
+        pin?.source,
+      ]
+        .filter(
+          Boolean
+        )
+        .join(
+          ' '
+        )
+    )
+
+  if (
+    text.includes(
+      'library'
+    )
+  ) {
+    return COMMUNITY_ICONS.library
+  }
+
+  if (
+    text.includes(
+      'splash pad'
+    ) ||
+    text.includes(
+      'splashpad'
+    )
+  ) {
+    return COMMUNITY_ICONS.splash
+  }
+
+  if (
+    text.includes(
+      'pool'
+    ) ||
+    text.includes(
+      'aquatic'
+    ) ||
+    text.includes(
+      'swimming'
+    )
+  ) {
+    return COMMUNITY_ICONS.pool
+  }
+
+  if (
+    text.includes(
+      'arena'
+    ) ||
+    text.includes(
+      'ice rink'
+    ) ||
+    text.includes(
+      'skating rink'
+    )
+  ) {
+    return COMMUNITY_ICONS.arena
+  }
+
+  if (
+    text.includes(
+      'community centre'
+    ) ||
+    text.includes(
+      'community center'
+    ) ||
+    text.includes(
+      'recreation centre'
+    ) ||
+    text.includes(
+      'recreation center'
+    ) ||
+    text.includes(
+      'recreation facility'
+    )
+  ) {
+    return COMMUNITY_ICONS.centre
+  }
+
+  if (
+    text.includes(
+      'playground'
+    )
+  ) {
+    return COMMUNITY_ICONS.playground
+  }
+
+  if (
+    text.includes(
+      'tennis'
+    )
+  ) {
+    return COMMUNITY_ICONS.tennis
+  }
+
+  if (
+    text.includes(
+      'basketball'
+    )
+  ) {
+    return COMMUNITY_ICONS.basketball
+  }
+
+  if (
+    text.includes(
+      'baseball'
+    ) ||
+    text.includes(
+      'ball diamond'
+    )
+  ) {
+    return COMMUNITY_ICONS.baseball
+  }
+
+  if (
+    text.includes(
+      'soccer'
+    )
+  ) {
+    return COMMUNITY_ICONS.soccer
+  }
+
+  if (
+    text.includes(
+      'skate park'
+    ) ||
+    text.includes(
+      'skatepark'
+    )
+  ) {
+    return COMMUNITY_ICONS.skate
+  }
+
+  if (
+    text.includes(
+      'park'
+    )
+  ) {
+    return COMMUNITY_ICONS.park
+  }
+
+  if (
+    explicitType ===
+      'community' ||
+    category ===
+      'community' ||
+    category.startsWith(
+      'community-'
+    )
+  ) {
+    return COMMUNITY_ICONS.community
+  }
+
+  return null
+}
+
+
 const NEW_SPORTS_ICONS = {
   hockey: {
     emoji:
@@ -6264,6 +6561,15 @@ function createMarker({
       : ''
 
 
+  const communityIcon =
+    pinType ===
+    'new'
+      ? getCommunityIcon(
+          pin
+        )
+      : null
+
+
   const newBusinessIcon =
     pinType ===
     'new'
@@ -6430,6 +6736,66 @@ function createMarker({
       pin,
       pinType,
     })
+  }
+  else if (
+    communityIcon
+  ) {
+    element.className =
+      'geographic-pin-emoji-marker geographic-pin-community-emoji-marker'
+
+    element.style.width =
+      '32px'
+
+    element.style.height =
+      '32px'
+
+    element.style.padding =
+      '0'
+
+    element.style.margin =
+      '0'
+
+    element.style.border =
+      'none'
+
+    element.style.borderRadius =
+      '0'
+
+    element.style.background =
+      'transparent'
+
+    element.style.boxShadow =
+      'none'
+
+    element.style.cursor =
+      'pointer'
+
+    element.style.display =
+      'flex'
+
+    element.style.alignItems =
+      'center'
+
+    element.style.justifyContent =
+      'center'
+
+    element.style.appearance =
+      'none'
+
+    element.style.WebkitAppearance =
+      'none'
+
+    element.setAttribute(
+      'aria-label',
+      pin.title
+        ? `${communityIcon.label} · ${pin.title}`
+        : `${communityIcon.label} marker`
+    )
+
+    appendEmojiMarkerIcon(
+      element,
+      communityIcon.emoji
+    )
   }
   else if (
     newBusinessIcon

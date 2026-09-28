@@ -1869,10 +1869,10 @@ const GeographicMap =
             // onto the user's building. After this first lock, manual zoom wins.
             zoom:
               walkingZoom
-                ? 15
+                ? 15.6
                 : Math.max(
                     map.getZoom(),
-                    15
+                    15.6
                   ),
 
             duration:
@@ -2128,13 +2128,13 @@ const GeographicMap =
               if (
                 event?.originalEvent
               ) {
-                // Cancel any compass/GPS easing already in flight so a pinch,
-                // drag or rotate gesture immediately belongs to the user.
+                // The map belongs to the user's fingers first. Cancel any
+                // GPS/compass animation already in flight and keep automatic
+                // camera movement suspended until GPS is explicitly restarted.
                 map.stop()
 
-                pauseAutomaticCamera(
-                  8000
-                )
+                manualCameraUntilRef.current =
+                  Number.POSITIVE_INFINITY
               }
             }
 
@@ -2905,16 +2905,6 @@ const GeographicMap =
             }
             onSearchResult={
               handleSearchResult
-            }
-            atmosphereEnabled={
-              atmosphereEnabled
-            }
-            onToggleAtmosphere={
-              () =>
-                setAtmosphereEnabled(
-                  (enabled) =>
-                    !enabled
-                )
             }
             activePinFilter={
               activePinFilter
