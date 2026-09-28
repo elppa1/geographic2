@@ -963,6 +963,24 @@ const GeographicMap =
           })
         mapRef.current =
           map
+
+        // Keep map interaction feeling immediate. These only tune MapLibre's
+        // native gesture handlers; they do not animate or recenter the camera.
+        map.scrollZoom?.setWheelZoomRate?.(
+          1 / 240
+        )
+
+        map.scrollZoom?.setZoomRate?.(
+          1 / 45
+        )
+
+        map.touchZoomRotate?.setZoomRate?.(
+          1.5
+        )
+
+        map.touchZoomRotate?.setZoomThreshold?.(
+          0.035
+        )
         map.on(
           'load',
           () => {
@@ -2128,11 +2146,9 @@ const GeographicMap =
               if (
                 event?.originalEvent
               ) {
-                // The map belongs to the user's fingers first. Cancel any
-                // GPS/compass animation already in flight and keep automatic
-                // camera movement suspended until GPS is explicitly restarted.
-                map.stop()
-
+                // The map belongs to the user's fingers first. Do not call
+                // map.stop() here because doing so can damp a wheel/pinch gesture.
+                // Instead, suspend GPS/compass camera updates until GPS is restarted.
                 manualCameraUntilRef.current =
                   Number.POSITIVE_INFINITY
               }

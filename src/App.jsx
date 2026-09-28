@@ -1476,11 +1476,60 @@ function GeographicApp() {
           .news-history-slider {
             display: block;
             width: 100%;
-            height: 10px;
+            height: 16px;
             margin: 0;
             padding: 0;
-            accent-color: #111;
+
+            appearance: none;
+            -webkit-appearance: none;
+
+            background: transparent;
             cursor: pointer;
+          }
+
+          .news-history-slider::-webkit-slider-runnable-track {
+            height: 4px;
+            border-radius: 999px;
+            background: rgba(17,17,17,0.28);
+          }
+
+          .news-history-slider::-webkit-slider-thumb {
+            width: 14px;
+            height: 14px;
+            margin-top: -5px;
+
+            border: 2px solid #111;
+            border-radius: 50%;
+
+            -webkit-appearance: none;
+            appearance: none;
+
+            background: #fff;
+
+            box-shadow:
+              0 0 0 2px rgba(255,255,255,0.88),
+              0 1px 5px rgba(0,0,0,0.34);
+          }
+
+          .news-history-slider::-moz-range-track {
+            height: 4px;
+            border: 0;
+            border-radius: 999px;
+            background: rgba(17,17,17,0.28);
+          }
+
+          .news-history-slider::-moz-range-thumb {
+            width: 12px;
+            height: 12px;
+
+            border: 2px solid #111;
+            border-radius: 50%;
+
+            background: #fff;
+
+            box-shadow:
+              0 0 0 2px rgba(255,255,255,0.88),
+              0 1px 5px rgba(0,0,0,0.34);
           }
 
           @media (max-width: 700px) {
@@ -1494,6 +1543,14 @@ function GeographicApp() {
 
             .news-history-slider-labels {
               font-size: 4.5px;
+            }
+
+            .news-history-slider::-webkit-slider-runnable-track {
+              background: rgba(255,255,255,0.34);
+            }
+
+            .news-history-slider::-moz-range-track {
+              background: rgba(255,255,255,0.34);
             }
 
             .brand {
@@ -1559,9 +1616,15 @@ function GeographicApp() {
 
             .map-utilities .map-utility-button {
               border-color: transparent !important;
-              background: transparent !important;
+              border-radius: 6px !important;
+              background: rgba(255,255,255,0.10) !important;
               color: #fff !important;
               box-shadow: none !important;
+            }
+
+            .map-utilities .gps-toggle-button-active {
+              background: #fff !important;
+              color: #111 !important;
             }
 
             .brand-primary-filters {

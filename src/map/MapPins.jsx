@@ -261,6 +261,47 @@ function newPinMatchesSubtype(
     )
 
 
+  const communityCategory =
+    [
+      'community',
+      'library',
+      'libraries',
+      'pool',
+      'pools',
+      'aquatic',
+      'aquatics',
+      'arena',
+      'arenas',
+      'rink',
+      'rinks',
+      'park',
+      'parks',
+      'playground',
+      'playgrounds',
+      'recreation',
+      'recreation-centre',
+      'recreation-center',
+      'community-centre',
+      'community-center',
+    ].includes(
+      category
+    ) ||
+    category.startsWith(
+      'community-'
+    )
+
+
+  const communityPin =
+    explicitType ===
+      'community' ||
+    communityCategory ||
+    Boolean(
+      pin.communityType ||
+      pin.communityIcon ||
+      pin.facilityType
+    )
+
+
   if (
     subtype ===
       'all'
@@ -271,6 +312,7 @@ function newPinMatchesSubtype(
       explicitType ===
         'events' ||
       realEstatePin ||
+      communityPin ||
       (
         !explicitType &&
         (
@@ -300,6 +342,14 @@ function newPinMatchesSubtype(
       )
     )
   }
+
+  if (
+    subtype ===
+      'community'
+  ) {
+    return communityPin
+  }
+
 
   if (
     subtype ===
@@ -3262,6 +3312,12 @@ const NEW_BUSINESS_ICONS = {
 function getNewBusinessIcon(
   pin
 ) {
+  const explicitType =
+    normalizeCompareText(
+      pin?.newType
+    )
+
+
   const category =
     normalizeCompareText(
       pin?.category
@@ -3269,6 +3325,8 @@ function getNewBusinessIcon(
 
 
   if (
+    explicitType !==
+      'business' &&
     !BUSINESS_CATEGORIES.includes(
       category
     )
@@ -3284,18 +3342,52 @@ function getNewBusinessIcon(
 
 
   if (
-    !iconKey
+    iconKey &&
+    NEW_BUSINESS_ICONS[
+      iconKey
+    ]
   ) {
-    return null
+    return NEW_BUSINESS_ICONS[
+      iconKey
+    ]
   }
 
 
-  return (
-    NEW_BUSINESS_ICONS[
-      iconKey
-    ] ||
-    null
-  )
+  if (
+    category ===
+      'restaurant'
+  ) {
+    return {
+      emoji:
+        '🍴',
+
+      label:
+        'Restaurant',
+    }
+  }
+
+
+  if (
+    category ===
+      'store'
+  ) {
+    return {
+      emoji:
+        '🛍️',
+
+      label:
+        'Store',
+    }
+  }
+
+
+  return {
+    emoji:
+      '🏢',
+
+    label:
+      'Business',
+  }
 }
 
 
@@ -3407,18 +3499,65 @@ function getNewEventIcon(
 
 
   if (
-    !iconKey
+    iconKey &&
+    NEW_EVENT_ICONS[
+      iconKey
+    ]
   ) {
-    return null
+    return NEW_EVENT_ICONS[
+      iconKey
+    ]
   }
 
 
-  return (
+  const categoryIconKey = {
+    theatre:
+      'theatre',
+
+    comedy:
+      'comedy',
+
+    concert:
+      'music',
+
+    festival:
+      'festival',
+
+    exhibition:
+      'art',
+
+    talk:
+      'talk',
+
+    screening:
+      'film',
+
+    'community-event':
+      'community',
+  }[
+    category
+  ]
+
+
+  if (
+    categoryIconKey &&
     NEW_EVENT_ICONS[
-      iconKey
-    ] ||
-    null
-  )
+      categoryIconKey
+    ]
+  ) {
+    return NEW_EVENT_ICONS[
+      categoryIconKey
+    ]
+  }
+
+
+  return {
+    emoji:
+      '🎟️',
+
+    label:
+      'Event',
+  }
 }
 
 
@@ -3859,17 +3998,118 @@ function getNewSportsIcon(
 
 
   if (
-    !iconKey
+    iconKey &&
+    NEW_SPORTS_ICONS[
+      iconKey
+    ]
+  ) {
+    return NEW_SPORTS_ICONS[
+      iconKey
+    ]
+  }
+
+
+  return NEW_SPORTS_ICONS.general
+}
+
+
+const NEW_REAL_ESTATE_ICONS = {
+  condo: {
+    emoji:
+      '🏢',
+
+    label:
+      'Condo',
+  },
+
+  house: {
+    emoji:
+      '🏠',
+
+    label:
+      'House',
+  },
+
+  rental: {
+    emoji:
+      '🔑',
+
+    label:
+      'Rental',
+  },
+
+  commercial: {
+    emoji:
+      '🏬',
+
+    label:
+      'Commercial',
+  },
+
+  land: {
+    emoji:
+      '🌱',
+
+    label:
+      'Land',
+  },
+
+  other: {
+    emoji:
+      '🏘️',
+
+    label:
+      'Real Estate',
+  },
+}
+
+
+function getNewRealEstateIcon(
+  pin
+) {
+  const explicitType =
+    normalizeCompareText(
+      pin?.newType
+    )
+
+
+  const category =
+    normalizeCompareText(
+      pin?.category
+    )
+
+
+  if (
+    explicitType !==
+      'real-estate' &&
+    !REAL_ESTATE_CATEGORIES.includes(
+      category
+    )
   ) {
     return null
   }
 
 
+  const rawKey =
+    normalizeCompareText(
+      pin?.realEstateIcon ||
+      pin?.realEstateType ||
+      category
+    )
+
+
+  const iconKey =
+    rawKey ===
+      'real-estate-other'
+      ? 'other'
+      : rawKey
+
+
   return (
-    NEW_SPORTS_ICONS[
+    NEW_REAL_ESTATE_ICONS[
       iconKey
     ] ||
-    null
+    NEW_REAL_ESTATE_ICONS.other
   )
 }
 
@@ -6597,6 +6837,15 @@ function createMarker({
       : null
 
 
+  const newRealEstateIcon =
+    pinType ===
+    'new'
+      ? getNewRealEstateIcon(
+          pin
+        )
+      : null
+
+
   if (
     historicIcon
   ) {
@@ -6991,6 +7240,72 @@ function createMarker({
       newSportsIcon.emoji
     )
 
+
+    applyMarkerActivityPulse({
+      element,
+      pin,
+      pinType,
+    })
+  }
+  else if (
+    newRealEstateIcon
+  ) {
+    element.className =
+      'geographic-pin-emoji-marker geographic-pin-new-real-estate-emoji-marker'
+
+    element.style.width =
+      '32px'
+
+    element.style.height =
+      '32px'
+
+    element.style.padding =
+      '0'
+
+    element.style.margin =
+      '0'
+
+    element.style.border =
+      'none'
+
+    element.style.borderRadius =
+      '0'
+
+    element.style.background =
+      'transparent'
+
+    element.style.boxShadow =
+      'none'
+
+    element.style.cursor =
+      'pointer'
+
+    element.style.display =
+      'flex'
+
+    element.style.alignItems =
+      'center'
+
+    element.style.justifyContent =
+      'center'
+
+    element.style.appearance =
+      'none'
+
+    element.style.WebkitAppearance =
+      'none'
+
+    element.setAttribute(
+      'aria-label',
+      pin.title
+        ? `${newRealEstateIcon.label} · ${pin.title}`
+        : `${newRealEstateIcon.label} marker`
+    )
+
+    appendEmojiMarkerIcon(
+      element,
+      newRealEstateIcon.emoji
+    )
 
     applyMarkerActivityPulse({
       element,
