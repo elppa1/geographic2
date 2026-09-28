@@ -59,20 +59,12 @@ import {
 } from './feeds/toronto/new/business.js'
 
 import {
-  torontoNewDevelopmentFeed,
-} from './feeds/toronto/new/development.js'
-
-import {
   torontoNewEventsFeed,
 } from './feeds/toronto/new/events.js'
 
 import {
-  torontoNewSportsFeed,
-} from './feeds/toronto/new/sports.js'
-
-import {
-  torontoNewRealEstateFeed,
-} from './feeds/toronto/new/realEstate.js'
+  tplCommunityFeed,
+} from './feeds/toronto/tplCommunity.js'
 
 import {
   torontoHistoricFeed,
@@ -1374,10 +1366,8 @@ const plugins = [
   liveNewsroomFeed(),
   nowServingFeed(),
   torontoNewBusinessFeed(),
-  torontoNewDevelopmentFeed(),
   torontoNewEventsFeed(),
-  torontoNewSportsFeed(),
-  torontoNewRealEstateFeed(),
+  tplCommunityFeed(),
   torontoHistoricFeed(),
 ]
 

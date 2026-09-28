@@ -2552,6 +2552,287 @@ function appendMobileBusinessLink({
 }
 
 
+function formatCommunityProgramWhen(
+  value
+) {
+  const text =
+    String(
+      value ||
+      ''
+    )
+      .trim()
+
+
+  if (
+    !text
+  ) {
+    return ''
+  }
+
+
+  const date =
+    new Date(
+      text
+    )
+
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return text
+  }
+
+
+  return date.toLocaleString(
+    'en-CA',
+    {
+      timeZone:
+        'America/Toronto',
+
+      weekday:
+        'short',
+
+      month:
+        'short',
+
+      day:
+        'numeric',
+
+      hour:
+        'numeric',
+
+      minute:
+        '2-digit',
+    }
+  )
+}
+
+
+function appendCommunityPrograms({
+  parent,
+  pin,
+}) {
+  const programs =
+    Array.isArray(
+      pin?.upcomingPrograms
+    )
+      ? pin.upcomingPrograms
+          .filter(
+            (program) =>
+              Boolean(
+                program?.title
+              )
+          )
+          .slice(
+            0,
+            3
+          )
+      : []
+
+
+  if (
+    programs.length ===
+      0
+  ) {
+    return
+  }
+
+
+  const shell =
+    document.createElement(
+      'div'
+    )
+
+
+  shell.style.marginTop =
+    '9px'
+
+
+  shell.style.paddingTop =
+    '8px'
+
+
+  shell.style.borderTop =
+    '1px solid rgba(0,0,0,0.12)'
+
+
+  const heading =
+    document.createElement(
+      'div'
+    )
+
+
+  heading.className =
+    'geographic-pin-category'
+
+
+  heading.textContent =
+    'UPCOMING AT THIS BRANCH'
+
+
+  shell.appendChild(
+    heading
+  )
+
+
+  programs.forEach(
+    (program) => {
+      const row =
+        document.createElement(
+          'div'
+        )
+
+
+      row.style.marginTop =
+        '7px'
+
+
+      const when =
+        formatCommunityProgramWhen(
+          program?.startTime ||
+          program?.date
+        )
+
+
+      if (
+        when
+      ) {
+        const whenElement =
+          document.createElement(
+            'div'
+          )
+
+
+        whenElement.className =
+          'geographic-pin-year'
+
+
+        whenElement.textContent =
+          when.toUpperCase()
+
+
+        row.appendChild(
+          whenElement
+        )
+      }
+
+
+      const titleText =
+        String(
+          program?.title ||
+          ''
+        )
+          .trim()
+
+
+      const href =
+        normalizeUrl(
+          program?.url
+        )
+
+
+      if (
+        href
+      ) {
+        const link =
+          document.createElement(
+            'a'
+          )
+
+
+        link.href =
+          href
+
+
+        link.target =
+          '_blank'
+
+
+        link.rel =
+          'noopener noreferrer'
+
+
+        link.className =
+          'geographic-pin-source-link'
+
+
+        link.textContent =
+          titleText
+
+
+        link.addEventListener(
+          'click',
+          (
+            event
+          ) => {
+            event.stopPropagation()
+          }
+        )
+
+
+        row.appendChild(
+          link
+        )
+      }
+      else {
+        const title =
+          document.createElement(
+            'div'
+          )
+
+
+        title.className =
+          'geographic-pin-description'
+
+
+        title.textContent =
+          titleText
+
+
+        row.appendChild(
+          title
+        )
+      }
+
+
+      if (
+        program?.isFull
+      ) {
+        const full =
+          document.createElement(
+            'div'
+          )
+
+
+        full.className =
+          'geographic-pin-year'
+
+
+        full.textContent =
+          'REGISTRATION FULL / CLOSED'
+
+
+        row.appendChild(
+          full
+        )
+      }
+
+
+      shell.appendChild(
+        row
+      )
+    }
+  )
+
+
+  parent.appendChild(
+    shell
+  )
+}
+
+
 // ============================================================
 // SEE IT THEN
 // ============================================================
@@ -6126,6 +6407,24 @@ function createMarker({
             )
           : pin.description,
     })
+
+
+    if (
+      pinType ===
+        'new' &&
+      COMMUNITY_CATEGORIES.includes(
+        normalizeCompareText(
+          pin.category
+        )
+      )
+    ) {
+      appendCommunityPrograms({
+        parent:
+          popupContent,
+
+        pin,
+      })
+    }
 
 
     if (
