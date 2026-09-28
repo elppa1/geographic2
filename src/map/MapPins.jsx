@@ -3071,6 +3071,10 @@ function appendOutdoorRecreationUses({
     )
 
 
+  shell.className =
+    'geographic-community-programs'
+
+
   shell.style.marginTop =
     '12px'
 
@@ -3600,6 +3604,10 @@ function appendCommunityPrograms({
         )
 
 
+      row.className =
+        'geographic-community-program-row'
+
+
       row.style.marginTop =
         '9px'
 
@@ -3621,7 +3629,7 @@ function appendCommunityPrograms({
 
 
         whenElement.className =
-          'geographic-pin-year'
+          'geographic-pin-year geographic-community-program-when'
 
 
         whenElement.textContent =
@@ -3654,6 +3662,10 @@ function appendCommunityPrograms({
         document.createElement(
           'div'
         )
+
+
+      title.className =
+        'geographic-community-program-title'
 
 
       title.textContent =
@@ -3701,7 +3713,7 @@ function appendCommunityPrograms({
 
 
         age.className =
-          'geographic-pin-year'
+          'geographic-pin-year geographic-community-program-meta'
 
 
         age.textContent =
@@ -3742,7 +3754,7 @@ function appendCommunityPrograms({
 
 
         price.className =
-          'geographic-pin-year'
+          'geographic-pin-year geographic-community-program-meta'
 
 
         price.textContent =
@@ -8984,17 +8996,17 @@ function createMarker({
           )
         )
       )
-        ? 'min(145px, calc(100vw - 64px))'
-        : 'min(165px, calc(100vw - 56px))'
+        ? 'min(138px, calc(100vw - 72px))'
+        : 'min(150px, calc(100vw - 68px))'
 
     popupContent.style.maxWidth =
-      'calc(100vw - 56px)'
+      'calc(100vw - 68px)'
 
     popupContent.style.maxHeight =
       pinType ===
         'news'
-        ? '34vh'
-        : '38vh'
+        ? '31vh'
+        : '34vh'
 
     popupContent.style.overflowY =
       'auto'
@@ -9003,7 +9015,7 @@ function createMarker({
       'contain'
 
     popupContent.style.fontSize =
-      '0.78em'
+      '0.74em'
 
     popupContent.style.lineHeight =
       '1.2'
@@ -9042,7 +9054,7 @@ function createMarker({
       mobileTitle
     ) {
       mobileTitle.style.fontSize =
-        '10px'
+        '9px'
 
       mobileTitle.style.lineHeight =
         '1.18'
@@ -9073,7 +9085,7 @@ function createMarker({
       mobileLocation
     ) {
       mobileLocation.style.fontSize =
-        '8px'
+        '7px'
 
       mobileLocation.style.lineHeight =
         '1.2'
@@ -9107,6 +9119,80 @@ function createMarker({
       mobileCategory.style.opacity =
         '0.55'
     }
+
+
+    const mobileProgramShells =
+      popupContent.querySelectorAll(
+        '.geographic-community-programs'
+      )
+
+
+    mobileProgramShells.forEach(
+      (shell) => {
+        shell.style.marginTop =
+          '8px'
+
+        shell.style.paddingTop =
+          '7px'
+      }
+    )
+
+
+    popupContent
+      .querySelectorAll(
+        '.geographic-community-program-row'
+      )
+      .forEach(
+        (row) => {
+          row.style.marginTop =
+            '6px'
+        }
+      )
+
+
+    popupContent
+      .querySelectorAll(
+        '.geographic-community-program-when'
+      )
+      .forEach(
+        (when) => {
+          when.style.fontSize =
+            '8px'
+
+          when.style.marginBottom =
+            '1px'
+        }
+      )
+
+
+    popupContent
+      .querySelectorAll(
+        '.geographic-community-program-title'
+      )
+      .forEach(
+        (title) => {
+          title.style.fontSize =
+            '10px'
+
+          title.style.lineHeight =
+            '1.15'
+        }
+      )
+
+
+    popupContent
+      .querySelectorAll(
+        '.geographic-community-program-meta'
+      )
+      .forEach(
+        (meta) => {
+          meta.style.fontSize =
+            '8px'
+
+          meta.style.lineHeight =
+            '1.1'
+        }
+      )
 
 
     const mobileImage =
@@ -9202,7 +9288,7 @@ function createMarker({
 
       maxWidth:
         compactMobilePopup
-          ? '178px'
+          ? '164px'
           : '280px',
     })
       .setDOMContent(
@@ -9230,6 +9316,14 @@ function createMarker({
           ) {
             popupShell.scrollTop =
               0
+
+
+            if (
+              compactMobilePopup
+            ) {
+              popupShell.style.padding =
+                '8px 9px'
+            }
           }
         }
 
