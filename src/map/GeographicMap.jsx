@@ -724,6 +724,15 @@ const GeographicMap =
       const userWatchIdRef =
         useRef(null)
 
+      const compassHandlerRef =
+        useRef(null)
+
+      const compassHeadingRef =
+        useRef(null)
+
+      const compassLastUpdateRef =
+        useRef(0)
+
       const enhancedSourceRef =
         useRef(null)
 
@@ -1442,8 +1451,292 @@ const GeographicMap =
 
 
       // ========================================================
-      // GPS
+      // GPS + COMPASS
       // ========================================================
+
+      function normalizeHeading(
+        heading
+      ) {
+        return (
+          (heading % 360) +
+          360
+        ) % 360
+      }
+
+
+      function smoothHeading(
+        nextHeading
+      ) {
+        const previous =
+          compassHeadingRef.current
+
+
+        if (
+          previous === null ||
+          !Number.isFinite(
+            previous
+          )
+        ) {
+          compassHeadingRef.current =
+            normalizeHeading(
+              nextHeading
+            )
+
+          return compassHeadingRef.current
+        }
+
+
+        const delta =
+          (
+            (
+              nextHeading -
+              previous +
+              540
+            ) % 360
+          ) -
+          180
+
+
+        const smoothed =
+          normalizeHeading(
+            previous +
+            delta * 0.22
+          )
+
+
+        compassHeadingRef.current =
+          smoothed
+
+
+        return smoothed
+      }
+
+
+      function applyMapHeading(
+        rawHeading
+      ) {
+        const map =
+          mapRef.current
+
+
+        if (
+          !map ||
+          !Number.isFinite(
+            rawHeading
+          )
+        ) {
+          return
+        }
+
+
+        const now =
+          performance.now()
+
+
+        if (
+          now -
+          compassLastUpdateRef.current <
+          70
+        ) {
+          return
+        }
+
+
+        compassLastUpdateRef.current =
+          now
+
+
+        const heading =
+          smoothHeading(
+            rawHeading
+          )
+
+
+        map.easeTo({
+          bearing:
+            heading,
+
+          duration:
+            110,
+
+          easing:
+            (value) =>
+              value,
+
+          essential:
+            true,
+        })
+      }
+
+
+      function getDeviceHeading(
+        event
+      ) {
+        if (
+          Number.isFinite(
+            event?.webkitCompassHeading
+          )
+        ) {
+          return normalizeHeading(
+            event.webkitCompassHeading
+          )
+        }
+
+
+        if (
+          !event?.absolute ||
+          !Number.isFinite(
+            event?.alpha
+          )
+        ) {
+          return null
+        }
+
+
+        const screenAngle =
+          Number(
+            window.screen
+              ?.orientation
+              ?.angle ??
+            window.orientation ??
+            0
+          ) ||
+          0
+
+
+        return normalizeHeading(
+          360 -
+          event.alpha +
+          screenAngle
+        )
+      }
+
+
+      function stopCompassTracking() {
+        const handler =
+          compassHandlerRef.current
+
+
+        if (
+          !handler
+        ) {
+          return
+        }
+
+
+        window.removeEventListener(
+          'deviceorientationabsolute',
+          handler,
+          true
+        )
+
+        window.removeEventListener(
+          'deviceorientation',
+          handler,
+          true
+        )
+
+
+        compassHandlerRef.current =
+          null
+
+        compassHeadingRef.current =
+          null
+
+        compassLastUpdateRef.current =
+          0
+      }
+
+
+      async function startCompassTracking() {
+        if (
+          typeof window ===
+            'undefined' ||
+          !window.DeviceOrientationEvent
+        ) {
+          return false
+        }
+
+
+        const DeviceOrientation =
+          window.DeviceOrientationEvent
+
+
+        if (
+          typeof DeviceOrientation
+            .requestPermission ===
+            'function'
+        ) {
+          try {
+            const permission =
+              await DeviceOrientation
+                .requestPermission()
+
+
+            if (
+              permission !==
+                'granted'
+            ) {
+              return false
+            }
+          } catch (
+            error
+          ) {
+            console.warn(
+              'COMPASS PERMISSION ERROR:',
+              error
+            )
+
+            return false
+          }
+        }
+
+
+        stopCompassTracking()
+
+
+        const handler =
+          (event) => {
+            const heading =
+              getDeviceHeading(
+                event
+              )
+
+
+            if (
+              heading ===
+                null
+            ) {
+              return
+            }
+
+
+            applyMapHeading(
+              heading
+            )
+          }
+
+
+        compassHandlerRef.current =
+          handler
+
+
+        window.addEventListener(
+          'deviceorientationabsolute',
+          handler,
+          true
+        )
+
+        window.addEventListener(
+          'deviceorientation',
+          handler,
+          true
+        )
+
+
+        return true
+      }
+
 
       function applyUserPosition(
         position,
@@ -1479,6 +1772,24 @@ const GeographicMap =
 
         userPositionRef.current =
           location
+
+
+        if (
+          Number.isFinite(
+            position.coords.heading
+          ) &&
+          (
+            !Number.isFinite(
+              position.coords.speed
+            ) ||
+            position.coords.speed >
+              0.5
+          )
+        ) {
+          applyMapHeading(
+            position.coords.heading
+          )
+        }
 
 
         if (
@@ -1612,6 +1923,9 @@ const GeographicMap =
 
 
       function stopLocationTracking() {
+        stopCompassTracking()
+
+
         if (
           userWatchIdRef.current ===
             null ||
@@ -1641,13 +1955,20 @@ const GeographicMap =
         }
 
 
+        stopLocationTracking()
+
+
+        // Request compass access immediately while this function is still
+        // running from the user's tap. iOS requires the permission request
+        // to happen inside a user gesture. GPS still works if compass access
+        // is unavailable or denied.
+        await startCompassTracking()
+
+
         const location =
           await getUserLocation(
             true
           )
-
-
-        stopLocationTracking()
 
 
         userWatchIdRef.current =
@@ -1697,9 +2018,7 @@ const GeographicMap =
 
 
       function locateUser() {
-        return getUserLocation(
-          true
-        )
+        return startLocationTracking()
       }
 
 
