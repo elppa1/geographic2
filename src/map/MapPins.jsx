@@ -2818,15 +2818,208 @@ function formatCommunityProgramPrice(
 }
 
 
-function appendCommunityPrograms({
+function appendRinkStatus({
   parent,
   pin,
 }) {
+  const facility =
+    pin?.rinkFacility
+
+
+  if (
+    !facility
+  ) {
+    return
+  }
+
+
+  const currentUse =
+    String(
+      facility?.currentUseLabel ||
+      ''
+    )
+      .trim()
+
+
+  const iceStatus =
+    String(
+      facility?.iceStatusLabel ||
+      ''
+    )
+      .trim()
+
+
+  const expectedIce =
+    String(
+      facility?.expectedIceLabel ||
+      ''
+    )
+      .trim()
+
+
+  if (
+    !currentUse &&
+    !iceStatus &&
+    !expectedIce
+  ) {
+    return
+  }
+
+
+  const shell =
+    document.createElement(
+      'div'
+    )
+
+
+  shell.style.marginTop =
+    '12px'
+
+
+  shell.style.paddingTop =
+    '10px'
+
+
+  shell.style.borderTop =
+    '1px solid rgba(0,0,0,0.12)'
+
+
+  const heading =
+    document.createElement(
+      'div'
+    )
+
+
+  heading.className =
+    'geographic-pin-category'
+
+
+  heading.textContent =
+    'CURRENT USE'
+
+
+  heading.style.marginBottom =
+    '3px'
+
+
+  shell.appendChild(
+    heading
+  )
+
+
+  if (
+    currentUse
+  ) {
+    appendText({
+      parent:
+        shell,
+
+      className:
+        'geographic-pin-description',
+
+      text:
+        currentUse,
+    })
+  }
+
+
+  if (
+    iceStatus
+  ) {
+    const status =
+      document.createElement(
+        'div'
+      )
+
+
+    status.className =
+      'geographic-pin-year'
+
+
+    status.textContent =
+      iceStatus
+
+
+    status.style.marginTop =
+      '3px'
+
+
+    status.style.fontSize =
+      '10px'
+
+
+    status.style.fontWeight =
+      '700'
+
+
+    shell.appendChild(
+      status
+    )
+  }
+
+
+  if (
+    expectedIce
+  ) {
+    const expected =
+      document.createElement(
+        'div'
+      )
+
+
+    expected.className =
+      'geographic-pin-year'
+
+
+    expected.textContent =
+      expectedIce
+
+
+    expected.style.marginTop =
+      '2px'
+
+
+    expected.style.fontSize =
+      '10px'
+
+
+    expected.style.fontWeight =
+      '600'
+
+
+    shell.appendChild(
+      expected
+    )
+  }
+
+
+  parent.appendChild(
+    shell
+  )
+}
+
+
+function appendCommunityPrograms({
+  parent,
+  pin,
+  programsOverride =
+    null,
+  headingText =
+    'UPCOMING',
+}) {
+  const sourcePrograms =
+    Array.isArray(
+      programsOverride
+    )
+      ? programsOverride
+      : pin?.upcomingPrograms
+
+
   const programs =
     Array.isArray(
-      pin?.upcomingPrograms
+      sourcePrograms
     )
-      ? pin.upcomingPrograms
+      ? sourcePrograms
           .filter(
             (program) =>
               Boolean(
@@ -2877,7 +3070,7 @@ function appendCommunityPrograms({
 
 
   heading.textContent =
-    'UPCOMING'
+    headingText
 
 
   heading.style.marginBottom =
@@ -3738,6 +3931,22 @@ const NEW_COMMUNITY_ICONS = {
 
     label:
       'Rink',
+  },
+
+  skateboard: {
+    emoji:
+      '🛹',
+
+    label:
+      'Skatepark',
+  },
+
+  'dry-pad': {
+    emoji:
+      '🏟️',
+
+    label:
+      'Dry Pad',
   },
 
   pool: {
@@ -6727,12 +6936,42 @@ function createMarker({
         )
       )
     ) {
+      appendRinkStatus({
+        parent:
+          popupContent,
+
+        pin,
+      })
+
+
       appendCommunityPrograms({
         parent:
           popupContent,
 
         pin,
       })
+
+
+      if (
+        Array.isArray(
+          pin?.rinkPrograms
+        ) &&
+        pin.rinkPrograms.length >
+          0
+      ) {
+        appendCommunityPrograms({
+          parent:
+            popupContent,
+
+          pin,
+
+          programsOverride:
+            pin.rinkPrograms,
+
+          headingText:
+            'SKATING',
+        })
+      }
     }
 
 

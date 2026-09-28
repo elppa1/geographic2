@@ -76,6 +76,10 @@ import {
 } from './feeds/toronto/learn4Life.js'
 
 import {
+  rinksFeed,
+} from './feeds/toronto/rinks.js'
+
+import {
   torontoHistoricFeed,
 } from './feeds/toronto/historic.js'
 
@@ -1379,6 +1383,7 @@ const plugins = [
   tplCommunityFeed(),
   communityCentresFeed(),
   learn4LifeFeed(),
+  rinksFeed(),
   torontoHistoricFeed(),
 ]
 
