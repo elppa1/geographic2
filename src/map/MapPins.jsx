@@ -2602,6 +2602,11 @@ function formatCommunityProgramWhen(
           'numeric',
       }
     )
+      .replace(
+        /,/g,
+        ''
+      )
+      .toUpperCase()
 
 
   const timeText =
@@ -2616,12 +2621,24 @@ function formatCommunityProgramWhen(
 
         minute:
           '2-digit',
+
+        hour12:
+          true,
       }
     )
+      .replace(
+        /\s*a\.m\./i,
+        ' AM'
+      )
+      .replace(
+        /\s*p\.m\./i,
+        ' PM'
+      )
       .replace(
         /\./g,
         ''
       )
+      .toUpperCase()
 
 
   return (
@@ -2735,7 +2752,19 @@ function appendCommunityPrograms({
 
 
         whenElement.textContent =
-          when.toUpperCase()
+          when
+
+
+        whenElement.style.fontSize =
+          '10px'
+
+
+        whenElement.style.fontWeight =
+          '600'
+
+
+        whenElement.style.letterSpacing =
+          '0.06em'
 
 
         whenElement.style.marginBottom =
@@ -6317,37 +6346,57 @@ function createMarker({
     })
 
 
-    appendText({
-      parent:
-        popupContent,
+    const hideNewsLocation =
+      pinType ===
+        'news' &&
+      (
+        isTorontoPolicePin(
+          pin
+        ) ||
+        isTorontoFirePin(
+          pin
+        ) ||
+        isTtcPin(
+          pin
+        )
+      )
 
-      className:
-        'geographic-pin-location',
 
-      text:
-        (
-          pinType ===
-            'new' &&
+    if (
+      !hideNewsLocation
+    ) {
+      appendText({
+        parent:
+          popupContent,
+
+        className:
+          'geographic-pin-location',
+
+        text:
           (
-            normalizeCompareText(
-              pin.newType
-            ) ===
-              'business' ||
-            BUSINESS_CATEGORIES.includes(
+            pinType ===
+              'new' &&
+            (
               normalizeCompareText(
-                pin.category
+                pin.newType
+              ) ===
+                'business' ||
+              BUSINESS_CATEGORIES.includes(
+                normalizeCompareText(
+                  pin.category
+                )
               )
             )
-          )
-            ? getNewBusinessLocationLabel(
-                pin
-              )
-            : (
-                pin.intersection ||
-                pin.location
-              )
-        ),
-    })
+              ? getNewBusinessLocationLabel(
+                  pin
+                )
+              : (
+                  pin.intersection ||
+                  pin.location
+                )
+          ),
+      })
+    }
 
 
     if (
