@@ -2916,6 +2916,208 @@ function appendOutdoorRecreationUses({
 }
 
 
+function appendAquaticsStatus({
+  parent,
+  pin,
+}) {
+  const facilities =
+    Array.isArray(
+      pin?.aquaticFacilities
+    )
+      ? pin.aquaticFacilities
+          .filter(
+            (facility) =>
+              Boolean(
+                facility?.typeLabel
+              )
+          )
+      : []
+
+
+  if (
+    facilities.length ===
+      0
+  ) {
+    return
+  }
+
+
+  const shell =
+    document.createElement(
+      'div'
+    )
+
+
+  shell.style.marginTop =
+    '12px'
+
+
+  shell.style.paddingTop =
+    '10px'
+
+
+  shell.style.borderTop =
+    '1px solid rgba(0,0,0,0.12)'
+
+
+  const heading =
+    document.createElement(
+      'div'
+    )
+
+
+  heading.className =
+    'geographic-pin-category'
+
+
+  heading.textContent =
+    'AQUATICS'
+
+
+  heading.style.marginBottom =
+    '3px'
+
+
+  shell.appendChild(
+    heading
+  )
+
+
+  facilities.forEach(
+    (
+      facility,
+      index
+    ) => {
+      if (
+        index >
+          0
+      ) {
+        const spacer =
+          document.createElement(
+            'div'
+          )
+
+
+        spacer.style.marginTop =
+          '6px'
+
+
+        shell.appendChild(
+          spacer
+        )
+      }
+
+
+      appendText({
+        parent:
+          shell,
+
+        className:
+          'geographic-pin-description',
+
+        text:
+          String(
+            facility?.typeLabel ||
+            ''
+          )
+            .trim(),
+      })
+
+
+      const status =
+        String(
+          facility?.currentStatus ||
+          ''
+        )
+          .trim()
+
+
+      if (
+        status
+      ) {
+        const statusElement =
+          document.createElement(
+            'div'
+          )
+
+
+        statusElement.className =
+          'geographic-pin-year'
+
+
+        statusElement.textContent =
+          status
+
+
+        statusElement.style.marginTop =
+          '2px'
+
+
+        statusElement.style.fontSize =
+          '10px'
+
+
+        statusElement.style.fontWeight =
+          '700'
+
+
+        shell.appendChild(
+          statusElement
+        )
+      }
+
+
+      const season =
+        String(
+          facility?.seasonLabel ||
+          ''
+        )
+          .trim()
+
+
+      if (
+        season
+      ) {
+        const seasonElement =
+          document.createElement(
+            'div'
+          )
+
+
+        seasonElement.className =
+          'geographic-pin-year'
+
+
+        seasonElement.textContent =
+          season
+
+
+        seasonElement.style.marginTop =
+          '2px'
+
+
+        seasonElement.style.fontSize =
+          '10px'
+
+
+        seasonElement.style.fontWeight =
+          '600'
+
+
+        shell.appendChild(
+          seasonElement
+        )
+      }
+    }
+  )
+
+
+  parent.appendChild(
+    shell
+  )
+}
+
+
 function appendRinkStatus({
   parent,
   pin,
@@ -4093,6 +4295,30 @@ const NEW_COMMUNITY_ICONS = {
 
     label:
       'Pool',
+  },
+
+  'splash-pad': {
+    emoji:
+      '💦',
+
+    label:
+      'Splash Pad',
+  },
+
+  'wading-pool': {
+    emoji:
+      '💧',
+
+    label:
+      'Wading Pool',
+  },
+
+  'water-park': {
+    emoji:
+      '🌊',
+
+    label:
+      'Water Park',
   },
 
   market: {
@@ -7090,12 +7316,42 @@ function createMarker({
       })
 
 
+      appendAquaticsStatus({
+        parent:
+          popupContent,
+
+        pin,
+      })
+
+
       appendCommunityPrograms({
         parent:
           popupContent,
 
         pin,
       })
+
+
+      if (
+        Array.isArray(
+          pin?.poolPrograms
+        ) &&
+        pin.poolPrograms.length >
+          0
+      ) {
+        appendCommunityPrograms({
+          parent:
+            popupContent,
+
+          pin,
+
+          programsOverride:
+            pin.poolPrograms,
+
+          headingText:
+            'SWIM',
+        })
+      }
 
 
       if (

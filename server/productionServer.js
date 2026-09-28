@@ -84,6 +84,10 @@ import {
 } from './feeds/toronto/outdoorRecreation.js'
 
 import {
+  poolsFeed,
+} from './feeds/toronto/pools.js'
+
+import {
   torontoHistoricFeed,
 } from './feeds/toronto/historic.js'
 
@@ -1389,6 +1393,7 @@ const plugins = [
   learn4LifeFeed(),
   rinksFeed(),
   outdoorRecreationFeed(),
+  poolsFeed(),
   torontoHistoricFeed(),
 ]
 
