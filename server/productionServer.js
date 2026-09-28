@@ -80,6 +80,10 @@ import {
 } from './feeds/toronto/rinks.js'
 
 import {
+  outdoorRecreationFeed,
+} from './feeds/toronto/outdoorRecreation.js'
+
+import {
   torontoHistoricFeed,
 } from './feeds/toronto/historic.js'
 
@@ -1384,6 +1388,7 @@ const plugins = [
   communityCentresFeed(),
   learn4LifeFeed(),
   rinksFeed(),
+  outdoorRecreationFeed(),
   torontoHistoricFeed(),
 ]
 

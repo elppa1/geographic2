@@ -75,6 +75,12 @@ const COMMUNITY_CATEGORIES = [
   'gallery',
   'cinema',
   'rink',
+  'skatepark',
+  'basketball-court',
+  'tennis-court',
+  'pickleball-court',
+  'bike-park',
+  'sports-court',
   'pool',
   'market',
   'park',
@@ -2818,6 +2824,98 @@ function formatCommunityProgramPrice(
 }
 
 
+function appendOutdoorRecreationUses({
+  parent,
+  pin,
+}) {
+  const activities =
+    Array.isArray(
+      pin?.outdoorActivities
+    )
+      ? pin.outdoorActivities
+          .map(
+            (value) =>
+              String(
+                value ||
+                ''
+              )
+                .trim()
+          )
+          .filter(
+            Boolean
+          )
+      : []
+
+
+  if (
+    activities.length ===
+      0
+  ) {
+    return
+  }
+
+
+  const shell =
+    document.createElement(
+      'div'
+    )
+
+
+  shell.style.marginTop =
+    '12px'
+
+
+  shell.style.paddingTop =
+    '10px'
+
+
+  shell.style.borderTop =
+    '1px solid rgba(0,0,0,0.12)'
+
+
+  const heading =
+    document.createElement(
+      'div'
+    )
+
+
+  heading.className =
+    'geographic-pin-category'
+
+
+  heading.textContent =
+    'FACILITIES'
+
+
+  heading.style.marginBottom =
+    '3px'
+
+
+  shell.appendChild(
+    heading
+  )
+
+
+  appendText({
+    parent:
+      shell,
+
+    className:
+      'geographic-pin-description',
+
+    text:
+      activities.join(
+        ' · '
+      ),
+  })
+
+
+  parent.appendChild(
+    shell
+  )
+}
+
+
 function appendRinkStatus({
   parent,
   pin,
@@ -3947,6 +4045,46 @@ const NEW_COMMUNITY_ICONS = {
 
     label:
       'Dry Pad',
+  },
+
+  basketball: {
+    emoji:
+      '🏀',
+
+    label:
+      'Basketball',
+  },
+
+  tennis: {
+    emoji:
+      '🎾',
+
+    label:
+      'Tennis',
+  },
+
+  pickleball: {
+    emoji:
+      '🏓',
+
+    label:
+      'Pickleball',
+  },
+
+  'bike-park': {
+    emoji:
+      '🚲',
+
+    label:
+      'Bike Park',
+  },
+
+  'sports-court': {
+    emoji:
+      '🏟️',
+
+    label:
+      'Sports Court',
   },
 
   pool: {
@@ -6937,6 +7075,14 @@ function createMarker({
       )
     ) {
       appendRinkStatus({
+        parent:
+          popupContent,
+
+        pin,
+      })
+
+
+      appendOutdoorRecreationUses({
         parent:
           popupContent,
 
