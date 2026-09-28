@@ -2758,6 +2758,66 @@ function formatCommunityProgramAge(
 }
 
 
+function formatCommunityProgramPrice(
+  program
+) {
+  const raw =
+    program?.price
+
+
+  if (
+    raw ===
+      undefined ||
+    raw ===
+      null ||
+    String(
+      raw
+    )
+      .trim() ===
+      ''
+  ) {
+    return ''
+  }
+
+
+  const numeric =
+    Number(
+      raw
+    )
+
+
+  if (
+    !Number.isFinite(
+      numeric
+    )
+  ) {
+    return String(
+      raw
+    )
+      .trim()
+  }
+
+
+  return (
+    '$' +
+    numeric.toLocaleString(
+      'en-CA',
+      {
+        minimumFractionDigits:
+          Number.isInteger(
+            numeric
+          )
+            ? 0
+            : 2,
+
+        maximumFractionDigits:
+          2,
+      }
+    )
+  )
+}
+
+
 function appendCommunityPrograms({
   parent,
   pin,
@@ -2959,6 +3019,47 @@ function appendCommunityPrograms({
 
         row.appendChild(
           age
+        )
+      }
+
+
+      const priceLabel =
+        formatCommunityProgramPrice(
+          program
+        )
+
+
+      if (
+        priceLabel
+      ) {
+        const price =
+          document.createElement(
+            'div'
+          )
+
+
+        price.className =
+          'geographic-pin-year'
+
+
+        price.textContent =
+          priceLabel
+
+
+        price.style.marginTop =
+          '2px'
+
+
+        price.style.fontSize =
+          '10px'
+
+
+        price.style.fontWeight =
+          '600'
+
+
+        row.appendChild(
+          price
         )
       }
 
@@ -3607,6 +3708,14 @@ const NEW_COMMUNITY_ICONS = {
       'Community Centre',
   },
 
+  learn4life: {
+    emoji:
+      '🏫',
+
+    label:
+      'Learn4Life',
+  },
+
   gallery: {
     emoji:
       '🖼️',
@@ -3683,11 +3792,22 @@ function getNewCommunityIcon(
   }
 
 
-  const iconKey =
+  const communityType =
     normalizeCompareText(
-      pin?.eventPinIcon
-    ) ||
-    category
+      pin?.communityType
+    )
+
+
+  const iconKey =
+    communityType ===
+      'learn4life'
+      ? 'learn4life'
+      : (
+          normalizeCompareText(
+            pin?.eventPinIcon
+          ) ||
+          category
+        )
 
 
   return (
