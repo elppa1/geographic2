@@ -7484,6 +7484,18 @@ function createMarker({
     }
 
 
+    if (
+      pinType !==
+        'news'
+    ) {
+      appendRouteActions({
+        popupContent,
+        pin,
+        longitude,
+        latitude,
+        onDirections,
+      })
+    }
   }
 
 
