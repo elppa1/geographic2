@@ -2648,6 +2648,116 @@ function formatCommunityProgramWhen(
   )
 }
 
+function formatCommunityProgramAge(
+  program
+) {
+  const rawMin =
+    program?.ageMin
+
+
+  const rawMax =
+    program?.ageMax
+
+
+  const hasMin =
+    rawMin !==
+      undefined &&
+    rawMin !==
+      null &&
+    String(
+      rawMin
+    )
+      .trim() !==
+      ''
+
+
+  const hasMax =
+    rawMax !==
+      undefined &&
+    rawMax !==
+      null &&
+    String(
+      rawMax
+    )
+      .trim() !==
+      ''
+
+
+  if (
+    !hasMin &&
+    !hasMax
+  ) {
+    return ''
+  }
+
+
+  const min =
+    hasMin
+      ? Number(
+          rawMin
+        )
+      : null
+
+
+  const max =
+    hasMax
+      ? Number(
+          rawMax
+        )
+      : null
+
+
+  const validMin =
+    min !==
+      null &&
+    Number.isFinite(
+      min
+    )
+
+
+  const validMax =
+    max !==
+      null &&
+    Number.isFinite(
+      max
+    )
+
+
+  if (
+    !validMin &&
+    !validMax
+  ) {
+    return ''
+  }
+
+
+  if (
+    validMin &&
+    validMax
+  ) {
+    if (
+      min ===
+        max
+    ) {
+      return `AGE ${min}`
+    }
+
+
+    return `AGES ${min}–${max}`
+  }
+
+
+  if (
+    validMin
+  ) {
+    return `AGES ${min}+`
+  }
+
+
+  return `AGES 0–${max}`
+}
+
+
 function appendCommunityPrograms({
   parent,
   pin,
@@ -2810,6 +2920,47 @@ function appendCommunityPrograms({
       row.appendChild(
         title
       )
+
+
+      const ageLabel =
+        formatCommunityProgramAge(
+          program
+        )
+
+
+      if (
+        ageLabel
+      ) {
+        const age =
+          document.createElement(
+            'div'
+          )
+
+
+        age.className =
+          'geographic-pin-year'
+
+
+        age.textContent =
+          ageLabel
+
+
+        age.style.marginTop =
+          '2px'
+
+
+        age.style.fontSize =
+          '10px'
+
+
+        age.style.fontWeight =
+          '600'
+
+
+        row.appendChild(
+          age
+        )
+      }
 
 
       if (
