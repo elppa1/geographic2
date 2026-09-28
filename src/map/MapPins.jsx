@@ -79,6 +79,26 @@ const BUSINESS_CATEGORIES = [
 ]
 
 
+const COMMUNITY_CATEGORIES = [
+  'community',
+  'community-place',
+  'library',
+  'community-centre',
+  'gallery',
+  'cinema',
+  'rink',
+  'skatepark',
+  'basketball-court',
+  'tennis-court',
+  'pickleball-court',
+  'bike-park',
+  'sports-court',
+  'pool',
+  'market',
+  'park',
+  'public-space',
+]
+
 const DEVELOPMENT_CATEGORIES = [
   'development',
   'construction',
@@ -261,6 +281,26 @@ function newPinMatchesSubtype(
     )
 
 
+  const communityCategory =
+    COMMUNITY_CATEGORIES.includes(
+      category
+    ) ||
+    category.startsWith(
+      'community-'
+    )
+
+
+  const communityPin =
+    explicitType ===
+      'community' ||
+    communityCategory ||
+    Boolean(
+      pin.communityType ||
+      pin.communityIcon ||
+      pin.facilityType
+    )
+
+
   if (
     subtype ===
       'all'
@@ -271,6 +311,7 @@ function newPinMatchesSubtype(
       explicitType ===
         'events' ||
       realEstatePin ||
+      communityPin ||
       (
         !explicitType &&
         (
@@ -300,6 +341,14 @@ function newPinMatchesSubtype(
       )
     )
   }
+
+  if (
+    subtype ===
+      'community'
+  ) {
+    return communityPin
+  }
+
 
   if (
     subtype ===
@@ -2719,6 +2768,1107 @@ function appendMobileBusinessLink({
 }
 
 
+function formatCommunityProgramWhen(
+  value
+) {
+  const text =
+    String(
+      value ||
+      ''
+    )
+      .trim()
+
+
+  if (
+    !text
+  ) {
+    return ''
+  }
+
+
+  const date =
+    new Date(
+      text
+    )
+
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return text
+  }
+
+
+  const dateText =
+    date.toLocaleDateString(
+      'en-CA',
+      {
+        timeZone:
+          'America/Toronto',
+
+        weekday:
+          'short',
+
+        month:
+          'short',
+
+        day:
+          'numeric',
+      }
+    )
+      .replace(
+        /,/g,
+        ''
+      )
+      .toUpperCase()
+
+
+  const timeText =
+    date.toLocaleTimeString(
+      'en-CA',
+      {
+        timeZone:
+          'America/Toronto',
+
+        hour:
+          'numeric',
+
+        minute:
+          '2-digit',
+
+        hour12:
+          true,
+      }
+    )
+      .replace(
+        /\s*a\.m\./i,
+        ' AM'
+      )
+      .replace(
+        /\s*p\.m\./i,
+        ' PM'
+      )
+      .replace(
+        /\./g,
+        ''
+      )
+      .toUpperCase()
+
+
+  return (
+    dateText +
+    ' · ' +
+    timeText
+  )
+}
+
+function formatCommunityProgramAge(
+  program
+) {
+  const rawMin =
+    program?.ageMin
+
+
+  const rawMax =
+    program?.ageMax
+
+
+  const hasMin =
+    rawMin !==
+      undefined &&
+    rawMin !==
+      null &&
+    String(
+      rawMin
+    )
+      .trim() !==
+      ''
+
+
+  const hasMax =
+    rawMax !==
+      undefined &&
+    rawMax !==
+      null &&
+    String(
+      rawMax
+    )
+      .trim() !==
+      ''
+
+
+  if (
+    !hasMin &&
+    !hasMax
+  ) {
+    return ''
+  }
+
+
+  const min =
+    hasMin
+      ? Number(
+          rawMin
+        )
+      : null
+
+
+  const max =
+    hasMax
+      ? Number(
+          rawMax
+        )
+      : null
+
+
+  const validMin =
+    min !==
+      null &&
+    Number.isFinite(
+      min
+    )
+
+
+  const validMax =
+    max !==
+      null &&
+    Number.isFinite(
+      max
+    )
+
+
+  if (
+    !validMin &&
+    !validMax
+  ) {
+    return ''
+  }
+
+
+  if (
+    validMin &&
+    validMax
+  ) {
+    if (
+      min ===
+        max
+    ) {
+      return `AGE ${min}`
+    }
+
+
+    return `AGES ${min}–${max}`
+  }
+
+
+  if (
+    validMin
+  ) {
+    return `AGES ${min}+`
+  }
+
+
+  return `AGES 0–${max}`
+}
+
+
+function formatCommunityProgramPrice(
+  program
+) {
+  const raw =
+    program?.price
+
+
+  if (
+    raw ===
+      undefined ||
+    raw ===
+      null ||
+    String(
+      raw
+    )
+      .trim() ===
+      ''
+  ) {
+    return ''
+  }
+
+
+  const numeric =
+    Number(
+      raw
+    )
+
+
+  if (
+    !Number.isFinite(
+      numeric
+    )
+  ) {
+    return String(
+      raw
+    )
+      .trim()
+  }
+
+
+  return (
+    '$' +
+    numeric.toLocaleString(
+      'en-CA',
+      {
+        minimumFractionDigits:
+          Number.isInteger(
+            numeric
+          )
+            ? 0
+            : 2,
+
+        maximumFractionDigits:
+          2,
+      }
+    )
+  )
+}
+
+
+function appendOutdoorRecreationUses({
+  parent,
+  pin,
+}) {
+  const activities =
+    Array.isArray(
+      pin?.outdoorActivities
+    )
+      ? pin.outdoorActivities
+          .map(
+            (value) =>
+              String(
+                value ||
+                ''
+              )
+                .trim()
+          )
+          .filter(
+            Boolean
+          )
+      : []
+
+
+  if (
+    activities.length ===
+      0
+  ) {
+    return
+  }
+
+
+  const shell =
+    document.createElement(
+      'div'
+    )
+
+
+  shell.className =
+    'geographic-community-programs'
+
+
+  shell.style.marginTop =
+    '12px'
+
+
+  shell.style.paddingTop =
+    '10px'
+
+
+  shell.style.borderTop =
+    '1px solid rgba(0,0,0,0.12)'
+
+
+  const heading =
+    document.createElement(
+      'div'
+    )
+
+
+  heading.className =
+    'geographic-pin-category'
+
+
+  heading.textContent =
+    'FACILITIES'
+
+
+  heading.style.marginBottom =
+    '3px'
+
+
+  shell.appendChild(
+    heading
+  )
+
+
+  appendText({
+    parent:
+      shell,
+
+    className:
+      'geographic-pin-description',
+
+    text:
+      activities.join(
+        ' · '
+      ),
+  })
+
+
+  parent.appendChild(
+    shell
+  )
+}
+
+
+function appendAquaticsStatus({
+  parent,
+  pin,
+}) {
+  const facilities =
+    Array.isArray(
+      pin?.aquaticFacilities
+    )
+      ? pin.aquaticFacilities
+          .filter(
+            (facility) =>
+              Boolean(
+                facility?.typeLabel
+              )
+          )
+      : []
+
+
+  if (
+    facilities.length ===
+      0
+  ) {
+    return
+  }
+
+
+  const shell =
+    document.createElement(
+      'div'
+    )
+
+
+  shell.style.marginTop =
+    '12px'
+
+
+  shell.style.paddingTop =
+    '10px'
+
+
+  shell.style.borderTop =
+    '1px solid rgba(0,0,0,0.12)'
+
+
+  const heading =
+    document.createElement(
+      'div'
+    )
+
+
+  heading.className =
+    'geographic-pin-category'
+
+
+  heading.textContent =
+    'AQUATICS'
+
+
+  heading.style.marginBottom =
+    '3px'
+
+
+  shell.appendChild(
+    heading
+  )
+
+
+  facilities.forEach(
+    (
+      facility,
+      index
+    ) => {
+      if (
+        index >
+          0
+      ) {
+        const spacer =
+          document.createElement(
+            'div'
+          )
+
+
+        spacer.style.marginTop =
+          '6px'
+
+
+        shell.appendChild(
+          spacer
+        )
+      }
+
+
+      appendText({
+        parent:
+          shell,
+
+        className:
+          'geographic-pin-description',
+
+        text:
+          String(
+            facility?.typeLabel ||
+            ''
+          )
+            .trim(),
+      })
+
+
+      const status =
+        String(
+          facility?.currentStatus ||
+          ''
+        )
+          .trim()
+
+
+      if (
+        status
+      ) {
+        const statusElement =
+          document.createElement(
+            'div'
+          )
+
+
+        statusElement.className =
+          'geographic-pin-year'
+
+
+        statusElement.textContent =
+          status
+
+
+        statusElement.style.marginTop =
+          '2px'
+
+
+        statusElement.style.fontSize =
+          '10px'
+
+
+        statusElement.style.fontWeight =
+          '700'
+
+
+        shell.appendChild(
+          statusElement
+        )
+      }
+
+
+      const season =
+        String(
+          facility?.seasonLabel ||
+          ''
+        )
+          .trim()
+
+
+      if (
+        season
+      ) {
+        const seasonElement =
+          document.createElement(
+            'div'
+          )
+
+
+        seasonElement.className =
+          'geographic-pin-year'
+
+
+        seasonElement.textContent =
+          season
+
+
+        seasonElement.style.marginTop =
+          '2px'
+
+
+        seasonElement.style.fontSize =
+          '10px'
+
+
+        seasonElement.style.fontWeight =
+          '600'
+
+
+        shell.appendChild(
+          seasonElement
+        )
+      }
+    }
+  )
+
+
+  parent.appendChild(
+    shell
+  )
+}
+
+
+function appendRinkStatus({
+  parent,
+  pin,
+}) {
+  const facility =
+    pin?.rinkFacility
+
+
+  if (
+    !facility
+  ) {
+    return
+  }
+
+
+  const currentUse =
+    String(
+      facility?.currentUseLabel ||
+      ''
+    )
+      .trim()
+
+
+  const iceStatus =
+    String(
+      facility?.iceStatusLabel ||
+      ''
+    )
+      .trim()
+
+
+  const expectedIce =
+    String(
+      facility?.expectedIceLabel ||
+      ''
+    )
+      .trim()
+
+
+  if (
+    !currentUse &&
+    !iceStatus &&
+    !expectedIce
+  ) {
+    return
+  }
+
+
+  const shell =
+    document.createElement(
+      'div'
+    )
+
+
+  shell.style.marginTop =
+    '12px'
+
+
+  shell.style.paddingTop =
+    '10px'
+
+
+  shell.style.borderTop =
+    '1px solid rgba(0,0,0,0.12)'
+
+
+  const heading =
+    document.createElement(
+      'div'
+    )
+
+
+  heading.className =
+    'geographic-pin-category'
+
+
+  heading.textContent =
+    'CURRENT USE'
+
+
+  heading.style.marginBottom =
+    '3px'
+
+
+  shell.appendChild(
+    heading
+  )
+
+
+  if (
+    currentUse
+  ) {
+    appendText({
+      parent:
+        shell,
+
+      className:
+        'geographic-pin-description',
+
+      text:
+        currentUse,
+    })
+  }
+
+
+  if (
+    iceStatus
+  ) {
+    const status =
+      document.createElement(
+        'div'
+      )
+
+
+    status.className =
+      'geographic-pin-year'
+
+
+    status.textContent =
+      iceStatus
+
+
+    status.style.marginTop =
+      '3px'
+
+
+    status.style.fontSize =
+      '10px'
+
+
+    status.style.fontWeight =
+      '700'
+
+
+    shell.appendChild(
+      status
+    )
+  }
+
+
+  if (
+    expectedIce
+  ) {
+    const expected =
+      document.createElement(
+        'div'
+      )
+
+
+    expected.className =
+      'geographic-pin-year'
+
+
+    expected.textContent =
+      expectedIce
+
+
+    expected.style.marginTop =
+      '2px'
+
+
+    expected.style.fontSize =
+      '10px'
+
+
+    expected.style.fontWeight =
+      '600'
+
+
+    shell.appendChild(
+      expected
+    )
+  }
+
+
+  parent.appendChild(
+    shell
+  )
+}
+
+
+function appendCommunityPrograms({
+  parent,
+  pin,
+  programsOverride =
+    null,
+  headingText =
+    'UPCOMING',
+}) {
+  const sourcePrograms =
+    Array.isArray(
+      programsOverride
+    )
+      ? programsOverride
+      : pin?.upcomingPrograms
+
+
+  const programs =
+    Array.isArray(
+      sourcePrograms
+    )
+      ? sourcePrograms
+          .filter(
+            (program) =>
+              Boolean(
+                program?.title
+              )
+          )
+          .slice(
+            0,
+            3
+          )
+      : []
+
+
+  if (
+    programs.length ===
+      0
+  ) {
+    return
+  }
+
+
+  const shell =
+    document.createElement(
+      'div'
+    )
+
+
+  shell.style.marginTop =
+    '12px'
+
+
+  shell.style.paddingTop =
+    '10px'
+
+
+  shell.style.borderTop =
+    '1px solid rgba(0,0,0,0.12)'
+
+
+  const heading =
+    document.createElement(
+      'div'
+    )
+
+
+  heading.className =
+    'geographic-pin-category'
+
+
+  heading.textContent =
+    headingText
+
+
+  heading.style.marginBottom =
+    '2px'
+
+
+  shell.appendChild(
+    heading
+  )
+
+
+  programs.forEach(
+    (program) => {
+      const row =
+        document.createElement(
+          'div'
+        )
+
+
+      row.className =
+        'geographic-community-program-row'
+
+
+      row.style.marginTop =
+        '9px'
+
+
+      const when =
+        formatCommunityProgramWhen(
+          program?.startTime ||
+          program?.date
+        )
+
+
+      if (
+        when
+      ) {
+        const whenElement =
+          document.createElement(
+            'div'
+          )
+
+
+        whenElement.className =
+          'geographic-pin-year geographic-community-program-when'
+
+
+        whenElement.textContent =
+          when
+
+
+        whenElement.style.fontSize =
+          '10px'
+
+
+        whenElement.style.fontWeight =
+          '600'
+
+
+        whenElement.style.letterSpacing =
+          '0.06em'
+
+
+        whenElement.style.marginBottom =
+          '2px'
+
+
+        row.appendChild(
+          whenElement
+        )
+      }
+
+
+      const title =
+        document.createElement(
+          'div'
+        )
+
+
+      title.className =
+        'geographic-community-program-title'
+
+
+      title.textContent =
+        String(
+          program?.title ||
+          ''
+        )
+          .trim()
+
+
+      title.style.fontSize =
+        '13px'
+
+
+      title.style.fontWeight =
+        '600'
+
+
+      title.style.lineHeight =
+        '1.25'
+
+
+      title.style.color =
+        '#111'
+
+
+      row.appendChild(
+        title
+      )
+
+
+      const ageLabel =
+        formatCommunityProgramAge(
+          program
+        )
+
+
+      if (
+        ageLabel
+      ) {
+        const age =
+          document.createElement(
+            'div'
+          )
+
+
+        age.className =
+          'geographic-pin-year geographic-community-program-meta'
+
+
+        age.textContent =
+          ageLabel
+
+
+        age.style.marginTop =
+          '2px'
+
+
+        age.style.fontSize =
+          '10px'
+
+
+        age.style.fontWeight =
+          '600'
+
+
+        row.appendChild(
+          age
+        )
+      }
+
+
+      const priceLabel =
+        formatCommunityProgramPrice(
+          program
+        )
+
+
+      if (
+        priceLabel
+      ) {
+        const price =
+          document.createElement(
+            'div'
+          )
+
+
+        price.className =
+          'geographic-pin-year geographic-community-program-meta'
+
+
+        price.textContent =
+          priceLabel
+
+
+        price.style.marginTop =
+          '2px'
+
+
+        price.style.fontSize =
+          '10px'
+
+
+        price.style.fontWeight =
+          '600'
+
+
+        row.appendChild(
+          price
+        )
+      }
+
+
+      const seniorPriceLabel =
+        formatCommunityProgramPrice({
+          price:
+            program?.seniorPrice,
+        })
+
+
+      if (
+        seniorPriceLabel
+      ) {
+        const senior =
+          document.createElement(
+            'div'
+          )
+
+
+        senior.className =
+          'geographic-pin-year'
+
+
+        senior.textContent =
+          (
+            'SENIOR ' +
+            seniorPriceLabel +
+            (
+              program?.seniorDiscountText
+                ? ` · ${String(program.seniorDiscountText).trim()}`
+                : ''
+            )
+          )
+
+
+        senior.style.marginTop =
+          '2px'
+
+
+        senior.style.fontSize =
+          '10px'
+
+
+        senior.style.fontWeight =
+          '600'
+
+
+        row.appendChild(
+          senior
+        )
+      }
+
+
+      if (
+        program?.isFull
+      ) {
+        const full =
+          document.createElement(
+            'div'
+          )
+
+
+        full.className =
+          'geographic-pin-year'
+
+
+        full.textContent =
+          'REGISTRATION FULL / CLOSED'
+
+
+        full.style.marginTop =
+          '2px'
+
+
+        row.appendChild(
+          full
+        )
+      }
+
+
+      shell.appendChild(
+        row
+      )
+    }
+  )
+
+
+  parent.appendChild(
+    shell
+  )
+}
+
+
 // ============================================================
 // SEE IT THEN
 // ============================================================
@@ -2815,7 +3965,59 @@ function appendSeeItThenAction({
     'button'
 
   button.className =
-    'geographic-route-action'
+    'geographic-route-action geographic-see-it-then-action'
+
+
+  button.style.display =
+    'block'
+
+  button.style.width =
+    '100%'
+
+  button.style.boxSizing =
+    'border-box'
+
+  button.style.marginTop =
+    '7px'
+
+  button.style.padding =
+    '8px 10px'
+
+  button.style.border =
+    '0'
+
+  button.style.borderRadius =
+    '0'
+
+  button.style.background =
+    '#111'
+
+  button.style.color =
+    '#fff'
+
+  button.style.fontFamily =
+    'inherit'
+
+  button.style.fontSize =
+    '8px'
+
+  button.style.fontWeight =
+    '800'
+
+  button.style.lineHeight =
+    '1.2'
+
+  button.style.letterSpacing =
+    '0.08em'
+
+  button.style.textAlign =
+    'center'
+
+  button.style.whiteSpace =
+    'nowrap'
+
+  button.style.cursor =
+    'pointer'
 
 
   const getReturnLabel =
@@ -3262,6 +4464,12 @@ const NEW_BUSINESS_ICONS = {
 function getNewBusinessIcon(
   pin
 ) {
+  const explicitType =
+    normalizeCompareText(
+      pin?.newType
+    )
+
+
   const category =
     normalizeCompareText(
       pin?.category
@@ -3269,6 +4477,8 @@ function getNewBusinessIcon(
 
 
   if (
+    explicitType !==
+      'business' &&
     !BUSINESS_CATEGORIES.includes(
       category
     )
@@ -3284,18 +4494,52 @@ function getNewBusinessIcon(
 
 
   if (
-    !iconKey
+    iconKey &&
+    NEW_BUSINESS_ICONS[
+      iconKey
+    ]
   ) {
-    return null
+    return NEW_BUSINESS_ICONS[
+      iconKey
+    ]
   }
 
 
-  return (
-    NEW_BUSINESS_ICONS[
-      iconKey
-    ] ||
-    null
-  )
+  if (
+    category ===
+      'restaurant'
+  ) {
+    return {
+      emoji:
+        '🍴',
+
+      label:
+        'Restaurant',
+    }
+  }
+
+
+  if (
+    category ===
+      'store'
+  ) {
+    return {
+      emoji:
+        '🛍️',
+
+      label:
+        'Store',
+    }
+  }
+
+
+  return {
+    emoji:
+      '🏢',
+
+    label:
+      'Business',
+  }
 }
 
 
@@ -3407,17 +4651,280 @@ function getNewEventIcon(
 
 
   if (
-    !iconKey
+    iconKey &&
+    NEW_EVENT_ICONS[
+      iconKey
+    ]
+  ) {
+    return NEW_EVENT_ICONS[
+      iconKey
+    ]
+  }
+
+
+  const categoryIconKey = {
+    theatre:
+      'theatre',
+
+    comedy:
+      'comedy',
+
+    concert:
+      'music',
+
+    festival:
+      'festival',
+
+    exhibition:
+      'art',
+
+    talk:
+      'talk',
+
+    screening:
+      'film',
+
+    'community-event':
+      'community',
+  }[
+    category
+  ]
+
+
+  if (
+    categoryIconKey &&
+    NEW_EVENT_ICONS[
+      categoryIconKey
+    ]
+  ) {
+    return NEW_EVENT_ICONS[
+      categoryIconKey
+    ]
+  }
+
+
+  return {
+    emoji:
+      '🎟️',
+
+    label:
+      'Event',
+  }
+}
+
+
+const NEW_COMMUNITY_ICONS = {
+  community: {
+    emoji:
+      '📍',
+
+    label:
+      'Community',
+  },
+
+  library: {
+    emoji:
+      '📚',
+
+    label:
+      'Library',
+  },
+
+  'community-centre': {
+    emoji:
+      '🏛️',
+
+    label:
+      'Community Centre',
+  },
+
+  learn4life: {
+    emoji:
+      '🏫',
+
+    label:
+      'Learn4Life',
+  },
+
+  gallery: {
+    emoji:
+      '🖼️',
+
+    label:
+      'Gallery',
+  },
+
+  cinema: {
+    emoji:
+      '🎬',
+
+    label:
+      'Cinema',
+  },
+
+  rink: {
+    emoji:
+      '⛸️',
+
+    label:
+      'Rink',
+  },
+
+  skateboard: {
+    emoji:
+      '🛹',
+
+    label:
+      'Skatepark',
+  },
+
+  'dry-pad': {
+    emoji:
+      '🏟️',
+
+    label:
+      'Dry Pad',
+  },
+
+  basketball: {
+    emoji:
+      '🏀',
+
+    label:
+      'Basketball',
+  },
+
+  tennis: {
+    emoji:
+      '🎾',
+
+    label:
+      'Tennis',
+  },
+
+  pickleball: {
+    emoji:
+      '🏓',
+
+    label:
+      'Pickleball',
+  },
+
+  'bike-park': {
+    emoji:
+      '🚲',
+
+    label:
+      'Bike Park',
+  },
+
+  'sports-court': {
+    emoji:
+      '🏟️',
+
+    label:
+      'Sports Court',
+  },
+
+  pool: {
+    emoji:
+      '🏊',
+
+    label:
+      'Pool',
+  },
+
+  'splash-pad': {
+    emoji:
+      '💦',
+
+    label:
+      'Splash Pad',
+  },
+
+  'wading-pool': {
+    emoji:
+      '💧',
+
+    label:
+      'Wading Pool',
+  },
+
+  'water-park': {
+    emoji:
+      '🌊',
+
+    label:
+      'Water Park',
+  },
+
+  market: {
+    emoji:
+      '🧺',
+
+    label:
+      'Market',
+  },
+
+  park: {
+    emoji:
+      '🌳',
+
+    label:
+      'Park',
+  },
+
+  'public-space': {
+    emoji:
+      '🌐',
+
+    label:
+      'Public Space',
+  },
+}
+
+
+function getNewCommunityIcon(
+  pin
+) {
+  const category =
+    normalizeCompareText(
+      pin?.category
+    )
+
+
+  if (
+    !COMMUNITY_CATEGORIES.includes(
+      category
+    )
   ) {
     return null
   }
 
 
+  const communityType =
+    normalizeCompareText(
+      pin?.communityType
+    )
+
+
+  const iconKey =
+    communityType ===
+      'learn4life'
+      ? 'learn4life'
+      : (
+          normalizeCompareText(
+            pin?.eventPinIcon
+          ) ||
+          category
+        )
+
+
   return (
-    NEW_EVENT_ICONS[
+    NEW_COMMUNITY_ICONS[
       iconKey
     ] ||
-    null
+    NEW_COMMUNITY_ICONS.community
   )
 }
 
@@ -3562,17 +5069,118 @@ function getNewSportsIcon(
 
 
   if (
-    !iconKey
+    iconKey &&
+    NEW_SPORTS_ICONS[
+      iconKey
+    ]
+  ) {
+    return NEW_SPORTS_ICONS[
+      iconKey
+    ]
+  }
+
+
+  return NEW_SPORTS_ICONS.general
+}
+
+
+const NEW_REAL_ESTATE_ICONS = {
+  condo: {
+    emoji:
+      '🏢',
+
+    label:
+      'Condo',
+  },
+
+  house: {
+    emoji:
+      '🏠',
+
+    label:
+      'House',
+  },
+
+  rental: {
+    emoji:
+      '🔑',
+
+    label:
+      'Rental',
+  },
+
+  commercial: {
+    emoji:
+      '🏬',
+
+    label:
+      'Commercial',
+  },
+
+  land: {
+    emoji:
+      '🌱',
+
+    label:
+      'Land',
+  },
+
+  other: {
+    emoji:
+      '🏘️',
+
+    label:
+      'Real Estate',
+  },
+}
+
+
+function getNewRealEstateIcon(
+  pin
+) {
+  const explicitType =
+    normalizeCompareText(
+      pin?.newType
+    )
+
+
+  const category =
+    normalizeCompareText(
+      pin?.category
+    )
+
+
+  if (
+    explicitType !==
+      'real-estate' &&
+    !REAL_ESTATE_CATEGORIES.includes(
+      category
+    )
   ) {
     return null
   }
 
 
+  const rawKey =
+    normalizeCompareText(
+      pin?.realEstateIcon ||
+      pin?.realEstateType ||
+      category
+    )
+
+
+  const iconKey =
+    rawKey ===
+      'real-estate-other'
+      ? 'other'
+      : rawKey
+
+
   return (
-    NEW_SPORTS_ICONS[
+    NEW_REAL_ESTATE_ICONS[
       iconKey
     ] ||
-    null
+    NEW_REAL_ESTATE_ICONS.other
   )
 }
 
@@ -4757,27 +6365,14 @@ function appendEmojiMarkerIcon(
     )
 
 
-  const ringColor =
-    emoji ===
-      '🚒'
-      ? 'rgba(205, 48, 48, 0.68)'
-      : emoji ===
-          '🚔'
-        ? 'rgba(45, 92, 170, 0.68)'
-        : emoji ===
-            '🚌'
-          ? 'rgba(20, 20, 20, 0.50)'
-          : 'rgba(20, 20, 20, 0.28)'
-
-
   iconShell.textContent =
     emoji
 
   iconShell.style.width =
-    '24px'
+    '22px'
 
   iconShell.style.height =
-    '24px'
+    '22px'
 
   iconShell.style.display =
     'grid'
@@ -4786,25 +6381,34 @@ function appendEmojiMarkerIcon(
     'center'
 
   iconShell.style.flex =
-    '0 0 24px'
+    '0 0 22px'
 
+  // Android's full-colour emoji artwork was making mobile markers read
+  // like stickers. Force a restrained monochrome treatment on mobile only.
+  // Category/icon selection remains exactly the same.
   iconShell.style.border =
-    `1px solid ${ringColor}`
+    '0'
 
   iconShell.style.borderRadius =
-    '50%'
+    '0'
 
   iconShell.style.background =
-    'rgba(255, 255, 255, 0.94)'
+    'transparent'
 
   iconShell.style.boxShadow =
-    '0 1px 4px rgba(0, 0, 0, 0.34)'
+    'none'
+
+  iconShell.style.filter =
+    'grayscale(1) saturate(0) contrast(1.45) brightness(0.58)'
 
   iconShell.style.fontSize =
-    '16px'
+    '18px'
 
   iconShell.style.lineHeight =
     '1'
+
+  iconShell.style.opacity =
+    '0.92'
 
   iconShell.style.pointerEvents =
     'none'
@@ -6272,6 +7876,15 @@ function createMarker({
       : ''
 
 
+  const newCommunityIcon =
+    pinType ===
+    'new'
+      ? getNewCommunityIcon(
+          pin
+        )
+      : null
+
+
   const newBusinessIcon =
     pinType ===
     'new'
@@ -6294,6 +7907,15 @@ function createMarker({
     pinType ===
     'new'
       ? getNewSportsIcon(
+          pin
+        )
+      : null
+
+
+  const newRealEstateIcon =
+    pinType ===
+    'new'
+      ? getNewRealEstateIcon(
           pin
         )
       : null
@@ -6438,6 +8060,66 @@ function createMarker({
       pin,
       pinType,
     })
+  }
+  else if (
+    newCommunityIcon
+  ) {
+    element.className =
+      'geographic-pin-emoji-marker geographic-pin-new-community-emoji-marker'
+
+    element.style.width =
+      '32px'
+
+    element.style.height =
+      '32px'
+
+    element.style.padding =
+      '0'
+
+    element.style.margin =
+      '0'
+
+    element.style.border =
+      'none'
+
+    element.style.borderRadius =
+      '0'
+
+    element.style.background =
+      'transparent'
+
+    element.style.boxShadow =
+      'none'
+
+    element.style.cursor =
+      'pointer'
+
+    element.style.display =
+      'flex'
+
+    element.style.alignItems =
+      'center'
+
+    element.style.justifyContent =
+      'center'
+
+    element.style.appearance =
+      'none'
+
+    element.style.WebkitAppearance =
+      'none'
+
+    element.setAttribute(
+      'aria-label',
+      pin.title
+        ? `${newCommunityIcon.label} · ${pin.title}`
+        : `${newCommunityIcon.label} marker`
+    )
+
+    appendEmojiMarkerIcon(
+      element,
+      newCommunityIcon.emoji
+    )
   }
   else if (
     newBusinessIcon
@@ -6633,6 +8315,72 @@ function createMarker({
       newSportsIcon.emoji
     )
 
+
+    applyMarkerActivityPulse({
+      element,
+      pin,
+      pinType,
+    })
+  }
+  else if (
+    newRealEstateIcon
+  ) {
+    element.className =
+      'geographic-pin-emoji-marker geographic-pin-new-real-estate-emoji-marker'
+
+    element.style.width =
+      '32px'
+
+    element.style.height =
+      '32px'
+
+    element.style.padding =
+      '0'
+
+    element.style.margin =
+      '0'
+
+    element.style.border =
+      'none'
+
+    element.style.borderRadius =
+      '0'
+
+    element.style.background =
+      'transparent'
+
+    element.style.boxShadow =
+      'none'
+
+    element.style.cursor =
+      'pointer'
+
+    element.style.display =
+      'flex'
+
+    element.style.alignItems =
+      'center'
+
+    element.style.justifyContent =
+      'center'
+
+    element.style.appearance =
+      'none'
+
+    element.style.WebkitAppearance =
+      'none'
+
+    element.setAttribute(
+      'aria-label',
+      pin.title
+        ? `${newRealEstateIcon.label} · ${pin.title}`
+        : `${newRealEstateIcon.label} marker`
+    )
+
+    appendEmojiMarkerIcon(
+      element,
+      newRealEstateIcon.emoji
+    )
 
     applyMarkerActivityPulse({
       element,
@@ -7073,7 +8821,116 @@ function createMarker({
 
 
     if (
-      pin.category ||
+      pinType ===
+        'new' &&
+      COMMUNITY_CATEGORIES.includes(
+        normalizeCompareText(
+          pin.category
+        )
+      )
+    ) {
+      appendRinkStatus({
+        parent:
+          popupContent,
+
+        pin,
+      })
+
+
+      appendOutdoorRecreationUses({
+        parent:
+          popupContent,
+
+        pin,
+      })
+
+
+      appendAquaticsStatus({
+        parent:
+          popupContent,
+
+        pin,
+      })
+
+
+      const hasPoolPrograms =
+        Array.isArray(
+          pin?.poolPrograms
+        ) &&
+        pin.poolPrograms.length >
+          0
+
+
+      const hasRinkPrograms =
+        Array.isArray(
+          pin?.rinkPrograms
+        ) &&
+        pin.rinkPrograms.length >
+          0
+
+
+      if (
+        !hasPoolPrograms &&
+        !hasRinkPrograms
+      ) {
+        appendCommunityPrograms({
+          parent:
+            popupContent,
+
+          pin,
+        })
+      }
+
+
+      if (
+        hasPoolPrograms
+      ) {
+        appendCommunityPrograms({
+          parent:
+            popupContent,
+
+          pin,
+
+          programsOverride:
+            pin.poolPrograms,
+
+          headingText:
+            'SWIM',
+        })
+      }
+
+
+      if (
+        hasRinkPrograms
+      ) {
+        appendCommunityPrograms({
+          parent:
+            popupContent,
+
+          pin,
+
+          programsOverride:
+            pin.rinkPrograms,
+
+          headingText:
+            'SKATING',
+        })
+      }
+    }
+
+    if (
+      (
+        pin.category &&
+        !(
+          pinType ===
+            'new' &&
+          COMMUNITY_CATEGORIES.includes(
+            normalizeCompareText(
+              pin.category
+            )
+          )
+        )
+      ) ||
       (
         pinType ===
           'historic' &&
@@ -7168,18 +9025,6 @@ function createMarker({
     }
 
 
-    if (
-      pinType !==
-        'news'
-    ) {
-      appendRouteActions({
-        popupContent,
-        pin,
-        longitude,
-        latitude,
-        onDirections,
-      })
-    }
   }
 
 
@@ -7207,17 +9052,17 @@ function createMarker({
           )
         )
       )
-        ? 'min(145px, calc(100vw - 64px))'
-        : 'min(165px, calc(100vw - 56px))'
+        ? 'min(138px, calc(100vw - 72px))'
+        : 'min(150px, calc(100vw - 68px))'
 
     popupContent.style.maxWidth =
-      'calc(100vw - 56px)'
+      'calc(100vw - 68px)'
 
     popupContent.style.maxHeight =
       pinType ===
         'news'
-        ? '34vh'
-        : '38vh'
+        ? '31vh'
+        : '34vh'
 
     popupContent.style.overflowY =
       'auto'
@@ -7226,7 +9071,7 @@ function createMarker({
       'contain'
 
     popupContent.style.fontSize =
-      '0.78em'
+      '0.74em'
 
     popupContent.style.lineHeight =
       '1.2'
@@ -7265,13 +9110,24 @@ function createMarker({
       mobileTitle
     ) {
       mobileTitle.style.fontSize =
-        '10px'
+        '9px'
 
       mobileTitle.style.lineHeight =
         '1.18'
 
       mobileTitle.style.marginBottom =
         '4px'
+
+
+      if (
+        pinType ===
+          'historic'
+      ) {
+        popupContent.insertBefore(
+          mobileTitle,
+          popupContent.firstChild
+        )
+      }
     }
 
 
@@ -7285,7 +9141,7 @@ function createMarker({
       mobileLocation
     ) {
       mobileLocation.style.fontSize =
-        '8px'
+        '7px'
 
       mobileLocation.style.lineHeight =
         '1.2'
@@ -7321,6 +9177,80 @@ function createMarker({
     }
 
 
+    const mobileProgramShells =
+      popupContent.querySelectorAll(
+        '.geographic-community-programs'
+      )
+
+
+    mobileProgramShells.forEach(
+      (shell) => {
+        shell.style.marginTop =
+          '8px'
+
+        shell.style.paddingTop =
+          '7px'
+      }
+    )
+
+
+    popupContent
+      .querySelectorAll(
+        '.geographic-community-program-row'
+      )
+      .forEach(
+        (row) => {
+          row.style.marginTop =
+            '6px'
+        }
+      )
+
+
+    popupContent
+      .querySelectorAll(
+        '.geographic-community-program-when'
+      )
+      .forEach(
+        (when) => {
+          when.style.fontSize =
+            '8px'
+
+          when.style.marginBottom =
+            '1px'
+        }
+      )
+
+
+    popupContent
+      .querySelectorAll(
+        '.geographic-community-program-title'
+      )
+      .forEach(
+        (title) => {
+          title.style.fontSize =
+            '10px'
+
+          title.style.lineHeight =
+            '1.15'
+        }
+      )
+
+
+    popupContent
+      .querySelectorAll(
+        '.geographic-community-program-meta'
+      )
+      .forEach(
+        (meta) => {
+          meta.style.fontSize =
+            '8px'
+
+          meta.style.lineHeight =
+            '1.1'
+        }
+      )
+
+
     const mobileImage =
       popupContent.querySelector(
         'img'
@@ -7333,6 +9263,10 @@ function createMarker({
       const mobileImageLink =
         mobileImage.parentElement
 
+      const historicMobileImage =
+        pinType ===
+          'historic'
+
 
       if (
         mobileImageLink
@@ -7341,16 +9275,29 @@ function createMarker({
           'block'
 
         mobileImageLink.style.width =
-          '42px'
+          historicMobileImage
+            ? '132px'
+            : '88px'
 
         mobileImageLink.style.height =
-          '32px'
+          historicMobileImage
+            ? '99px'
+            : '66px'
 
         mobileImageLink.style.float =
-          'right'
+          historicMobileImage
+            ? 'none'
+            : 'right'
 
         mobileImageLink.style.margin =
-          '0 0 2px 6px'
+          historicMobileImage
+            ? '8px auto 10px'
+            : '0 0 5px 8px'
+
+        mobileImageLink.style.clear =
+          historicMobileImage
+            ? 'both'
+            : 'none'
 
         mobileImageLink.style.overflow =
           'hidden'
@@ -7361,16 +9308,24 @@ function createMarker({
 
 
       mobileImage.style.width =
-        '42px'
+        historicMobileImage
+          ? '132px'
+          : '88px'
 
       mobileImage.style.height =
-        '32px'
+        historicMobileImage
+          ? '99px'
+          : '66px'
 
       mobileImage.style.maxHeight =
-        '32px'
+        historicMobileImage
+          ? '99px'
+          : '66px'
 
       mobileImage.style.margin =
-        '0'
+        historicMobileImage
+          ? '0 auto'
+          : '0'
 
       mobileImage.style.objectFit =
         'cover'
@@ -7414,12 +9369,85 @@ function createMarker({
 
       maxWidth:
         compactMobilePopup
-          ? '178px'
+          ? '164px'
           : '280px',
     })
       .setDOMContent(
         popupContent
       )
+
+
+  popup.on(
+    'open',
+    () => {
+      const resetPopupScroll =
+        () => {
+          // Popup content and MapLibre's shell can both retain an old scroll
+          // position. Reset both after layout/image changes as well as now.
+          popupContent.scrollTop =
+            0
+
+          const popupShell =
+            popupContent.closest(
+              '.maplibregl-popup-content'
+            )
+
+          if (
+            popupShell
+          ) {
+            popupShell.scrollTop =
+              0
+
+
+            if (
+              compactMobilePopup
+            ) {
+              popupShell.style.padding =
+                '8px 9px'
+            }
+          }
+        }
+
+
+      resetPopupScroll()
+
+      window.requestAnimationFrame(
+        resetPopupScroll
+      )
+
+      window.setTimeout(
+        resetPopupScroll,
+        60
+      )
+
+      window.setTimeout(
+        resetPopupScroll,
+        180
+      )
+
+
+      const popupImage =
+        popupContent.querySelector(
+          'img'
+        )
+
+
+      if (
+        popupImage &&
+        !popupImage.complete
+      ) {
+        popupImage.addEventListener(
+          'load',
+          resetPopupScroll,
+          {
+            once:
+              true,
+          }
+        )
+      }
+    }
+  )
+
 
   const marker =
     new Marker({
@@ -9736,6 +11764,8 @@ function MapPins({
     selectedPinId,
     activePinFilter,
     newSubtypeFilter,
+    selectedLayer?.year,
+    selectedLayer?.layerType,
   ])
 
 
