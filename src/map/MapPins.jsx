@@ -6369,10 +6369,10 @@ function appendEmojiMarkerIcon(
     emoji
 
   iconShell.style.width =
-    '28px'
+    '22px'
 
   iconShell.style.height =
-    '28px'
+    '22px'
 
   iconShell.style.display =
     'grid'
@@ -6381,10 +6381,11 @@ function appendEmojiMarkerIcon(
     'center'
 
   iconShell.style.flex =
-    '0 0 24px'
+    '0 0 22px'
 
-  // Mobile markers should read as restrained map symbols rather than
-  // oversized emoji stickers. Keep all category/icon logic untouched.
+  // Android's full-colour emoji artwork was making mobile markers read
+  // like stickers. Force a restrained monochrome treatment on mobile only.
+  // Category/icon selection remains exactly the same.
   iconShell.style.border =
     '0'
 
@@ -6398,16 +6399,16 @@ function appendEmojiMarkerIcon(
     'none'
 
   iconShell.style.filter =
-    'none'
+    'grayscale(1) saturate(0) contrast(1.45) brightness(0.58)'
 
   iconShell.style.fontSize =
-    '19px'
+    '18px'
 
   iconShell.style.lineHeight =
     '1'
 
   iconShell.style.opacity =
-    '0.94'
+    '0.92'
 
   iconShell.style.pointerEvents =
     'none'
