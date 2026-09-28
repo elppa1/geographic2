@@ -6,7 +6,6 @@ import {
   useRef,
   useState,
 } from 'react'
-
 import {
   LngLatBounds,
   Map,
@@ -14,43 +13,30 @@ import {
   Popup,
   setWorkerUrl,
 } from 'maplibre-gl'
-
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
-
 import 'maplibre-gl/dist/maplibre-gl.css'
-
 import {
   CITIES,
 } from '../cities/index.js'
-
 import {
   addHistoricalLayers,
   showHistoricalLayer,
 } from './historicalLayers.js'
-
 import {
   addStreetLabels,
   setStreetLabelsVisible,
 } from './streetLabels.js'
-
 import MapControls from './MapControls.jsx'
 import MapPins from './MapPins.jsx'
 import DirectionsPanel from './DirectionsPanel.jsx'
-
 import {
   getDirectRoute,
 } from './routeService.js'
-
-
 setWorkerUrl(
   workerUrl
 )
-
-
 const TORONTO_WEATHER_URL =
   'https://api.open-meteo.com/v1/forecast?latitude=43.6532&longitude=-79.3832&current=temperature_2m,is_day,precipitation,rain,snowfall,weather_code,cloud_cover&daily=sunrise,sunset&timezone=America%2FToronto&forecast_days=1'
-
-
 function clamp01(
   value
 ) {
@@ -62,14 +48,11 @@ function clamp01(
     )
   )
 }
-
-
 function getAtmosphere(
   weather
 ) {
   const now =
     Date.now()
-
   const sunrise =
     weather?.daily
       ?.sunrise?.[0]
@@ -78,7 +61,6 @@ function getAtmosphere(
             .sunrise[0]
         ).getTime()
       : null
-
   const sunset =
     weather?.daily
       ?.sunset?.[0]
@@ -87,13 +69,11 @@ function getAtmosphere(
             .sunset[0]
         ).getTime()
       : null
-
   let night =
     weather?.current
       ?.is_day === 0
       ? 1
       : 0
-
   if (
     sunrise &&
     sunset
@@ -101,19 +81,15 @@ function getAtmosphere(
     const dawnStart =
       sunrise -
       45 * 60 * 1000
-
     const dawnEnd =
       sunrise +
       35 * 60 * 1000
-
     const duskStart =
       sunset -
       60 * 60 * 1000
-
     const duskEnd =
       sunset +
       50 * 60 * 1000
-
     if (
       now <
       dawnStart
@@ -159,7 +135,6 @@ function getAtmosphere(
       night = 1
     }
   }
-
   const cloud =
     clamp01(
       (
@@ -169,35 +144,30 @@ function getAtmosphere(
       ) /
       100
     )
-
   const rain =
     Number(
       weather?.current
         ?.rain ||
       0
     )
-
   const precipitation =
     Number(
       weather?.current
         ?.precipitation ||
       0
     )
-
   const snowfall =
     Number(
       weather?.current
         ?.snowfall ||
       0
     )
-
   const code =
     Number(
       weather?.current
         ?.weather_code ||
       0
     )
-
   const fog =
     [
       45,
@@ -205,13 +175,11 @@ function getAtmosphere(
     ].includes(
       code
     )
-
   const darkness =
     clamp01(
       night * 0.56 +
       cloud * 0.12
     )
-
   return {
     darkness,
     cloud,
@@ -229,8 +197,6 @@ function getAtmosphere(
       0,
   }
 }
-
-
 function AtmosphereLayer({
   atmosphere,
 }) {
@@ -239,14 +205,12 @@ function AtmosphereLayer({
   ) {
     return null
   }
-
   const style = {
     '--atmosphere-darkness':
       atmosphere.darkness,
     '--atmosphere-cloud':
       atmosphere.cloud,
   }
-
   return (
     <div
       className={[
@@ -262,7 +226,6 @@ function AtmosphereLayer({
     >
       <div className="geographic-atmosphere-shade" />
       <div className="geographic-atmosphere-cloud-veil" />
-
       {atmosphere.fog && (
         <div className="geographic-atmosphere-fog">
           <span />
@@ -270,7 +233,6 @@ function AtmosphereLayer({
           <span />
         </div>
       )}
-
       {atmosphere.rain && (
         <>
           <div className="geographic-atmosphere-rain geographic-atmosphere-rain-back" />
@@ -279,33 +241,26 @@ function AtmosphereLayer({
           <div className="geographic-atmosphere-rain-mist" />
         </>
       )}
-
       {atmosphere.snow && (
         <>
           <div className="geographic-atmosphere-snow geographic-atmosphere-snow-back">
             <span />
           </div>
-
           <div className="geographic-atmosphere-snow geographic-atmosphere-snow-mid">
             <span />
           </div>
-
           <div className="geographic-atmosphere-snow geographic-atmosphere-snow-front">
             <span />
           </div>
-
           <div className="geographic-atmosphere-snow-gust" />
         </>
       )}
-
       {atmosphere.storm && (
         <div className="geographic-atmosphere-lightning" />
       )}
     </div>
   )
 }
-
-
 function HalloweenHistoricLayer({
   active,
 }) {
@@ -314,35 +269,26 @@ function HalloweenHistoricLayer({
   ) {
     return null
   }
-
   return (
     <div
       className="halloween-historic-atmosphere"
       aria-hidden="true"
     >
       <div className="halloween-historic-cold-shade" />
-
       <div className="halloween-historic-fog halloween-historic-fog-one" />
       <div className="halloween-historic-fog halloween-historic-fog-two" />
       <div className="halloween-historic-fog halloween-historic-fog-three" />
-
       <div className="halloween-historic-wind halloween-historic-wind-one" />
       <div className="halloween-historic-wind halloween-historic-wind-two" />
-
       <div className="halloween-historic-blue-lightning halloween-historic-blue-lightning-one" />
       <div className="halloween-historic-blue-lightning halloween-historic-blue-lightning-two" />
     </div>
   )
 }
-
-
 const ROUTE_SOURCE_ID =
   'geographic-route'
-
 const ROUTE_LAYER_ID =
   'geographic-route-line'
-
-
 function getEnhancedTileUrl({
   cityKey,
   layerType,
@@ -356,8 +302,6 @@ function getEnhancedTileUrl({
     '{z}/{x}/{y}.png'
   )
 }
-
-
 function getHistoricLayerFromCity({
   city,
   layerType,
@@ -367,8 +311,6 @@ function getHistoricLayerFromCity({
     Number(
       year
     )
-
-
   if (
     !city ||
     !Number.isFinite(
@@ -377,8 +319,6 @@ function getHistoricLayerFromCity({
   ) {
     return null
   }
-
-
   const collection =
     layerType ===
       'map'
@@ -387,32 +327,22 @@ function getHistoricLayerFromCity({
           'aerial'
         ? city.aerials
         : null
-
-
   const item =
     collection?.[
       numericYear
     ]
-
-
   if (
     !item?.url
   ) {
     return null
   }
-
-
   return {
     year:
       numericYear,
-
     layerType,
-
     ...item,
   }
 }
-
-
 function getClosestHistoricLayer({
   city,
   year,
@@ -421,8 +351,6 @@ function getClosestHistoricLayer({
     Number(
       year
     )
-
-
   if (
     !city ||
     !Number.isFinite(
@@ -431,8 +359,6 @@ function getClosestHistoricLayer({
   ) {
     return null
   }
-
-
   const layers = [
     ...Object.entries(
       city.maps ||
@@ -456,14 +382,11 @@ function getClosestHistoricLayer({
             Number(
               layerYear
             ),
-
           layerType:
             'map',
-
           ...item,
         })
       ),
-
     ...Object.entries(
       city.aerials ||
       {}
@@ -486,10 +409,8 @@ function getClosestHistoricLayer({
             Number(
               layerYear
             ),
-
           layerType:
             'aerial',
-
           ...item,
         })
       ),
@@ -500,8 +421,6 @@ function getClosestHistoricLayer({
           layer.year
         )
     )
-
-
   return layers.reduce(
     (
       closest,
@@ -512,43 +431,31 @@ function getClosestHistoricLayer({
       ) {
         return layer
       }
-
-
       const difference =
         Math.abs(
           layer.year -
           numericYear
         )
-
-
       const closestDifference =
         Math.abs(
           closest.year -
           numericYear
         )
-
-
       if (
         difference <
         closestDifference
       ) {
         return layer
       }
-
-
       if (
         difference >
         closestDifference
       ) {
         return closest
       }
-
-
       const preferredType =
         city.defaultMode ||
         'aerial'
-
-
       if (
         layer.layerType ===
           preferredType &&
@@ -557,23 +464,17 @@ function getClosestHistoricLayer({
       ) {
         return layer
       }
-
-
       if (
         layer.year >
         closest.year
       ) {
         return layer
       }
-
-
       return closest
     },
     null
   )
 }
-
-
 function getHistoricSeeItThenLayer({
   city,
   pin,
@@ -585,54 +486,40 @@ function getHistoricSeeItThenLayer({
     const manualLayer =
       getHistoricLayerFromCity({
         city,
-
         layerType:
           pin.layerOverrideType,
-
         year:
           pin.layerOverrideYear,
       })
-
-
     if (
       manualLayer
     ) {
       return manualLayer
     }
   }
-
-
   const storedAutoLayer =
     Array.isArray(
       pin?.autoLayers
     )
       ? pin.autoLayers[0]
       : null
-
-
   if (
     storedAutoLayer
   ) {
     const autoLayer =
       getHistoricLayerFromCity({
         city,
-
         layerType:
           storedAutoLayer.layerType,
-
         year:
           storedAutoLayer.year,
       })
-
-
     if (
       autoLayer
     ) {
       return autoLayer
     }
   }
-
-
   const eventYear =
     String(
       pin?.eventDate ||
@@ -643,264 +530,191 @@ function getHistoricSeeItThenLayer({
       )?.[1] ||
     pin?.year ||
     pin?.startYear
-
-
   return getClosestHistoricLayer({
     city,
     year:
       eventYear,
   })
 }
-
-
 const GeographicMap =
   forwardRef(
     function GeographicMap(
       {
         cityKey =
           'toronto',
-
         selectedLayer,
-
         homeLayer,
-
         opacity =
           1,
-
         enhanced =
           false,
-
         activePinFilter =
           'historic',
-
         onChangePinFilter,
-
         historicIssueFilter =
           'all',
-
         historicCategoryFilter =
           'all',
-
         historicLayerFilter =
           'all',
-
         onSelectHistoricalLayer,
-
         newsRangeFilter =
           'curated',
-
         newSubtypeFilter =
           'all',
-
         onChangeNewSubtypeFilter,
-
         newBusinessRangeFilter =
           '30',
       },
-
       ref
     ) {
       const mapContainerRef =
         useRef(null)
-
       const mapRef =
         useRef(null)
-
       const userMarkerRef =
         useRef(null)
-
       const searchMarkerRef =
         useRef(null)
-
       const searchPopupRef =
         useRef(null)
-
       const routeStepMarkerRef =
         useRef(null)
-
       const userPositionRef =
         useRef(null)
 
       const displayedUserPositionRef =
         useRef(null)
-
       const userWatchIdRef =
         useRef(null)
-
       const followUserRef =
         useRef(false)
-
       const manualCameraUntilRef =
         useRef(0)
-
       const compassHandlerRef =
         useRef(null)
-
       const compassHeadingRef =
         useRef(null)
-
       const compassLastUpdateRef =
         useRef(0)
-
       const compassSensorLastSeenRef =
         useRef(0)
-
       const enhancedSourceRef =
         useRef(null)
-
-
       const [
         layersReady,
         setLayersReady,
       ] =
         useState(false)
-
-
       const [
         mapReady,
         setMapReady,
       ] =
         useState(false)
 
-
+      const [
+        locationTrackingActive,
+        setLocationTrackingActive,
+      ] =
+        useState(false)
       const [
         selectedPinId,
         setSelectedPinId,
       ] =
         useState(null)
-
-
       const [
         route,
         setRoute,
       ] =
         useState(null)
-
-
       const [
         routeDestination,
         setRouteDestination,
       ] =
         useState(null)
-
-
       const [
         routeLoading,
         setRouteLoading,
       ] =
         useState(false)
-
-
       const [
         routeError,
         setRouteError,
       ] =
         useState('')
-
-
       const city =
         CITIES[
           cityKey
         ]
-
-
       useImperativeHandle(
         ref,
         () => ({
           getMap() {
             return mapRef.current
           },
-
-
           getUserPosition() {
             return userPositionRef.current
           },
-
-
           clearSelectedPin() {
             setSelectedPinId(
               null
             )
           },
-
-
           startLocationTracking() {
             return startLocationTracking()
           },
-
-
           stopLocationTracking() {
             stopLocationTracking()
           },
         }),
         []
       )
-
-
       // ========================================================
       // CONTENT FILTER
       // ========================================================
-
       function changePinFilter(
         nextFilter
       ) {
         onChangePinFilter?.(
           nextFilter
         )
-
-
         setSelectedPinId(
           null
         )
       }
-
-
       function changeNewSubtypeFilter(
         nextSubtype
       ) {
         onChangeNewSubtypeFilter?.(
           nextSubtype
         )
-
-
         setSelectedPinId(
           null
         )
       }
-
-
       // ========================================================
       // CREATE MAP
       // ========================================================
-
       const [
     atmosphere,
     setAtmosphere,
   ] =
     useState(null)
-
-
       const [
         atmosphereTest,
         setAtmosphereTest,
       ] =
         useState('live')
-
-
       const [
         atmosphereEnabled,
         setAtmosphereEnabled,
       ] =
         useState(false)
-
-
   useEffect(() => {
     let cancelled =
       false
-
     let weatherData =
       null
-
     async function refreshWeather() {
       try {
         const response =
@@ -911,7 +725,6 @@ const GeographicMap =
                 'no-store',
             }
           )
-
         if (
           !response.ok
         ) {
@@ -919,10 +732,8 @@ const GeographicMap =
             `Weather request failed: ${response.status}`
           )
         }
-
         weatherData =
           await response.json()
-
         if (
           !cancelled
         ) {
@@ -941,15 +752,12 @@ const GeographicMap =
         )
       }
     }
-
     refreshWeather()
-
     const weatherTimer =
       window.setInterval(
         refreshWeather,
         15 * 60 * 1000
       )
-
     const lightTimer =
       window.setInterval(
         () => {
@@ -966,22 +774,17 @@ const GeographicMap =
         },
         60 * 1000
       )
-
     return () => {
       cancelled =
         true
-
       window.clearInterval(
         weatherTimer
       )
-
       window.clearInterval(
         lightTimer
       )
     }
   }, [])
-
-
   useEffect(() => {
     window.setAtmosphereTest =
       (
@@ -995,7 +798,6 @@ const GeographicMap =
           )
             .trim()
             .toLowerCase()
-
         const allowed = [
           'live',
           'snow',
@@ -1005,7 +807,6 @@ const GeographicMap =
           'night',
           'halloween',
         ]
-
         if (
           !allowed.includes(
             normalized
@@ -1014,25 +815,19 @@ const GeographicMap =
           console.warn(
             'ATMOSPHERE TEST: use live, snow, rain, fog, storm, night, or halloween'
           )
-
           return
         }
-
         setAtmosphereTest(
           normalized
         )
-
         console.log(
           `ATMOSPHERE TEST: ${normalized.toUpperCase()}`
         )
       }
-
     return () => {
       delete window.setAtmosphereTest
     }
   }, [])
-
-
   const displayedAtmosphere =
     atmosphereTest ===
       'halloween'
@@ -1045,19 +840,14 @@ const GeographicMap =
         ? {
             darkness:
               0.28,
-
             cloud:
               0.92,
-
             fog:
               true,
-
             rain:
               false,
-
             snow:
               true,
-
             storm:
               false,
           }
@@ -1066,19 +856,14 @@ const GeographicMap =
           ? {
               darkness:
                 0.38,
-
               cloud:
                 1,
-
               fog:
                 true,
-
               rain:
                 true,
-
               snow:
                 false,
-
               storm:
                 false,
             }
@@ -1087,19 +872,14 @@ const GeographicMap =
             ? {
                 darkness:
                   0.18,
-
                 cloud:
                   0.88,
-
                 fog:
                   true,
-
                 rain:
                   false,
-
                 snow:
                   false,
-
                 storm:
                   false,
               }
@@ -1108,43 +888,31 @@ const GeographicMap =
               ? {
                   darkness:
                     0.62,
-
                   cloud:
                     1,
-
                   fog:
                     true,
-
                   rain:
                     true,
-
                   snow:
                     false,
-
                   storm:
                     true,
                 }
               : {
                   darkness:
                     0.72,
-
                   cloud:
                     0.35,
-
                   fog:
                     false,
-
                   rain:
                     false,
-
                   snow:
                     false,
-
                   storm:
                     false,
                 }
-
-
   useEffect(() => {
         if (
           !mapContainerRef.current ||
@@ -1153,66 +921,48 @@ const GeographicMap =
         ) {
           return
         }
-
-
         const map =
           new Map({
             container:
               mapContainerRef.current,
-
             attributionControl:
               false,
-
             style: {
               version:
                 8,
-
               glyphs:
                 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
-
               sources: {
                 osm: {
                   type:
                     'raster',
-
                   tiles: [
                     'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   ],
-
                   tileSize:
                     256,
-
                   attribution:
                     '© OpenStreetMap contributors',
                 },
               },
-
               layers: [
                 {
                   id:
                     'osm',
-
                   type:
                     'raster',
-
                   source:
                     'osm',
                 },
               ],
             },
-
             center:
               city.center,
-
             zoom:
               city.zoom,
           })
-
-
         mapRef.current =
           map
-
-
         map.on(
           'load',
           () => {
@@ -1220,25 +970,17 @@ const GeographicMap =
               map,
               city,
             })
-
-
             addStreetLabels({
               map,
             })
-
-
             setLayersReady(
               true
             )
-
-
             setMapReady(
               true
             )
           }
         )
-
-
         map.on(
           'error',
           (event) => {
@@ -1248,51 +990,31 @@ const GeographicMap =
             )
           }
         )
-
-
         return () => {
           setLayersReady(
             false
           )
-
-
           setMapReady(
             false
           )
-
-
           stopLocationTracking()
-
-
           userMarkerRef.current?.remove()
-
           searchMarkerRef.current?.remove()
-
           searchPopupRef.current?.remove()
-
           routeStepMarkerRef.current?.remove()
-
-
           map.remove()
-
-
           mapRef.current =
             null
         }
       }, [
         city,
       ])
-
-
       // ========================================================
       // HISTORICAL LAYER
       // ========================================================
-
       useEffect(() => {
         const map =
           mapRef.current
-
-
         if (
           !map ||
           !city ||
@@ -1301,25 +1023,17 @@ const GeographicMap =
         ) {
           return
         }
-
-
         showHistoricalLayer({
           map,
           city,
-
           layerType:
             selectedLayer.layerType,
-
           year:
             selectedLayer.year,
-
           opacity,
         })
-
-
         setStreetLabelsVisible({
           map,
-
           visible:
             selectedLayer.layerType ===
             'aerial',
@@ -1330,17 +1044,12 @@ const GeographicMap =
         selectedLayer,
         opacity,
       ])
-
-
       // ========================================================
       // ENHANCE
       // ========================================================
-
       useEffect(() => {
         const map =
           mapRef.current
-
-
         if (
           !map ||
           !city ||
@@ -1349,27 +1058,19 @@ const GeographicMap =
         ) {
           return
         }
-
-
         const restorePreviousEnhancedSource =
           () => {
             const previous =
               enhancedSourceRef.current
-
-
             if (
               !previous
             ) {
               return
             }
-
-
             const previousSource =
               map.getSource(
                 previous.sourceId
               )
-
-
             if (
               previousSource &&
               typeof previousSource.setTiles ===
@@ -1379,17 +1080,11 @@ const GeographicMap =
                 previous.originalUrl,
               ])
             }
-
-
             enhancedSourceRef.current =
               null
           }
-
-
         const sourceId =
           `${city.key}-${selectedLayer.layerType}-${selectedLayer.year}`
-
-
         // Normal historical browsing should NOT call setTiles().
         // The source already has selectedLayer.url from addHistoricalLayers().
         // Calling setTiles() again invalidates MapLibre's raster tile cache
@@ -1399,15 +1094,10 @@ const GeographicMap =
           !enhanced
         ) {
           restorePreviousEnhancedSource()
-
           return
         }
-
-
         const previous =
           enhancedSourceRef.current
-
-
         if (
           previous &&
           previous.sourceId !==
@@ -1415,14 +1105,10 @@ const GeographicMap =
         ) {
           restorePreviousEnhancedSource()
         }
-
-
         const source =
           map.getSource(
             sourceId
           )
-
-
         if (
           !source ||
           typeof source.setTiles !==
@@ -1430,30 +1116,21 @@ const GeographicMap =
         ) {
           return
         }
-
-
         source.setTiles([
           getEnhancedTileUrl({
             cityKey:
               city.key,
-
             layerType:
               selectedLayer.layerType,
-
             year:
               selectedLayer.year,
           }),
         ])
-
-
         enhancedSourceRef.current = {
           sourceId,
-
           originalUrl:
             selectedLayer.url,
         }
-
-
         map.triggerRepaint()
       }, [
         city,
@@ -1461,8 +1138,6 @@ const GeographicMap =
         selectedLayer,
         enhanced,
       ])
-
-
       // ========================================================
       // GPS + WALKING FOLLOW + COMPASS
       // ========================================================
@@ -1530,7 +1205,7 @@ const GeographicMap =
           Math.abs(
             delta
           ) <
-            3.5
+            6
         ) {
           return previous
         }
@@ -1539,7 +1214,7 @@ const GeographicMap =
         const smoothed =
           normalizeHeading(
             previous +
-            delta * 0.16
+            delta * 0.10
           )
 
 
@@ -1553,7 +1228,7 @@ const GeographicMap =
 
       function pauseAutomaticCamera(
         milliseconds =
-          5000
+          8000
       ) {
         manualCameraUntilRef.current =
           Date.now() +
@@ -1597,7 +1272,7 @@ const GeographicMap =
         if (
           now -
           compassLastUpdateRef.current <
-          220
+          350
         ) {
           return
         }
@@ -1625,7 +1300,7 @@ const GeographicMap =
           Math.abs(
             delta
           ) <
-            5
+            8
         ) {
           return
         }
@@ -1640,7 +1315,7 @@ const GeographicMap =
             heading,
 
           duration:
-            280,
+            360,
 
           easing:
             (value) =>
@@ -2003,13 +1678,13 @@ const GeographicMap =
 
         return (
           point.x <
-            width * 0.22 ||
+            width * 0.15 ||
           point.x >
-            width * 0.78 ||
+            width * 0.85 ||
           point.y <
-            height * 0.24 ||
+            height * 0.18 ||
           point.y >
-            height * 0.76
+            height * 0.82
         )
       }
 
@@ -2128,20 +1803,20 @@ const GeographicMap =
             accuracy
           ) &&
           accuracy >
-            80
+            60
 
         const tinyJitter =
           Boolean(
             previousDisplayed
           ) &&
           movement <
-            3 &&
+            5 &&
           (
             !Number.isFinite(
               accuracy
             ) ||
             accuracy <=
-              35
+              45
           )
 
 
@@ -2190,14 +1865,14 @@ const GeographicMap =
               latitude,
             ],
 
-            // Time Machine should begin at a real walking scale instead of
-            // the city-wide view. A normal GPS tap also gets this close view.
+            // Start at a neighbourhood scale instead of dropping almost
+            // onto the user's building. After this first lock, manual zoom wins.
             zoom:
               walkingZoom
-                ? 17.25
+                ? 15
                 : Math.max(
                     map.getZoom(),
-                    16
+                    15
                   ),
 
             duration:
@@ -2314,6 +1989,18 @@ const GeographicMap =
 
         userWatchIdRef.current =
           null
+
+        displayedUserPositionRef.current =
+          null
+
+        userMarkerRef.current?.remove()
+
+        userMarkerRef.current =
+          null
+
+        setLocationTrackingActive(
+          false
+        )
       }
 
 
@@ -2339,18 +2026,19 @@ const GeographicMap =
 
         // iOS requires compass permission to be requested from the same
         // user gesture that starts the experience.
-        await startCompassTracking()
+        try {
+          await startCompassTracking()
 
 
-        const location =
-          await getUserLocation(
-            true,
-            true
-          )
+          const location =
+            await getUserLocation(
+              true,
+              true
+            )
 
 
-        userWatchIdRef.current =
-          navigator.geolocation.watchPosition(
+          userWatchIdRef.current =
+            navigator.geolocation.watchPosition(
             (
               position
             ) => {
@@ -2392,7 +2080,32 @@ const GeographicMap =
           )
 
 
-        return location
+          setLocationTrackingActive(
+            true
+          )
+
+
+          return location
+        } catch (
+          error
+        ) {
+          stopLocationTracking()
+          throw error
+        }
+      }
+
+
+      async function toggleLocationTracking() {
+        if (
+          followUserRef.current
+        ) {
+          stopLocationTracking()
+          return false
+        }
+
+
+        await startLocationTracking()
+        return true
       }
 
 
@@ -2415,8 +2128,12 @@ const GeographicMap =
               if (
                 event?.originalEvent
               ) {
+                // Cancel any compass/GPS easing already in flight so a pinch,
+                // drag or rotate gesture immediately belongs to the user.
+                map.stop()
+
                 pauseAutomaticCamera(
-                  5000
+                  8000
                 )
               }
             }
@@ -2471,22 +2188,14 @@ const GeographicMap =
       )
 
 
-      function locateUser() {
-        return startLocationTracking()
-      }
-
-
       // ========================================================
       // DRAW ROUTE
       // ========================================================
-
       function drawRoute(
         nextRoute
       ) {
         const map =
           mapRef.current
-
-
         if (
           !map ||
           !Array.isArray(
@@ -2497,31 +2206,22 @@ const GeographicMap =
         ) {
           return
         }
-
-
         const geojson = {
           type:
             'Feature',
-
           properties:
             {},
-
           geometry: {
             type:
               'LineString',
-
             coordinates:
               nextRoute.coordinates,
           },
         }
-
-
         const existingSource =
           map.getSource(
             ROUTE_SOURCE_ID
           )
-
-
         if (
           existingSource
         ) {
@@ -2534,49 +2234,35 @@ const GeographicMap =
             {
               type:
                 'geojson',
-
               data:
                 geojson,
             }
           )
-
-
           map.addLayer({
             id:
               ROUTE_LAYER_ID,
-
             type:
               'line',
-
             source:
               ROUTE_SOURCE_ID,
-
             paint: {
               'line-color':
                 '#2f80ed',
-
               'line-width':
                 5,
-
               'line-opacity':
                 0.9,
             },
-
             layout: {
               'line-cap':
                 'round',
-
               'line-join':
                 'round',
             },
           })
         }
-
-
         const bounds =
           new LngLatBounds()
-
-
         nextRoute.coordinates.forEach(
           (coordinate) => {
             bounds.extend(
@@ -2584,28 +2270,21 @@ const GeographicMap =
             )
           }
         )
-
-
         map.fitBounds(
           bounds,
           {
             padding:
               70,
-
             duration:
               900,
-
             maxZoom:
               17,
           }
         )
       }
-
-
       // ========================================================
       // CURRENT MANEUVER
       // ========================================================
-
       const handleStepChange =
         useCallback(
           (
@@ -2613,15 +2292,11 @@ const GeographicMap =
           ) => {
             const map =
               mapRef.current
-
-
             if (
               !map
             ) {
               return
             }
-
-
             if (
               !step ||
               !Array.isArray(
@@ -2629,23 +2304,15 @@ const GeographicMap =
               )
             ) {
               routeStepMarkerRef.current?.remove()
-
-
               routeStepMarkerRef.current =
                 null
-
-
               return
             }
-
-
             const [
               longitude,
               latitude,
             ] =
               step.coordinate
-
-
             if (
               !Number.isFinite(
                 Number(
@@ -2660,8 +2327,6 @@ const GeographicMap =
             ) {
               return
             }
-
-
             if (
               !routeStepMarkerRef.current
             ) {
@@ -2669,16 +2334,11 @@ const GeographicMap =
                 document.createElement(
                   'div'
                 )
-
-
               element.className =
                 'route-step-marker'
-
-
               routeStepMarkerRef.current =
                 new Marker({
                   element,
-
                   anchor:
                     'center',
                 })
@@ -2696,32 +2356,25 @@ const GeographicMap =
                   latitude,
                 ])
             }
-
-
             map.easeTo({
               center: [
                 longitude,
                 latitude,
               ],
-
               zoom:
                 Math.max(
                   map.getZoom(),
                   17
                 ),
-
               duration:
                 550,
             })
           },
           []
         )
-
-
       // ========================================================
       // ROUTING
       // ========================================================
-
       const startRoute =
         useCallback(
           async (
@@ -2729,45 +2382,29 @@ const GeographicMap =
           ) => {
             try {
               routeStepMarkerRef.current?.remove()
-
-
               routeStepMarkerRef.current =
                 null
-
-
               setRouteLoading(
                 true
               )
-
-
               setRouteError(
                 ''
               )
-
-
               setRouteDestination(
                 destination
               )
-
-
               const start =
                 await getUserLocation(
                   false
                 )
-
-
               const nextRoute =
                 await getDirectRoute({
                   start,
                   destination,
                 })
-
-
               setRoute(
                 nextRoute
               )
-
-
               drawRoute(
                 nextRoute
               )
@@ -2778,13 +2415,9 @@ const GeographicMap =
                 'ROUTE ERROR:',
                 error
               )
-
-
               setRouteError(
                 'ROUTE UNAVAILABLE'
               )
-
-
               setRoute(
                 null
               )
@@ -2798,8 +2431,6 @@ const GeographicMap =
             getUserLocation,
           ]
         )
-
-
       const handleDirections =
         useCallback(
           (
@@ -2813,20 +2444,12 @@ const GeographicMap =
             startRoute,
           ]
         )
-
-
       function clearRoute() {
         const map =
           mapRef.current
-
-
         routeStepMarkerRef.current?.remove()
-
-
         routeStepMarkerRef.current =
           null
-
-
         if (
           map?.getLayer(
             ROUTE_LAYER_ID
@@ -2836,8 +2459,6 @@ const GeographicMap =
             ROUTE_LAYER_ID
           )
         }
-
-
         if (
           map?.getSource(
             ROUTE_SOURCE_ID
@@ -2847,28 +2468,19 @@ const GeographicMap =
             ROUTE_SOURCE_ID
           )
         }
-
-
         setRoute(
           null
         )
-
-
         setRouteDestination(
           null
         )
-
-
         setRouteError(
           ''
         )
       }
-
-
       // ========================================================
       // HISTORIC · SEE IT THEN
       // ========================================================
-
       const handleHistoricSeeItThen =
         useCallback(
           (
@@ -2876,28 +2488,20 @@ const GeographicMap =
           ) => {
             const map =
               mapRef.current
-
-
             if (
               !map ||
               !pin
             ) {
               return
             }
-
-
             const longitude =
               Number(
                 pin.longitude
               )
-
-
             const latitude =
               Number(
                 pin.latitude
               )
-
-
             if (
               !Number.isFinite(
                 longitude
@@ -2908,15 +2512,11 @@ const GeographicMap =
             ) {
               return
             }
-
-
             const targetLayer =
               getHistoricSeeItThenLayer({
                 city,
                 pin,
               })
-
-
             if (
               pin.id
             ) {
@@ -2924,8 +2524,6 @@ const GeographicMap =
                 pin.id
               )
             }
-
-
             if (
               targetLayer
             ) {
@@ -2933,15 +2531,11 @@ const GeographicMap =
                 targetLayer
               )
             }
-
-
             const requestedZoom =
               Number(
                 pin.seeItThenZoom ||
                 16
               )
-
-
             const zoom =
               Number.isFinite(
                 requestedZoom
@@ -2954,16 +2548,12 @@ const GeographicMap =
                     )
                   )
                 : 16
-
-
             map.flyTo({
               center: [
                 longitude,
                 latitude,
               ],
-
               zoom,
-
               duration:
                 900,
             })
@@ -2973,27 +2563,20 @@ const GeographicMap =
             onSelectHistoricalLayer,
           ]
         )
-
-
       // ========================================================
       // HISTORIC · ISSUE HOME
       // ========================================================
-
       const handleHistoricIssueHome =
         useCallback(
           () => {
             const map =
               mapRef.current
-
-
             if (
               !map ||
               !city
             ) {
               return
             }
-
-
             if (
               homeLayer
             ) {
@@ -3001,20 +2584,14 @@ const GeographicMap =
                 homeLayer
               )
             }
-
-
             setSelectedPinId(
               null
             )
-
-
             map.flyTo({
               center:
                 city.center,
-
               zoom:
                 city.zoom,
-
               duration:
                 900,
             })
@@ -3025,39 +2602,28 @@ const GeographicMap =
             onSelectHistoricalLayer,
           ]
         )
-
-
       // ========================================================
       // SEARCH RESULT
       // ========================================================
-
       function handleSearchResult(
         result
       ) {
         const map =
           mapRef.current
-
-
         if (
           !map ||
           !result
         ) {
           return
         }
-
-
         const longitude =
           Number(
             result.longitude
           )
-
-
         const latitude =
           Number(
             result.latitude
           )
-
-
         if (
           !Number.isFinite(
             longitude
@@ -3068,25 +2634,16 @@ const GeographicMap =
         ) {
           return
         }
-
-
         if (
           result.type ===
           'geographic'
         ) {
           searchMarkerRef.current?.remove()
-
           searchPopupRef.current?.remove()
-
-
           searchMarkerRef.current =
             null
-
-
           searchPopupRef.current =
             null
-
-
           if (
             result.pinType ===
               'historic' &&
@@ -3109,8 +2666,6 @@ const GeographicMap =
                 'new'
               )
             }
-
-
             onChangeNewSubtypeFilter?.(
               'all'
             )
@@ -3125,91 +2680,56 @@ const GeographicMap =
               'news'
             )
           }
-
-
           setSelectedPinId(
             result.id
           )
-
-
           map.flyTo({
             center: [
               longitude,
               latitude,
             ],
-
             zoom:
               Math.max(
                 map.getZoom(),
                 16
               ),
-
             duration:
               900,
           })
-
-
           return
         }
-
-
         setSelectedPinId(
           null
         )
-
-
         searchMarkerRef.current?.remove()
-
         searchPopupRef.current?.remove()
-
-
         searchMarkerRef.current =
           null
-
-
         searchPopupRef.current =
           null
-
-
         const markerElement =
           document.createElement(
             'div'
           )
-
-
         markerElement.className =
           'search-location-marker'
-
-
         const popupContent =
           document.createElement(
             'div'
           )
-
-
         popupContent.className =
           'geographic-pin-card'
-
-
         const title =
           document.createElement(
             'div'
           )
-
-
         title.className =
           'geographic-pin-title'
-
-
         title.textContent =
           result.name
-
-
         popupContent.appendChild(
           title
         )
-
-
         if (
           result.subtitle
         ) {
@@ -3217,99 +2737,64 @@ const GeographicMap =
             document.createElement(
               'div'
             )
-
-
           subtitle.className =
             'geographic-pin-description'
-
-
           subtitle.textContent =
             result.subtitle
-
-
           popupContent.appendChild(
             subtitle
           )
         }
-
-
         const actions =
           document.createElement(
             'div'
           )
-
-
         actions.className =
           'geographic-route-actions'
-
-
         const directionsButton =
           document.createElement(
             'button'
           )
-
-
         directionsButton.type =
           'button'
-
-
         directionsButton.className =
           'geographic-route-action'
-
-
         directionsButton.textContent =
           'DIRECTIONS'
-
-
         directionsButton.addEventListener(
           'click',
           () => {
             handleDirections({
               ...result,
-
               longitude,
-
               latitude,
             })
           }
         )
-
-
         actions.appendChild(
           directionsButton
         )
-
-
         popupContent.appendChild(
           actions
         )
-
-
         const popup =
           new Popup({
             closeButton:
               true,
-
             offset:
               14,
-
             maxWidth:
               '280px',
           })
             .setDOMContent(
               popupContent
             )
-
-
         searchPopupRef.current =
           popup
-
-
         searchMarkerRef.current =
           new Marker({
             element:
               markerElement,
-
             anchor:
               'center',
           })
@@ -3323,31 +2808,23 @@ const GeographicMap =
             .addTo(
               map
             )
-
-
         popup.addTo(
           map
         )
-
-
         map.flyTo({
           center: [
             longitude,
             latitude,
           ],
-
           zoom:
             Math.max(
               map.getZoom(),
               16
             ),
-
           duration:
             900,
         })
       }
-
-
       return (
         <>
           <div
@@ -3356,8 +2833,6 @@ const GeographicMap =
             }
             className="map"
           />
-
-
           <AtmosphereLayer
             atmosphere={
               atmosphereEnabled
@@ -3365,8 +2840,6 @@ const GeographicMap =
                 : null
             }
           />
-
-
           <HalloweenHistoricLayer
             active={
               atmosphereEnabled &&
@@ -3374,86 +2847,68 @@ const GeographicMap =
                 'halloween'
             }
           />
-
-
           {mapReady && (
             <MapPins
               map={
                 mapRef.current
               }
-
               cityKey={
                 cityKey
               }
-
               selectedLayer={
                 selectedLayer
               }
-
               selectedPinId={
                 selectedPinId
               }
-
               activePinFilter={
                 activePinFilter
               }
-
               historicIssueFilter={
                 historicIssueFilter
               }
-
               historicCategoryFilter={
                 historicCategoryFilter
               }
-
               historicLayerFilter={
                 historicLayerFilter
               }
-
               newsRangeFilter={
                 newsRangeFilter
               }
-
               newSubtypeFilter={
                 newSubtypeFilter
               }
-
               newBusinessRangeFilter={
                 newBusinessRangeFilter
               }
-
               onDirections={
                 handleDirections
               }
-
               homeLayer={
                 homeLayer
               }
-
               onSeeItThen={
                 handleHistoricSeeItThen
               }
-
               onReturnToHistoricIssueHome={
                 handleHistoricIssueHome
               }
             />
           )}
-
-
           <MapControls
             onLocate={
-              locateUser
+              toggleLocationTracking
             }
-
+            locationTrackingActive={
+              locationTrackingActive
+            }
             onSearchResult={
               handleSearchResult
             }
-
             atmosphereEnabled={
               atmosphereEnabled
             }
-
             onToggleAtmosphere={
               () =>
                 setAtmosphereEnabled(
@@ -3461,46 +2916,35 @@ const GeographicMap =
                     !enabled
                 )
             }
-
             activePinFilter={
               activePinFilter
             }
-
             onChangePinFilter={
               changePinFilter
             }
-
             newSubtypeFilter={
               newSubtypeFilter
             }
-
             onChangeNewSubtypeFilter={
               changeNewSubtypeFilter
             }
           />
-
-
           <DirectionsPanel
             route={
               route
             }
-
             destination={
               routeDestination
             }
-
             loading={
               routeLoading
             }
-
             error={
               routeError
             }
-
             onClear={
               clearRoute
             }
-
             onStepChange={
               handleStepChange
             }
@@ -3509,6 +2953,4 @@ const GeographicMap =
       )
     }
   )
-
-
 export default GeographicMap

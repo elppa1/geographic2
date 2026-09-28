@@ -4757,27 +4757,14 @@ function appendEmojiMarkerIcon(
     )
 
 
-  const ringColor =
-    emoji ===
-      '🚒'
-      ? 'rgba(205, 48, 48, 0.68)'
-      : emoji ===
-          '🚔'
-        ? 'rgba(45, 92, 170, 0.68)'
-        : emoji ===
-            '🚌'
-          ? 'rgba(20, 20, 20, 0.50)'
-          : 'rgba(20, 20, 20, 0.28)'
-
-
   iconShell.textContent =
     emoji
 
   iconShell.style.width =
-    '24px'
+    '28px'
 
   iconShell.style.height =
-    '24px'
+    '28px'
 
   iconShell.style.display =
     'grid'
@@ -4786,22 +4773,27 @@ function appendEmojiMarkerIcon(
     'center'
 
   iconShell.style.flex =
-    '0 0 24px'
+    '0 0 28px'
 
+  // Mobile markers should read as map symbols, not white UI buttons.
+  // Keep every existing pin/category decision above intact; presentation only.
   iconShell.style.border =
-    `1px solid ${ringColor}`
+    '0'
 
   iconShell.style.borderRadius =
-    '50%'
+    '0'
 
   iconShell.style.background =
-    'rgba(255, 255, 255, 0.94)'
+    'transparent'
 
   iconShell.style.boxShadow =
-    '0 1px 4px rgba(0, 0, 0, 0.34)'
+    'none'
+
+  iconShell.style.filter =
+    'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.52))'
 
   iconShell.style.fontSize =
-    '16px'
+    '21px'
 
   iconShell.style.lineHeight =
     '1'
@@ -7352,16 +7344,16 @@ function createMarker({
           'block'
 
         mobileImageLink.style.width =
-          '42px'
+          '88px'
 
         mobileImageLink.style.height =
-          '32px'
+          '66px'
 
         mobileImageLink.style.float =
           'right'
 
         mobileImageLink.style.margin =
-          '0 0 2px 6px'
+          '0 0 5px 8px'
 
         mobileImageLink.style.overflow =
           'hidden'
@@ -7372,13 +7364,13 @@ function createMarker({
 
 
       mobileImage.style.width =
-        '42px'
+        '88px'
 
       mobileImage.style.height =
-        '32px'
+        '66px'
 
       mobileImage.style.maxHeight =
-        '32px'
+        '66px'
 
       mobileImage.style.margin =
         '0'
@@ -7436,11 +7428,10 @@ function createMarker({
   popup.on(
     'open',
     () => {
-      window.requestAnimationFrame(
+      const resetPopupScroll =
         () => {
-          // Mobile story cards are internally scrollable. Always reset the
-          // card itself so a newly opened story starts at its title instead
-          // of inheriting an old mid-story scroll position.
+          // Popup content and MapLibre's shell can both retain an old scroll
+          // position. Reset both after layout/image changes as well as now.
           popupContent.scrollTop =
             0
 
@@ -7456,7 +7447,44 @@ function createMarker({
               0
           }
         }
+
+
+      resetPopupScroll()
+
+      window.requestAnimationFrame(
+        resetPopupScroll
       )
+
+      window.setTimeout(
+        resetPopupScroll,
+        60
+      )
+
+      window.setTimeout(
+        resetPopupScroll,
+        180
+      )
+
+
+      const popupImage =
+        popupContent.querySelector(
+          'img'
+        )
+
+
+      if (
+        popupImage &&
+        !popupImage.complete
+      ) {
+        popupImage.addEventListener(
+          'load',
+          resetPopupScroll,
+          {
+            once:
+              true,
+          }
+        )
+      }
     }
   )
 

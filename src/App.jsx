@@ -989,15 +989,19 @@ function GeographicApp() {
     const timeMachineLayer =
       timelineLayers.find(
         (layer) =>
-          layer.year ===
-            1954 &&
+          layer.year >=
+            1960 &&
+          layer.year <=
+            1969 &&
           layer.layerType ===
             'aerial'
       ) ||
       timelineLayers.find(
         (layer) =>
-          layer.year ===
-          1954
+          layer.year >=
+            1960 &&
+          layer.year <=
+            1969
       ) ||
       defaultLayer
 
@@ -2809,15 +2813,10 @@ function GeographicApp() {
               </h2>
 
               <p>
-                Turn on GPS and step into Toronto in 1954. We will centre the
-                map on you and show all historic stories while your location
-                moves with you.
-              </p>
-
-              <p className="howto-tip">
-                <strong>TRY IT:</strong> Scroll through the years at the bottom
-                of the map to move backward and forward through Toronto as you
-                walk.
+                Turn on GPS and step into Toronto in the 1960s. Scroll through
+                the years at the bottom and walk through the years. Click the
+                historical markers to see your neighbourhood and city in the
+                past.
               </p>
             </section>
 

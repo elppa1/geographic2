@@ -10,6 +10,9 @@ import './MapControls.css'
 function MapControls({
   onLocate,
   onSearchResult,
+  locationTrackingActive = false,
+  atmosphereEnabled = true,
+  onToggleAtmosphere,
 }) {
   const [
     locating,
@@ -26,11 +29,9 @@ function MapControls({
       return
     }
 
-
     setLocating(
       true
     )
-
 
     try {
       await onLocate()
@@ -53,18 +54,69 @@ function MapControls({
     <div className="map-utilities">
       <button
         type="button"
-        className="map-utility-button"
+        className={[
+          'map-utility-button',
+          'gps-toggle-button',
+          locationTrackingActive
+            ? 'gps-toggle-button-active'
+            : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
         onClick={
           handleLocate
         }
-        aria-label="GPS — find my location"
-        title="GPS — find my location"
+        aria-label={
+          locationTrackingActive
+            ? 'Turn GPS tracking off'
+            : 'Turn GPS tracking on'
+        }
+        aria-pressed={
+          locationTrackingActive
+        }
+        title={
+          locationTrackingActive
+            ? 'GPS on — click to turn off'
+            : 'GPS off — click to turn on'
+        }
       >
         {locating
           ? '…'
-          : 'GPS'}
+          : locationTrackingActive
+            ? '●'
+            : '◎'}
       </button>
 
+      <button
+        type="button"
+        className={[
+          'map-utility-button',
+          'atmosphere-toggle-button',
+          atmosphereEnabled
+            ? 'atmosphere-toggle-button-active'
+            : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        onClick={
+          onToggleAtmosphere
+        }
+        aria-label={
+          atmosphereEnabled
+            ? 'Turn atmosphere off'
+            : 'Turn atmosphere on'
+        }
+        aria-pressed={
+          atmosphereEnabled
+        }
+        title={
+          atmosphereEnabled
+            ? 'Atmosphere on — click to turn off'
+            : 'Atmosphere off — click to turn on'
+        }
+      >
+        ATM
+      </button>
 
       <SearchControl
         onResult={

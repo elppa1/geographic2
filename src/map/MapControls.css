@@ -11,7 +11,23 @@
 
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 3px;
+
+  padding: 4px;
+
+  border-radius: 10px;
+
+  background:
+    rgba(12, 12, 12, 0.80);
+
+  box-shadow:
+    0 5px 18px rgba(0, 0, 0, 0.26);
+
+  backdrop-filter:
+    blur(8px);
+
+  -webkit-backdrop-filter:
+    blur(8px);
 }
 
 
@@ -20,32 +36,38 @@
    ============================================================ */
 
 .map-utility-button {
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
 
   display: grid;
   place-items: center;
 
   padding: 0;
 
-  border: 1px solid rgba(0, 0, 0, 0.18);
+  border: 0;
+  border-radius: 7px;
 
-  background: rgba(255, 255, 255, 0.96);
-  color: #111;
+  background: transparent;
+  color: #fff;
 
   font-family: inherit;
-  font-size: 21px;
+  font-size: 19px;
   line-height: 1;
 
   cursor: pointer;
 
-  box-shadow:
-    0 1px 4px rgba(0, 0, 0, 0.08);
+  box-shadow: none;
+
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    transform 120ms ease;
 }
 
 
 .map-utility-button:hover {
-  background: #fff;
+  background:
+    rgba(255, 255, 255, 0.14);
 }
 
 
@@ -64,14 +86,16 @@
   letter-spacing: 0.06em;
 }
 
+.gps-toggle-button-active,
 .atmosphere-toggle-button-active {
-  background: #111;
-  color: #fff;
+  background: #fff;
+  color: #111;
 }
 
+.gps-toggle-button-active:hover,
 .atmosphere-toggle-button-active:hover {
-  background: #111;
-  color: #fff;
+  background: #fff;
+  color: #111;
 }
 
 
@@ -898,6 +922,18 @@
     flex-direction: row;
 
     gap: 1px;
+
+    padding: 0;
+
+    border-radius: 0;
+
+    background: transparent;
+
+    box-shadow: none;
+
+    backdrop-filter: none;
+
+    -webkit-backdrop-filter: none;
   }
 
 
@@ -932,6 +968,24 @@
   .atmosphere-toggle-button {
     font-size: 6px;
     letter-spacing: 0.04em;
+  }
+
+
+  .gps-toggle-button-active,
+  .atmosphere-toggle-button-active {
+    background:
+      rgba(255, 255, 255, 0.16);
+
+    color: #fff;
+  }
+
+
+  .gps-toggle-button-active:hover,
+  .atmosphere-toggle-button-active:hover {
+    background:
+      rgba(255, 255, 255, 0.16);
+
+    color: #fff;
   }
 
 
