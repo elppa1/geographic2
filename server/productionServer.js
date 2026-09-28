@@ -66,6 +66,11 @@ import {
   tplCommunityFeed,
 } from './feeds/toronto/tplCommunity.js'
 
+
+import {
+  communityCentresFeed,
+} from './feeds/toronto/communityCentres.js'
+
 import {
   torontoHistoricFeed,
 } from './feeds/toronto/historic.js'
@@ -1368,6 +1373,7 @@ const plugins = [
   torontoNewBusinessFeed(),
   torontoNewEventsFeed(),
   tplCommunityFeed(),
+  communityCentresFeed(),
   torontoHistoricFeed(),
 ]
 
