@@ -3043,11 +3043,14 @@ function GeographicApp() {
                   ? 'content-subfilter content-subfilter-active'
                   : 'content-subfilter'
               }
-              onClick={() =>
+              onClick={() => {
                 setNewSubtypeFilter(
                   'businesses'
                 )
-              }
+                setNewBusinessRangeFilter(
+                  '90'
+                )
+              }}
             >
               NEW BUSINESSES
             </button>
@@ -3068,165 +3071,49 @@ function GeographicApp() {
             >
               COMMUNITY
             </button>
+
+            {newSubtypeFilter ===
+              'businesses' && (
+              <div className="news-history-slider-shell">
+                <div className="news-history-slider-labels">
+                  <span>1 MONTH</span>
+                  <span>
+                    {Number(
+                      newBusinessRangeFilter
+                    ) / 30} MONTHS
+                  </span>
+                  <span>6 MONTHS</span>
+                </div>
+
+                <input
+                  className="news-history-slider"
+                  type="range"
+                  min="1"
+                  max="6"
+                  step="1"
+                  value={
+                    String(
+                      Number(
+                        newBusinessRangeFilter
+                      ) / 30
+                    )
+                  }
+                  onChange={(event) =>
+                    setNewBusinessRangeFilter(
+                      String(
+                        Number(
+                          event.target.value
+                        ) * 30
+                      )
+                    )
+                  }
+                  aria-label="New business age range"
+                />
+              </div>
+            )}
           </div>
         )}
 
-
-        {activePinFilter ===
-          'new' &&
-          newSubtypeFilter ===
-            'businesses' && (
-          <div
-            className="brand-range-filters"
-            style={{
-              display:
-                'flex',
-
-              gap:
-                '2px',
-
-              marginLeft:
-                '0',
-            }}
-          >
-            <button
-              type="button"
-              onClick={() =>
-                setNewBusinessRangeFilter(
-                  '30'
-                )
-              }
-              style={{
-                border:
-                  '1px solid rgba(0,0,0,0.14)',
-
-                padding:
-                  '4px 7px',
-
-                background:
-                  newBusinessRangeFilter ===
-                  '30'
-                    ? '#111'
-                    : '#fff',
-
-                color:
-                  newBusinessRangeFilter ===
-                  '30'
-                    ? '#fff'
-                    : '#111',
-
-                font:
-                  'inherit',
-
-                fontSize:
-                  '7px',
-
-                fontWeight:
-                  '700',
-
-                letterSpacing:
-                  '0.08em',
-
-                cursor:
-                  'pointer',
-              }}
-            >
-              1 MONTH
-            </button>
-
-
-            <button
-              type="button"
-              onClick={() =>
-                setNewBusinessRangeFilter(
-                  '60'
-                )
-              }
-              style={{
-                border:
-                  '1px solid rgba(0,0,0,0.14)',
-
-                padding:
-                  '4px 7px',
-
-                background:
-                  newBusinessRangeFilter ===
-                  '60'
-                    ? '#111'
-                    : '#fff',
-
-                color:
-                  newBusinessRangeFilter ===
-                  '60'
-                    ? '#fff'
-                    : '#111',
-
-                font:
-                  'inherit',
-
-                fontSize:
-                  '7px',
-
-                fontWeight:
-                  '700',
-
-                letterSpacing:
-                  '0.08em',
-
-                cursor:
-                  'pointer',
-              }}
-            >
-              2 MONTHS
-            </button>
-
-
-            <button
-              type="button"
-              onClick={() =>
-                setNewBusinessRangeFilter(
-                  '90'
-                )
-              }
-              style={{
-                border:
-                  '1px solid rgba(0,0,0,0.14)',
-
-                padding:
-                  '4px 7px',
-
-                background:
-                  newBusinessRangeFilter ===
-                  '90'
-                    ? '#111'
-                    : '#fff',
-
-                color:
-                  newBusinessRangeFilter ===
-                  '90'
-                    ? '#fff'
-                    : '#111',
-
-                font:
-                  'inherit',
-
-                fontSize:
-                  '7px',
-
-                fontWeight:
-                  '700',
-
-                letterSpacing:
-                  '0.08em',
-
-                cursor:
-                  'pointer',
-              }}
-            >
-              3 MONTHS
-            </button>
-          </div>
-        )}
       </div>
 
 
