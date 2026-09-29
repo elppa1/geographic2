@@ -2053,6 +2053,16 @@ function GeographicApp() {
             color: #fff !important;
           }
 
+          @media (min-width: 701px) {
+            .historic-menu-anchor .historic-mobile-picker-heading {
+              font-size: 7.5px !important;
+            }
+
+            .historic-menu-anchor .historic-mobile-picker-option {
+              font-size: 8.5px !important;
+            }
+          }
+
 
           /* GPS + Search are now part of the main menu, not floating map chrome. */
           .brand-primary-filters > .map-utilities {
@@ -2840,7 +2850,7 @@ function GeographicApp() {
                   'pointer',
               }}
             >
-              NEW
+              TO-DO
             </button>
 
 
@@ -3029,23 +3039,6 @@ function GeographicApp() {
               type="button"
               className={
                 newSubtypeFilter ===
-                  'all'
-                  ? 'content-subfilter content-subfilter-active'
-                  : 'content-subfilter'
-              }
-              onClick={() =>
-                setNewSubtypeFilter(
-                  'all'
-                )
-              }
-            >
-              ALL
-            </button>
-
-            <button
-              type="button"
-              className={
-                newSubtypeFilter ===
                   'businesses'
                   ? 'content-subfilter content-subfilter-active'
                   : 'content-subfilter'
@@ -3056,7 +3049,7 @@ function GeographicApp() {
                 )
               }
             >
-              BUSINESS
+              NEW BUSINESSES
             </button>
 
             <button
