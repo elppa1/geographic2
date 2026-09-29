@@ -9352,6 +9352,10 @@ function createMarker({
   }
 
 
+  const preferredPopupMaxHeight =
+    popupContent.style.maxHeight
+
+
   const popup =
     new Popup({
       closeButton:
@@ -9408,19 +9412,194 @@ function createMarker({
         }
 
 
-      resetPopupScroll()
+      const fitPopupIntoViewport = () => {
+        const mapContainer =
+          map?.getContainer?.()
+
+        const popupElement =
+          popup?.getElement?.() ||
+          popupContent.closest(
+            '.maplibregl-popup'
+          )
+
+        if (
+          !mapContainer ||
+          !popupElement
+        ) {
+          return
+        }
+
+        const mapRect =
+          mapContainer.getBoundingClientRect()
+
+        const edgePadding =
+          compactMobilePopup
+            ? 8
+            : 14
+
+        let safeTop =
+          mapRect.top +
+          edgePadding
+
+        let safeBottom =
+          mapRect.bottom -
+          edgePadding
+
+        const brandRect =
+          document
+            .querySelector(
+              '.brand'
+            )
+            ?.getBoundingClientRect()
+
+        if (
+          brandRect?.height &&
+          brandRect.bottom >
+            mapRect.top &&
+          brandRect.top <
+            mapRect.bottom
+        ) {
+          safeTop =
+            Math.max(
+              safeTop,
+              brandRect.bottom +
+                edgePadding
+            )
+        }
+
+        const timelineRect =
+          document
+            .querySelector(
+              '.timeline-shell'
+            )
+            ?.getBoundingClientRect()
+
+        if (
+          timelineRect?.height &&
+          timelineRect.bottom >
+            mapRect.top &&
+          timelineRect.top <
+            mapRect.bottom
+        ) {
+          safeBottom =
+            Math.min(
+              safeBottom,
+              timelineRect.top -
+                edgePadding
+            )
+        }
+
+        popupContent.style.maxHeight =
+          preferredPopupMaxHeight ||
+          'none'
+
+        const preferredHeight =
+          parseFloat(
+            window
+              .getComputedStyle(
+                popupContent
+              )
+              .maxHeight
+          )
+
+        const availableHeight =
+          Math.max(
+            96,
+            safeBottom -
+              safeTop -
+              38
+          )
+
+        popupContent.style.maxHeight =
+          `${Math.floor(
+            Number.isFinite(
+              preferredHeight
+            )
+              ? Math.min(
+                  availableHeight,
+                  preferredHeight
+                )
+              : availableHeight
+          )}px`
+
+        popupContent.style.overflowY =
+          'auto'
+
+        popupContent.style.overscrollBehavior =
+          'contain'
+
+        const popupRect =
+          popupElement.getBoundingClientRect()
+
+        const safeLeft =
+          mapRect.left +
+          edgePadding
+
+        const safeRight =
+          mapRect.right -
+          edgePadding
+
+        const panX =
+          popupRect.left <
+          safeLeft
+            ? popupRect.left -
+              safeLeft
+            : popupRect.right >
+                safeRight
+              ? popupRect.right -
+                safeRight
+              : 0
+
+        const panY =
+          popupRect.top <
+          safeTop
+            ? popupRect.top -
+              safeTop
+            : popupRect.bottom >
+                safeBottom
+              ? popupRect.bottom -
+                safeBottom
+              : 0
+
+        if (
+          Math.abs(
+            panX
+          ) >
+            1 ||
+          Math.abs(
+            panY
+          ) >
+            1
+        ) {
+          map.panBy(
+            [
+              panX,
+              panY,
+            ],
+            {
+              duration:
+                180,
+            }
+          )
+        }
+      }
+
+
+      const refreshPopupLayout =
+        () => {
+          resetPopupScroll()
+          fitPopupIntoViewport()
+        }
+
+
+      refreshPopupLayout()
 
       window.requestAnimationFrame(
-        resetPopupScroll
+        refreshPopupLayout
       )
 
       window.setTimeout(
-        resetPopupScroll,
-        60
-      )
-
-      window.setTimeout(
-        resetPopupScroll,
+        refreshPopupLayout,
         180
       )
 
@@ -9437,7 +9616,7 @@ function createMarker({
       ) {
         popupImage.addEventListener(
           'load',
-          resetPopupScroll,
+          refreshPopupLayout,
           {
             once:
               true,
