@@ -1042,6 +1042,9 @@ function GeographicApp() {
   function selectHistoricTimeMachineLayer(
     layer
   ) {
+    geographicMapRef.current
+      ?.clearSelectedPin?.()
+
     setActivePinFilter(
       'historic'
     )
