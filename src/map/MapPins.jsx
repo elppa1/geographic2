@@ -6383,9 +6383,8 @@ function appendEmojiMarkerIcon(
   iconShell.style.flex =
     '0 0 22px'
 
-  // Android's full-colour emoji artwork was making mobile markers read
-  // like stickers. Force a restrained monochrome treatment on mobile only.
-  // Category/icon selection remains exactly the same.
+  // Keep the native full-colour emoji artwork on mobile.
+  // Category/icon selection and mobile sizing remain exactly the same.
   iconShell.style.border =
     '0'
 
@@ -6399,7 +6398,7 @@ function appendEmojiMarkerIcon(
     'none'
 
   iconShell.style.filter =
-    'grayscale(1) saturate(0) contrast(1.45) brightness(0.58)'
+    'none'
 
   iconShell.style.fontSize =
     '18px'
