@@ -1411,6 +1411,24 @@ async function observeRecord({
         'new'
     }
     else if (
+      sourceKey ===
+        'police' &&
+      existing.published !==
+        true &&
+      cleanText(
+        existing.lastEditorialAction
+      )
+        .toLowerCase()
+        .includes(
+          'rejected'
+        )
+    ) {
+      // A rejected unpublished TPS story stays rejected. Updates to a TPS
+      // story that was already published remain eligible for later review.
+      action =
+        'seen'
+    }
+    else if (
       isFire
     ) {
       if (
@@ -1775,6 +1793,69 @@ function policeCaseNumberFromRecord(
 }
 
 
+function policeRecordIsMissingOrElopeePerson(
+  record
+) {
+  const category =
+    cleanText(
+      record?.category
+    )
+      .toLowerCase()
+
+
+  if (
+    category ===
+      'missing' ||
+    category ===
+      'missing-person' ||
+    category ===
+      'missing person' ||
+    category ===
+      'missing_person'
+  ) {
+    return true
+  }
+
+
+  const text =
+    cleanText(
+      [
+        record?.title,
+        record?.description,
+        record?.tpsReleaseTitle,
+      ]
+        .filter(
+          Boolean
+        )
+        .join(
+          ' '
+        )
+    )
+
+
+  if (
+    /\bmissing\s+(?:person|man|woman|boy|girl|child|teen|teenager|youth|adult|senior)\b/i
+      .test(
+        text
+      )
+  ) {
+    return true
+  }
+
+
+  // TPS classifies ELOPEE releases under the broader WANTED category.
+  // Do not treat every wanted-person release as an elopee.
+  return (
+    category ===
+      'wanted' &&
+    /\b(?:elopee|warrant of committal)\b/i
+      .test(
+        text
+      )
+  )
+}
+
+
 function policeRecordIsMissingPersonResolution({
   record,
   rawAction =
@@ -1900,7 +1981,10 @@ function findPoliceMissingPersonResolutionTarget(
             candidateExternalId !==
               incomingExternalId &&
             candidateCaseNumber ===
-              requestedCaseNumber
+              requestedCaseNumber &&
+            policeRecordIsMissingOrElopeePerson(
+              candidate
+            )
           )
         }
       )
@@ -1977,7 +2061,10 @@ function findPoliceMissingPersonResolutionTarget(
             candidateExternalId !==
               incomingExternalId &&
             candidateCaseNumber ===
-              requestedCaseNumber
+              requestedCaseNumber &&
+            policeRecordIsMissingOrElopeePerson(
+              candidate
+            )
           )
         }
       )
@@ -2038,6 +2125,17 @@ async function archivePublishedPoliceMissingPersonPin(
     !publishedRecord ||
     publishedRecord.active ===
       false
+  ) {
+    return publishedRecord
+  }
+
+
+  // LOCATED / FOUND automatically removes only an actual missing-person
+  // or elopee story. Ordinary wanted / police stories are untouched.
+  if (
+    !policeRecordIsMissingOrElopeePerson(
+      publishedRecord
+    )
   ) {
     return publishedRecord
   }
@@ -2255,6 +2353,13 @@ export async function queueLiveNewsroomRecord({
                     ''
                   ),
 
+            // A LOCATED replacement must not inherit the old missing-person
+            // or elopee photograph from the original public story.
+            imageUrl:
+              cleanText(
+                record?.imageUrl
+              ),
+
             active:
               false,
 
@@ -2270,6 +2375,11 @@ export async function queueLiveNewsroomRecord({
         : {
             ...record,
 
+            imageUrl:
+              cleanText(
+                record?.imageUrl
+              ),
+
             active:
               false,
 
@@ -2284,11 +2394,34 @@ export async function queueLiveNewsroomRecord({
           }
 
 
-    // TPS LOCATED / FOUND is authoritative. Remove the existing public pin
-    // immediately; the RESOLVE card remains only as an audit notice.
+    // TPS LOCATED / FOUND is authoritative. Remove the existing MISSING /
+    // ELOPEE pin immediately. The LOCATED story itself remains pending in
+    // NEWSROOM as an UPDATE until the editor approves or rejects it.
     await archivePublishedPoliceMissingPersonPin(
       resolutionRecord
     )
+
+
+    const previousResolutionState =
+      store.sources?.[
+        sourceKey
+      ]?.[
+        resolutionRecord.externalId
+      ] ||
+      null
+
+
+    const sameHandledResolutionVersion =
+      previousResolutionState &&
+      previousResolutionState.sourceFingerprint ===
+        fingerprint(
+          resolutionRecord
+        ) &&
+      Boolean(
+        cleanText(
+          previousResolutionState.lastEditorialAction
+        )
+      )
 
 
     return observeRecord({
@@ -2296,7 +2429,9 @@ export async function queueLiveNewsroomRecord({
       record:
         resolutionRecord,
       forceAction:
-        'resolve',
+        sameHandledResolutionVersion
+          ? ''
+          : 'update',
     })
   }
 

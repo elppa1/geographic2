@@ -453,6 +453,47 @@ function getTpsIncidentIdentity(
 }
 
 
+function getTpsCaseIdentity(
+  record
+) {
+  return normalizeTpsIdentityPart(
+    record?.caseNumber ||
+    record?.policeCaseNumber ||
+    record?.goNumber ||
+    ''
+  )
+    .replace(
+      /[^a-z0-9]/g,
+      ''
+    )
+}
+
+
+function sameTpsCase(
+  a,
+  b
+) {
+  const aCase =
+    getTpsCaseIdentity(
+      a
+    )
+
+
+  const bCase =
+    getTpsCaseIdentity(
+      b
+    )
+
+
+  return Boolean(
+    aCase &&
+    bCase &&
+    aCase ===
+      bCase
+  )
+}
+
+
 function sameTpsIncident(
   a,
   b
@@ -564,6 +605,9 @@ function getTpsProcessedVersionKey(
   record
 ) {
   const identity =
+    normalizeTpsIdentityPart(
+      record?.resolutionNoticeExternalId
+    ) ||
     getTpsIncidentIdentity(
       record
     )
@@ -661,6 +705,44 @@ function hasProcessedTpsVersion(
       key
     ]
   )
+}
+
+
+function hasRejectedUnpublishedTpsIncident(
+  record
+) {
+  const identity =
+    getTpsIncidentIdentity(
+      record
+    )
+
+
+  if (
+    !identity
+  ) {
+    return false
+  }
+
+
+  const prefix =
+    identity +
+    '::'
+
+
+  return Object.entries(
+    getProcessedTpsVersions()
+  )
+    .some(
+      ([
+        key,
+        value,
+      ]) =>
+        key.startsWith(
+          prefix
+        ) &&
+        value?.status ===
+          'new-rejected'
+    )
 }
 
 
@@ -3807,6 +3889,21 @@ function getNewsroomApproveLabel(
     getNewsroomAction(
       record
     )
+
+
+  if (
+    isTpsNewsroomRecord(
+      record
+    ) &&
+    String(
+      record?.category ||
+      ''
+    )
+      .toLowerCase() ===
+      'located'
+  ) {
+    return 'APPROVE'
+  }
 
 
   // Official-source UPDATE / RESOLVE cards are audit notices.
@@ -7796,6 +7893,15 @@ function AdminRoom() {
           }
 
 
+          const isLocatedResolution =
+            String(
+              rawIncomingRecord.category ||
+              ''
+            )
+              .toLowerCase() ===
+              'located'
+
+
           const existingReviewIndex =
             nextTorontoReview.findIndex(
               (
@@ -7804,9 +7910,18 @@ function AdminRoom() {
                 isTpsNewsroomRecord(
                   reviewRecord
                 ) &&
-                sameTpsIncident(
-                  reviewRecord,
-                  rawIncomingRecord
+                (
+                  sameTpsIncident(
+                    reviewRecord,
+                    rawIncomingRecord
+                  ) ||
+                  (
+                    isLocatedResolution &&
+                    sameTpsCase(
+                      reviewRecord,
+                      rawIncomingRecord
+                    )
+                  )
                 )
             )
 
@@ -7823,9 +7938,18 @@ function AdminRoom() {
                 isTpsNewsroomRecord(
                   publishedRecord
                 ) &&
-                sameTpsIncident(
-                  publishedRecord,
-                  rawIncomingRecord
+                (
+                  sameTpsIncident(
+                    publishedRecord,
+                    rawIncomingRecord
+                  ) ||
+                  (
+                    isLocatedResolution &&
+                    sameTpsCase(
+                      publishedRecord,
+                      rawIncomingRecord
+                    )
+                  )
                 )
             )
 
@@ -7856,9 +7980,8 @@ function AdminRoom() {
 
           const isResolve =
             requestedNewsroomAction ===
-              'resolve' ||
-            rawIncomingRecord.category ===
-              'located'
+              'resolve' &&
+            !isLocatedResolution
 
 
           // --------------------------------------------------
@@ -7966,10 +8089,14 @@ function AdminRoom() {
           if (
             existingReviewIndex <
               0 &&
-            hasProcessedTpsVersion(
-              rawIncomingRecord
-            ) &&
-            !isResolve
+            (
+              hasProcessedTpsVersion(
+                rawIncomingRecord
+              ) ||
+              hasRejectedUnpublishedTpsIncident(
+                rawIncomingRecord
+              )
+            )
           ) {
             skipped++
 
@@ -8005,11 +8132,13 @@ function AdminRoom() {
 
 
           const newsroomAction =
-            isResolve
-              ? 'resolve'
-              : matchingPublished
-                ? 'update'
-                : 'new'
+            isLocatedResolution
+              ? 'update'
+              : isResolve
+                ? 'resolve'
+                : matchingPublished
+                  ? 'update'
+                  : 'new'
 
 
           const comparisonRecord =
@@ -9807,6 +9936,23 @@ function AdminRoom() {
           const queueId =
             serverRecord.serverQueueId ||
             serverRecord.id
+
+
+          if (
+            isTpsNewsroomRecord(
+              serverRecord
+            ) &&
+            (
+              hasProcessedTpsVersion(
+                serverRecord
+              ) ||
+              hasRejectedUnpublishedTpsIncident(
+                serverRecord
+              )
+            )
+          ) {
+            return
+          }
 
 
           const action =
@@ -15607,9 +15753,23 @@ function AdminRoom() {
           isTpsNewsroomRecord(
             publishedRecord
           ) &&
-          sameTpsIncident(
-            publishedRecord,
-            candidate
+          (
+            sameTpsIncident(
+              publishedRecord,
+              candidate
+            ) ||
+            (
+              String(
+                candidate.category ||
+                ''
+              )
+                .toLowerCase() ===
+                'located' &&
+              sameTpsCase(
+                publishedRecord,
+                candidate
+              )
+            )
           )
       )
 
@@ -15623,23 +15783,32 @@ function AdminRoom() {
         : null
 
 
-    const newsroomAction =
-      (
-        candidate.newsroomAction ===
-          'resolve' ||
-        candidate.serverAction ===
-          'resolve' ||
-        candidate.category ===
-          'located'
+    const isLocatedResolution =
+      String(
+        candidate.category ||
+        ''
       )
-        ? 'resolve'
+        .toLowerCase() ===
+        'located'
+
+
+    const newsroomAction =
+      isLocatedResolution
+        ? 'update'
         : (
             candidate.newsroomAction ===
-              'update' ||
-            existingPublished
+              'resolve' ||
+            candidate.serverAction ===
+              'resolve'
           )
-          ? 'update'
-          : 'publish'
+          ? 'resolve'
+          : (
+              candidate.newsroomAction ===
+                'update' ||
+              existingPublished
+            )
+            ? 'update'
+            : 'publish'
 
 
     if (
@@ -15739,6 +15908,49 @@ function AdminRoom() {
 
 
       return
+    }
+
+
+    if (
+      isLocatedResolution &&
+      existingPublished
+    ) {
+      candidate = {
+        ...candidate,
+
+        location:
+          existingPublished.location ||
+          candidate.location ||
+          '',
+
+        intersection:
+          existingPublished.intersection ||
+          existingPublished.location ||
+          candidate.intersection ||
+          candidate.location ||
+          '',
+
+        longitude:
+          existingPublished.longitude,
+
+        latitude:
+          existingPublished.latitude,
+
+        searchedLongitude:
+          existingPublished.searchedLongitude ??
+          existingPublished.longitude,
+
+        searchedLatitude:
+          existingPublished.searchedLatitude ??
+          existingPublished.latitude,
+
+        pinPositionMode:
+          existingPublished.pinPositionMode ||
+          'auto',
+
+        imageUrl:
+          '',
+      }
     }
 
 
@@ -16808,6 +17020,28 @@ function AdminRoom() {
     if (
       tab ===
         'news' &&
+      isTpsNewsroomRecord(
+        reviewRecord
+      ) &&
+      String(
+        reviewRecord?.category ||
+        ''
+      )
+        .toLowerCase() ===
+        'located'
+    ) {
+      await approveTpsNewsroomRecord(
+        reviewRecord
+      )
+
+
+      return
+    }
+
+
+    if (
+      tab ===
+        'news' &&
       (
         getNewsroomAction(
           reviewRecord
@@ -17183,7 +17417,10 @@ function AdminRoom() {
     ) {
       markTpsVersionProcessed(
         reviewRecord,
-        'rejected'
+        newsroomAction ===
+          'new'
+          ? 'new-rejected'
+          : 'rejected'
       )
     }
 
@@ -22161,11 +22398,26 @@ function AdminRoom() {
                                   'resolve'
                               ) && (
                               <div className="admin-record-meta">
-                                AUTOMATIC · {
-                                  newsroomAction ===
-                                    'resolve'
-                                    ? 'PUBLIC PIN ALREADY CLOSED'
-                                    : 'PUBLIC PIN ALREADY UPDATED'
+                                {
+                                  isTpsNewsroomRecord(
+                                    record
+                                  ) &&
+                                  String(
+                                    record?.category ||
+                                    ''
+                                  )
+                                    .toLowerCase() ===
+                                    'located'
+                                    ? 'LOCATED STORY · AWAITING APPROVAL'
+                                    : (
+                                        'AUTOMATIC · ' +
+                                        (
+                                          newsroomAction ===
+                                            'resolve'
+                                            ? 'PUBLIC PIN ALREADY CLOSED'
+                                            : 'PUBLIC PIN ALREADY UPDATED'
+                                        )
+                                      )
                                 }
                               </div>
                             )}
@@ -22288,6 +22540,29 @@ function AdminRoom() {
                                             REJECT
                                           </button>
                                         </>
+                                      )}
+
+                                      {tab ===
+                                        'news' &&
+                                        isTpsNewsroomRecord(
+                                          record
+                                        ) &&
+                                        (
+                                          newsroomAction ===
+                                            'update' ||
+                                          newsroomAction ===
+                                            'resolve'
+                                        ) && (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            rejectReview(
+                                              record
+                                            )
+                                          }
+                                        >
+                                          REJECT
+                                        </button>
                                       )}
                                     </>
                                   )}
