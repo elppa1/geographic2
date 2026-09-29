@@ -3287,7 +3287,7 @@ function GeographicApp() {
               </h2>
 
               <p>
-                Turn on your gps and walk through time. Use the controls on the
+                Turn on your gps and walk through time. Use the controls at the
                 bottom of the screen to see how your neighbourhood and our city
                 has changed over the years. Click on historic markers and see
                 what that place looked like back when that event happened or
