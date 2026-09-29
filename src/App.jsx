@@ -3263,7 +3263,7 @@ function GeographicApp() {
                 </div>
 
                 <div className="about-panel-title">
-                  HOW TO USE THE MAP
+                  HOW TO USE THIS TOOL
                 </div>
               </div>
 
@@ -3287,10 +3287,11 @@ function GeographicApp() {
               </h2>
 
               <p>
-                Turn on GPS and step into Toronto in the 1960s. Scroll through
-                the years at the bottom and walk through the years. Click the
-                historical markers to see your neighbourhood and city in the
-                past.
+                Turn on your gps and walk through time. Use the controls on the
+                bottom of the screen to see how your neighbourhood and our city
+                has changed over the years. Click on historic markers and see
+                what that place looked like back when that event happened or
+                building existed.
               </p>
             </section>
 
@@ -3300,9 +3301,11 @@ function GeographicApp() {
               </h2>
 
               <p>
-                See current neighbourhood news, public-safety incidents and
-                transit information on the map. Use the NEWS history slider to
-                look back through recent stories.
+                Click news and see transit, police and fire stories. If a map pin
+                is pulsating, it means that it is active or was recently
+                reported. Zoom in further or use the scroll on the top to see
+                police and fire calls from the past. Missing people are updated
+                daily and the ttc is live.
               </p>
             </section>
 
@@ -3312,19 +3315,22 @@ function GeographicApp() {
               </h2>
 
               <p>
-                Find neighbourhood events, sports and community activity under
-                NEW → COMMUNITY.
+                The community section allows you to see upcoming community
+                programs in your area and across the city. Along with ice times,
+                swim times, you can also view the outdoor recreational facilities
+                available, drop-in programs, adult learning etc.
               </p>
             </section>
 
             <section className="about-section">
               <h2>
-                NEW BUSINESSES
+                NEW BUSINESS
               </h2>
 
               <p>
-                Discover recently found or verified businesses around Toronto
-                under NEW → BUSINESS.
+                Check out new businesses. Be the first to tell your friends
+                about the new cafe up the street or that new dumpling spot
+                downtown.
               </p>
             </section>
 
