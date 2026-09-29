@@ -9,6 +9,7 @@ import './MapControls.css'
 
 function MapControls({
   onLocate,
+  onOrientation,
   onSearchResult,
   locationTrackingActive = false,
 }) {
@@ -17,6 +18,20 @@ function MapControls({
     setLocating,
   ] =
     useState(false)
+
+  const [
+    orientationTrackingActive,
+    setOrientationTrackingActive,
+  ] =
+    useState(false)
+
+  const mobileControls =
+    typeof window !==
+      'undefined' &&
+    window.matchMedia(
+      '(max-width: 700px)'
+    )
+      .matches
 
 
   async function handleLocate() {
@@ -32,7 +47,17 @@ function MapControls({
     )
 
     try {
-      await onLocate()
+      const active =
+        await onLocate()
+
+
+      if (
+        !active
+      ) {
+        setOrientationTrackingActive(
+          false
+        )
+      }
     } catch (
       error
     ) {
@@ -42,6 +67,40 @@ function MapControls({
       )
     } finally {
       setLocating(
+        false
+      )
+    }
+  }
+
+
+  async function handleOrientation() {
+    if (
+      !locationTrackingActive ||
+      !onOrientation
+    ) {
+      return
+    }
+
+
+    try {
+      const active =
+        await onOrientation()
+
+
+      setOrientationTrackingActive(
+        Boolean(
+          active
+        )
+      )
+    } catch (
+      error
+    ) {
+      console.error(
+        'ORIENTATION ERROR:',
+        error
+      )
+
+      setOrientationTrackingActive(
         false
       )
     }
@@ -82,6 +141,45 @@ function MapControls({
           ? '…'
           : 'GPS'}
       </button>
+
+
+      {mobileControls && (
+        <button
+          type="button"
+          className={[
+            'map-utility-button',
+            'gps-toggle-button',
+            orientationTrackingActive
+              ? 'gps-toggle-button-active'
+              : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          onClick={
+            handleOrientation
+          }
+          disabled={
+            !locationTrackingActive
+          }
+          aria-label={
+            orientationTrackingActive
+              ? 'Turn phone orientation off'
+              : 'Turn phone orientation on'
+          }
+          aria-pressed={
+            orientationTrackingActive
+          }
+          title={
+            !locationTrackingActive
+              ? 'Turn GPS on first'
+              : orientationTrackingActive
+                ? 'Orientation on — click for north-up'
+                : 'Orientation off — click to follow phone direction'
+          }
+        >
+          DIR
+        </button>
+      )}
 
 
       <SearchControl

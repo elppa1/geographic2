@@ -667,6 +667,9 @@ const GeographicMap =
           toggleLocationTracking() {
             return toggleLocationTracking()
           },
+          toggleOrientationTracking() {
+            return toggleOrientationTracking()
+          },
           handleSearchResult(
             result
           ) {
@@ -1396,7 +1399,10 @@ const GeographicMap =
       }
 
 
-      function stopCompassTracking() {
+      function stopCompassTracking(
+        resetBearing =
+          false
+      ) {
         const handler =
           compassHandlerRef.current
 
@@ -1429,11 +1435,28 @@ const GeographicMap =
 
         compassSensorLastSeenRef.current =
           0
+
+
+        if (
+          resetBearing
+        ) {
+          mapRef.current?.easeTo({
+            bearing:
+              0,
+
+            duration:
+              280,
+
+            essential:
+              true,
+          })
+        }
       }
 
 
       async function startCompassTracking() {
         if (
+          !followUserRef.current ||
           typeof window ===
             'undefined' ||
           !window.DeviceOrientationEvent
@@ -1477,6 +1500,9 @@ const GeographicMap =
 
 
         stopCompassTracking()
+
+        manualCameraUntilRef.current =
+          0
 
 
         const handler =
@@ -1523,6 +1549,24 @@ const GeographicMap =
 
 
         return true
+      }
+
+
+      async function toggleOrientationTracking() {
+        if (
+          compassHandlerRef.current
+        ) {
+          stopCompassTracking(
+            true
+          )
+
+          return false
+        }
+
+
+        return Boolean(
+          await startCompassTracking()
+        )
       }
 
 
@@ -1859,6 +1903,7 @@ const GeographicMap =
         // GPS heading is only a fallback. If the phone compass has reported
         // recently, do not let GPS course and compass fight each other.
         if (
+          compassHandlerRef.current &&
           Number.isFinite(
             position.coords.heading
           ) &&
@@ -1890,6 +1935,9 @@ const GeographicMap =
               longitude,
               latitude,
             ],
+
+            bearing:
+              0,
 
             // Start at a neighbourhood scale instead of dropping almost
             // onto the user's building. After this first lock, manual zoom wins.
@@ -1999,7 +2047,9 @@ const GeographicMap =
           false
 
 
-        stopCompassTracking()
+        stopCompassTracking(
+          true
+        )
 
 
         if (
@@ -2050,12 +2100,7 @@ const GeographicMap =
           0
 
 
-        // iOS requires compass permission to be requested from the same
-        // user gesture that starts the experience.
         try {
-          await startCompassTracking()
-
-
           const location =
             await getUserLocation(
               true,

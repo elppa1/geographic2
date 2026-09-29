@@ -1188,6 +1188,23 @@ function GeographicApp() {
   }
 
 
+  async function handleMainMenuOrientation() {
+    const mapApi =
+      geographicMapRef.current
+
+
+    if (
+      !mapApi?.toggleOrientationTracking
+    ) {
+      return false
+    }
+
+
+    return mapApi
+      .toggleOrientationTracking()
+  }
+
+
   function handleMainMenuSearchResult(
     result
   ) {
@@ -2873,6 +2890,9 @@ function GeographicApp() {
               }
               locationTrackingActive={
                 locationTrackingActive
+              }
+              onOrientation={
+                handleMainMenuOrientation
               }
               onSearchResult={
                 handleMainMenuSearchResult
