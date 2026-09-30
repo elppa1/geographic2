@@ -8534,6 +8534,7 @@ function createMarker({
   historicIssueFilter,
   historicCategoryFilter,
   historicLayerFilter,
+  newSubtypeFilter,
   historicLayerPulse =
     false,
   onDirections,
@@ -12949,6 +12950,7 @@ function MapPins({
                   historicIssueFilter,
                   historicCategoryFilter,
                   historicLayerFilter,
+                  newSubtypeFilter,
                   onDirections,
                   onSeeItThen,
                   onReturnToHistoricIssueHome,
@@ -12996,6 +12998,7 @@ function MapPins({
             historicIssueFilter,
             historicCategoryFilter,
             historicLayerFilter,
+            newSubtypeFilter,
 
             historicLayerPulse:
               pinType ===
