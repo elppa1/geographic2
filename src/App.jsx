@@ -3082,7 +3082,7 @@ function GeographicApp() {
                   'businesses'
                 )
                 setNewBusinessRangeFilter(
-                  '90'
+                  '180'
                 )
               }}
             >

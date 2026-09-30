@@ -173,7 +173,7 @@ const NEW_LIFECYCLE_DAYS = {
       90,
 
     open:
-      90,
+      180,
 
     cancelled:
       14,
