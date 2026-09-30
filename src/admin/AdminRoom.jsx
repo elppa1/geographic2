@@ -6341,38 +6341,124 @@ function AdminRoom() {
           }
 
 
-          payload.records.forEach(
-            (record) => {
-              addNewReviewItem({
-                ...record,
+          // Farmers' Markets are already filtered server-side against
+          // rejected source IDs and successfully published market pins.
+          // Merge them directly into the NEW review queue instead of
+          // routing through generic processed-scraper history. This lets
+          // a market recover automatically if an older browser approval
+          // acknowledged it even though the public save did not finish.
+          const latestReview =
+            getNewReviewItems()
+              .map(
+                normalizePinRecord
+              )
 
-                city:
-                  'toronto',
 
-                type:
-                  'new',
+          const existingFarmersKeys =
+            new Set(
+              latestReview
+                .filter(
+                  isFarmersMarketRecord
+                )
+                .map(
+                  (record) =>
+                    String(
+                      record?.externalId ||
+                      record?.sourceId ||
+                      ''
+                    )
+                )
+                .filter(
+                  Boolean
+                )
+            )
 
-                category:
-                  'market',
 
-                communityType:
-                  'farmers-market',
+          const incomingFarmers =
+            payload.records
+              .map(
+                (record) =>
+                  normalizePinRecord({
+                    ...record,
 
-                lifecycleOverride:
-                  'keep-live',
-              })
-            }
-          )
+                    id:
+                      record.id ||
+                      createAdminId(
+                        'new-review'
+                      ),
+
+                    city:
+                      'toronto',
+
+                    type:
+                      'new',
+
+                    category:
+                      'market',
+
+                    communityType:
+                      'farmers-market',
+
+                    lifecycleOverride:
+                      'keep-live',
+
+                    reviewStatus:
+                      'pending',
+
+                    active:
+                      false,
+
+                    receivedAt:
+                      record.receivedAt ||
+                      new Date()
+                        .toISOString(),
+                  })
+              )
+              .filter(
+                (record) => {
+                  const key =
+                    String(
+                      record?.externalId ||
+                      record?.sourceId ||
+                      ''
+                    )
+
+
+                  return (
+                    key &&
+                    !existingFarmersKeys.has(
+                      key
+                    )
+                  )
+                }
+              )
+
+
+          const nextReview =
+            incomingFarmers.length >
+              0
+              ? [
+                  ...incomingFarmers,
+                  ...latestReview,
+                ]
+              : latestReview
+
+
+          if (
+            incomingFarmers.length >
+              0
+          ) {
+            saveNewReviewItems(
+              nextReview
+            )
+          }
 
 
           if (
             !cancelled
           ) {
             setAllNewReviewItems(
-              getNewReviewItems()
-                .map(
-                  normalizePinRecord
-                )
+              nextReview
             )
           }
         }
@@ -17495,6 +17581,149 @@ function AdminRoom() {
     }
 
 
+    // Farmers' Markets publish server-first. Do not rewrite the giant
+    // legacy elppa-geographic-new document as part of approval. Only
+    // remove the review card after the dedicated Toronto NEW server
+    // confirms the public market pin was saved.
+    if (
+      tab ===
+        'new' &&
+      isFarmersMarketRecord(
+        reviewRecord
+      )
+    ) {
+      const latestReviewItems =
+        getNewReviewItems()
+          .map(
+            normalizePinRecord
+          )
+
+
+      const latestReviewRecord =
+        latestReviewItems.find(
+          (item) =>
+            item.id ===
+            reviewRecord.id
+        ) ||
+        normalizePinRecord(
+          reviewRecord
+        )
+
+
+      setApprovingReviewId(
+        latestReviewRecord.id
+      )
+
+
+      const publishedRecord =
+        await syncNewRecordForSave(
+          normalizePinRecord({
+            ...latestReviewRecord,
+
+            city:
+              'toronto',
+
+            type:
+              'new',
+
+            category:
+              'market',
+
+            communityType:
+              'farmers-market',
+
+            lifecycleOverride:
+              'keep-live',
+
+            active:
+              true,
+          })
+        )
+
+
+      if (
+        !publishedRecord ||
+        publishedRecord
+          .serverSyncPending ===
+          true
+      ) {
+        setApprovingReviewId(
+          null
+        )
+
+
+        return
+      }
+
+
+      // Keep the just-published market visible in the current Admin
+      // session without mirroring the old giant NEW browser document.
+      setAllNewItems(
+        (current) => {
+          const existing =
+            Array.isArray(
+              current
+            )
+              ? current
+              : []
+
+
+          const identity =
+            String(
+              publishedRecord
+                ?.externalId ||
+              publishedRecord
+                ?.sourceId ||
+              ''
+            )
+
+
+          return [
+            publishedRecord,
+            ...existing.filter(
+              (record) =>
+                String(
+                  record?.externalId ||
+                  record?.sourceId ||
+                  ''
+                ) !==
+                identity
+            ),
+          ]
+        }
+      )
+
+
+      const nextCityReview =
+        latestReviewItems
+          .filter(
+            (item) =>
+              belongsToCity(
+                item,
+                cityKey
+              )
+          )
+          .filter(
+            (item) =>
+              item.id !==
+              latestReviewRecord.id
+          )
+
+
+      persistReview(
+        nextCityReview
+      )
+
+
+      setApprovingReviewId(
+        null
+      )
+
+
+      return
+    }
+
+
     if (
       tab ===
         'news' &&
@@ -17886,6 +18115,102 @@ function AdminRoom() {
         confirmText
       )
     ) {
+      return
+    }
+
+
+    const isFarmersMarket =
+      tab ===
+        'new' &&
+      isFarmersMarketRecord(
+        reviewRecord
+      )
+
+
+    // Farmers' Market rejection is authoritative in the dedicated
+    // server-side source ledger. Do not add it to generic scraper
+    // processed history.
+    if (
+      isFarmersMarket
+    ) {
+      try {
+        const response =
+          await fetch(
+            FARMERS_MARKETS_REJECT_ENDPOINT,
+            {
+              method:
+                'POST',
+
+              headers: {
+                'Content-Type':
+                  'application/json',
+
+                Accept:
+                  'application/json',
+              },
+
+              body:
+                JSON.stringify({
+                  sourceId:
+                    reviewRecord.sourceId,
+                }),
+            }
+          )
+
+
+        const payload =
+          await response.json()
+
+
+        if (
+          !response.ok ||
+          payload?.ok !==
+            true
+        ) {
+          throw new Error(
+            payload?.error ||
+            (
+              'Farmers market rejection failed · ' +
+              response.status
+            )
+          )
+        }
+      }
+      catch (
+        error
+      ) {
+        console.warn(
+          'FARMERS MARKETS · REJECT PERSIST FAILED:',
+          error
+        )
+
+
+        window.alert(
+          'This farmers market was not rejected because the server could not save the rejection. Please try again.'
+        )
+
+
+        return
+      }
+
+
+      persistReview(
+        reviewItems.filter(
+          (item) =>
+            item.id !==
+            reviewRecord.id
+        )
+      )
+
+
+      if (
+        editingReviewId ===
+        reviewRecord.id
+      ) {
+        resetDraft()
+      }
+
+
       return
     }
 
