@@ -9078,10 +9078,22 @@ function createMarker({
 
         text:
           formatNewsDateTime(
-            getNewsRecordTimestamp(
+            isTtcPin(
               pin
-            ) ||
-            pin.publishedAt
+            )
+              ? (
+                  pin.serverPublishedAt ||
+                  pin.approvedAt ||
+                  pin.firstPublishedAt ||
+                  pin.createdAt ||
+                  pin.publishedAt
+                )
+              : (
+                  getNewsRecordTimestamp(
+                    pin
+                  ) ||
+                  pin.publishedAt
+                )
           ),
       })
     }
@@ -9275,9 +9287,10 @@ function createMarker({
             pin
           )
             ? formatNewsDateTime(
-                getNewsRecordTimestamp(
-                  pin
-                ) ||
+                pin.serverPublishedAt ||
+                pin.approvedAt ||
+                pin.firstPublishedAt ||
+                pin.createdAt ||
                 pin.publishedAt
               )
             : formatNewsDate(
