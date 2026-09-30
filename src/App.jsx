@@ -2281,12 +2281,12 @@ function GeographicApp() {
              ====================================================== */
           @media (min-width: 701px) {
             .brand {
-              top: 20px !important;
-              left: 24px !important;
+              top: 12px !important;
+              left: 18px !important;
               width: auto !important;
-              max-width: calc(100vw - 48px) !important;
-              padding: 7px 10px 7px 16px !important;
-              gap: 7px !important;
+              max-width: calc(100vw - 36px) !important;
+              padding: 4px 8px 4px 12px !important;
+              gap: 4px !important;
               border: 1px solid rgba(17,17,17,0.12) !important;
               border-radius: 2px !important;
               background: rgba(255,255,255,0.96) !important;
@@ -2297,7 +2297,7 @@ function GeographicApp() {
             }
 
             .brand-main-row {
-              min-height: 40px !important;
+              min-height: 30px !important;
               gap: 0 !important;
             }
 
@@ -2305,15 +2305,15 @@ function GeographicApp() {
               display: flex !important;
               align-items: center !important;
               align-self: stretch !important;
-              margin-right: 8px !important;
-              padding-right: 18px !important;
+              margin-right: 5px !important;
+              padding-right: 12px !important;
               border-right: 1px solid rgba(17,17,17,0.13) !important;
               white-space: nowrap !important;
               color: #111 !important;
-              font-size: 13px !important;
+              font-size: 11px !important;
               font-weight: 850 !important;
               line-height: 1 !important;
-              letter-spacing: 0.17em !important;
+              letter-spacing: 0.14em !important;
             }
 
             .brand-primary-filters {
@@ -2323,16 +2323,16 @@ function GeographicApp() {
 
             .brand .brand-mode-button,
             .brand .about-button {
-              min-height: 40px !important;
-              padding: 0 13px !important;
+              min-height: 30px !important;
+              padding: 0 10px !important;
               border: 0 !important;
               border-radius: 0 !important;
               background: transparent !important;
               color: #111 !important;
-              font-size: 9px !important;
+              font-size: 8px !important;
               font-weight: 800 !important;
               line-height: 1 !important;
-              letter-spacing: 0.11em !important;
+              letter-spacing: 0.10em !important;
               box-shadow: none !important;
               transition:
                 background 120ms ease,
@@ -2355,22 +2355,22 @@ function GeographicApp() {
             }
 
             .brand-primary-filters > .map-utilities {
-              margin-left: 4px !important;
+              margin-left: 3px !important;
               gap: 0 !important;
               border-left: 1px solid rgba(17,17,17,0.13) !important;
             }
 
             .brand-primary-filters .map-utility-button {
-              min-width: 40px !important;
-              min-height: 40px !important;
-              padding: 0 12px !important;
+              min-width: 32px !important;
+              min-height: 30px !important;
+              padding: 0 9px !important;
               border: 0 !important;
               border-radius: 0 !important;
               background: transparent !important;
               color: #111 !important;
-              font-size: 9px !important;
+              font-size: 8px !important;
               font-weight: 800 !important;
-              letter-spacing: 0.11em !important;
+              letter-spacing: 0.10em !important;
             }
 
             .brand-primary-filters .map-utility-button:hover {
@@ -2378,7 +2378,7 @@ function GeographicApp() {
             }
 
             .brand-primary-filters .gps-toggle-button {
-              min-width: 48px !important;
+              min-width: 40px !important;
             }
 
             .brand-primary-filters .gps-toggle-button-active,
@@ -2388,18 +2388,30 @@ function GeographicApp() {
             }
 
             .brand-primary-filters .search-control .map-utility-button {
-              width: 40px !important;
-              min-width: 40px !important;
+              width: 32px !important;
+              min-width: 32px !important;
               padding: 0 !important;
-              font-size: 15px !important;
+              font-size: 13px !important;
               font-weight: 500 !important;
               letter-spacing: 0 !important;
             }
 
             .news-history-control,
             .content-subfilters {
-              padding-top: 7px !important;
+              padding-top: 4px !important;
               border-top: 1px solid rgba(17,17,17,0.10) !important;
+            }
+
+            .brand .content-subfilters {
+              gap: 4px !important;
+            }
+
+            .brand .content-subfilter {
+              min-height: 26px !important;
+              padding: 4px 9px !important;
+              font-size: 7.5px !important;
+              line-height: 1 !important;
+              letter-spacing: 0.07em !important;
             }
 
             /* Opening welcome / HOW-TO panel: make it comfortably readable. */
