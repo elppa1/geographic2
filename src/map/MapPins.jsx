@@ -94,10 +94,47 @@ const COMMUNITY_CATEGORIES = [
   'bike-park',
   'sports-court',
   'pool',
+  'splash-pad',
+  'wading-pool',
+  'water-park',
+  'dry-pad',
   'market',
   'park',
   'public-space',
 ]
+
+
+const SPORTS_REC_CATEGORIES = [
+  'rink',
+  'skatepark',
+  'basketball-court',
+  'tennis-court',
+  'pickleball-court',
+  'bike-park',
+  'sports-court',
+  'pool',
+  'splash-pad',
+  'wading-pool',
+  'water-park',
+  'dry-pad',
+]
+
+
+const SPORTS_REC_ICON_KEYS = [
+  'rink',
+  'skateboard',
+  'dry-pad',
+  'basketball',
+  'tennis',
+  'pickleball',
+  'bike-park',
+  'sports-court',
+  'pool',
+  'splash-pad',
+  'wading-pool',
+  'water-park',
+]
+
 
 const DEVELOPMENT_CATEGORIES = [
   'development',
@@ -301,6 +338,38 @@ function newPinMatchesSubtype(
     )
 
 
+  const sportsRecKeys =
+    [
+      category,
+      pin.eventPinIcon,
+      pin.communityIcon,
+      pin.facilityType,
+    ]
+      .map(
+        (value) =>
+          String(
+            value ||
+            ''
+          )
+            .trim()
+            .toLowerCase()
+      )
+
+
+  const sportsRecPin =
+    explicitType ===
+      'sports-rec' ||
+    sportsRecKeys.some(
+      (value) =>
+        SPORTS_REC_CATEGORIES.includes(
+          value
+        ) ||
+        SPORTS_REC_ICON_KEYS.includes(
+          value
+        )
+    )
+
+
   if (
     subtype ===
       'all'
@@ -346,7 +415,18 @@ function newPinMatchesSubtype(
     subtype ===
       'community'
   ) {
-    return communityPin
+    return (
+      communityPin &&
+      !sportsRecPin
+    )
+  }
+
+
+  if (
+    subtype ===
+      'sports-rec'
+  ) {
+    return sportsRecPin
   }
 
 

@@ -3380,6 +3380,23 @@ function GeographicApp() {
               COMMUNITY
             </button>
 
+            <button
+              type="button"
+              className={
+                newSubtypeFilter ===
+                  'sports-rec'
+                  ? 'content-subfilter content-subfilter-active'
+                  : 'content-subfilter'
+              }
+              onClick={() =>
+                setNewSubtypeFilter(
+                  'sports-rec'
+                )
+              }
+            >
+              SPORTS + REC
+            </button>
+
             {newSubtypeFilter ===
               'businesses' && (
               <div className="news-history-slider-shell">
@@ -3503,10 +3520,20 @@ function GeographicApp() {
               </h2>
 
               <p>
-                The community section allows you to see upcoming community
-                programs in your area and across the city. Along with ice times,
-                swim times, you can also view the outdoor recreational facilities
-                available, drop-in programs, adult learning etc.
+                See libraries, community centres, farmers' markets, cinemas,
+                learning programs and other community places and programs across
+                the city.
+              </p>
+            </section>
+
+            <section className="about-section">
+              <h2>
+                SPORTS + REC
+              </h2>
+
+              <p>
+                See rinks, pools, skateparks, courts, bike parks and other sports
+                and recreation facilities and programs across the city.
               </p>
             </section>
 
