@@ -1694,7 +1694,7 @@ function GeographicApp() {
               right: 8px !important;
               width: auto !important;
               min-height: 30px;
-              padding: 5px 6px !important;
+              padding: 8px 6px 5px !important;
               gap: 4px !important;
               scale: 1;
               transform-origin: top left;
