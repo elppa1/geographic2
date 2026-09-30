@@ -127,6 +127,39 @@ const MISSING_POLLS_TO_RESOLVE =
   2
 
 
+const TPS_MISSING_SOURCE_CHECK_MS =
+  30 * 60 * 1000
+
+
+const TPS_MISSING_SOURCE_HEADERS = {
+  'User-Agent':
+    (
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
+      'AppleWebKit/537.36 (KHTML, like Gecko) ' +
+      'Chrome/151.0.0.0 Safari/537.36'
+    ),
+
+  Accept:
+    (
+      'text/html,application/xhtml+xml,' +
+      'application/xml;q=0.9,image/avif,' +
+      'image/webp,*/*;q=0.8'
+    ),
+
+  'Accept-Language':
+    'en-CA,en;q=0.9',
+
+  'Cache-Control':
+    'no-cache',
+
+  Pragma:
+    'no-cache',
+
+  Referer:
+    'https://www.tps.ca/',
+}
+
+
 const MAX_EVENTS =
   1500
 
@@ -4506,6 +4539,27 @@ export async function syncTorontoLiveNewsroom() {
       ])
 
 
+    const [
+      policeMissing,
+    ] =
+      await Promise.allSettled([
+        (async () => {
+          const restored =
+            await restoreIncorrectlyArchivedPoliceMissingPins()
+
+
+          const archived =
+            await reconcilePublishedPoliceMissingSourcePages()
+
+
+          return {
+            restored,
+            archived,
+          }
+        })(),
+      ])
+
+
     const result = {
       ok:
         true,
@@ -4576,6 +4630,38 @@ export async function syncTorontoLiveNewsroom() {
                 String(
                   fire.reason?.cause?.message ||
                   fire.reason?.cause ||
+                  ''
+                ),
+            },
+
+      policeMissing:
+        policeMissing.status ===
+          'fulfilled'
+          ? policeMissing.value
+          : {
+              error:
+                String(
+                  policeMissing.reason?.message ||
+                  policeMissing.reason
+                ),
+
+              name:
+                String(
+                  policeMissing.reason?.name ||
+                  ''
+                ),
+
+              code:
+                String(
+                  policeMissing.reason?.code ||
+                  policeMissing.reason?.cause?.code ||
+                  ''
+                ),
+
+              cause:
+                String(
+                  policeMissing.reason?.cause?.message ||
+                  policeMissing.reason?.cause ||
                   ''
                 ),
             },
@@ -5121,12 +5207,31 @@ async function archivePublishedNewsRecord({
 }
 
 
-async function publishedPoliceMissingSourcePageIsAvailable(
+const policeMissingSourcePageCache =
+  new Map()
+
+
+function policeMissingSourcePageUrl(
   record
 ) {
+  return cleanText(
+    record?.sourceUrl ||
+    record?.tpsReleaseUrl ||
+    ''
+  )
+}
+
+
+async function publishedPoliceMissingSourcePageStatus(
+  record,
+  {
+    force =
+      false,
+  } = {}
+) {
   const sourceUrl =
-    cleanText(
-      record?.sourceUrl
+    policeMissingSourcePageUrl(
+      record
     )
 
 
@@ -5135,8 +5240,38 @@ async function publishedPoliceMissingSourcePageIsAvailable(
       sourceUrl
     )
   ) {
-    return false
+    return 'unknown'
   }
+
+
+  const now =
+    Date.now()
+
+
+  const cached =
+    policeMissingSourcePageCache.get(
+      sourceUrl
+    )
+
+
+  if (
+    force !==
+      true &&
+    cached &&
+    now -
+      Number(
+        cached.checkedAt ||
+        0
+      ) <
+      TPS_MISSING_SOURCE_CHECK_MS
+  ) {
+    return cached.status ||
+      'unknown'
+  }
+
+
+  let status =
+    'unknown'
 
 
   try {
@@ -5144,13 +5279,11 @@ async function publishedPoliceMissingSourcePageIsAvailable(
       await fetch(
         sourceUrl,
         {
-          headers: {
-            Accept:
-              'text/html,*/*',
+          method:
+            'GET',
 
-            'User-Agent':
-              'ELPPA-Geographic/1.0',
-          },
+          headers:
+            TPS_MISSING_SOURCE_HEADERS,
 
           cache:
             'no-store',
@@ -5161,7 +5294,21 @@ async function publishedPoliceMissingSourcePageIsAvailable(
       )
 
 
-    return response.ok
+    if (
+      response.ok
+    ) {
+      status =
+        'available'
+    }
+    else if (
+      response.status ===
+        404 ||
+      response.status ===
+        410
+    ) {
+      status =
+        'gone'
+    }
   }
   catch (
     error
@@ -5171,14 +5318,24 @@ async function publishedPoliceMissingSourcePageIsAvailable(
       sourceUrl,
       error
     )
-
-
-    return false
   }
+
+
+  policeMissingSourcePageCache.set(
+    sourceUrl,
+    {
+      status,
+      checkedAt:
+        now,
+    }
+  )
+
+
+  return status
 }
 
 
-async function restoreShelfExpiredPoliceMissingPins() {
+async function restoreIncorrectlyArchivedPoliceMissingPins() {
   await ensureLoaded()
 
 
@@ -5201,16 +5358,24 @@ async function restoreShelfExpiredPoliceMissingPins() {
       {}
     )
   ) {
-    if (
-      record?.active !==
-        false ||
-      record?.resolved ===
-        true ||
+    const archiveReason =
       cleanText(
         record?.archiveReason
       )
-        .toLowerCase() !==
+        .toLowerCase()
+
+
+    const repairableLegacyRemoval =
+      archiveReason ===
         'expired-shelf-life' ||
+      archiveReason ===
+        'missing-from-live-feed'
+
+
+    if (
+      record?.active !==
+        false ||
+      !repairableLegacyRemoval ||
       !policeRecordIsMissingOrElopeePerson(
         record
       )
@@ -5219,14 +5384,15 @@ async function restoreShelfExpiredPoliceMissingPins() {
     }
 
 
-    const sourceStillAvailable =
-      await publishedPoliceMissingSourcePageIsAvailable(
+    const sourceStatus =
+      await publishedPoliceMissingSourcePageStatus(
         record
       )
 
 
     if (
-      !sourceStillAvailable
+      sourceStatus !==
+        'available'
     ) {
       continue
     }
@@ -5240,6 +5406,12 @@ async function restoreShelfExpiredPoliceMissingPins() {
 
       resolved:
         false,
+
+      resolvedAt:
+        '',
+
+      resolutionReason:
+        '',
 
       expiresAt:
         '',
@@ -5289,6 +5461,12 @@ async function restoreShelfExpiredPoliceMissingPins() {
         resolved:
           false,
 
+        resolvedAt:
+          '',
+
+        resolutionReason:
+          '',
+
         missingPolls:
           0,
       }
@@ -5321,7 +5499,7 @@ async function restoreShelfExpiredPoliceMissingPins() {
         'published-news-republished',
 
       outcome:
-        'repair-tps-missing-shelf-expiry',
+        'repair-tps-missing-lifecycle',
 
       record,
     })
@@ -5329,6 +5507,139 @@ async function restoreShelfExpiredPoliceMissingPins() {
 
 
   return restoredRecords.length
+}
+
+
+async function reconcilePublishedPoliceMissingSourcePages() {
+  await ensureLoaded()
+
+
+  let archived =
+    0
+
+
+  const publishedRecords =
+    Object.values(
+      store.publishedNews ||
+      {}
+    )
+
+
+  for (
+    const record
+    of publishedRecords
+  ) {
+    if (
+      record?.active ===
+        false ||
+      record?.resolved ===
+        true ||
+      !policeRecordIsMissingOrElopeePerson(
+        record
+      )
+    ) {
+      continue
+    }
+
+
+    const sourceStatus =
+      await publishedPoliceMissingSourcePageStatus(
+        record
+      )
+
+
+    // Only a direct, explicit 404/410 from the original TPS release page
+    // can remove an unresolved missing-person / elopee pin here. Network
+    // failures, 403s, 5xx responses, and absence from a listing/feed are
+    // all treated as unknown and leave the public pin untouched.
+    if (
+      sourceStatus !==
+        'gone'
+    ) {
+      continue
+    }
+
+
+    const resolvedAt =
+      new Date()
+        .toISOString()
+
+
+    const archivedRecord =
+      await archivePublishedNewsRecord({
+        id:
+          record.id ||
+          '',
+
+        externalId:
+          record.externalId ||
+          '',
+
+        record: {
+          ...record,
+
+          active:
+            false,
+
+          resolved:
+            true,
+
+          resolvedAt,
+
+          resolutionReason:
+            'police-missing-source-page-unavailable',
+        },
+
+        reason:
+          'police-missing-source-page-unavailable',
+      })
+
+
+    const externalId =
+      cleanText(
+        archivedRecord?.externalId ||
+        record?.externalId
+      )
+
+
+    if (
+      externalId &&
+      store.sources?.police?.[
+        externalId
+      ]
+    ) {
+      store.sources.police[
+        externalId
+      ] = {
+        ...store.sources.police[
+          externalId
+        ],
+
+        active:
+          false,
+
+        published:
+          false,
+
+        resolved:
+          true,
+
+        resolvedAt,
+
+        resolutionReason:
+          'police-missing-source-page-unavailable',
+      }
+
+
+      await persistStore()
+    }
+
+
+    archived++
+  }
+
+
+  return archived
 }
 
 
@@ -5445,7 +5756,7 @@ async function getPublishedNewsRecords({
   await ensureLoaded()
 
 
-  await restoreShelfExpiredPoliceMissingPins()
+  await restoreIncorrectlyArchivedPoliceMissingPins()
 
 
   await expirePublishedNewsShelfLife()
