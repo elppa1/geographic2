@@ -356,7 +356,7 @@ function newPinMatchesSubtype(
       )
 
 
-  const sportsRecPin =
+  const sportsRecFacilityPin =
     explicitType ===
       'sports-rec' ||
     sportsRecKeys.some(
@@ -368,6 +368,28 @@ function newPinMatchesSubtype(
           value
         )
     )
+
+
+  const sportsRecProgramPin =
+    (
+      Array.isArray(
+        pin?.poolPrograms
+      ) &&
+      pin.poolPrograms.length >
+        0
+    ) ||
+    (
+      Array.isArray(
+        pin?.rinkPrograms
+      ) &&
+      pin.rinkPrograms.length >
+        0
+    )
+
+
+  const sportsRecPin =
+    sportsRecFacilityPin ||
+    sportsRecProgramPin
 
 
   if (
@@ -417,7 +439,7 @@ function newPinMatchesSubtype(
   ) {
     return (
       communityPin &&
-      !sportsRecPin
+      !sportsRecFacilityPin
     )
   }
 
@@ -9865,9 +9887,18 @@ function createMarker({
           0
 
 
+      const communityProgramsOnly =
+        newSubtypeFilter ===
+          'community'
+
+
+      const sportsRecProgramsOnly =
+        newSubtypeFilter ===
+          'sports-rec'
+
+
       if (
-        !hasPoolPrograms &&
-        !hasRinkPrograms
+        communityProgramsOnly
       ) {
         appendCommunityPrograms({
           parent:
@@ -9876,41 +9907,105 @@ function createMarker({
           pin,
         })
       }
-
-
-      if (
-        hasPoolPrograms
+      else if (
+        sportsRecProgramsOnly
       ) {
-        appendCommunityPrograms({
-          parent:
-            popupContent,
+        if (
+          hasPoolPrograms
+        ) {
+          appendCommunityPrograms({
+            parent:
+              popupContent,
 
-          pin,
+            pin,
 
-          programsOverride:
-            pin.poolPrograms,
+            programsOverride:
+              pin.poolPrograms,
 
-          headingText:
-            'SWIM',
-        })
+            headingText:
+              'SWIM',
+          })
+        }
+
+
+        if (
+          hasRinkPrograms
+        ) {
+          appendCommunityPrograms({
+            parent:
+              popupContent,
+
+            pin,
+
+            programsOverride:
+              pin.rinkPrograms,
+
+            headingText:
+              'SKATING',
+          })
+        }
+
+
+        if (
+          !hasPoolPrograms &&
+          !hasRinkPrograms
+        ) {
+          appendCommunityPrograms({
+            parent:
+              popupContent,
+
+            pin,
+          })
+        }
       }
+      else {
+        if (
+          !hasPoolPrograms &&
+          !hasRinkPrograms
+        ) {
+          appendCommunityPrograms({
+            parent:
+              popupContent,
+
+            pin,
+          })
+        }
 
 
-      if (
-        hasRinkPrograms
-      ) {
-        appendCommunityPrograms({
-          parent:
-            popupContent,
+        if (
+          hasPoolPrograms
+        ) {
+          appendCommunityPrograms({
+            parent:
+              popupContent,
 
-          pin,
+            pin,
 
-          programsOverride:
-            pin.rinkPrograms,
+            programsOverride:
+              pin.poolPrograms,
 
-          headingText:
-            'SKATING',
-        })
+            headingText:
+              'SWIM',
+          })
+        }
+
+
+        if (
+          hasRinkPrograms
+        ) {
+          appendCommunityPrograms({
+            parent:
+              popupContent,
+
+            pin,
+
+            programsOverride:
+              pin.rinkPrograms,
+
+            headingText:
+              'SKATING',
+          })
+        }
       }
     }
 
