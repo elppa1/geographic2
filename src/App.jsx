@@ -1925,6 +1925,7 @@ function GeographicApp() {
             }
 
             .timeline-shell {
+              position: fixed !important;
               scale: 1;
               transform-origin: bottom center;
               transform: translate(-50%, -42px) !important;
