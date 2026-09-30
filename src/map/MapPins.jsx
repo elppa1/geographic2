@@ -3034,6 +3034,562 @@ function formatCommunityProgramPrice(
 }
 
 
+function parseFarmersMarketDate(
+  value
+) {
+  const text =
+    String(
+      value ||
+      ''
+    )
+      .trim()
+
+
+  if (
+    !text
+  ) {
+    return null
+  }
+
+
+  const date =
+    /^\d{4}-\d{2}-\d{2}$/.test(
+      text
+    )
+      ? new Date(
+          `${text}T12:00:00`
+        )
+      : new Date(
+          text
+        )
+
+
+  return Number.isNaN(
+    date.getTime()
+  )
+    ? null
+    : date
+}
+
+
+function formatFarmersMarketTime(
+  value
+) {
+  const match =
+    String(
+      value ||
+      ''
+    )
+      .trim()
+      .match(
+        /^(\d{1,2}):(\d{2})$/
+      )
+
+
+  if (
+    !match
+  ) {
+    return ''
+  }
+
+
+  const hour =
+    Number(
+      match[1]
+    )
+
+
+  const minute =
+    Number(
+      match[2]
+    )
+
+
+  if (
+    !Number.isFinite(
+      hour
+    ) ||
+    !Number.isFinite(
+      minute
+    ) ||
+    hour >
+      23 ||
+    minute >
+      59
+  ) {
+    return ''
+  }
+
+
+  const date =
+    new Date(
+      2000,
+      0,
+      1,
+      hour,
+      minute
+    )
+
+
+  return date
+    .toLocaleTimeString(
+      'en-CA',
+      {
+        hour:
+          'numeric',
+
+        minute:
+          minute ===
+            0
+            ? undefined
+            : '2-digit',
+
+        hour12:
+          true,
+      }
+    )
+    .replace(
+      /\s*a\.m\./i,
+      ' AM'
+    )
+    .replace(
+      /\s*p\.m\./i,
+      ' PM'
+    )
+    .replace(
+      /\./g,
+      ''
+    )
+    .toUpperCase()
+}
+
+
+function getFarmersMarketStatus(
+  pin
+) {
+  if (
+    String(
+      pin?.communityType ||
+      ''
+    )
+      .toLowerCase() !==
+      'farmers-market'
+  ) {
+    return null
+  }
+
+
+  const now =
+    new Date()
+
+
+  const today =
+    new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      12
+    )
+
+
+  const seasonType =
+    String(
+      pin?.seasonType ||
+      ''
+    )
+      .toLowerCase()
+
+
+  const seasonStart =
+    parseFarmersMarketDate(
+      pin?.seasonStart
+    )
+
+
+  const seasonEnd =
+    parseFarmersMarketDate(
+      pin?.seasonEnd
+    )
+
+
+  const yearRound =
+    seasonType ===
+      'year-round'
+
+
+  const inSeason =
+    yearRound ||
+    (
+      seasonStart &&
+      seasonEnd &&
+      today >=
+        seasonStart &&
+      today <=
+        seasonEnd
+    )
+
+
+  const weekdays =
+    Array.isArray(
+      pin?.weekdays
+    )
+      ? pin.weekdays
+          .map(
+            (value) =>
+              String(
+                value ||
+                ''
+              )
+                .trim()
+          )
+          .filter(
+            Boolean
+          )
+      : []
+
+
+  const openTime =
+    formatFarmersMarketTime(
+      pin?.openTime
+    )
+
+
+  const closeTime =
+    formatFarmersMarketTime(
+      pin?.closeTime
+    )
+
+
+  const hours =
+    openTime &&
+    closeTime
+      ? `${openTime}–${closeTime}`
+      : String(
+          pin?.hoursText ||
+          ''
+        )
+          .trim()
+
+
+  if (
+    !inSeason
+  ) {
+    const nextStart =
+      parseFarmersMarketDate(
+        pin?.nextSeasonStart ||
+        (
+          seasonStart &&
+          seasonStart.getFullYear() >
+            today.getFullYear()
+            ? pin?.seasonStart
+            : ''
+        )
+      )
+
+
+    if (
+      nextStart
+    ) {
+      return {
+        status:
+          'OFF-SEASON',
+
+        line1:
+          'Closed for the season',
+
+        line2:
+          `Reopens ${nextStart.toLocaleDateString(
+            'en-CA',
+            {
+              year:
+                'numeric',
+
+              month:
+                'long',
+
+              day:
+                'numeric',
+            }
+          )}`,
+      }
+    }
+
+
+    const expectedMonth =
+      Number(
+        pin?.expectedReopenMonth
+      )
+
+
+    const monthName =
+      Number.isFinite(
+        expectedMonth
+      ) &&
+      expectedMonth >=
+        1 &&
+      expectedMonth <=
+        12
+        ? new Date(
+            2000,
+            expectedMonth -
+              1,
+            1
+          )
+            .toLocaleDateString(
+              'en-CA',
+              {
+                month:
+                  'long',
+              }
+            )
+        : ''
+
+
+    return {
+      status:
+        'OFF-SEASON',
+
+      line1:
+        'Closed for the season',
+
+      line2:
+        monthName
+          ? `Expected to reopen around ${monthName}`
+          : 'Next season dates not yet announced',
+
+      line3:
+        monthName
+          ? `${
+              expectedMonth >
+                today.getMonth() +
+                  1
+                ? today.getFullYear()
+                : today.getFullYear() +
+                  1
+            } dates not yet announced`
+          : '',
+    }
+  }
+
+
+  const todayName =
+    today.toLocaleDateString(
+      'en-CA',
+      {
+        weekday:
+          'long',
+      }
+    )
+
+
+  const openToday =
+    weekdays.some(
+      (weekday) =>
+        weekday.toLowerCase() ===
+        todayName.toLowerCase()
+    )
+
+
+  let nextMarket =
+    ''
+
+
+  if (
+    weekdays.length >
+      0
+  ) {
+    const dayIndexes = {
+      Sunday:
+        0,
+      Monday:
+        1,
+      Tuesday:
+        2,
+      Wednesday:
+        3,
+      Thursday:
+        4,
+      Friday:
+        5,
+      Saturday:
+        6,
+    }
+
+
+    let best =
+      null
+
+
+    weekdays.forEach(
+      (weekday) => {
+        const target =
+          dayIndexes[
+            weekday
+          ]
+
+
+        if (
+          target ===
+            undefined
+        ) {
+          return
+        }
+
+
+        let delta =
+          (
+            target -
+            today.getDay() +
+            7
+          ) %
+          7
+
+
+        if (
+          delta ===
+            0 &&
+          !openToday
+        ) {
+          delta =
+            7
+        }
+
+
+        if (
+          best ===
+            null ||
+          delta <
+            best.delta
+        ) {
+          best = {
+            delta,
+            weekday,
+          }
+        }
+      }
+    )
+
+
+    if (
+      best
+    ) {
+      nextMarket =
+        best.weekday +
+        (
+          hours
+            ? ` · ${hours}`
+            : ''
+        )
+    }
+  }
+
+
+  return {
+    status:
+      yearRound
+        ? 'YEAR-ROUND'
+        : 'IN SEASON',
+
+    line1:
+      openToday
+        ? (
+            hours
+              ? `OPEN TODAY · ${hours}`
+              : 'OPEN TODAY'
+          )
+        : 'CLOSED TODAY',
+
+    line2:
+      !openToday &&
+      nextMarket
+        ? `Next market: ${nextMarket}`
+        : (
+            openToday &&
+            weekdays.length >
+              0
+              ? `${weekdays.join(' · ')}${hours ? ` · ${hours}` : ''}`
+              : ''
+          ),
+  }
+}
+
+
+function appendFarmersMarketStatus({
+  parent,
+  pin,
+}) {
+  const status =
+    getFarmersMarketStatus(
+      pin
+    )
+
+
+  if (
+    !status
+  ) {
+    return
+  }
+
+
+  const shell =
+    document.createElement(
+      'div'
+    )
+
+
+  shell.style.marginTop =
+    '12px'
+
+
+  shell.style.paddingTop =
+    '10px'
+
+
+  shell.style.borderTop =
+    '1px solid rgba(0,0,0,0.12)'
+
+
+  appendText({
+    parent:
+      shell,
+
+    className:
+      'geographic-pin-year',
+
+    text:
+      status.status,
+  })
+
+
+  ;[
+    status.line1,
+    status.line2,
+    status.line3,
+  ]
+    .filter(
+      Boolean
+    )
+    .forEach(
+      (text) => {
+        appendText({
+          parent:
+            shell,
+
+          className:
+            'geographic-pin-description',
+
+          text,
+        })
+      }
+    )
+
+
+  parent.appendChild(
+    shell
+  )
+}
+
+
 function appendOutdoorRecreationUses({
   parent,
   pin,
@@ -9156,6 +9712,14 @@ function createMarker({
         )
       )
     ) {
+      appendFarmersMarketStatus({
+        parent:
+          popupContent,
+
+        pin,
+      })
+
+
       appendRinkStatus({
         parent:
           popupContent,

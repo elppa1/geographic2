@@ -88,6 +88,10 @@ import {
 } from './feeds/toronto/pools.js'
 
 import {
+  farmersMarketsFeed,
+} from './feeds/toronto/farmersMarkets.js'
+
+import {
   torontoHistoricFeed,
 } from './feeds/toronto/historic.js'
 
@@ -1407,6 +1411,7 @@ const plugins = [
   rinksFeed(),
   outdoorRecreationFeed(),
   poolsFeed(),
+  farmersMarketsFeed(),
   torontoHistoricFeed(),
   torontoAdminStoreMirrorFeed(),
 ]

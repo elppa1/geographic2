@@ -9,6 +9,7 @@ import {
 } from '../cities/index.js'
 
 import {
+  addNewReviewItem,
   applyNewsItemUpdate,
   createAdminId,
   downloadHistoricMigrationSnapshot,
@@ -143,6 +144,18 @@ const TORONTO_NEW_SERVER_MIGRATION_KEY =
 
 const PUBLISHED_NEW_PULL_MS =
   15 * 1000
+
+
+const FARMERS_MARKETS_INCOMING_ENDPOINT =
+  '/api/geographic/toronto/new/community/farmers-markets/incoming'
+
+
+const FARMERS_MARKETS_REJECT_ENDPOINT =
+  '/api/geographic/toronto/new/community/farmers-markets/reject'
+
+
+const FARMERS_MARKETS_ADMIN_POLL_MS =
+  30 * 60 * 1000
 
 
 const PERSISTENT_NEWSROOM_PULL_MS =
@@ -6079,6 +6092,130 @@ function AdminRoom() {
       }
     },
     []
+  )
+
+
+  useEffect(
+    () => {
+      if (
+        !adminStorePersistenceReady ||
+        cityKey !==
+          'toronto'
+      ) {
+        return undefined
+      }
+
+
+      let cancelled =
+        false
+
+
+      async function pullFarmersMarkets() {
+        try {
+          const response =
+            await fetch(
+              FARMERS_MARKETS_INCOMING_ENDPOINT,
+              {
+                headers: {
+                  Accept:
+                    'application/json',
+                },
+              }
+            )
+
+
+          const payload =
+            await response.json()
+
+
+          if (
+            !response.ok ||
+            payload?.ok !==
+              true ||
+            !Array.isArray(
+              payload?.records
+            )
+          ) {
+            throw new Error(
+              payload?.error ||
+              (
+                'Farmers markets ingestion failed · ' +
+                response.status
+              )
+            )
+          }
+
+
+          payload.records.forEach(
+            (record) => {
+              addNewReviewItem({
+                ...record,
+
+                city:
+                  'toronto',
+
+                type:
+                  'new',
+
+                category:
+                  'market',
+
+                communityType:
+                  'farmers-market',
+
+                lifecycleOverride:
+                  'keep-live',
+              })
+            }
+          )
+
+
+          if (
+            !cancelled
+          ) {
+            setAllNewReviewItems(
+              getNewReviewItems()
+                .map(
+                  normalizePinRecord
+                )
+            )
+          }
+        }
+        catch (
+          error
+        ) {
+          console.warn(
+            'FARMERS MARKETS · INGEST FAILED:',
+            error
+          )
+        }
+      }
+
+
+      void pullFarmersMarkets()
+
+
+      const interval =
+        window.setInterval(
+          pullFarmersMarkets,
+          FARMERS_MARKETS_ADMIN_POLL_MS
+        )
+
+
+      return () => {
+        cancelled =
+          true
+
+
+        window.clearInterval(
+          interval
+        )
+      }
+    },
+    [
+      adminStorePersistenceReady,
+      cityKey,
+    ]
   )
 
 
@@ -17562,6 +17699,51 @@ function AdminRoom() {
         reviewRecord,
         'rejected'
       )
+    }
+
+
+    if (
+      tab ===
+        'new' &&
+      String(
+        reviewRecord?.communityType ||
+        ''
+      )
+        .toLowerCase() ===
+        'farmers-market' &&
+      reviewRecord?.sourceId
+    ) {
+      try {
+        await fetch(
+          FARMERS_MARKETS_REJECT_ENDPOINT,
+          {
+            method:
+              'POST',
+
+            headers: {
+              'Content-Type':
+                'application/json',
+
+              Accept:
+                'application/json',
+            },
+
+            body:
+              JSON.stringify({
+                sourceId:
+                  reviewRecord.sourceId,
+              }),
+          }
+        )
+      }
+      catch (
+        error
+      ) {
+        console.warn(
+          'FARMERS MARKETS · REJECT PERSIST FAILED:',
+          error
+        )
+      }
     }
 
 
