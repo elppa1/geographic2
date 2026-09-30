@@ -1,5 +1,6 @@
 import {
   postgresMirrorEnabled,
+  readPostgresDocument,
   seedPostgresDocument,
   writePostgresDocument,
 } from '../../db/postgresMirror.js'
@@ -158,12 +159,18 @@ export function torontoAdminStoreMirrorFeed() {
           res,
           next
         ) => {
-          if (
+          const method =
             String(
               req.method ||
               'GET'
             )
-              .toUpperCase() !==
+              .toUpperCase()
+
+
+          if (
+            method !==
+              'GET' &&
+            method !==
               'POST'
           ) {
             next()
@@ -227,6 +234,90 @@ export function torontoAdminStoreMirrorFeed() {
 
 
           try {
+            if (
+              method ===
+                'GET'
+            ) {
+              const snapshot =
+                await readPostgresDocument({
+                  storeKey:
+                    documentKey,
+                })
+
+
+              if (
+                !snapshot.found
+              ) {
+                sendJson(
+                  res,
+                  404,
+                  {
+                    ok:
+                      false,
+
+                    error:
+                      'Admin store has not been migrated to Postgres yet.',
+                  }
+                )
+
+
+                return
+              }
+
+
+              const records =
+                snapshot.payload
+
+
+              if (
+                !Array.isArray(
+                  records
+                )
+              ) {
+                sendJson(
+                  res,
+                  500,
+                  {
+                    ok:
+                      false,
+
+                    error:
+                      'Postgres admin store payload is not a records array.',
+                  }
+                )
+
+
+                return
+              }
+
+
+              sendJson(
+                res,
+                200,
+                {
+                  ok:
+                    true,
+
+                  mode:
+                    'read',
+
+                  storeKey:
+                    browserStoreKey,
+
+                  documentKey,
+
+                  count:
+                    records.length,
+
+                  records,
+                }
+              )
+
+
+              return
+            }
+
+
             const body =
               await readJsonBody(
                 req
@@ -273,12 +364,14 @@ export function torontoAdminStoreMirrorFeed() {
                 ? await seedPostgresDocument({
                     storeKey:
                       documentKey,
+
                     payload:
                       records,
                   })
                 : await writePostgresDocument({
                     storeKey:
                       documentKey,
+
                     payload:
                       records,
                   })
@@ -331,7 +424,7 @@ export function torontoAdminStoreMirrorFeed() {
             error
           ) {
             console.warn(
-              'ADMIN STORE · POSTGRES MIRROR REQUEST FAILED:',
+              'ADMIN STORE · POSTGRES REQUEST FAILED:',
               browserStoreKey,
               error?.message ||
               error
@@ -340,7 +433,7 @@ export function torontoAdminStoreMirrorFeed() {
 
             sendJson(
               res,
-              400,
+              500,
               {
                 ok:
                   false,

@@ -314,6 +314,90 @@ export function seedPostgresDocument({
 }
 
 
+export async function readPostgresDocument({
+  storeKey,
+}) {
+  const database =
+    getPool()
+
+
+  if (
+    !database ||
+    !storeKey
+  ) {
+    return {
+      found:
+        false,
+
+      payload:
+        null,
+    }
+  }
+
+
+  try {
+    await ensureDocumentsTable()
+
+
+    const result =
+      await database.query(
+        `
+          SELECT
+            payload
+          FROM geographic_documents
+          WHERE store_key = $1
+          LIMIT 1
+        `,
+        [
+          storeKey,
+        ]
+      )
+
+
+    if (
+      result.rows.length ===
+        0
+    ) {
+      return {
+        found:
+          false,
+
+        payload:
+          null,
+      }
+    }
+
+
+    logReady(
+      storeKey
+    )
+
+
+    return {
+      found:
+        true,
+
+      payload:
+        result.rows[0]?.payload ??
+        null,
+    }
+  }
+  catch (
+    error
+  ) {
+    console.warn(
+      'POSTGRES MIRROR · READ FAILED:',
+      storeKey,
+      error?.message ||
+      error
+    )
+
+
+    throw error
+  }
+}
+
+
 export function writePostgresDocument({
   storeKey,
   payload,

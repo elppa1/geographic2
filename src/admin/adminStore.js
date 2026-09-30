@@ -4,7 +4,9 @@ import {
 } from '../newsPolicy.js'
 
 import {
-  mirrorAdminStoreRecords,
+  getAdminStoreRecords,
+  isPostgresAdminStoreKey,
+  writeAdminStoreRecords,
 } from './adminStoreMirror.js'
 
 
@@ -71,6 +73,17 @@ export const GEOGRAPHIC_STORE_CHANGE_EVENT =
 function readRecords(
   key
 ) {
+  if (
+    isPostgresAdminStoreKey(
+      key
+    )
+  ) {
+    return getAdminStoreRecords(
+      key
+    )
+  }
+
+
   try {
     const value =
       localStorage.getItem(
@@ -114,6 +127,38 @@ function writeRecords(
   key,
   records
 ) {
+  if (
+    isPostgresAdminStoreKey(
+      key
+    )
+  ) {
+    writeAdminStoreRecords(
+      key,
+      records
+    )
+
+
+    if (
+      typeof window !==
+        'undefined'
+    ) {
+      window.dispatchEvent(
+        new CustomEvent(
+          GEOGRAPHIC_STORE_CHANGE_EVENT,
+          {
+            detail: {
+              key,
+            },
+          }
+        )
+      )
+    }
+
+
+    return
+  }
+
+
   try {
     localStorage.setItem(
       key,
@@ -138,12 +183,6 @@ function writeRecords(
         )
       )
     }
-
-
-    mirrorAdminStoreRecords(
-      key,
-      records
-    )
   } catch (
     error
   ) {

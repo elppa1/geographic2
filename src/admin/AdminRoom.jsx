@@ -33,6 +33,10 @@ import {
 } from './adminStore.js'
 
 import {
+  hydrateAdminStoresFromPostgres,
+} from './adminStoreMirror.js'
+
+import {
   hasCityScraper,
   runCityScraper,
 } from '../scrapers/index.js'
@@ -5986,6 +5990,98 @@ function AdminRoom() {
     )
 
 
+  const [
+    adminStorePersistenceReady,
+    setAdminStorePersistenceReady,
+  ] =
+    useState(
+      false
+    )
+
+
+  useEffect(
+    () => {
+      let cancelled =
+        false
+
+
+      hydrateAdminStoresFromPostgres()
+        .then(
+          () => {
+            if (
+              cancelled
+            ) {
+              return
+            }
+
+
+            setAllNewsItems(
+              getNewsItems()
+                .map(
+                  normalizePinRecord
+                )
+            )
+
+
+            setAllNewItems(
+              getNewItems()
+                .map(
+                  normalizePinRecord
+                )
+            )
+
+
+            setAllNewsReviewItems(
+              getNewsReviewItems()
+                .map(
+                  normalizePinRecord
+                )
+            )
+
+
+            setAllNewReviewItems(
+              getNewReviewItems()
+                .map(
+                  normalizePinRecord
+                )
+            )
+
+
+            setAdminStorePersistenceReady(
+              true
+            )
+          }
+        )
+        .catch(
+          (
+            error
+          ) => {
+            console.error(
+              'ADMIN STORE · POSTGRES HYDRATION ERROR:',
+              error
+            )
+
+
+            if (
+              !cancelled
+            ) {
+              setAdminStorePersistenceReady(
+                true
+              )
+            }
+          }
+        )
+
+
+      return () => {
+        cancelled =
+          true
+      }
+    },
+    []
+  )
+
+
   const newsItems =
     allNewsItems.filter(
       (record) =>
@@ -10253,6 +10349,13 @@ function AdminRoom() {
 
   useEffect(
     () => {
+      if (
+        !adminStorePersistenceReady
+      ) {
+        return
+      }
+
+
       let disposed =
         false
 
@@ -10305,9 +10408,10 @@ function AdminRoom() {
         )
       }
     },
-    []
+    [
+      adminStorePersistenceReady,
+    ]
   )
-
 
   // ==========================================================
   // TORONTO NEW · BACKGROUND SERVER SYNC
@@ -10315,6 +10419,13 @@ function AdminRoom() {
 
   useEffect(
     () => {
+      if (
+        !adminStorePersistenceReady
+      ) {
+        return
+      }
+
+
       let disposed =
         false
 
@@ -10354,9 +10465,10 @@ function AdminRoom() {
         )
       }
     },
-    []
+    [
+      adminStorePersistenceReady,
+    ]
   )
-
 
   // ==========================================================
   // SYNC OFFICIAL TORONTO NEWS SOURCES
@@ -10375,6 +10487,7 @@ function AdminRoom() {
 
   async function syncOfficialTorontoNews() {
     if (
+      !adminStorePersistenceReady ||
       cityKey !==
         'toronto' ||
       tab !==
@@ -10462,6 +10575,7 @@ function AdminRoom() {
 
   async function updateCurrentCity() {
     if (
+      !adminStorePersistenceReady ||
       scraperRunning ||
       !scraperAvailable
     ) {
