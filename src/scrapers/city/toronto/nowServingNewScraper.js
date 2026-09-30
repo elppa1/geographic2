@@ -18,9 +18,9 @@
 // We keep the source-first-seen fields too so the provenance is clear.
 //
 // Historical recovery:
-// the six previous monthly NowServing snapshots are checked and any
-// restaurant with an approximate opening date within the last 180 days
-// is kept. Existing review/published dedupe prevents duplicate leads.
+// all six NowServing Toronto district pages are checked and any restaurant
+// with an approximate opening date within the last 180 days is kept.
+// Existing review/published dedupe prevents duplicate leads.
 //
 // ============================================================
 
@@ -40,8 +40,14 @@ const BACKFILL_LOOKBACK_DAYS =
   180
 
 
-const BACKFILL_EDITION_COUNT =
-  6
+const NOWSERVING_DISTRICTS = [
+  'downtown',
+  'east-toronto',
+  'etobicoke',
+  'north-york',
+  'scarborough',
+  'west-toronto',
+]
 
 
 function cleanText(
@@ -892,62 +898,6 @@ async function fetchNowServingRecords(
 }
 
 
-function getBackfillEditions(
-  referenceDate =
-    new Date()
-) {
-  const editions =
-    []
-
-
-  for (
-    let offset =
-      BACKFILL_EDITION_COUNT;
-    offset >=
-      1;
-    offset -=
-      1
-  ) {
-    const date =
-      new Date(
-        referenceDate
-      )
-
-
-    date.setDate(
-      1
-    )
-
-
-    date.setMonth(
-      date.getMonth() -
-      offset
-    )
-
-
-    editions.push(
-      (
-        String(
-          date.getFullYear()
-        ) +
-        '-' +
-        String(
-          date.getMonth() +
-          1
-        )
-          .padStart(
-            2,
-            '0'
-          )
-      )
-    )
-  }
-
-
-  return editions
-}
-
-
 function isWithinBackfillWindow(
   record,
   referenceDate =
@@ -1074,38 +1024,33 @@ export async function scrapeNowServingNew() {
     new Date()
 
 
-  const backfillRecords =
+  const districtRecords =
     []
 
 
-  const editions =
-    getBackfillEditions(
-      referenceDate
-    )
-
-
   for (
-    const edition of editions
+    const district of
+      NOWSERVING_DISTRICTS
   ) {
     try {
-      const archiveUrl =
+      const districtUrl =
         (
           SOURCE.url +
-          '?edition=' +
+          '?district=' +
           encodeURIComponent(
-            edition
+            district
           )
         )
 
 
-      const archiveRecords =
+      const records =
         await fetchNowServingRecords(
-          archiveUrl
+          districtUrl
         )
 
 
-      backfillRecords.push(
-        ...archiveRecords
+      districtRecords.push(
+        ...records
           .filter(
             (
               record
@@ -1120,20 +1065,20 @@ export async function scrapeNowServingNew() {
     catch (
       error
     ) {
-      // Current discovery and the remaining archive snapshots should
-      // still work if one historical month is temporarily unavailable.
+      // Current discovery and the remaining district pages should
+      // still work if one district is temporarily unavailable.
       console.warn(
-        `NOWSERVING BACKFILL FAILED · ${edition}:`,
+        `NOWSERVING DISTRICT BACKFILL FAILED · ${district}:`,
         error
       )
     }
   }
 
 
-  // Oldest archive first, newest archive later, current last so the
-  // freshest copy wins if a restaurant appears in multiple sources.
+  // District pages provide the deeper history. Current /new is merged
+  // last so its freshest copy wins when a restaurant appears in both.
   return mergeByExternalId([
-    ...backfillRecords,
+    ...districtRecords,
     ...currentRecords,
   ])
 }

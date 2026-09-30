@@ -31,10 +31,53 @@ const inFlightPages =
   new Map()
 
 
-function getUpstreamUrl(
-  edition
-) {
-  const normalized =
+const DISTRICT_SLUGS =
+  new Set([
+    'downtown',
+    'east-toronto',
+    'etobicoke',
+    'north-york',
+    'scarborough',
+    'west-toronto',
+  ])
+
+
+function getUpstreamUrl({
+  edition,
+  district,
+}) {
+  const normalizedDistrict =
+    String(
+      district ||
+      ''
+    )
+      .trim()
+      .toLowerCase()
+
+
+  if (
+    normalizedDistrict
+  ) {
+    if (
+      !DISTRICT_SLUGS.has(
+        normalizedDistrict
+      )
+    ) {
+      throw new Error(
+        'NOWSERVING DISTRICT INVALID'
+      )
+    }
+
+
+    return (
+      'https://nowservingto.com/district/' +
+      normalizedDistrict +
+      '/'
+    )
+  }
+
+
+  const normalizedEdition =
     String(
       edition ||
       ''
@@ -43,7 +86,7 @@ function getUpstreamUrl(
 
 
   if (
-    !normalized
+    !normalizedEdition
   ) {
     return UPSTREAM_URL
   }
@@ -51,7 +94,7 @@ function getUpstreamUrl(
 
   if (
     !/^\d{4}-\d{2}$/.test(
-      normalized
+      normalizedEdition
     )
   ) {
     throw new Error(
@@ -62,7 +105,7 @@ function getUpstreamUrl(
 
   return (
     'https://nowservingto.com/trends/' +
-    normalized
+    normalizedEdition
   )
 }
 
@@ -326,10 +369,21 @@ export function nowServingFeed() {
                 .trim()
 
 
-            const upstreamUrl =
-              getUpstreamUrl(
-                edition
+            const district =
+              String(
+                url.searchParams.get(
+                  'district'
+                ) ||
+                ''
               )
+                .trim()
+
+
+            const upstreamUrl =
+              getUpstreamUrl({
+                edition,
+                district,
+              })
 
 
             const page =
@@ -353,6 +407,9 @@ export function nowServingFeed() {
 
                 requestedEdition:
                   edition,
+
+                requestedDistrict:
+                  district,
 
                 fetchedAt:
                   new Date(
