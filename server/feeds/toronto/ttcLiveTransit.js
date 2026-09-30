@@ -1,3 +1,4 @@
+// LIVE TTC VEHICLES FIX V3 · 2026-09-30 · resilient realtime vehicle payload
 import https from 'node:https'
 import { inflateRawSync } from 'node:zlib'
 
@@ -27,10 +28,10 @@ const STATIC_CACHE_MS =
 
 const REALTIME_CACHE_MS =
   4 * 1000
-const TRIP_UPDATE_STALE_FALLBACK_MS =
-  2 * 60 * 1000
 const REALTIME_RETRY_DELAY_MS =
   450
+const VEHICLE_STALE_FALLBACK_MS =
+  2 * 60 * 1000
 
 const TORONTO_ATTRIBUTION =
   'Contains information licensed under the Open Government Licence - Toronto'
@@ -2129,6 +2130,21 @@ async function fetchRealtimeFeed(
 }
 
 
+function delay(
+  milliseconds
+) {
+  return new Promise(
+    (
+      resolve
+    ) =>
+      setTimeout(
+        resolve,
+        milliseconds
+      )
+  )
+}
+
+
 async function fetchRealtimeFeedWithRetry(
   url,
   attempts =
@@ -2139,8 +2155,8 @@ async function fetchRealtimeFeedWithRetry(
 
   for (
     let attempt =
-      0;
-    attempt <
+      1;
+    attempt <=
       attempts;
     attempt +=
       1
@@ -2157,17 +2173,12 @@ async function fetchRealtimeFeedWithRetry(
         error
 
       if (
-        attempt +
-          1 <
+        attempt <
         attempts
       ) {
-        await new Promise(
-          (resolve) =>
-            setTimeout(
-              resolve,
-              REALTIME_RETRY_DELAY_MS *
-                (attempt + 1)
-            )
+        await delay(
+          REALTIME_RETRY_DELAY_MS *
+            attempt
         )
       }
     }
@@ -2175,7 +2186,7 @@ async function fetchRealtimeFeedWithRetry(
 
   throw lastError ||
     new Error(
-      'TTC realtime request failed'
+      `Unable to fetch TTC realtime feed · ${url}`
     )
 }
 
@@ -2197,8 +2208,9 @@ async function getRawVehicleFeed() {
   }
 
   vehiclePromise =
-    fetchRealtimeFeed(
-      TTC_VEHICLES_URL
+    fetchRealtimeFeedWithRetry(
+      TTC_VEHICLES_URL,
+      3
     )
       .then(
         (
@@ -2210,6 +2222,27 @@ async function getRawVehicleFeed() {
             feed,
           }
           return feed
+        }
+      )
+      .catch(
+        (
+          error
+        ) => {
+          if (
+            vehicleCache &&
+            Date.now() -
+              vehicleCache.cachedAt <=
+              VEHICLE_STALE_FALLBACK_MS
+          ) {
+            console.warn(
+              'LIVE TTC VEHICLES · using recent cached feed after upstream failure:',
+              error?.message ||
+                error
+            )
+            return vehicleCache.feed
+          }
+
+          throw error
         }
       )
       .finally(
@@ -2239,19 +2272,9 @@ async function getRawTripUpdateFeed() {
     return tripUpdatePromise
   }
 
-  const staleFeed =
-    tripUpdateCache?.feed ||
-    null
-  const staleAge =
-    tripUpdateCache
-      ? Date.now() -
-        tripUpdateCache.cachedAt
-      : Number.POSITIVE_INFINITY
-
   tripUpdatePromise =
-    fetchRealtimeFeedWithRetry(
-      TTC_TRIPS_URL,
-      3
+    fetchRealtimeFeed(
+      TTC_TRIPS_URL
     )
       .then(
         (
@@ -2263,26 +2286,6 @@ async function getRawTripUpdateFeed() {
             feed,
           }
           return feed
-        }
-      )
-      .catch(
-        (
-          error
-        ) => {
-          if (
-            staleFeed &&
-            staleAge <=
-              TRIP_UPDATE_STALE_FALLBACK_MS
-          ) {
-            console.warn(
-              'LIVE TTC TRIP UPDATES: using recent cached feed after upstream failure',
-              error?.message ||
-              error
-            )
-            return staleFeed
-          }
-
-          throw error
         }
       )
       .finally(
@@ -2320,21 +2323,6 @@ async function getVehiclesPayload(
       getSurfaceNetwork(),
     ])
 
-  // Warm the Trip Updates feed while vehicles are already being viewed.
-  // This makes stop ETAs much more likely to be ready before the first tap.
-  getRawTripUpdateFeed()
-    .catch(
-      (
-        error
-      ) => {
-        console.warn(
-          'LIVE TTC TRIP UPDATE WARMUP:',
-          error?.message ||
-          error
-        )
-      }
-    )
-
   const nowSeconds =
     Math.floor(
       Date.now() /
@@ -2346,14 +2334,27 @@ async function getVehiclesPayload(
       url
     )
 
-  const vehicles =
-    (
-      Array.isArray(
-        feed?.entity
-      )
-        ? feed.entity
-        : []
+  const rawEntities =
+    Array.isArray(
+      feed?.entity
     )
+      ? feed.entity
+      : []
+
+  const feedTimestamp =
+    numberOrNull(
+      feed?.header?.timestamp
+    )
+
+  let positionedCount =
+    0
+  let identifiedCount =
+    0
+  let routeMatchedCount =
+    0
+
+  const positionedVehicles =
+    rawEntities
       .map(
         (
           entity
@@ -2383,52 +2384,36 @@ async function getVehiclesPayload(
             return null
           }
 
+          positionedCount +=
+            1
+
           const tripId =
             cleanText(
               vehicle?.trip?.tripId
             )
 
-          const staticTrip =
-            surface.trips.get(
-              tripId
-            )
-
+          // TTC's current realtime/static feeds can safely be joined by
+          // route_id. trip_id and stop_id are not reliable cross-feed
+          // join keys, so never discard a valid GPS position because
+          // those metadata lookups miss.
           const routeId =
             cleanText(
               vehicle?.trip?.routeId
-            ) ||
-            staticTrip?.routeId ||
-            ''
+            )
 
           const route =
-            surface.routes.get(
-              routeId
-            )
+            routeId
+              ? surface.routes.get(
+                  routeId
+                )
+              : null
 
           if (
-            !route
+            route
           ) {
-            return null
+            routeMatchedCount +=
+              1
           }
-
-          const stopId =
-            cleanText(
-              vehicle?.stopId
-            )
-
-          const stop =
-            surface.stopsById.get(
-              stopId
-            )
-
-          const timestamp =
-            numberOrNull(
-              vehicle?.timestamp
-            ) ??
-            numberOrNull(
-              feed?.header?.timestamp
-            ) ??
-            nowSeconds
 
           const vehicleDescriptor =
             vehicle?.vehicle ||
@@ -2451,6 +2436,49 @@ async function getVehiclesPayload(
             return null
           }
 
+          identifiedCount +=
+            1
+
+          const rawVehicleTimestamp =
+            numberOrNull(
+              vehicle?.timestamp
+            )
+
+          const plausibleFeedTimestamp =
+            feedTimestamp !==
+                null &&
+            feedTimestamp >=
+              nowSeconds -
+                6 *
+                  60 *
+                  60 &&
+            feedTimestamp <=
+              nowSeconds +
+                5 *
+                  60
+              ? feedTimestamp
+              : null
+
+          const plausibleVehicleTimestamp =
+            rawVehicleTimestamp !==
+                null &&
+            rawVehicleTimestamp >=
+              nowSeconds -
+                6 *
+                  60 *
+                  60 &&
+            rawVehicleTimestamp <=
+              nowSeconds +
+                5 *
+                  60
+              ? rawVehicleTimestamp
+              : null
+
+          const timestamp =
+            plausibleVehicleTimestamp ??
+            plausibleFeedTimestamp ??
+            nowSeconds
+
           const routeType =
             route?.type ??
             3
@@ -2470,7 +2498,8 @@ async function getVehiclesPayload(
             routeId,
             routeShortName:
               route?.shortName ||
-              routeId,
+              routeId ||
+              'TTC',
             routeLongName:
               route?.longName ||
               '',
@@ -2480,14 +2509,11 @@ async function getVehiclesPayload(
                 routeType
               ),
             headsign:
-              staticTrip?.headsign ||
               '',
             directionId:
               numberOrNull(
                 vehicle?.trip?.directionId
-              ) ??
-              staticTrip?.directionId ??
-              null,
+              ),
             latitude,
             longitude,
             bearing:
@@ -2509,9 +2535,11 @@ async function getVehiclesPayload(
               numberOrNull(
                 vehicle?.currentStopSequence
               ),
-            stopId,
+            stopId:
+              cleanText(
+                vehicle?.stopId
+              ),
             stopName:
-              stop?.name ||
               '',
             currentStatus:
               cleanText(
@@ -2521,20 +2549,30 @@ async function getVehiclesPayload(
               cleanText(
                 vehicle?.occupancyStatus
               ),
+            routeMatched:
+              Boolean(
+                route
+              ),
           }
         }
       )
       .filter(
         Boolean
       )
+
+  const freshVehicles =
+    positionedVehicles
       .filter(
         (
           vehicle
         ) =>
           vehicle.ageSeconds <=
-          5 *
+          15 *
             60
       )
+
+  const vehicles =
+    freshVehicles
       .filter(
         (
           vehicle
@@ -2558,12 +2596,23 @@ async function getVehiclesPayload(
     updatedAt:
       new Date()
         .toISOString(),
-    feedTimestamp:
-      numberOrNull(
-        feed?.header?.timestamp
-      ),
+    feedTimestamp,
     count:
       vehicles.length,
+    diagnostics: {
+      rawEntities:
+        rawEntities.length,
+      withPosition:
+        positionedCount,
+      withVehicleId:
+        identifiedCount,
+      routeMatched:
+        routeMatchedCount,
+      fresh:
+        freshVehicles.length,
+      inViewport:
+        vehicles.length,
+    },
     vehicles,
   }
 }

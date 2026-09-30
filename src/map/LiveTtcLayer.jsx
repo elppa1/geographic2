@@ -1,3 +1,4 @@
+// LIVE TTC VEHICLES FIX V3 · 2026-09-30 · far dots -> vehicle markers
 import {
   useEffect,
   useRef,
@@ -27,18 +28,27 @@ const SELECTED_ROUTE_LAYER_ID =
   'ttc-live-selected-route'
 const STOPS_LAYER_ID =
   'ttc-live-stops'
-const STOPS_HIT_LAYER_ID =
-  'ttc-live-stops-hit'
 const STATIONS_LAYER_ID =
   'ttc-live-stations'
 const STATION_LABELS_LAYER_ID =
   'ttc-live-station-labels'
 const VEHICLE_CIRCLE_LAYER_ID =
   'ttc-live-vehicle-circles'
+const VEHICLE_ICON_LAYER_ID =
+  'ttc-live-vehicle-icons'
 const VEHICLE_ROUTE_LABEL_LAYER_ID =
   'ttc-live-vehicle-route-labels'
 const VEHICLE_DIRECTION_LAYER_ID =
   'ttc-live-vehicle-direction'
+
+const BUS_MARKER_IMAGE_ID =
+  'ttc-live-bus-marker'
+const STREETCAR_MARKER_IMAGE_ID =
+  'ttc-live-streetcar-marker'
+const VEHICLE_DOT_MIN_ZOOM =
+  7.5
+const VEHICLE_ICON_MIN_ZOOM =
+  12.5
 
 const NETWORK_ENDPOINT =
   '/api/geographic/toronto/ttc/live/network'
@@ -49,8 +59,6 @@ const ARRIVALS_ENDPOINT =
 
 const VEHICLE_POLL_MS =
   7000
-const VEHICLES_AUTO_MIN_ZOOM =
-  12
 const ANIMATION_FRAME_MS =
   180
 
@@ -704,6 +712,189 @@ function currentAnimatedCoordinate(
 }
 
 
+function createVehicleMarkerImage(
+  color,
+  {
+    streetcar =
+      false,
+  } = {}
+) {
+  const size =
+    48
+  const canvas =
+    document.createElement(
+      'canvas'
+    )
+
+  canvas.width =
+    size
+  canvas.height =
+    size
+
+  const context =
+    canvas.getContext(
+      '2d'
+    )
+
+  if (
+    !context
+  ) {
+    return null
+  }
+
+  context.clearRect(
+    0,
+    0,
+    size,
+    size
+  )
+
+  context.lineJoin =
+    'round'
+  context.lineCap =
+    'round'
+
+  context.fillStyle =
+    color
+  context.strokeStyle =
+    '#ffffff'
+  context.lineWidth =
+    3
+
+  context.beginPath()
+  context.moveTo(
+    13,
+    6
+  )
+  context.lineTo(
+    35,
+    6
+  )
+  context.quadraticCurveTo(
+    40,
+    6,
+    40,
+    11
+  )
+  context.lineTo(
+    40,
+    34
+  )
+  context.quadraticCurveTo(
+    40,
+    38,
+    36,
+    38
+  )
+  context.lineTo(
+    12,
+    38
+  )
+  context.quadraticCurveTo(
+    8,
+    38,
+    8,
+    34
+  )
+  context.lineTo(
+    8,
+    11
+  )
+  context.quadraticCurveTo(
+    8,
+    6,
+    13,
+    6
+  )
+  context.closePath()
+  context.fill()
+  context.stroke()
+
+  context.fillStyle =
+    'rgba(255,255,255,0.94)'
+  context.fillRect(
+    13,
+    11,
+    22,
+    streetcar
+      ? 8
+      : 10
+  )
+
+  if (
+    streetcar
+  ) {
+    context.strokeStyle =
+      '#ffffff'
+    context.lineWidth =
+      2
+    context.beginPath()
+    context.moveTo(
+      18,
+      5
+    )
+    context.lineTo(
+      24,
+      1
+    )
+    context.lineTo(
+      30,
+      5
+    )
+    context.stroke()
+  }
+
+  context.fillStyle =
+    '#ffffff'
+  context.beginPath()
+  context.arc(
+    14,
+    31,
+    2.2,
+    0,
+    Math.PI *
+      2
+  )
+  context.arc(
+    34,
+    31,
+    2.2,
+    0,
+    Math.PI *
+      2
+  )
+  context.fill()
+
+  context.fillStyle =
+    '#111111'
+  context.beginPath()
+  context.arc(
+    14,
+    40,
+    3.2,
+    0,
+    Math.PI *
+      2
+  )
+  context.arc(
+    34,
+    40,
+    3.2,
+    0,
+    Math.PI *
+      2
+  )
+  context.fill()
+
+  return context.getImageData(
+    0,
+    0,
+    size,
+    size
+  )
+}
+
+
 function LiveTtcLayer({
   map,
   active =
@@ -762,6 +953,20 @@ function LiveTtcLayer({
         }
       }
 
+      function safeRemoveImage(
+        imageId
+      ) {
+        if (
+          map.hasImage(
+            imageId
+          )
+        ) {
+          map.removeImage(
+            imageId
+          )
+        }
+      }
+
       function safeRemoveSource(
         sourceId
       ) {
@@ -777,6 +982,58 @@ function LiveTtcLayer({
       }
 
       function addSourcesAndLayers() {
+        if (
+          !map.hasImage(
+            BUS_MARKER_IMAGE_ID
+          )
+        ) {
+          const busMarker =
+            createVehicleMarkerImage(
+              '#111111'
+            )
+
+          if (
+            busMarker
+          ) {
+            map.addImage(
+              BUS_MARKER_IMAGE_ID,
+              busMarker,
+              {
+                pixelRatio:
+                  2,
+              }
+            )
+          }
+        }
+
+        if (
+          !map.hasImage(
+            STREETCAR_MARKER_IMAGE_ID
+          )
+        ) {
+          const streetcarMarker =
+            createVehicleMarkerImage(
+              '#C8102E',
+              {
+                streetcar:
+                  true,
+              }
+            )
+
+          if (
+            streetcarMarker
+          ) {
+            map.addImage(
+              STREETCAR_MARKER_IMAGE_ID,
+              streetcarMarker,
+              {
+                pixelRatio:
+                  2,
+              }
+            )
+          }
+        }
+
         if (
           !map.getSource(
             ROUTES_SOURCE_ID
@@ -1049,59 +1306,18 @@ function LiveTtcLayer({
                   'zoom',
                 ],
                 13,
-                5,
-                15,
-                7.5,
+                2.2,
                 17,
-                9.5,
+                4,
               ],
               'circle-color':
                 '#ffffff',
               'circle-stroke-color':
                 '#111111',
               'circle-stroke-width':
-                2,
+                1.25,
               'circle-opacity':
-                0.96,
-            },
-          })
-        }
-
-        // Large invisible hit target so stops are easy to tap on phones.
-        if (
-          !map.getLayer(
-            STOPS_HIT_LAYER_ID
-          )
-        ) {
-          map.addLayer({
-            id:
-              STOPS_HIT_LAYER_ID,
-            type:
-              'circle',
-            source:
-              STOPS_SOURCE_ID,
-            minzoom:
-              13,
-            paint: {
-              'circle-radius': [
-                'interpolate',
-                [
-                  'linear',
-                ],
-                [
-                  'zoom',
-                ],
-                13,
-                14,
-                15,
-                18,
-                17,
-                22,
-              ],
-              'circle-color':
-                '#111111',
-              'circle-opacity':
-                0.01,
+                0.92,
             },
           })
         }
@@ -1198,7 +1414,9 @@ function LiveTtcLayer({
             source:
               VEHICLES_SOURCE_ID,
             minzoom:
-              VEHICLES_AUTO_MIN_ZOOM,
+              VEHICLE_DOT_MIN_ZOOM,
+            maxzoom:
+              VEHICLE_ICON_MIN_ZOOM,
             paint: {
               'circle-radius': [
                 'interpolate',
@@ -1208,12 +1426,12 @@ function LiveTtcLayer({
                 [
                   'zoom',
                 ],
+                7.5,
+                2.2,
                 10,
-                7,
-                14,
-                10,
-                17,
-                12,
+                3.2,
+                12.5,
+                4.6,
               ],
               'circle-color': [
                 'case',
@@ -1230,8 +1448,82 @@ function LiveTtcLayer({
               ],
               'circle-stroke-color':
                 '#ffffff',
-              'circle-stroke-width':
-                2,
+              'circle-stroke-width': [
+                'interpolate',
+                [
+                  'linear',
+                ],
+                [
+                  'zoom',
+                ],
+                7.5,
+                0.7,
+                12.5,
+                1.4,
+              ],
+              'circle-opacity':
+                0.94,
+            },
+          })
+        }
+
+        if (
+          !map.getLayer(
+            VEHICLE_ICON_LAYER_ID
+          )
+        ) {
+          map.addLayer({
+            id:
+              VEHICLE_ICON_LAYER_ID,
+            type:
+              'symbol',
+            source:
+              VEHICLES_SOURCE_ID,
+            minzoom:
+              VEHICLE_ICON_MIN_ZOOM,
+            layout: {
+              'icon-image': [
+                'case',
+                [
+                  '==',
+                  [
+                    'get',
+                    'mode',
+                  ],
+                  'streetcar',
+                ],
+                STREETCAR_MARKER_IMAGE_ID,
+                BUS_MARKER_IMAGE_ID,
+              ],
+              'icon-size': [
+                'interpolate',
+                [
+                  'linear',
+                ],
+                [
+                  'zoom',
+                ],
+                12.5,
+                0.78,
+                15,
+                0.98,
+                18,
+                1.18,
+              ],
+              'icon-rotate': [
+                'coalesce',
+                [
+                  'get',
+                  'bearing',
+                ],
+                0,
+              ],
+              'icon-rotation-alignment':
+                'map',
+              'icon-allow-overlap':
+                true,
+              'icon-ignore-placement':
+                true,
             },
           })
         }
@@ -1249,7 +1541,7 @@ function LiveTtcLayer({
             source:
               VEHICLES_SOURCE_ID,
             minzoom:
-              VEHICLES_AUTO_MIN_ZOOM,
+              VEHICLE_ICON_MIN_ZOOM,
             layout: {
               'text-field': [
                 'get',
@@ -1263,9 +1555,11 @@ function LiveTtcLayer({
                 [
                   'zoom',
                 ],
-                10,
-                8,
+                12.5,
+                7,
                 15,
+                9,
+                18,
                 10,
               ],
               'text-allow-overlap':
@@ -1621,24 +1915,6 @@ function LiveTtcLayer({
           return
         }
 
-        // Citywide stays clean. Once the user reaches neighbourhood/street
-        // level, live vehicles automatically populate without selecting a route.
-        if (
-          map.getZoom() <
-            VEHICLES_AUTO_MIN_ZOOM
-        ) {
-          vehicleAnimationsRef.current =
-            new Map()
-          map
-            .getSource(
-              VEHICLES_SOURCE_ID
-            )
-            ?.setData(
-              EMPTY_FEATURE_COLLECTION
-            )
-          return
-        }
-
         vehicleAbortRef.current
           ?.abort?.()
 
@@ -1916,88 +2192,6 @@ function LiveTtcLayer({
             )
       }
 
-      async function fetchStopArrivals(
-        stopId,
-        attempts =
-          3
-      ) {
-        let lastError =
-          null
-
-        for (
-          let attempt =
-            0;
-          attempt <
-            attempts;
-          attempt +=
-            1
-        ) {
-          try {
-            const response =
-              await fetch(
-                `${ARRIVALS_ENDPOINT}?stopId=${encodeURIComponent(stopId)}`,
-                {
-                  cache:
-                    'no-store',
-                }
-              )
-
-            if (
-              !response.ok
-            ) {
-              let detail =
-                ''
-
-              try {
-                const errorPayload =
-                  await response.json()
-                detail =
-                  String(
-                    errorPayload?.error ||
-                    ''
-                  )
-              }
-              catch {
-                // Keep the HTTP status as the useful fallback.
-              }
-
-              throw new Error(
-                `TTC arrivals request failed: ${response.status}${detail ? ` · ${detail}` : ''}`
-              )
-            }
-
-            return await response.json()
-          }
-          catch (
-            error
-          ) {
-            lastError =
-              error
-
-            if (
-              attempt +
-                1 <
-              attempts
-            ) {
-              await new Promise(
-                (resolve) =>
-                  window.setTimeout(
-                    resolve,
-                    550 *
-                      (attempt + 1)
-                  )
-              )
-            }
-          }
-        }
-
-        throw lastError ||
-          new Error(
-            'TTC arrivals unavailable'
-          )
-      }
-
-
       async function handleStopClick(
         event
       ) {
@@ -2058,10 +2252,25 @@ function LiveTtcLayer({
           popup
 
         try {
-          const payload =
-            await fetchStopArrivals(
-              stopId
+          const response =
+            await fetch(
+              `${ARRIVALS_ENDPOINT}?stopId=${encodeURIComponent(stopId)}`,
+              {
+                cache:
+                  'no-store',
+              }
             )
+
+          if (
+            !response.ok
+          ) {
+            throw new Error(
+              `TTC arrivals request failed: ${response.status}`
+            )
+          }
+
+          const payload =
+            await response.json()
 
           if (
             popupRef.current ===
@@ -2089,7 +2298,7 @@ function LiveTtcLayer({
               parent:
                 shell,
               text:
-                'Live predictions are refreshing. The buses and streetcars shown on the map are still live.',
+                'Live arrivals are temporarily unavailable.',
               style: {
                 fontSize:
                   '10px',
@@ -2196,7 +2405,13 @@ function LiveTtcLayer({
 
       map.on(
         'click',
-        STOPS_HIT_LAYER_ID,
+        VEHICLE_ICON_LAYER_ID,
+        handleVehicleClick
+      )
+
+      map.on(
+        'click',
+        STOPS_LAYER_ID,
         handleStopClick
       )
 
@@ -2214,7 +2429,8 @@ function LiveTtcLayer({
 
       ;[
         VEHICLE_CIRCLE_LAYER_ID,
-        STOPS_HIT_LAYER_ID,
+        VEHICLE_ICON_LAYER_ID,
+        STOPS_LAYER_ID,
         STATIONS_LAYER_ID,
         ROUTES_LAYER_ID,
       ]
@@ -2279,7 +2495,13 @@ function LiveTtcLayer({
 
         map.off(
           'click',
-          STOPS_HIT_LAYER_ID,
+          VEHICLE_ICON_LAYER_ID,
+          handleVehicleClick
+        )
+
+        map.off(
+          'click',
+          STOPS_LAYER_ID,
           handleStopClick
         )
 
@@ -2297,7 +2519,8 @@ function LiveTtcLayer({
 
         ;[
           VEHICLE_CIRCLE_LAYER_ID,
-          STOPS_HIT_LAYER_ID,
+          VEHICLE_ICON_LAYER_ID,
+          STOPS_LAYER_ID,
           STATIONS_LAYER_ID,
           ROUTES_LAYER_ID,
         ]
@@ -2323,10 +2546,10 @@ function LiveTtcLayer({
         ;[
           VEHICLE_DIRECTION_LAYER_ID,
           VEHICLE_ROUTE_LABEL_LAYER_ID,
+          VEHICLE_ICON_LAYER_ID,
           VEHICLE_CIRCLE_LAYER_ID,
           STATION_LABELS_LAYER_ID,
           STATIONS_LAYER_ID,
-          STOPS_HIT_LAYER_ID,
           STOPS_LAYER_ID,
           SELECTED_ROUTE_LAYER_ID,
           SELECTED_ROUTE_CASING_LAYER_ID,
@@ -2335,6 +2558,14 @@ function LiveTtcLayer({
         ]
           .forEach(
             safeRemoveLayer
+          )
+
+        ;[
+          STREETCAR_MARKER_IMAGE_ID,
+          BUS_MARKER_IMAGE_ID,
+        ]
+          .forEach(
+            safeRemoveImage
           )
 
         ;[
