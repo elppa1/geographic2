@@ -18,6 +18,12 @@ import {
   getTtcAlertsSnapshot,
 } from './ttcAlerts.js'
 
+import {
+  appendPostgresLedgerEvent,
+  seedPostgresDocument,
+  writePostgresDocument,
+} from '../../db/postgresMirror.js'
+
 
 import {
   getNewsExpiresAt,
@@ -191,6 +197,32 @@ let ledgerWriteChain =
 
 let syncRunning =
   false
+
+
+let postgresSeedAttempted =
+  false
+
+
+function seedPostgresStoreOnce() {
+  if (
+    postgresSeedAttempted
+  ) {
+    return
+  }
+
+
+  postgresSeedAttempted =
+    true
+
+
+  void seedPostgresDocument({
+    storeKey:
+      'toronto-live-newsroom',
+
+    payload:
+      store,
+  })
+}
 
 
 // ============================================================
@@ -594,6 +626,18 @@ async function appendLedgerEvent({
           }),
           'utf8'
         )
+
+
+        void appendPostgresLedgerEvent({
+          ledgerKey:
+            'toronto-news-ledger',
+
+          payload: {
+            eventType,
+            outcome,
+            record,
+          },
+        })
       }
     )
 
@@ -693,6 +737,9 @@ async function ensureLoaded() {
   // server version that marked source history resolved but left the public
   // Police pin active.
   await reconcilePublishedPoliceMissingPersonResolutions()
+
+
+  seedPostgresStoreOnce()
 }
 
 
@@ -725,6 +772,15 @@ async function persistStore() {
           ),
           'utf8'
         )
+
+
+        void writePostgresDocument({
+          storeKey:
+            'toronto-live-newsroom',
+
+          payload:
+            store,
+        })
       }
     )
 

@@ -14,6 +14,11 @@ import {
   fileURLToPath,
 } from 'node:url'
 
+import {
+  seedPostgresDocument,
+  writePostgresDocument,
+} from './postgresMirror.js'
+
 
 const __filename =
   fileURLToPath(
@@ -53,6 +58,34 @@ const STORE_PATH =
 
 let writeChain =
   Promise.resolve()
+
+
+let postgresSeedAttempted =
+  false
+
+
+function seedPostgresStoreOnce(
+  store
+) {
+  if (
+    postgresSeedAttempted
+  ) {
+    return
+  }
+
+
+  postgresSeedAttempted =
+    true
+
+
+  void seedPostgresDocument({
+    storeKey:
+      'geographic-published-pins',
+
+    payload:
+      store,
+  })
+}
 
 
 function cleanText(
@@ -265,7 +298,7 @@ async function readStore() {
     }
 
 
-    return {
+    const store = {
       version:
         1,
 
@@ -283,6 +316,14 @@ async function readStore() {
             Boolean
           ),
     }
+
+
+    seedPostgresStoreOnce(
+      store
+    )
+
+
+    return store
   }
   catch (
     error
@@ -291,7 +332,16 @@ async function readStore() {
       error?.code ===
         'ENOENT'
     ) {
-      return createEmptyStore()
+      const store =
+        createEmptyStore()
+
+
+      seedPostgresStoreOnce(
+        store
+      )
+
+
+      return store
     }
 
 
@@ -354,6 +404,15 @@ async function writeStoreAtomic(
     tempPath,
     STORE_PATH
   )
+
+
+  void writePostgresDocument({
+    storeKey:
+      'geographic-published-pins',
+
+    payload:
+      nextStore,
+  })
 
 
   return nextStore

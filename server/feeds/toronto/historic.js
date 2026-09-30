@@ -14,6 +14,11 @@ import {
   loadEnv,
 } from 'vite'
 
+import {
+  seedPostgresDocument,
+  writePostgresDocument,
+} from '../../db/postgresMirror.js'
+
 
 let resolvedDataDirectory =
   ''
@@ -46,6 +51,34 @@ const MAX_BODY_BYTES =
 
 let writeQueue =
   Promise.resolve()
+
+
+let postgresSeedAttempted =
+  false
+
+
+function seedPostgresSnapshotOnce(
+  snapshot
+) {
+  if (
+    postgresSeedAttempted
+  ) {
+    return
+  }
+
+
+  postgresSeedAttempted =
+    true
+
+
+  void seedPostgresDocument({
+    storeKey:
+      'toronto-historic',
+
+    payload:
+      snapshot,
+  })
+}
 
 
 function getDataDirectory() {
@@ -160,11 +193,20 @@ async function readSnapshot() {
       )
 
 
-    return normalizeSnapshot(
-      JSON.parse(
-        raw
+    const snapshot =
+      normalizeSnapshot(
+        JSON.parse(
+          raw
+        )
       )
+
+
+    seedPostgresSnapshotOnce(
+      snapshot
     )
+
+
+    return snapshot
   }
   catch (
     error
@@ -173,9 +215,18 @@ async function readSnapshot() {
       error?.code ===
         'ENOENT'
     ) {
-      return normalizeSnapshot(
-        EMPTY_SNAPSHOT
+      const snapshot =
+        normalizeSnapshot(
+          EMPTY_SNAPSHOT
+        )
+
+
+      seedPostgresSnapshotOnce(
+        snapshot
       )
+
+
+      return snapshot
     }
 
 
@@ -221,6 +272,15 @@ async function writeSnapshot(
     ),
     'utf8'
   )
+
+
+  void writePostgresDocument({
+    storeKey:
+      'toronto-historic',
+
+    payload:
+      normalized,
+  })
 
 
   return normalized
