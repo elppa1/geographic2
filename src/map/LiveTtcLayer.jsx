@@ -27,6 +27,8 @@ const SELECTED_ROUTE_LAYER_ID =
   'ttc-live-selected-route'
 const STOPS_LAYER_ID =
   'ttc-live-stops'
+const STOPS_HIT_LAYER_ID =
+  'ttc-live-stops-hit'
 const STATIONS_LAYER_ID =
   'ttc-live-stations'
 const STATION_LABELS_LAYER_ID =
@@ -47,6 +49,8 @@ const ARRIVALS_ENDPOINT =
 
 const VEHICLE_POLL_MS =
   7000
+const VEHICLES_AUTO_MIN_ZOOM =
+  12
 const ANIMATION_FRAME_MS =
   180
 
@@ -1045,18 +1049,59 @@ function LiveTtcLayer({
                   'zoom',
                 ],
                 13,
-                2.2,
+                5,
+                15,
+                7.5,
                 17,
-                4,
+                9.5,
               ],
               'circle-color':
                 '#ffffff',
               'circle-stroke-color':
                 '#111111',
               'circle-stroke-width':
-                1.25,
+                2,
               'circle-opacity':
-                0.92,
+                0.96,
+            },
+          })
+        }
+
+        // Large invisible hit target so stops are easy to tap on phones.
+        if (
+          !map.getLayer(
+            STOPS_HIT_LAYER_ID
+          )
+        ) {
+          map.addLayer({
+            id:
+              STOPS_HIT_LAYER_ID,
+            type:
+              'circle',
+            source:
+              STOPS_SOURCE_ID,
+            minzoom:
+              13,
+            paint: {
+              'circle-radius': [
+                'interpolate',
+                [
+                  'linear',
+                ],
+                [
+                  'zoom',
+                ],
+                13,
+                14,
+                15,
+                18,
+                17,
+                22,
+              ],
+              'circle-color':
+                '#111111',
+              'circle-opacity':
+                0.01,
             },
           })
         }
@@ -1153,7 +1198,7 @@ function LiveTtcLayer({
             source:
               VEHICLES_SOURCE_ID,
             minzoom:
-              10,
+              VEHICLES_AUTO_MIN_ZOOM,
             paint: {
               'circle-radius': [
                 'interpolate',
@@ -1204,7 +1249,7 @@ function LiveTtcLayer({
             source:
               VEHICLES_SOURCE_ID,
             minzoom:
-              10,
+              VEHICLES_AUTO_MIN_ZOOM,
             layout: {
               'text-field': [
                 'get',
@@ -1576,6 +1621,24 @@ function LiveTtcLayer({
           return
         }
 
+        // Citywide stays clean. Once the user reaches neighbourhood/street
+        // level, live vehicles automatically populate without selecting a route.
+        if (
+          map.getZoom() <
+            VEHICLES_AUTO_MIN_ZOOM
+        ) {
+          vehicleAnimationsRef.current =
+            new Map()
+          map
+            .getSource(
+              VEHICLES_SOURCE_ID
+            )
+            ?.setData(
+              EMPTY_FEATURE_COLLECTION
+            )
+          return
+        }
+
         vehicleAbortRef.current
           ?.abort?.()
 
@@ -1853,6 +1916,88 @@ function LiveTtcLayer({
             )
       }
 
+      async function fetchStopArrivals(
+        stopId,
+        attempts =
+          3
+      ) {
+        let lastError =
+          null
+
+        for (
+          let attempt =
+            0;
+          attempt <
+            attempts;
+          attempt +=
+            1
+        ) {
+          try {
+            const response =
+              await fetch(
+                `${ARRIVALS_ENDPOINT}?stopId=${encodeURIComponent(stopId)}`,
+                {
+                  cache:
+                    'no-store',
+                }
+              )
+
+            if (
+              !response.ok
+            ) {
+              let detail =
+                ''
+
+              try {
+                const errorPayload =
+                  await response.json()
+                detail =
+                  String(
+                    errorPayload?.error ||
+                    ''
+                  )
+              }
+              catch {
+                // Keep the HTTP status as the useful fallback.
+              }
+
+              throw new Error(
+                `TTC arrivals request failed: ${response.status}${detail ? ` · ${detail}` : ''}`
+              )
+            }
+
+            return await response.json()
+          }
+          catch (
+            error
+          ) {
+            lastError =
+              error
+
+            if (
+              attempt +
+                1 <
+              attempts
+            ) {
+              await new Promise(
+                (resolve) =>
+                  window.setTimeout(
+                    resolve,
+                    550 *
+                      (attempt + 1)
+                  )
+              )
+            }
+          }
+        }
+
+        throw lastError ||
+          new Error(
+            'TTC arrivals unavailable'
+          )
+      }
+
+
       async function handleStopClick(
         event
       ) {
@@ -1913,25 +2058,10 @@ function LiveTtcLayer({
           popup
 
         try {
-          const response =
-            await fetch(
-              `${ARRIVALS_ENDPOINT}?stopId=${encodeURIComponent(stopId)}`,
-              {
-                cache:
-                  'no-store',
-              }
-            )
-
-          if (
-            !response.ok
-          ) {
-            throw new Error(
-              `TTC arrivals request failed: ${response.status}`
-            )
-          }
-
           const payload =
-            await response.json()
+            await fetchStopArrivals(
+              stopId
+            )
 
           if (
             popupRef.current ===
@@ -1959,7 +2089,7 @@ function LiveTtcLayer({
               parent:
                 shell,
               text:
-                'Live arrivals are temporarily unavailable.',
+                'Live predictions are refreshing. The buses and streetcars shown on the map are still live.',
               style: {
                 fontSize:
                   '10px',
@@ -2066,7 +2196,7 @@ function LiveTtcLayer({
 
       map.on(
         'click',
-        STOPS_LAYER_ID,
+        STOPS_HIT_LAYER_ID,
         handleStopClick
       )
 
@@ -2084,7 +2214,7 @@ function LiveTtcLayer({
 
       ;[
         VEHICLE_CIRCLE_LAYER_ID,
-        STOPS_LAYER_ID,
+        STOPS_HIT_LAYER_ID,
         STATIONS_LAYER_ID,
         ROUTES_LAYER_ID,
       ]
@@ -2149,7 +2279,7 @@ function LiveTtcLayer({
 
         map.off(
           'click',
-          STOPS_LAYER_ID,
+          STOPS_HIT_LAYER_ID,
           handleStopClick
         )
 
@@ -2167,7 +2297,7 @@ function LiveTtcLayer({
 
         ;[
           VEHICLE_CIRCLE_LAYER_ID,
-          STOPS_LAYER_ID,
+          STOPS_HIT_LAYER_ID,
           STATIONS_LAYER_ID,
           ROUTES_LAYER_ID,
         ]
@@ -2196,6 +2326,7 @@ function LiveTtcLayer({
           VEHICLE_CIRCLE_LAYER_ID,
           STATION_LABELS_LAYER_ID,
           STATIONS_LAYER_ID,
+          STOPS_HIT_LAYER_ID,
           STOPS_LAYER_ID,
           SELECTED_ROUTE_LAYER_ID,
           SELECTED_ROUTE_CASING_LAYER_ID,

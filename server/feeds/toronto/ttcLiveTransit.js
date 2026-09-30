@@ -27,6 +27,10 @@ const STATIC_CACHE_MS =
 
 const REALTIME_CACHE_MS =
   4 * 1000
+const TRIP_UPDATE_STALE_FALLBACK_MS =
+  2 * 60 * 1000
+const REALTIME_RETRY_DELAY_MS =
+  450
 
 const TORONTO_ATTRIBUTION =
   'Contains information licensed under the Open Government Licence - Toronto'
@@ -2125,6 +2129,57 @@ async function fetchRealtimeFeed(
 }
 
 
+async function fetchRealtimeFeedWithRetry(
+  url,
+  attempts =
+    3
+) {
+  let lastError =
+    null
+
+  for (
+    let attempt =
+      0;
+    attempt <
+      attempts;
+    attempt +=
+      1
+  ) {
+    try {
+      return await fetchRealtimeFeed(
+        url
+      )
+    }
+    catch (
+      error
+    ) {
+      lastError =
+        error
+
+      if (
+        attempt +
+          1 <
+        attempts
+      ) {
+        await new Promise(
+          (resolve) =>
+            setTimeout(
+              resolve,
+              REALTIME_RETRY_DELAY_MS *
+                (attempt + 1)
+            )
+        )
+      }
+    }
+  }
+
+  throw lastError ||
+    new Error(
+      'TTC realtime request failed'
+    )
+}
+
+
 async function getRawVehicleFeed() {
   if (
     vehicleCache &&
@@ -2184,9 +2239,19 @@ async function getRawTripUpdateFeed() {
     return tripUpdatePromise
   }
 
+  const staleFeed =
+    tripUpdateCache?.feed ||
+    null
+  const staleAge =
+    tripUpdateCache
+      ? Date.now() -
+        tripUpdateCache.cachedAt
+      : Number.POSITIVE_INFINITY
+
   tripUpdatePromise =
-    fetchRealtimeFeed(
-      TTC_TRIPS_URL
+    fetchRealtimeFeedWithRetry(
+      TTC_TRIPS_URL,
+      3
     )
       .then(
         (
@@ -2198,6 +2263,26 @@ async function getRawTripUpdateFeed() {
             feed,
           }
           return feed
+        }
+      )
+      .catch(
+        (
+          error
+        ) => {
+          if (
+            staleFeed &&
+            staleAge <=
+              TRIP_UPDATE_STALE_FALLBACK_MS
+          ) {
+            console.warn(
+              'LIVE TTC TRIP UPDATES: using recent cached feed after upstream failure',
+              error?.message ||
+              error
+            )
+            return staleFeed
+          }
+
+          throw error
         }
       )
       .finally(
@@ -2234,6 +2319,21 @@ async function getVehiclesPayload(
       getRawVehicleFeed(),
       getSurfaceNetwork(),
     ])
+
+  // Warm the Trip Updates feed while vehicles are already being viewed.
+  // This makes stop ETAs much more likely to be ready before the first tap.
+  getRawTripUpdateFeed()
+    .catch(
+      (
+        error
+      ) => {
+        console.warn(
+          'LIVE TTC TRIP UPDATE WARMUP:',
+          error?.message ||
+          error
+        )
+      }
+    )
 
   const nowSeconds =
     Math.floor(
