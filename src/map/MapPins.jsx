@@ -8595,6 +8595,30 @@ function createMarker({
     })
   }
   else {
+    const historicDescription =
+      pinType ===
+        'historic'
+        ? String(
+            pin.description ||
+            ''
+          )
+            .trim()
+        : ''
+
+    const collapseHistoricDetails =
+      compactMobilePopup &&
+      pinType ===
+        'historic' &&
+      historicDescription.length >
+        260
+
+    let collapsedHistoricSourcesParent =
+      null
+
+    let collapsedHistoricLessButton =
+      null
+
+
     if (
       pinType !==
         'historic'
@@ -8827,24 +8851,255 @@ function createMarker({
     }
 
 
-    appendText({
-      parent:
-        popupContent,
+    const publicDescription =
+      pinType ===
+        'news' &&
+      isTorontoFirePin(
+        pin
+      )
+        ? getTorontoFirePublicDescription(
+            pin
+          )
+        : pin.description
 
-      className:
-        'geographic-pin-description',
 
-      text:
-        pinType ===
-          'news' &&
-        isTorontoFirePin(
-          pin
+    if (
+      collapseHistoricDetails
+    ) {
+      const detailsShell =
+        document.createElement(
+          'div'
         )
-          ? getTorontoFirePublicDescription(
-              pin
+
+      detailsShell.className =
+        'geographic-pin-collapsible-details'
+
+
+      const previewDescription =
+        document.createElement(
+          'div'
+        )
+
+      previewDescription.className =
+        'geographic-pin-description'
+
+
+      let previewText =
+        historicDescription
+          .slice(
+            0,
+            260
+          )
+          .trim()
+
+      const previewBreak =
+        previewText.lastIndexOf(
+          ' '
+        )
+
+
+      if (
+        previewBreak >
+          180
+      ) {
+        previewText =
+          previewText
+            .slice(
+              0,
+              previewBreak
             )
-          : pin.description,
-    })
+            .trim()
+      }
+
+
+      previewDescription.textContent =
+        `${previewText}…`
+
+
+      const moreButton =
+        document.createElement(
+          'button'
+        )
+
+      moreButton.type =
+        'button'
+
+      moreButton.textContent =
+        '(... MORE)'
+
+      moreButton.style.display =
+        'inline-block'
+
+      moreButton.style.margin =
+        '4px 0 0'
+
+      moreButton.style.border =
+        '0'
+
+      moreButton.style.padding =
+        '0'
+
+      moreButton.style.background =
+        'transparent'
+
+      moreButton.style.color =
+        'inherit'
+
+      moreButton.style.font =
+        'inherit'
+
+      moreButton.style.fontSize =
+        '7px'
+
+      moreButton.style.fontWeight =
+        '800'
+
+      moreButton.style.letterSpacing =
+        '0.05em'
+
+      moreButton.style.cursor =
+        'pointer'
+
+
+      const expandedDetails =
+        document.createElement(
+          'div'
+        )
+
+      expandedDetails.style.display =
+        'none'
+
+
+      appendText({
+        parent:
+          expandedDetails,
+
+        className:
+          'geographic-pin-description',
+
+        text:
+          publicDescription,
+      })
+
+
+      const lessButton =
+        document.createElement(
+          'button'
+        )
+
+      lessButton.type =
+        'button'
+
+      lessButton.textContent =
+        '(LESS)'
+
+      lessButton.style.display =
+        'inline-block'
+
+      lessButton.style.margin =
+        '5px 0 0'
+
+      lessButton.style.border =
+        '0'
+
+      lessButton.style.padding =
+        '0'
+
+      lessButton.style.background =
+        'transparent'
+
+      lessButton.style.color =
+        'inherit'
+
+      lessButton.style.font =
+        'inherit'
+
+      lessButton.style.fontSize =
+        '7px'
+
+      lessButton.style.fontWeight =
+        '800'
+
+      lessButton.style.letterSpacing =
+        '0.05em'
+
+      lessButton.style.cursor =
+        'pointer'
+
+
+      moreButton.addEventListener(
+        'click',
+        (
+          event
+        ) => {
+          event.stopPropagation()
+
+          previewDescription.style.display =
+            'none'
+
+          moreButton.style.display =
+            'none'
+
+          expandedDetails.style.display =
+            'block'
+        }
+      )
+
+
+      lessButton.addEventListener(
+        'click',
+        (
+          event
+        ) => {
+          event.stopPropagation()
+
+          expandedDetails.style.display =
+            'none'
+
+          previewDescription.style.display =
+            'block'
+
+          moreButton.style.display =
+            'inline-block'
+        }
+      )
+
+
+      detailsShell.appendChild(
+        previewDescription
+      )
+
+      detailsShell.appendChild(
+        moreButton
+      )
+
+      detailsShell.appendChild(
+        expandedDetails
+      )
+
+      popupContent.appendChild(
+        detailsShell
+      )
+
+
+      collapsedHistoricSourcesParent =
+        expandedDetails
+
+      collapsedHistoricLessButton =
+        lessButton
+    }
+    else {
+      appendText({
+        parent:
+          popupContent,
+
+        className:
+          'geographic-pin-description',
+
+        text:
+          publicDescription,
+      })
+    }
 
 
     if (
@@ -9027,10 +9282,22 @@ function createMarker({
 
     appendSources({
       parent:
+        collapsedHistoricSourcesParent ||
         popupContent,
 
       pin,
     })
+
+
+    if (
+      collapsedHistoricSourcesParent &&
+      collapsedHistoricLessButton
+    ) {
+      collapsedHistoricSourcesParent
+        .appendChild(
+          collapsedHistoricLessButton
+        )
+    }
 
 
     if (
