@@ -6401,16 +6401,16 @@ function appendEmojiMarkerIcon(
     'none'
 
   iconShell.style.filter =
-    'drop-shadow(0 0 0.7px rgba(0,0,0,0.9))'
+    'drop-shadow(1px 0 0 rgba(0,0,0,0.95)) drop-shadow(-1px 0 0 rgba(0,0,0,0.95)) drop-shadow(0 1px 0 rgba(0,0,0,0.95)) drop-shadow(0 -1px 0 rgba(0,0,0,0.95)) drop-shadow(0 0 1.5px rgba(255,255,255,0.95))'
 
   iconShell.style.fontSize =
-    '18px'
+    '20px'
 
   iconShell.style.lineHeight =
     '1'
 
   iconShell.style.opacity =
-    '0.92'
+    '1'
 
   iconShell.style.pointerEvents =
     'none'
