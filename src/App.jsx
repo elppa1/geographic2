@@ -1940,15 +1940,15 @@ function GeographicApp() {
 
             .timeline-button {
               min-width: 44px !important;
-              min-height: 36px !important;
-              padding: 7px 6px !important;
+              min-height: 30px !important;
+              padding: 5px 6px !important;
               font-size: 6.5px !important;
               line-height: 1 !important;
             }
 
             .opacity-row {
               gap: 6px !important;
-              margin-top: 6px !important;
+              margin-top: 4px !important;
               font-size: 7px !important;
             }
 
