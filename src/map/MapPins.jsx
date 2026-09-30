@@ -7984,12 +7984,6 @@ function createMarker({
     )
 
 
-    applyHistoricLayerSelectionPulse({
-      element,
-
-      active:
-        historicLayerPulse,
-    })
   }
   else if (
     newsEmoji
