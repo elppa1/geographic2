@@ -1,4 +1,4 @@
-// LIVE TTC VEHICLES FIX V3 · 2026-09-30 · resilient realtime vehicle payload
+// LIVE TTC REALTIME FAILOVER FIX · 2026-09-30
 import https from 'node:https'
 import { inflateRawSync } from 'node:zlib'
 
@@ -12,9 +12,15 @@ const TTC_FULL_GTFS_URL =
   'https://ckan0.cf.opendata.inter.prod-toronto.ca/dataset/7795b45e-e65a-4465-81fc-c36b9dfff169/resource/cfb6b2b8-6191-41e3-bda1-b175c51148cb/download/TTC%20Routes%20and%20Schedules%20Data.zip'
 
 const TTC_VEHICLES_URL =
+  'https://gtfsrt.ttc.ca/vehicles/position?format=binary'
+
+const TTC_VEHICLES_FALLBACK_URL =
   'https://bustime.ttc.ca/gtfsrt/vehicles'
 
 const TTC_TRIPS_URL =
+  'https://gtfsrt.ttc.ca/trips/update?format=binary'
+
+const TTC_TRIPS_FALLBACK_URL =
   'https://bustime.ttc.ca/gtfsrt/trips'
 
 const LIVE_TTC_ENDPOINT =
@@ -23,15 +29,17 @@ const LIVE_TTC_ENDPOINT =
 const FETCH_TIMEOUT_MS =
   25 * 1000
 
+const REALTIME_FETCH_TIMEOUT_MS =
+  8 * 1000
+
+const REALTIME_STALE_FALLBACK_MS =
+  2 * 60 * 1000
+
 const STATIC_CACHE_MS =
   6 * 60 * 60 * 1000
 
 const REALTIME_CACHE_MS =
   4 * 1000
-const REALTIME_RETRY_DELAY_MS =
-  450
-const VEHICLE_STALE_FALLBACK_MS =
-  2 * 60 * 1000
 
 const TORONTO_ATTRIBUTION =
   'Contains information licensed under the Open Government Licence - Toronto'
@@ -174,7 +182,9 @@ function sendJson(
 function fetchBuffer(
   url,
   redirectCount =
-    0
+    0,
+  timeoutMs =
+    FETCH_TIMEOUT_MS
 ) {
   return new Promise(
     (
@@ -274,7 +284,8 @@ function fetchBuffer(
               fetchBuffer(
                 nextUrl,
                 redirectCount +
-                  1
+                  1,
+                timeoutMs
               )
                 .then(
                   finishResolve
@@ -338,11 +349,11 @@ function fetchBuffer(
           () => {
             request.destroy(
               new Error(
-                `TTC request timed out after ${FETCH_TIMEOUT_MS}ms`
+                `TTC request timed out after ${timeoutMs}ms · ${url}`
               )
             )
           },
-          FETCH_TIMEOUT_MS
+          timeoutMs
         )
 
       request.on(
@@ -2124,70 +2135,39 @@ async function fetchRealtimeFeed(
 ) {
   return decodeRealtimeFeed(
     await fetchBuffer(
-      url
+      url,
+      0,
+      REALTIME_FETCH_TIMEOUT_MS
     )
   )
 }
 
 
-function delay(
-  milliseconds
+async function fetchRealtimeFeedWithFallback(
+  primaryUrl,
+  fallbackUrl
 ) {
-  return new Promise(
-    (
-      resolve
-    ) =>
-      setTimeout(
-        resolve,
-        milliseconds
-      )
-  )
-}
-
-
-async function fetchRealtimeFeedWithRetry(
-  url,
-  attempts =
-    3
-) {
-  let lastError =
-    null
-
-  for (
-    let attempt =
-      1;
-    attempt <=
-      attempts;
-    attempt +=
-      1
+  try {
+    return await fetchRealtimeFeed(
+      primaryUrl
+    )
+  }
+  catch (
+    primaryError
   ) {
     try {
       return await fetchRealtimeFeed(
-        url
+        fallbackUrl
       )
     }
     catch (
-      error
+      fallbackError
     ) {
-      lastError =
-        error
-
-      if (
-        attempt <
-        attempts
-      ) {
-        await delay(
-          REALTIME_RETRY_DELAY_MS *
-            attempt
-        )
-      }
+      throw new Error(
+        `TTC realtime feeds unavailable · primary: ${primaryError?.message || primaryError} · fallback: ${fallbackError?.message || fallbackError}`
+      )
     }
   }
-
-  throw lastError ||
-    new Error(
-      `Unable to fetch TTC realtime feed · ${url}`
-    )
 }
 
 
@@ -2208,9 +2188,9 @@ async function getRawVehicleFeed() {
   }
 
   vehiclePromise =
-    fetchRealtimeFeedWithRetry(
+    fetchRealtimeFeedWithFallback(
       TTC_VEHICLES_URL,
-      3
+      TTC_VEHICLES_FALLBACK_URL
     )
       .then(
         (
@@ -2231,8 +2211,8 @@ async function getRawVehicleFeed() {
           if (
             vehicleCache &&
             Date.now() -
-              vehicleCache.cachedAt <=
-              VEHICLE_STALE_FALLBACK_MS
+              vehicleCache.cachedAt <
+              REALTIME_STALE_FALLBACK_MS
           ) {
             console.warn(
               'LIVE TTC VEHICLES · using recent cached feed after upstream failure:',
@@ -2273,8 +2253,9 @@ async function getRawTripUpdateFeed() {
   }
 
   tripUpdatePromise =
-    fetchRealtimeFeed(
-      TTC_TRIPS_URL
+    fetchRealtimeFeedWithFallback(
+      TTC_TRIPS_URL,
+      TTC_TRIPS_FALLBACK_URL
     )
       .then(
         (
@@ -2286,6 +2267,27 @@ async function getRawTripUpdateFeed() {
             feed,
           }
           return feed
+        }
+      )
+      .catch(
+        (
+          error
+        ) => {
+          if (
+            tripUpdateCache &&
+            Date.now() -
+              tripUpdateCache.cachedAt <
+              REALTIME_STALE_FALLBACK_MS
+          ) {
+            console.warn(
+              'LIVE TTC TRIPS · using recent cached feed after upstream failure:',
+              error?.message ||
+                error
+            )
+            return tripUpdateCache.feed
+          }
+
+          throw error
         }
       )
       .finally(
@@ -2334,27 +2336,14 @@ async function getVehiclesPayload(
       url
     )
 
-  const rawEntities =
-    Array.isArray(
-      feed?.entity
+  const vehicles =
+    (
+      Array.isArray(
+        feed?.entity
+      )
+        ? feed.entity
+        : []
     )
-      ? feed.entity
-      : []
-
-  const feedTimestamp =
-    numberOrNull(
-      feed?.header?.timestamp
-    )
-
-  let positionedCount =
-    0
-  let identifiedCount =
-    0
-  let routeMatchedCount =
-    0
-
-  const positionedVehicles =
-    rawEntities
       .map(
         (
           entity
@@ -2384,36 +2373,52 @@ async function getVehiclesPayload(
             return null
           }
 
-          positionedCount +=
-            1
-
           const tripId =
             cleanText(
               vehicle?.trip?.tripId
             )
 
-          // TTC's current realtime/static feeds can safely be joined by
-          // route_id. trip_id and stop_id are not reliable cross-feed
-          // join keys, so never discard a valid GPS position because
-          // those metadata lookups miss.
+          const staticTrip =
+            surface.trips.get(
+              tripId
+            )
+
           const routeId =
             cleanText(
               vehicle?.trip?.routeId
-            )
+            ) ||
+            staticTrip?.routeId ||
+            ''
 
           const route =
-            routeId
-              ? surface.routes.get(
-                  routeId
-                )
-              : null
+            surface.routes.get(
+              routeId
+            )
 
           if (
-            route
+            !route
           ) {
-            routeMatchedCount +=
-              1
+            return null
           }
+
+          const stopId =
+            cleanText(
+              vehicle?.stopId
+            )
+
+          const stop =
+            surface.stopsById.get(
+              stopId
+            )
+
+          const timestamp =
+            numberOrNull(
+              vehicle?.timestamp
+            ) ??
+            numberOrNull(
+              feed?.header?.timestamp
+            ) ??
+            nowSeconds
 
           const vehicleDescriptor =
             vehicle?.vehicle ||
@@ -2436,49 +2441,6 @@ async function getVehiclesPayload(
             return null
           }
 
-          identifiedCount +=
-            1
-
-          const rawVehicleTimestamp =
-            numberOrNull(
-              vehicle?.timestamp
-            )
-
-          const plausibleFeedTimestamp =
-            feedTimestamp !==
-                null &&
-            feedTimestamp >=
-              nowSeconds -
-                6 *
-                  60 *
-                  60 &&
-            feedTimestamp <=
-              nowSeconds +
-                5 *
-                  60
-              ? feedTimestamp
-              : null
-
-          const plausibleVehicleTimestamp =
-            rawVehicleTimestamp !==
-                null &&
-            rawVehicleTimestamp >=
-              nowSeconds -
-                6 *
-                  60 *
-                  60 &&
-            rawVehicleTimestamp <=
-              nowSeconds +
-                5 *
-                  60
-              ? rawVehicleTimestamp
-              : null
-
-          const timestamp =
-            plausibleVehicleTimestamp ??
-            plausibleFeedTimestamp ??
-            nowSeconds
-
           const routeType =
             route?.type ??
             3
@@ -2498,8 +2460,7 @@ async function getVehiclesPayload(
             routeId,
             routeShortName:
               route?.shortName ||
-              routeId ||
-              'TTC',
+              routeId,
             routeLongName:
               route?.longName ||
               '',
@@ -2509,11 +2470,14 @@ async function getVehiclesPayload(
                 routeType
               ),
             headsign:
+              staticTrip?.headsign ||
               '',
             directionId:
               numberOrNull(
                 vehicle?.trip?.directionId
-              ),
+              ) ??
+              staticTrip?.directionId ??
+              null,
             latitude,
             longitude,
             bearing:
@@ -2535,11 +2499,9 @@ async function getVehiclesPayload(
               numberOrNull(
                 vehicle?.currentStopSequence
               ),
-            stopId:
-              cleanText(
-                vehicle?.stopId
-              ),
+            stopId,
             stopName:
+              stop?.name ||
               '',
             currentStatus:
               cleanText(
@@ -2549,30 +2511,20 @@ async function getVehiclesPayload(
               cleanText(
                 vehicle?.occupancyStatus
               ),
-            routeMatched:
-              Boolean(
-                route
-              ),
           }
         }
       )
       .filter(
         Boolean
       )
-
-  const freshVehicles =
-    positionedVehicles
       .filter(
         (
           vehicle
         ) =>
           vehicle.ageSeconds <=
-          15 *
+          5 *
             60
       )
-
-  const vehicles =
-    freshVehicles
       .filter(
         (
           vehicle
@@ -2596,23 +2548,12 @@ async function getVehiclesPayload(
     updatedAt:
       new Date()
         .toISOString(),
-    feedTimestamp,
+    feedTimestamp:
+      numberOrNull(
+        feed?.header?.timestamp
+      ),
     count:
       vehicles.length,
-    diagnostics: {
-      rawEntities:
-        rawEntities.length,
-      withPosition:
-        positionedCount,
-      withVehicleId:
-        identifiedCount,
-      routeMatched:
-        routeMatchedCount,
-      fresh:
-        freshVehicles.length,
-      inViewport:
-        vehicles.length,
-    },
     vehicles,
   }
 }
