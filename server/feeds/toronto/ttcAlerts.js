@@ -146,34 +146,113 @@ function routeIds(
 function normalizeActivePeriod(
   record
 ) {
-  const start =
-    dateToUnixSeconds(
-      record?.activePeriod?.start
+  const periods =
+    []
+
+
+  const appendPeriod =
+    (
+      startValue,
+      endValue
+    ) => {
+      const start =
+        dateToUnixSeconds(
+          startValue
+        )
+
+
+      const end =
+        dateToUnixSeconds(
+          endValue
+        )
+
+
+      if (
+        start ===
+          null &&
+        end ===
+          null
+      ) {
+        return
+      }
+
+
+      periods.push({
+        start,
+        end,
+      })
+    }
+
+
+  appendPeriod(
+    record?.activePeriod?.start,
+    record?.activePeriod?.end
+  )
+
+
+  const childAlerts =
+    Array.isArray(
+      record?.childAlerts
     )
+      ? record.childAlerts
+      : []
 
 
-  const end =
-    dateToUnixSeconds(
-      record?.activePeriod?.end
-    )
-
-
-  if (
-    start ===
-      null &&
-    end ===
-      null
+  for (
+    const child
+    of childAlerts
   ) {
-    return []
+    appendPeriod(
+      child?.startTime ||
+      child?.activePeriod?.start,
+      child?.endTime ||
+      child?.activePeriod?.end
+    )
   }
 
 
-  return [
-    {
-      start,
-      end,
-    },
-  ]
+  return periods
+}
+
+
+function ttcAlertIsStillRelevant(
+  record,
+  nowUnixSeconds
+) {
+  const periods =
+    Array.isArray(
+      record?.activePeriods
+    )
+      ? record.activePeriods
+      : []
+
+
+  if (
+    periods.length ===
+      0
+  ) {
+    return true
+  }
+
+
+  return periods.some(
+    (
+      period
+    ) => {
+      const end =
+        numberOrNull(
+          period?.end
+        )
+
+
+      return (
+        end ===
+          null ||
+        end >
+          nowUnixSeconds
+      )
+    }
+  )
 }
 
 
@@ -704,6 +783,13 @@ export async function getTtcAlertsSnapshot() {
     )
 
 
+  const nowUnixSeconds =
+    Math.floor(
+      Date.now() /
+      1000
+    )
+
+
   const records =
     rawRecords
       .map(
@@ -711,6 +797,15 @@ export async function getTtcAlertsSnapshot() {
       )
       .filter(
         Boolean
+      )
+      .filter(
+        (
+          record
+        ) =>
+          ttcAlertIsStillRelevant(
+            record,
+            nowUnixSeconds
+          )
       )
 
 

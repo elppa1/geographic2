@@ -1409,7 +1409,7 @@ async function observeRecord({
     {}
 
 
-  const existing =
+  const sourceExisting =
     sourceState[
       externalId
     ] ||
@@ -1420,6 +1420,48 @@ async function observeRecord({
     fingerprint(
       record
     )
+
+
+  const publishedTtcRecord =
+    sourceKey ===
+      'ttc'
+      ? Object.values(
+          store.publishedNews ||
+          {}
+        )
+          .find(
+            (
+              candidate
+            ) =>
+              candidate?.active !==
+                false &&
+              cleanText(
+                candidate?.externalId
+              ) ===
+                externalId
+          ) ||
+        null
+      : null
+
+
+  // A published TTC pin is canonical proof that this source item has
+  // already passed editorial review. Repair older / migrated source state
+  // from that canonical published record instead of creating a duplicate
+  // NEW newsroom card. Manual title / route edits keep the same externalId.
+  const existing =
+    publishedTtcRecord
+      ? {
+          ...(sourceExisting ||
+            publishedTtcRecord),
+
+          published:
+            true,
+
+          sourceFingerprint:
+            sourceExisting?.sourceFingerprint ||
+            currentFingerprint,
+        }
+      : sourceExisting
 
 
   const previousFingerprint =
