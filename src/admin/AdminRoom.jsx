@@ -22724,20 +22724,32 @@ function AdminRoom() {
                                 {tab ===
                                   'news'
                                   ? (
-                                      record.category &&
-                                      record.category !==
-                                        'ttc' &&
-                                      record.category !==
-                                        'fire'
-                                        ? String(
-                                            record.category
+                                      getNewsroomSourceKey(
+                                        record
+                                      ) ===
+                                        'transit'
+                                        ? formatTorontoNewsTimestamp(
+                                            record.ttcSourceTime ||
+                                            record.publishedAt ||
+                                            record.firstSeenAt ||
+                                            record.receivedAt
                                           )
-                                            .replace(
-                                              /-/g,
-                                              ' '
-                                            )
-                                            .toUpperCase()
-                                        : ''
+                                        : (
+                                            record.category &&
+                                            record.category !==
+                                              'ttc' &&
+                                            record.category !==
+                                              'fire'
+                                              ? String(
+                                                  record.category
+                                                )
+                                                  .replace(
+                                                    /-/g,
+                                                    ' '
+                                                  )
+                                                  .toUpperCase()
+                                              : ''
+                                          )
                                     )
                                   : getReviewSourceLabel(
                                       record
