@@ -1745,6 +1745,18 @@ function GeographicApp() {
               color: #111 !important;
             }
 
+            .brand .content-subfilter {
+              border-color: #111 !important;
+              background: #111 !important;
+              color: #fff !important;
+            }
+
+            .brand .content-subfilter-active {
+              border-color: #fff !important;
+              background: #fff !important;
+              color: #111 !important;
+            }
+
             .brand .mobile-brand-toggle {
               color: #fff !important;
             }

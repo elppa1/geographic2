@@ -178,7 +178,7 @@ function MapControls({
                 : 'Orientation off — click to follow phone direction'
           }
         >
-          DIR
+          ↑
         </button>
       )}
 
