@@ -215,15 +215,98 @@ function normalizeActivePeriod(
 }
 
 
+function normalizeVisibilityPeriods(
+  record
+) {
+  const childAlerts =
+    Array.isArray(
+      record?.childAlerts
+    )
+      ? record.childAlerts
+      : []
+
+
+  const childPeriods =
+    childAlerts
+      .map(
+        (
+          child
+        ) => ({
+          start:
+            dateToUnixSeconds(
+              child?.startTime ||
+              child?.activePeriod?.start
+            ),
+
+          end:
+            dateToUnixSeconds(
+              child?.endTime ||
+              child?.activePeriod?.end
+            ),
+        })
+      )
+      .filter(
+        (
+          period
+        ) =>
+          period.start !==
+            null ||
+          period.end !==
+            null
+      )
+
+
+  if (
+    childPeriods.length >
+      0
+  ) {
+    return childPeriods
+  }
+
+
+  const parentStart =
+    dateToUnixSeconds(
+      record?.activePeriod?.start
+    )
+
+
+  const parentEnd =
+    dateToUnixSeconds(
+      record?.activePeriod?.end
+    )
+
+
+  if (
+    parentStart ===
+      null &&
+    parentEnd ===
+      null
+  ) {
+    return []
+  }
+
+
+  return [
+    {
+      start:
+        parentStart,
+
+      end:
+        parentEnd,
+    },
+  ]
+}
+
+
 function ttcAlertIsStillRelevant(
   record,
   nowUnixSeconds
 ) {
   const periods =
     Array.isArray(
-      record?.activePeriods
+      record?.visibilityPeriods
     )
-      ? record.activePeriods
+      ? record.visibilityPeriods
       : []
 
 
@@ -231,6 +314,8 @@ function ttcAlertIsStillRelevant(
     periods.length ===
       0
   ) {
+    // No usable schedule metadata: membership in TTC's live-alert API
+    // remains authoritative.
     return true
   }
 
@@ -239,6 +324,12 @@ function ttcAlertIsStillRelevant(
     (
       period
     ) => {
+      const start =
+        numberOrNull(
+          period?.start
+        )
+
+
       const end =
         numberOrNull(
           period?.end
@@ -246,10 +337,18 @@ function ttcAlertIsStillRelevant(
 
 
       return (
-        end ===
-          null ||
-        end >
-          nowUnixSeconds
+        (
+          start ===
+            null ||
+          start <=
+            nowUnixSeconds
+        ) &&
+        (
+          end ===
+            null ||
+          end >
+            nowUnixSeconds
+        )
       )
     }
   )
@@ -335,6 +434,15 @@ function normalizeTtcApiAlert(
 
     activePeriods:
       normalizeActivePeriod(
+        record
+      ),
+
+    // The TTC live-alert API can keep a planned alert in the payload for
+    // several days while childAlerts define the actual live windows shown
+    // to riders. Public-map visibility follows those child windows when
+    // present; otherwise it follows the parent activePeriod.
+    visibilityPeriods:
+      normalizeVisibilityPeriods(
         record
       ),
 

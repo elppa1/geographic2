@@ -1422,7 +1422,7 @@ async function observeRecord({
     )
 
 
-  const publishedTtcRecord =
+  let publishedTtcRecord =
     sourceKey ===
       'ttc'
       ? Object.values(
@@ -1433,8 +1433,6 @@ async function observeRecord({
             (
               candidate
             ) =>
-              candidate?.active !==
-                false &&
               cleanText(
                 candidate?.externalId
               ) ===
@@ -1442,6 +1440,46 @@ async function observeRecord({
           ) ||
         null
       : null
+
+
+  // A TTC source ID is immutable identity. Editorial changes to title,
+  // description, location, or a hand-drawn route never change which TTC
+  // alert this pin belongs to.
+  //
+  // If a recurring TTC alert was automatically archived because it left
+  // the current live window, the same source ID can return in a later live
+  // window. Re-publish that already-approved pin without creating a new
+  // newsroom approval card. Deliberate manual unpublishing is untouched.
+  if (
+    sourceKey ===
+      'ttc' &&
+    publishedTtcRecord?.active ===
+      false &&
+    cleanText(
+      publishedTtcRecord?.archiveReason
+    )
+      .toLowerCase() ===
+      'missing-from-live-feed'
+  ) {
+    publishedTtcRecord =
+      await upsertPublishedNewsRecord({
+        record: {
+          ...publishedTtcRecord,
+
+          active:
+            true,
+
+          resolved:
+            false,
+
+          resolvedAt:
+            '',
+
+          resolutionReason:
+            '',
+        },
+      })
+  }
 
 
   // A published TTC pin is canonical proof that this source item has
