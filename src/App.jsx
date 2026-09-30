@@ -2273,6 +2273,214 @@ function GeographicApp() {
             }
 
           }
+
+
+          /* ======================================================
+             DESKTOP UI POLISH
+             Visual-only overrides. Mobile remains unchanged.
+             ====================================================== */
+          @media (min-width: 701px) {
+            .brand {
+              top: 20px !important;
+              left: 24px !important;
+              width: auto !important;
+              max-width: calc(100vw - 48px) !important;
+              padding: 7px 10px 7px 16px !important;
+              gap: 7px !important;
+              border: 1px solid rgba(17,17,17,0.12) !important;
+              border-radius: 2px !important;
+              background: rgba(255,255,255,0.96) !important;
+              color: #111 !important;
+              box-shadow: 0 10px 32px rgba(0,0,0,0.13) !important;
+              backdrop-filter: blur(10px) !important;
+              -webkit-backdrop-filter: blur(10px) !important;
+            }
+
+            .brand-main-row {
+              min-height: 40px !important;
+              gap: 0 !important;
+            }
+
+            .brand-title {
+              display: flex !important;
+              align-items: center !important;
+              align-self: stretch !important;
+              margin-right: 8px !important;
+              padding-right: 18px !important;
+              border-right: 1px solid rgba(17,17,17,0.13) !important;
+              white-space: nowrap !important;
+              color: #111 !important;
+              font-size: 13px !important;
+              font-weight: 850 !important;
+              line-height: 1 !important;
+              letter-spacing: 0.17em !important;
+            }
+
+            .brand-primary-filters {
+              align-items: stretch !important;
+              gap: 0 !important;
+            }
+
+            .brand .brand-mode-button,
+            .brand .about-button {
+              min-height: 40px !important;
+              padding: 0 13px !important;
+              border: 0 !important;
+              border-radius: 0 !important;
+              background: transparent !important;
+              color: #111 !important;
+              font-size: 9px !important;
+              font-weight: 800 !important;
+              line-height: 1 !important;
+              letter-spacing: 0.11em !important;
+              box-shadow: none !important;
+              transition:
+                background 120ms ease,
+                color 120ms ease !important;
+            }
+
+            .brand .brand-mode-button:hover,
+            .brand .about-button:hover {
+              background: rgba(17,17,17,0.055) !important;
+            }
+
+            .brand .brand-mode-button-active,
+            .brand .brand-mode-button-active:hover {
+              background: #111 !important;
+              color: #fff !important;
+            }
+
+            .historic-menu-anchor {
+              align-items: stretch !important;
+            }
+
+            .brand-primary-filters > .map-utilities {
+              margin-left: 4px !important;
+              gap: 0 !important;
+              border-left: 1px solid rgba(17,17,17,0.13) !important;
+            }
+
+            .brand-primary-filters .map-utility-button {
+              min-width: 40px !important;
+              min-height: 40px !important;
+              padding: 0 12px !important;
+              border: 0 !important;
+              border-radius: 0 !important;
+              background: transparent !important;
+              color: #111 !important;
+              font-size: 9px !important;
+              font-weight: 800 !important;
+              letter-spacing: 0.11em !important;
+            }
+
+            .brand-primary-filters .map-utility-button:hover {
+              background: rgba(17,17,17,0.055) !important;
+            }
+
+            .brand-primary-filters .gps-toggle-button {
+              min-width: 48px !important;
+            }
+
+            .brand-primary-filters .gps-toggle-button-active,
+            .brand-primary-filters .gps-toggle-button-active:hover {
+              background: #111 !important;
+              color: #fff !important;
+            }
+
+            .brand-primary-filters .search-control .map-utility-button {
+              width: 40px !important;
+              min-width: 40px !important;
+              padding: 0 !important;
+              font-size: 15px !important;
+              font-weight: 500 !important;
+              letter-spacing: 0 !important;
+            }
+
+            .news-history-control,
+            .content-subfilters {
+              padding-top: 7px !important;
+              border-top: 1px solid rgba(17,17,17,0.10) !important;
+            }
+
+            /* Opening welcome / HOW-TO panel: make it comfortably readable. */
+            .about-panel {
+              width: min(590px, calc(100vw - 64px)) !important;
+              padding: 26px 28px 24px !important;
+              border-color: rgba(17,17,17,0.14) !important;
+              box-shadow: 0 24px 80px rgba(0,0,0,0.24) !important;
+            }
+
+            .about-panel-header {
+              gap: 22px !important;
+              padding-bottom: 17px !important;
+            }
+
+            .about-panel-kicker {
+              font-size: 9px !important;
+              letter-spacing: 0.18em !important;
+            }
+
+            .about-panel-title {
+              margin-top: 7px !important;
+              font-size: 21px !important;
+              line-height: 1.12 !important;
+              letter-spacing: 0.075em !important;
+            }
+
+            .about-close {
+              width: 34px !important;
+              height: 34px !important;
+              font-size: 19px !important;
+            }
+
+            .about-section {
+              padding: 15px 0 !important;
+            }
+
+            .about-section h2 {
+              margin-bottom: 7px !important;
+              font-size: 10px !important;
+              letter-spacing: 0.14em !important;
+            }
+
+            .about-section p {
+              max-width: 68ch !important;
+              font-size: 13px !important;
+              line-height: 1.58 !important;
+            }
+
+            .about-section p + p {
+              margin-top: 9px !important;
+            }
+
+            .howto-actions {
+              gap: 8px !important;
+              margin-top: 18px !important;
+            }
+
+            .howto-primary,
+            .howto-secondary {
+              min-height: 43px !important;
+              padding: 10px 13px !important;
+              font-size: 10px !important;
+              letter-spacing: 0.10em !important;
+            }
+
+            .howto-error {
+              font-size: 11px !important;
+            }
+
+            .howto-sponsor {
+              margin-top: 15px !important;
+              padding-top: 13px !important;
+              font-size: 9px !important;
+            }
+
+            .about-made-by {
+              margin-top: 10px !important;
+              font-size: 8px !important;
+            }
+          }
         `}
       </style>
 
