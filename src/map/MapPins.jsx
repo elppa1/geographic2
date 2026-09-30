@@ -9058,16 +9058,13 @@ function createMarker({
       'calc(100vw - 68px)'
 
     popupContent.style.maxHeight =
-      pinType ===
-        'news'
-        ? '31vh'
-        : '34vh'
+      'none'
 
     popupContent.style.overflowY =
-      'auto'
+      'visible'
 
     popupContent.style.overscrollBehavior =
-      'contain'
+      'auto'
 
     popupContent.style.fontSize =
       '0.74em'
@@ -9173,6 +9170,21 @@ function createMarker({
 
       mobileCategory.style.opacity =
         '0.55'
+
+
+      if (
+        pinType ===
+          'historic' &&
+        mobileTitle
+      ) {
+        mobileCategory.style.marginBottom =
+          '3px'
+
+        popupContent.insertBefore(
+          mobileCategory,
+          mobileTitle
+        )
+      }
     }
 
 
@@ -9267,6 +9279,14 @@ function createMarker({
           'historic'
 
 
+      const policeMobileImage =
+        pinType ===
+          'news' &&
+        isTorontoPolicePin(
+          pin
+        )
+
+
       if (
         mobileImageLink
       ) {
@@ -9276,25 +9296,33 @@ function createMarker({
         mobileImageLink.style.width =
           historicMobileImage
             ? '132px'
-            : '88px'
+            : policeMobileImage
+              ? '128px'
+              : '88px'
 
         mobileImageLink.style.height =
           historicMobileImage
             ? '99px'
-            : '66px'
+            : policeMobileImage
+              ? '128px'
+              : '66px'
 
         mobileImageLink.style.float =
-          historicMobileImage
+          historicMobileImage ||
+          policeMobileImage
             ? 'none'
             : 'right'
 
         mobileImageLink.style.margin =
           historicMobileImage
             ? '8px auto 10px'
-            : '0 0 5px 8px'
+            : policeMobileImage
+              ? '6px auto 8px'
+              : '0 0 5px 8px'
 
         mobileImageLink.style.clear =
-          historicMobileImage
+          historicMobileImage ||
+          policeMobileImage
             ? 'both'
             : 'none'
 
@@ -9309,20 +9337,27 @@ function createMarker({
       mobileImage.style.width =
         historicMobileImage
           ? '132px'
-          : '88px'
+          : policeMobileImage
+            ? '128px'
+            : '88px'
 
       mobileImage.style.height =
         historicMobileImage
           ? '99px'
-          : '66px'
+          : policeMobileImage
+            ? '128px'
+            : '66px'
 
       mobileImage.style.maxHeight =
         historicMobileImage
           ? '99px'
-          : '66px'
+          : policeMobileImage
+            ? '128px'
+            : '66px'
 
       mobileImage.style.margin =
-        historicMobileImage
+        historicMobileImage ||
+        policeMobileImage
           ? '0 auto'
           : '0'
 
@@ -9489,44 +9524,58 @@ function createMarker({
             )
         }
 
-        popupContent.style.maxHeight =
-          preferredPopupMaxHeight ||
-          'none'
+        if (
+          compactMobilePopup
+        ) {
+          popupContent.style.maxHeight =
+            'none'
 
-        const preferredHeight =
-          parseFloat(
-            window
-              .getComputedStyle(
-                popupContent
-              )
-              .maxHeight
-          )
+          popupContent.style.overflowY =
+            'visible'
 
-        const availableHeight =
-          Math.max(
-            96,
-            safeBottom -
-              safeTop -
-              38
-          )
+          popupContent.style.overscrollBehavior =
+            'auto'
+        }
+        else {
+          popupContent.style.maxHeight =
+            preferredPopupMaxHeight ||
+            'none'
 
-        popupContent.style.maxHeight =
-          `${Math.floor(
-            Number.isFinite(
-              preferredHeight
-            )
-              ? Math.min(
-                  availableHeight,
-                  preferredHeight
+          const preferredHeight =
+            parseFloat(
+              window
+                .getComputedStyle(
+                  popupContent
                 )
-              : availableHeight
-          )}px`
+                .maxHeight
+            )
 
-        popupContent.style.overflowY =
-          'auto'
+          const availableHeight =
+            Math.max(
+              96,
+              safeBottom -
+                safeTop -
+                38
+            )
 
-        popupContent.style.overscrollBehavior =
-          'contain'
+          popupContent.style.maxHeight =
+            `${Math.floor(
+              Number.isFinite(
+                preferredHeight
+              )
+                ? Math.min(
+                    availableHeight,
+                    preferredHeight
+                  )
+                : availableHeight
+            )}px`
+
+          popupContent.style.overflowY =
+            'auto'
+
+          popupContent.style.overscrollBehavior =
+            'contain'
+        }
 
         const popupRect =
           popupElement.getBoundingClientRect()
