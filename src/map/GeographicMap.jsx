@@ -27,6 +27,7 @@ import {
   setStreetLabelsVisible,
 } from './streetLabels.js'
 import MapPins from './MapPins.jsx'
+import LiveTtcLayer from './LiveTtcLayer.jsx'
 import {
   getDirectRoute,
 } from './routeService.js'
@@ -2884,6 +2885,17 @@ const GeographicMap =
                 'halloween'
             }
           />
+          {mapReady && (
+            <LiveTtcLayer
+              map={
+                mapRef.current
+              }
+              active={
+                activePinFilter ===
+                  'ttc-live'
+              }
+            />
+          )}
           {mapReady && (
             <MapPins
               map={

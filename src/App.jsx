@@ -3092,6 +3092,58 @@ function GeographicApp() {
               type="button"
               className={
                 activePinFilter ===
+                  'ttc-live'
+                  ? 'brand-mode-button brand-mode-button-active'
+                  : 'brand-mode-button'
+              }
+              onClick={() =>
+                chooseContentMode(
+                  'ttc-live'
+                )
+              }
+              style={{
+                border:
+                  '1px solid rgba(0,0,0,0.18)',
+
+                padding:
+                  '5px 8px',
+
+                background:
+                  activePinFilter ===
+                  'ttc-live'
+                    ? '#111'
+                    : '#fff',
+
+                color:
+                  activePinFilter ===
+                  'ttc-live'
+                    ? '#fff'
+                    : '#111',
+
+                font:
+                  'inherit',
+
+                fontSize:
+                  '8px',
+
+                fontWeight:
+                  '700',
+
+                letterSpacing:
+                  '0.08em',
+
+                cursor:
+                  'pointer',
+              }}
+            >
+              LIVE TTC
+            </button>
+
+
+            <button
+              type="button"
+              className={
+                activePinFilter ===
                   'new'
                   ? 'brand-mode-button brand-mode-button-active'
                   : 'brand-mode-button'

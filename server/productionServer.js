@@ -47,6 +47,10 @@ import {
 } from './feeds/toronto/ttcAlerts.js'
 
 import {
+  ttcLiveTransitFeed,
+} from './feeds/toronto/ttcLiveTransit.js'
+
+import {
   liveNewsroomFeed,
 } from './feeds/toronto/liveNewsroom.js'
 
@@ -1401,6 +1405,7 @@ const plugins = [
   enhanceHistoricalTiles(),
   tpsWebhookFeed(),
   ttcAlertsFeed(),
+  ttcLiveTransitFeed(),
   liveNewsroomFeed(),
   nowServingFeed(),
   torontoNewBusinessFeed(),
