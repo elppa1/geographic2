@@ -44,6 +44,7 @@ import {
 
 import LocationSearch from './LocationSearch.jsx'
 import AdminPinMap from './AdminPinMap.jsx'
+import HistoricPreviewMap from './HistoricPreviewMap.jsx'
 
 import {
   searchLocation,
@@ -7026,6 +7027,73 @@ function AdminRoom() {
         tab,
         city,
         draft,
+      ]
+    )
+
+
+  const historicPreviewLayer =
+    useMemo(
+      () => {
+        if (
+          tab !==
+          'historic'
+        ) {
+          return null
+        }
+
+
+        if (
+          draft.layerPlacementMode ===
+            'manual'
+        ) {
+          const year =
+            Number(
+              draft.layerOverrideYear
+            )
+
+
+          if (
+            !Number.isFinite(
+              year
+            ) ||
+            !draft.layerOverrideType
+          ) {
+            return null
+          }
+
+
+          return (
+            historicalLayers.find(
+              (layer) =>
+                layer.layerType ===
+                  draft.layerOverrideType &&
+                layer.year ===
+                  year
+            ) ||
+            null
+          )
+        }
+
+
+        const automaticLayers =
+          getAutomaticHistoricLayers({
+            city,
+
+            record:
+              draft,
+          })
+
+
+        return (
+          automaticLayers[0] ||
+          null
+        )
+      },
+      [
+        tab,
+        city,
+        draft,
+        historicalLayers,
       ]
     )
 
@@ -21615,6 +21683,47 @@ function AdminRoom() {
                     )}
                   </div>
                 </div>
+
+
+                {historicPreviewLayer && (
+                  <div className="admin-field admin-field-wide">
+                    <span>
+                      HISTORICAL PREVIEW
+                    </span>
+
+                    <div className="historic-admin-preview">
+                      <div className="historic-admin-preview-heading">
+                        <strong>
+                          {
+                            historicPreviewLayer.label
+                          }
+                        </strong>
+
+                        <span>
+                          DRAG THE PIN OR CLICK THE HISTORICAL VIEW TO FINE-TUNE ITS LOCATION.
+                        </span>
+                      </div>
+
+                      <HistoricPreviewMap
+                        city={
+                          city
+                        }
+                        layer={
+                          historicPreviewLayer
+                        }
+                        longitude={
+                          draft.longitude
+                        }
+                        latitude={
+                          draft.latitude
+                        }
+                        onChange={
+                          changeCustomPinPosition
+                        }
+                      />
+                    </div>
+                  </div>
+                )}
               </>
             )}
 
