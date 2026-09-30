@@ -1,4 +1,4 @@
-// LIVE TTC VEHICLES FIX V3 · 2026-09-30 · far dots -> vehicle markers
+// LIVE TTC UX V5 · 2026-09-30 · existing vehicle icons at all zooms + continuous motion + stop arrivals + route selector + GPS prompt
 import {
   useEffect,
   useRef,
@@ -28,6 +28,8 @@ const SELECTED_ROUTE_LAYER_ID =
   'ttc-live-selected-route'
 const STOPS_LAYER_ID =
   'ttc-live-stops'
+const STOPS_HIT_LAYER_ID =
+  'ttc-live-stops-hit'
 const STATIONS_LAYER_ID =
   'ttc-live-stations'
 const STATION_LABELS_LAYER_ID =
@@ -45,10 +47,16 @@ const BUS_MARKER_IMAGE_ID =
   'ttc-live-bus-marker'
 const STREETCAR_MARKER_IMAGE_ID =
   'ttc-live-streetcar-marker'
+const STOP_MARKER_IMAGE_ID =
+  'ttc-live-stop-marker'
 const VEHICLE_DOT_MIN_ZOOM =
-  7.5
+  5.5
 const VEHICLE_ICON_MIN_ZOOM =
-  12.5
+  5.5
+const VEHICLE_LABEL_MIN_ZOOM =
+  13.5
+const GPS_PROMPT_SESSION_KEY =
+  'toronto-geographic-live-ttc-gps-prompted'
 
 const NETWORK_ENDPOINT =
   '/api/geographic/toronto/ttc/live/network'
@@ -60,7 +68,7 @@ const ARRIVALS_ENDPOINT =
 const VEHICLE_POLL_MS =
   7000
 const ANIMATION_FRAME_MS =
-  180
+  90
 
 const EMPTY_FEATURE_COLLECTION = {
   type:
@@ -433,7 +441,9 @@ function createStopPopupLoading(
     parent:
       shell,
     text:
-      'TTC STOP · LIVE',
+      properties.isStation
+        ? 'TTC STATION · LIVE'
+        : 'TTC STOP · LIVE',
     style: {
       fontSize:
         '9px',
@@ -895,6 +905,89 @@ function createVehicleMarkerImage(
 }
 
 
+function createStopMarkerImage() {
+  const size =
+    48
+  const canvas =
+    document.createElement(
+      'canvas'
+    )
+
+  canvas.width =
+    size
+  canvas.height =
+    size
+
+  const context =
+    canvas.getContext(
+      '2d'
+    )
+
+  if (
+    !context
+  ) {
+    return null
+  }
+
+  context.clearRect(
+    0,
+    0,
+    size,
+    size
+  )
+  context.fillStyle =
+    '#ffffff'
+  context.strokeStyle =
+    '#111111'
+  context.lineWidth =
+    3
+  context.beginPath()
+  context.arc(
+    24,
+    18,
+    14,
+    Math.PI,
+    0
+  )
+  context.quadraticCurveTo(
+    38,
+    29,
+    24,
+    45
+  )
+  context.quadraticCurveTo(
+    10,
+    29,
+    10,
+    18
+  )
+  context.closePath()
+  context.fill()
+  context.stroke()
+
+  context.fillStyle =
+    '#111111'
+  context.font =
+    '900 16px Arial, Helvetica, sans-serif'
+  context.textAlign =
+    'center'
+  context.textBaseline =
+    'middle'
+  context.fillText(
+    'T',
+    24,
+    18
+  )
+
+  return context.getImageData(
+    0,
+    0,
+    size,
+    size
+  )
+}
+
+
 function LiveTtcLayer({
   map,
   active =
@@ -931,12 +1024,648 @@ function LiveTtcLayer({
         null
       let networkTimer =
         null
+      let controlsRoot =
+        null
+      let routeSelect =
+        null
+      let routeCatalogById =
+        new Map()
+      let gpsPrompt =
+        null
 
       function removePopup() {
         popupRef.current
           ?.remove?.()
         popupRef.current =
           null
+      }
+
+
+      function popupOptions({
+        offset =
+          14,
+        maxWidth =
+          '310px',
+      } = {}) {
+        return {
+          closeButton:
+            true,
+          closeOnClick:
+            false,
+          offset,
+          maxWidth,
+          padding: {
+            top:
+              92,
+            right:
+              18,
+            bottom:
+              92,
+            left:
+              18,
+          },
+        }
+      }
+
+      function snapPopupToScreen(
+        lngLat
+      ) {
+        if (
+          !lngLat
+        ) {
+          return
+        }
+
+        map.easeTo({
+          center:
+            lngLat,
+          duration:
+            220,
+          essential:
+            true,
+        })
+      }
+
+      function requestGpsCenter() {
+        if (
+          !navigator?.geolocation
+        ) {
+          if (
+            controlsRoot
+          ) {
+            const button =
+              controlsRoot.querySelector(
+                '[data-ttc-gps]'
+              )
+            if (
+              button
+            ) {
+              button.textContent =
+                'GPS UNAVAILABLE'
+            }
+          }
+          return
+        }
+
+        const button =
+          controlsRoot?.querySelector(
+            '[data-ttc-gps]'
+          )
+
+        if (
+          button
+        ) {
+          button.textContent =
+            'LOCATING…'
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          (
+            position
+          ) => {
+            const longitude =
+              Number(
+                position?.coords?.longitude
+              )
+            const latitude =
+              Number(
+                position?.coords?.latitude
+              )
+
+            if (
+              !Number.isFinite(
+                longitude
+              ) ||
+              !Number.isFinite(
+                latitude
+              )
+            ) {
+              return
+            }
+
+            map.easeTo({
+              center: [
+                longitude,
+                latitude,
+              ],
+              zoom:
+                Math.max(
+                  13.5,
+                  map.getZoom()
+                ),
+              duration:
+                650,
+              essential:
+                true,
+            })
+
+            if (
+              button
+            ) {
+              button.textContent =
+                'GPS ✓'
+            }
+
+            gpsPrompt?.remove?.()
+            gpsPrompt =
+              null
+          },
+          () => {
+            if (
+              button
+            ) {
+              button.textContent =
+                'GPS'
+            }
+          },
+          {
+            enableHighAccuracy:
+              true,
+            timeout:
+              10000,
+            maximumAge:
+              15000,
+          }
+        )
+      }
+
+      function updateRouteSelector(
+        catalog
+      ) {
+        if (
+          !routeSelect ||
+          routeSelect.dataset.loaded ===
+            '1' ||
+          !Array.isArray(
+            catalog
+          )
+        ) {
+          return
+        }
+
+        routeCatalogById =
+          new Map()
+
+        const fragment =
+          document.createDocumentFragment()
+
+        catalog.forEach(
+          (
+            route
+          ) => {
+            const id =
+              String(
+                route?.id ||
+                ''
+              )
+
+            if (
+              !id
+            ) {
+              return
+            }
+
+            routeCatalogById.set(
+              id,
+              route
+            )
+
+            const option =
+              document.createElement(
+                'option'
+              )
+            option.value =
+              id
+            option.textContent =
+              `${route.shortName || id}${route.longName ? ` · ${route.longName}` : ''}`
+            fragment.appendChild(
+              option
+            )
+          }
+        )
+
+        routeSelect.appendChild(
+          fragment
+        )
+        routeSelect.dataset.loaded =
+          '1'
+        routeSelect.value =
+          selectedRouteRef.current ||
+          ''
+      }
+
+      function createLiveTtcControls() {
+        const container =
+          map.getContainer()
+
+        if (
+          !container
+        ) {
+          return
+        }
+
+        controlsRoot =
+          document.createElement(
+            'div'
+          )
+        controlsRoot.dataset.ttcLiveControls =
+          '1'
+
+        Object.assign(
+          controlsRoot.style,
+          {
+            position:
+              'absolute',
+            top:
+              '72px',
+            left:
+              '50%',
+            transform:
+              'translateX(-50%)',
+            zIndex:
+              '18',
+            display:
+              'flex',
+            gap:
+              '6px',
+            alignItems:
+              'center',
+            maxWidth:
+              'calc(100% - 24px)',
+            pointerEvents:
+              'auto',
+          }
+        )
+
+        routeSelect =
+          document.createElement(
+            'select'
+          )
+        routeSelect.setAttribute(
+          'aria-label',
+          'Select TTC route'
+        )
+        Object.assign(
+          routeSelect.style,
+          {
+            height:
+              '34px',
+            minWidth:
+              '170px',
+            maxWidth:
+              '62vw',
+            border:
+              '1px solid rgba(0,0,0,0.22)',
+            borderRadius:
+              '8px',
+            background:
+              '#fff',
+            color:
+              '#111',
+            padding:
+              '0 30px 0 10px',
+            fontSize:
+              '11px',
+            fontWeight:
+              '800',
+            boxShadow:
+              '0 2px 8px rgba(0,0,0,0.14)',
+          }
+        )
+
+        const allOption =
+          document.createElement(
+            'option'
+          )
+        allOption.value =
+          ''
+        allOption.textContent =
+          'ALL TTC ROUTES'
+        routeSelect.appendChild(
+          allOption
+        )
+        routeSelect.addEventListener(
+          'change',
+          () => {
+            const routeId =
+              routeSelect.value
+            setSelectedRoute(
+              routeId
+            )
+
+            const route =
+              routeCatalogById.get(
+                routeId
+              )
+            const bounds =
+              route?.bounds
+
+            if (
+              routeId &&
+              Array.isArray(
+                bounds
+              ) &&
+              bounds.length ===
+                4 &&
+              bounds.every(
+                Number.isFinite
+              )
+            ) {
+              map.fitBounds(
+                [
+                  [
+                    bounds[0],
+                    bounds[1],
+                  ],
+                  [
+                    bounds[2],
+                    bounds[3],
+                  ],
+                ],
+                {
+                  padding: {
+                    top:
+                      115,
+                    right:
+                      55,
+                    bottom:
+                      70,
+                    left:
+                      55,
+                  },
+                  maxZoom:
+                    13,
+                  duration:
+                    650,
+                }
+              )
+            }
+          }
+        )
+
+        const gpsButton =
+          document.createElement(
+            'button'
+          )
+        gpsButton.type =
+          'button'
+        gpsButton.dataset.ttcGps =
+          '1'
+        gpsButton.textContent =
+          'GPS'
+        Object.assign(
+          gpsButton.style,
+          {
+            height:
+              '34px',
+            border:
+              '1px solid rgba(0,0,0,0.22)',
+            borderRadius:
+              '8px',
+            background:
+              '#111',
+            color:
+              '#fff',
+            padding:
+              '0 11px',
+            fontSize:
+              '10px',
+            fontWeight:
+              '900',
+            letterSpacing:
+              '0.06em',
+            boxShadow:
+              '0 2px 8px rgba(0,0,0,0.14)',
+            cursor:
+              'pointer',
+          }
+        )
+        gpsButton.addEventListener(
+          'click',
+          requestGpsCenter
+        )
+
+        controlsRoot.appendChild(
+          routeSelect
+        )
+        controlsRoot.appendChild(
+          gpsButton
+        )
+        container.appendChild(
+          controlsRoot
+        )
+
+        let alreadyPrompted =
+          false
+        try {
+          alreadyPrompted =
+            sessionStorage.getItem(
+              GPS_PROMPT_SESSION_KEY
+            ) ===
+              '1'
+        }
+        catch {
+          alreadyPrompted =
+            false
+        }
+
+        if (
+          alreadyPrompted
+        ) {
+          return
+        }
+
+        gpsPrompt =
+          document.createElement(
+            'div'
+          )
+        Object.assign(
+          gpsPrompt.style,
+          {
+            position:
+              'absolute',
+            left:
+              '50%',
+            top:
+              '50%',
+            transform:
+              'translate(-50%, -50%)',
+            zIndex:
+              '22',
+            width:
+              'min(330px, calc(100% - 34px))',
+            background:
+              '#fff',
+            color:
+              '#111',
+            border:
+              '1px solid rgba(0,0,0,0.2)',
+            borderRadius:
+              '12px',
+            padding:
+              '16px',
+            boxShadow:
+              '0 10px 36px rgba(0,0,0,0.24)',
+            fontFamily:
+              'Arial, Helvetica, sans-serif',
+          }
+        )
+
+        addTextLine({
+          parent:
+            gpsPrompt,
+          text:
+            'LIVE TTC',
+          style: {
+            fontSize:
+              '10px',
+            fontWeight:
+              '900',
+            letterSpacing:
+              '0.12em',
+            opacity:
+              '0.55',
+            marginBottom:
+              '5px',
+          },
+        })
+        addTextLine({
+          parent:
+            gpsPrompt,
+          text:
+            'Browse the map, or use GPS to jump to live buses and streetcars around you.',
+          style: {
+            fontSize:
+              '14px',
+            lineHeight:
+              '1.35',
+            fontWeight:
+              '800',
+            marginBottom:
+              '13px',
+          },
+        })
+
+        const actions =
+          document.createElement(
+            'div'
+          )
+        Object.assign(
+          actions.style,
+          {
+            display:
+              'flex',
+            gap:
+              '7px',
+          }
+        )
+
+        const useGps =
+          document.createElement(
+            'button'
+          )
+        useGps.type =
+          'button'
+        useGps.textContent =
+          'USE GPS'
+        Object.assign(
+          useGps.style,
+          {
+            flex:
+              '1',
+            height:
+              '36px',
+            border:
+              '0',
+            borderRadius:
+              '8px',
+            background:
+              '#111',
+            color:
+              '#fff',
+            fontSize:
+              '11px',
+            fontWeight:
+              '900',
+            cursor:
+              'pointer',
+          }
+        )
+
+        const browse =
+          document.createElement(
+            'button'
+          )
+        browse.type =
+          'button'
+        browse.textContent =
+          'BROWSE MAP'
+        Object.assign(
+          browse.style,
+          {
+            flex:
+              '1',
+            height:
+              '36px',
+            border:
+              '1px solid rgba(0,0,0,0.22)',
+            borderRadius:
+              '8px',
+            background:
+              '#fff',
+            color:
+              '#111',
+            fontSize:
+              '11px',
+            fontWeight:
+              '900',
+            cursor:
+              'pointer',
+          }
+        )
+
+        const rememberPrompt =
+          () => {
+            try {
+              sessionStorage.setItem(
+                GPS_PROMPT_SESSION_KEY,
+                '1'
+              )
+            }
+            catch {
+              // Session storage can be unavailable in strict privacy modes.
+            }
+          }
+
+        useGps.addEventListener(
+          'click',
+          () => {
+            rememberPrompt()
+            requestGpsCenter()
+          }
+        )
+        browse.addEventListener(
+          'click',
+          () => {
+            rememberPrompt()
+            gpsPrompt?.remove?.()
+            gpsPrompt =
+              null
+          }
+        )
+
+        actions.appendChild(
+          useGps
+        )
+        actions.appendChild(
+          browse
+        )
+        gpsPrompt.appendChild(
+          actions
+        )
+        container.appendChild(
+          gpsPrompt
+        )
       }
 
       function safeRemoveLayer(
@@ -1026,6 +1755,28 @@ function LiveTtcLayer({
             map.addImage(
               STREETCAR_MARKER_IMAGE_ID,
               streetcarMarker,
+              {
+                pixelRatio:
+                  2,
+              }
+            )
+          }
+        }
+
+        if (
+          !map.hasImage(
+            STOP_MARKER_IMAGE_ID
+          )
+        ) {
+          const stopMarker =
+            createStopMarkerImage()
+
+          if (
+            stopMarker
+          ) {
+            map.addImage(
+              STOP_MARKER_IMAGE_ID,
+              stopMarker,
               {
                 pixelRatio:
                   2,
@@ -1291,11 +2042,51 @@ function LiveTtcLayer({
             id:
               STOPS_LAYER_ID,
             type:
+              'symbol',
+            source:
+              STOPS_SOURCE_ID,
+            minzoom:
+              12.5,
+            layout: {
+              'icon-image':
+                STOP_MARKER_IMAGE_ID,
+              'icon-size': [
+                'interpolate',
+                [
+                  'linear',
+                ],
+                [
+                  'zoom',
+                ],
+                12.5,
+                0.42,
+                15,
+                0.52,
+                18,
+                0.62,
+              ],
+              'icon-allow-overlap':
+                false,
+              'icon-ignore-placement':
+                false,
+            },
+          })
+        }
+
+        if (
+          !map.getLayer(
+            STOPS_HIT_LAYER_ID
+          )
+        ) {
+          map.addLayer({
+            id:
+              STOPS_HIT_LAYER_ID,
+            type:
               'circle',
             source:
               STOPS_SOURCE_ID,
             minzoom:
-              13,
+              12.5,
             paint: {
               'circle-radius': [
                 'interpolate',
@@ -1305,19 +2096,19 @@ function LiveTtcLayer({
                 [
                   'zoom',
                 ],
-                13,
-                2.2,
-                17,
-                4,
+                12.5,
+                12,
+                16,
+                16,
+                18,
+                19,
               ],
               'circle-color':
-                '#ffffff',
-              'circle-stroke-color':
-                '#111111',
-              'circle-stroke-width':
-                1.25,
+                '#000000',
               'circle-opacity':
-                0.92,
+                0.01,
+              'circle-stroke-opacity':
+                0,
             },
           })
         }
@@ -1415,8 +2206,6 @@ function LiveTtcLayer({
               VEHICLES_SOURCE_ID,
             minzoom:
               VEHICLE_DOT_MIN_ZOOM,
-            maxzoom:
-              VEHICLE_ICON_MIN_ZOOM,
             paint: {
               'circle-radius': [
                 'interpolate',
@@ -1427,42 +2216,18 @@ function LiveTtcLayer({
                   'zoom',
                 ],
                 7.5,
-                2.2,
+                6,
+                13,
+                8,
+                18,
                 10,
-                3.2,
-                12.5,
-                4.6,
               ],
-              'circle-color': [
-                'case',
-                [
-                  '==',
-                  [
-                    'get',
-                    'mode',
-                  ],
-                  'streetcar',
-                ],
-                '#C8102E',
-                '#111111',
-              ],
-              'circle-stroke-color':
-                '#ffffff',
-              'circle-stroke-width': [
-                'interpolate',
-                [
-                  'linear',
-                ],
-                [
-                  'zoom',
-                ],
-                7.5,
-                0.7,
-                12.5,
-                1.4,
-              ],
+              'circle-color':
+                '#000000',
               'circle-opacity':
-                0.94,
+                0.01,
+              'circle-stroke-opacity':
+                0,
             },
           })
         }
@@ -1482,6 +2247,7 @@ function LiveTtcLayer({
             minzoom:
               VEHICLE_ICON_MIN_ZOOM,
             layout: {
+
               'icon-image': [
                 'case',
                 [
@@ -1503,12 +2269,14 @@ function LiveTtcLayer({
                 [
                   'zoom',
                 ],
-                12.5,
-                0.78,
-                15,
-                0.98,
-                18,
-                1.18,
+                5.5,
+                0.55,
+                9,
+                0.66,
+                13,
+                0.82,
+                17,
+                0.96,
               ],
               'icon-rotate': [
                 'coalesce',
@@ -1524,6 +2292,7 @@ function LiveTtcLayer({
                 true,
               'icon-ignore-placement':
                 true,
+
             },
           })
         }
@@ -1541,7 +2310,7 @@ function LiveTtcLayer({
             source:
               VEHICLES_SOURCE_ID,
             minzoom:
-              VEHICLE_ICON_MIN_ZOOM,
+              VEHICLE_LABEL_MIN_ZOOM,
             layout: {
               'text-field': [
                 'get',
@@ -1555,12 +2324,12 @@ function LiveTtcLayer({
                 [
                   'zoom',
                 ],
-                12.5,
+                13.5,
                 7,
-                15,
-                9,
+                16,
+                8,
                 18,
-                10,
+                9,
               ],
               'text-allow-overlap':
                 true,
@@ -1587,7 +2356,7 @@ function LiveTtcLayer({
             source:
               VEHICLES_SOURCE_ID,
             minzoom:
-              13,
+              24,
             filter: [
               'has',
               'bearing',
@@ -1636,7 +2405,7 @@ function LiveTtcLayer({
         selectedRouteRef.current =
           normalized
 
-        const filter = [
+        const routeFilter = [
           '==',
           [
             'get',
@@ -1653,7 +2422,7 @@ function LiveTtcLayer({
         ) {
           map.setFilter(
             SELECTED_ROUTE_CASING_LAYER_ID,
-            filter
+            routeFilter
           )
         }
 
@@ -1664,7 +2433,7 @@ function LiveTtcLayer({
         ) {
           map.setFilter(
             SELECTED_ROUTE_LAYER_ID,
-            filter
+            routeFilter
           )
         }
 
@@ -1677,9 +2446,44 @@ function LiveTtcLayer({
             ROUTES_LAYER_ID,
             'line-opacity',
             normalized
-              ? 0.12
+              ? 0.10
               : 0.34
           )
+        }
+
+        ;[
+          VEHICLE_CIRCLE_LAYER_ID,
+          VEHICLE_ICON_LAYER_ID,
+          VEHICLE_ROUTE_LABEL_LAYER_ID,
+        ]
+          .forEach(
+            (
+              layerId
+            ) => {
+              if (
+                !map.getLayer(
+                  layerId
+                )
+              ) {
+                return
+              }
+
+              map.setFilter(
+                layerId,
+                normalized
+                  ? routeFilter
+                  : null
+              )
+            }
+          )
+
+        if (
+          routeSelect &&
+          routeSelect.value !==
+            normalized
+        ) {
+          routeSelect.value =
+            normalized
         }
       }
 
@@ -1749,6 +2553,10 @@ function LiveTtcLayer({
 
           const payload =
             await response.json()
+
+          updateRouteSelector(
+            payload?.routeCatalog
+          )
 
           if (
             disposed
@@ -2166,18 +2974,19 @@ function LiveTtcLayer({
         }
 
         removePopup()
+        snapPopupToScreen(
+          event.lngLat
+        )
 
         popupRef.current =
-          new Popup({
-            closeButton:
-              true,
-            closeOnClick:
-              false,
-            offset:
-              16,
-            maxWidth:
-              '300px',
-          })
+          new Popup(
+            popupOptions({
+              offset:
+                16,
+              maxWidth:
+                '300px',
+            })
+          )
             .setLngLat(
               event.lngLat
             )
@@ -2213,14 +3022,23 @@ function LiveTtcLayer({
             properties.stopId ||
             ''
           )
+        const stopCode =
+          String(
+            properties.stopCode ||
+            ''
+          )
 
         if (
-          !stopId
+          !stopId &&
+          !stopCode
         ) {
           return
         }
 
         removePopup()
+        snapPopupToScreen(
+          event.lngLat
+        )
 
         const shell =
           createStopPopupLoading(
@@ -2228,16 +3046,14 @@ function LiveTtcLayer({
           )
 
         const popup =
-          new Popup({
-            closeButton:
-              true,
-            closeOnClick:
-              false,
-            offset:
-              13,
-            maxWidth:
-              '310px',
-          })
+          new Popup(
+            popupOptions({
+              offset:
+                13,
+              maxWidth:
+                '330px',
+            })
+          )
             .setLngLat(
               event.lngLat
             )
@@ -2254,7 +3070,7 @@ function LiveTtcLayer({
         try {
           const response =
             await fetch(
-              `${ARRIVALS_ENDPOINT}?stopId=${encodeURIComponent(stopId)}`,
+              `${ARRIVALS_ENDPOINT}?stopId=${encodeURIComponent(stopId)}&stopCode=${encodeURIComponent(stopCode)}`,
               {
                 cache:
                   'no-store',
@@ -2280,6 +3096,9 @@ function LiveTtcLayer({
               shell,
               payload,
             })
+            snapPopupToScreen(
+              event.lngLat
+            )
           }
         }
         catch (
@@ -2312,7 +3131,7 @@ function LiveTtcLayer({
         }
       }
 
-      function handleStationClick(
+      async function handleStationClick(
         event
       ) {
         const feature =
@@ -2324,31 +3143,136 @@ function LiveTtcLayer({
           return
         }
 
-        removePopup()
+        const properties =
+          feature.properties ||
+          {}
+        const coordinates =
+          Array.isArray(
+            feature.geometry?.coordinates
+          )
+            ? feature.geometry.coordinates
+            : [
+                event.lngLat.lng,
+                event.lngLat.lat,
+              ]
 
-        popupRef.current =
-          new Popup({
-            closeButton:
+        removePopup()
+        snapPopupToScreen(
+          event.lngLat
+        )
+
+        const shell =
+          createStopPopupLoading({
+            stopName:
+              properties.stopName ||
+              'TTC Station',
+            stopCode:
+              '',
+            isStation:
               true,
-            closeOnClick:
-              false,
-            offset:
-              14,
-            maxWidth:
-              '290px',
           })
+
+        const popup =
+          new Popup(
+            popupOptions({
+              offset:
+                14,
+              maxWidth:
+                '340px',
+            })
+          )
             .setLngLat(
               event.lngLat
             )
             .setDOMContent(
-              createStationPopup(
-                feature.properties ||
-                {}
-              )
+              shell
             )
             .addTo(
               map
             )
+
+        popupRef.current =
+          popup
+
+        try {
+          const params =
+            new URLSearchParams({
+              latitude:
+                String(
+                  coordinates[1]
+                ),
+              longitude:
+                String(
+                  coordinates[0]
+                ),
+              name:
+                String(
+                  properties.stopName ||
+                  ''
+                ),
+            })
+
+          const response =
+            await fetch(
+              `${ARRIVALS_ENDPOINT}/nearby?${params.toString()}`,
+              {
+                cache:
+                  'no-store',
+              }
+            )
+
+          if (
+            !response.ok
+          ) {
+            throw new Error(
+              `TTC station arrivals request failed: ${response.status}`
+            )
+          }
+
+          const payload =
+            await response.json()
+
+          if (
+            popupRef.current ===
+              popup
+          ) {
+            fillStopArrivals({
+              shell,
+              payload,
+            })
+            snapPopupToScreen(
+              event.lngLat
+            )
+          }
+        }
+        catch (
+          error
+        ) {
+          console.warn(
+            'LIVE TTC STATION ARRIVALS:',
+            error
+          )
+
+          if (
+            popupRef.current ===
+              popup
+          ) {
+            addTextLine({
+              parent:
+                shell,
+              text:
+                'Nearby live arrivals are temporarily unavailable.',
+              style: {
+                fontSize:
+                  '10px',
+                marginTop:
+                  '7px',
+                opacity:
+                  '0.65',
+              },
+            })
+          }
+        }
       }
 
       function handleRouteClick(
@@ -2388,6 +3312,7 @@ function LiveTtcLayer({
       }
 
       addSourcesAndLayers()
+      createLiveTtcControls()
       setSelectedRoute(
         ''
       )
@@ -2405,13 +3330,7 @@ function LiveTtcLayer({
 
       map.on(
         'click',
-        VEHICLE_ICON_LAYER_ID,
-        handleVehicleClick
-      )
-
-      map.on(
-        'click',
-        STOPS_LAYER_ID,
+        STOPS_HIT_LAYER_ID,
         handleStopClick
       )
 
@@ -2429,8 +3348,7 @@ function LiveTtcLayer({
 
       ;[
         VEHICLE_CIRCLE_LAYER_ID,
-        VEHICLE_ICON_LAYER_ID,
-        STOPS_LAYER_ID,
+        STOPS_HIT_LAYER_ID,
         STATIONS_LAYER_ID,
         ROUTES_LAYER_ID,
       ]
@@ -2481,6 +3399,16 @@ function LiveTtcLayer({
         )
 
         removePopup()
+        gpsPrompt?.remove?.()
+        gpsPrompt =
+          null
+        controlsRoot?.remove?.()
+        controlsRoot =
+          null
+        routeSelect =
+          null
+        routeCatalogById =
+          new Map()
 
         map.off(
           'moveend',
@@ -2495,13 +3423,7 @@ function LiveTtcLayer({
 
         map.off(
           'click',
-          VEHICLE_ICON_LAYER_ID,
-          handleVehicleClick
-        )
-
-        map.off(
-          'click',
-          STOPS_LAYER_ID,
+          STOPS_HIT_LAYER_ID,
           handleStopClick
         )
 
@@ -2519,8 +3441,7 @@ function LiveTtcLayer({
 
         ;[
           VEHICLE_CIRCLE_LAYER_ID,
-          VEHICLE_ICON_LAYER_ID,
-          STOPS_LAYER_ID,
+          STOPS_HIT_LAYER_ID,
           STATIONS_LAYER_ID,
           ROUTES_LAYER_ID,
         ]
@@ -2550,6 +3471,7 @@ function LiveTtcLayer({
           VEHICLE_CIRCLE_LAYER_ID,
           STATION_LABELS_LAYER_ID,
           STATIONS_LAYER_ID,
+          STOPS_HIT_LAYER_ID,
           STOPS_LAYER_ID,
           SELECTED_ROUTE_LAYER_ID,
           SELECTED_ROUTE_CASING_LAYER_ID,
@@ -2561,6 +3483,7 @@ function LiveTtcLayer({
           )
 
         ;[
+          STOP_MARKER_IMAGE_ID,
           STREETCAR_MARKER_IMAGE_ID,
           BUS_MARKER_IMAGE_ID,
         ]

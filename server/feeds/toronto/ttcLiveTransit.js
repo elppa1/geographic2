@@ -1,4 +1,4 @@
-// LIVE TTC REALTIME FAILOVER FIX · 2026-09-30
+// LIVE TTC UX V5 · 2026-09-30 · realtime failover + stop predictions + route catalog + nearby station arrivals
 import https from 'node:https'
 import { inflateRawSync } from 'node:zlib'
 
@@ -22,6 +22,9 @@ const TTC_TRIPS_URL =
 
 const TTC_TRIPS_FALLBACK_URL =
   'https://bustime.ttc.ca/gtfsrt/trips'
+
+const TTC_PREDICTIONS_URL =
+  'https://retro.umoiq.com/service/publicJSONFeed'
 
 const LIVE_TTC_ENDPOINT =
   '/api/geographic/toronto/ttc/live'
@@ -2016,7 +2019,7 @@ async function getNetworkPayload(
 
   const stopFeatures =
     zoom >=
-      13
+      12.5
       ? surface.stops
           .filter(
             (
@@ -2049,6 +2052,121 @@ async function getNetworkPayload(
         stationFeature
       )
 
+  const routeBounds =
+    new Map()
+
+  surface.routeShapes.forEach(
+    (
+      shape
+    ) => {
+      const routeId =
+        cleanText(
+          shape?.routeId
+        )
+      const bounds =
+        shape?.bounds
+
+      if (
+        !routeId ||
+        !Array.isArray(
+          bounds
+        ) ||
+        bounds.length !==
+          4
+      ) {
+        return
+      }
+
+      const current =
+        routeBounds.get(
+          routeId
+        )
+
+      if (
+        !current
+      ) {
+        routeBounds.set(
+          routeId,
+          [
+            bounds[0],
+            bounds[1],
+            bounds[2],
+            bounds[3],
+          ]
+        )
+        return
+      }
+
+      current[0] =
+        Math.min(
+          current[0],
+          bounds[0]
+        )
+      current[1] =
+        Math.min(
+          current[1],
+          bounds[1]
+        )
+      current[2] =
+        Math.max(
+          current[2],
+          bounds[2]
+        )
+      current[3] =
+        Math.max(
+          current[3],
+          bounds[3]
+        )
+    }
+  )
+
+  const routeCatalog =
+    Array.from(
+      surface.routes.values()
+    )
+      .map(
+        (
+          route
+        ) => ({
+          id:
+            route.id,
+          shortName:
+            route.shortName,
+          longName:
+            route.longName,
+          type:
+            route.type,
+          bounds:
+            routeBounds.get(
+              route.id
+            ) ||
+            null,
+        })
+      )
+      .sort(
+        (
+          a,
+          b
+        ) =>
+          String(
+            a.shortName ||
+            a.id
+          )
+            .localeCompare(
+              String(
+                b.shortName ||
+                b.id
+              ),
+              undefined,
+              {
+                numeric:
+                  true,
+                sensitivity:
+                  'base',
+              }
+            )
+      )
+
   return {
     ok:
       true,
@@ -2062,6 +2180,7 @@ async function getNetworkPayload(
         .toISOString(),
     attribution:
       TORONTO_ATTRIBUTION,
+    routeCatalog,
     routes: {
       type:
         'FeatureCollection',
@@ -2395,12 +2514,6 @@ async function getVehiclesPayload(
               routeId
             )
 
-          if (
-            !route
-          ) {
-            return null
-          }
-
           const stopId =
             cleanText(
               vehicle?.stopId
@@ -2443,7 +2556,16 @@ async function getVehiclesPayload(
 
           const routeType =
             route?.type ??
-            3
+            (
+              /^5\d\d$/.test(
+                routeId
+              ) ||
+              /^3(?:01|04|06)$/.test(
+                routeId
+              )
+                ? 0
+                : 3
+            )
 
           return {
             id,
@@ -2559,6 +2681,347 @@ async function getVehiclesPayload(
 }
 
 
+function asArray(
+  value
+) {
+  if (
+    Array.isArray(
+      value
+    )
+  ) {
+    return value
+  }
+
+  if (
+    value ===
+      null ||
+    value ===
+      undefined
+  ) {
+    return []
+  }
+
+  return [
+    value,
+  ]
+}
+
+
+async function fetchJson(
+  url,
+  timeoutMs =
+    REALTIME_FETCH_TIMEOUT_MS
+) {
+  const buffer =
+    await fetchBuffer(
+      url,
+      0,
+      timeoutMs
+    )
+
+  return JSON.parse(
+    buffer.toString(
+      'utf8'
+    )
+  )
+}
+
+
+async function getUmoArrivalsForStopCode(
+  stopCode,
+  surface
+) {
+  const normalizedStopCode =
+    cleanText(
+      stopCode
+    )
+
+  if (
+    !normalizedStopCode
+  ) {
+    return []
+  }
+
+  const url =
+    new URL(
+      TTC_PREDICTIONS_URL
+    )
+  url.searchParams.set(
+    'command',
+    'predictions'
+  )
+  url.searchParams.set(
+    'a',
+    'ttc'
+  )
+  url.searchParams.set(
+    'stopId',
+    normalizedStopCode
+  )
+  url.searchParams.set(
+    'useShortTitles',
+    'true'
+  )
+
+  const payload =
+    await fetchJson(
+      url.toString()
+    )
+
+  if (
+    payload?.Error ||
+    payload?.error
+  ) {
+    throw new Error(
+      cleanText(
+        payload?.Error?.content ||
+        payload?.Error ||
+        payload?.error?.content ||
+        payload?.error ||
+        'TTC prediction feed returned an error'
+      )
+    )
+  }
+
+  const arrivals =
+    []
+
+  asArray(
+    payload?.predictions
+  )
+    .forEach(
+      (
+        predictionGroup
+      ) => {
+        const routeId =
+          cleanText(
+            predictionGroup?.routeTag
+          )
+        const route =
+          surface?.routes?.get?.(
+            routeId
+          )
+        const routeTitle =
+          cleanText(
+            predictionGroup?.routeTitle
+          )
+
+        asArray(
+          predictionGroup?.direction
+        )
+          .forEach(
+            (
+              direction
+            ) => {
+              const headsign =
+                cleanText(
+                  direction?.title
+                )
+
+              asArray(
+                direction?.prediction
+              )
+                .forEach(
+                  (
+                    prediction
+                  ) => {
+                    const minutes =
+                      numberOrNull(
+                        prediction?.minutes
+                      )
+                    const seconds =
+                      numberOrNull(
+                        prediction?.seconds
+                      )
+                    const epochMilliseconds =
+                      numberOrNull(
+                        prediction?.epochTime
+                      )
+
+                    if (
+                      minutes ===
+                        null &&
+                      seconds ===
+                        null &&
+                      epochMilliseconds ===
+                        null
+                    ) {
+                      return
+                    }
+
+                    const normalizedMinutes =
+                      minutes ??
+                      Math.max(
+                        0,
+                        Math.floor(
+                          (seconds ?? 0) /
+                            60
+                        )
+                      )
+
+                    arrivals.push({
+                      tripId:
+                        cleanText(
+                          prediction?.tripTag
+                        ),
+                      routeId,
+                      routeShortName:
+                        cleanText(
+                          prediction?.branch
+                        ) ||
+                        route?.shortName ||
+                        routeId,
+                      routeLongName:
+                        route?.longName ||
+                        routeTitle,
+                      routeType:
+                        route?.type ??
+                        (
+                          /^5\d\d$/.test(
+                            routeId
+                          )
+                            ? 0
+                            : 3
+                        ),
+                      mode:
+                        routeMode(
+                          route?.type ??
+                          (
+                            /^5\d\d$/.test(
+                              routeId
+                            )
+                              ? 0
+                              : 3
+                          )
+                        ),
+                      headsign,
+                      directionId:
+                        cleanText(
+                          prediction?.dirTag
+                        ),
+                      vehicleId:
+                        cleanText(
+                          prediction?.vehicle
+                        ),
+                      stopId:
+                        '',
+                      stopCode:
+                        normalizedStopCode,
+                      arrivalTime:
+                        epochMilliseconds !==
+                          null
+                          ? Math.floor(
+                              epochMilliseconds /
+                              1000
+                            )
+                          : Math.floor(
+                              Date.now() /
+                              1000
+                            ) +
+                            normalizedMinutes *
+                              60,
+                      minutes:
+                        normalizedMinutes,
+                      seconds:
+                        seconds ??
+                        normalizedMinutes *
+                          60,
+                      branch:
+                        cleanText(
+                          prediction?.branch
+                        ),
+                      isDeparture:
+                        String(
+                          prediction?.isDeparture ||
+                          ''
+                        ) ===
+                          'true',
+                      source:
+                        'UMO NextBus',
+                    })
+                  }
+                )
+            }
+          )
+      }
+    )
+
+  arrivals.sort(
+    (
+      a,
+      b
+    ) =>
+      a.minutes -
+      b.minutes
+  )
+
+  return arrivals
+}
+
+
+function distanceMeters(
+  latitudeA,
+  longitudeA,
+  latitudeB,
+  longitudeB
+) {
+  const toRadians =
+    (value) =>
+      value *
+      Math.PI /
+      180
+  const earthRadius =
+    6371000
+  const dLat =
+    toRadians(
+      latitudeB -
+      latitudeA
+    )
+  const dLon =
+    toRadians(
+      longitudeB -
+      longitudeA
+    )
+  const lat1 =
+    toRadians(
+      latitudeA
+    )
+  const lat2 =
+    toRadians(
+      latitudeB
+    )
+  const a =
+    Math.sin(
+      dLat /
+      2
+    ) **
+      2 +
+    Math.sin(
+      dLon /
+      2
+    ) **
+      2 *
+      Math.cos(
+        lat1
+      ) *
+      Math.cos(
+        lat2
+      )
+
+  return earthRadius *
+    2 *
+    Math.atan2(
+      Math.sqrt(
+        a
+      ),
+      Math.sqrt(
+        1 -
+        a
+      )
+    )
+}
+
+
 function realtimeStopTime(
   stopTimeUpdate
 ) {
@@ -2573,7 +3036,7 @@ function realtimeStopTime(
 }
 
 
-async function getArrivalsPayload(
+async function getGtfsArrivalsPayload(
   stopId
 ) {
   const normalizedStopId =
@@ -2826,6 +3289,351 @@ async function getArrivalsPayload(
 }
 
 
+async function getArrivalsPayload({
+  stopId,
+  stopCode,
+}) {
+  const surface =
+    await getSurfaceNetwork()
+  const normalizedStopId =
+    cleanText(
+      stopId
+    )
+  const staticStop =
+    surface.stopsById.get(
+      normalizedStopId
+    )
+  const normalizedStopCode =
+    cleanText(
+      stopCode
+    ) ||
+    cleanText(
+      staticStop?.code
+    )
+
+  if (
+    normalizedStopCode
+  ) {
+    try {
+      const arrivals =
+        await getUmoArrivalsForStopCode(
+          normalizedStopCode,
+          surface
+        )
+
+      return {
+        ok:
+          true,
+        source:
+          'TTC Next Vehicle Arrival System · UMO NextBus',
+        upstream:
+          TTC_PREDICTIONS_URL,
+        attribution:
+          TORONTO_ATTRIBUTION,
+        updatedAt:
+          new Date()
+            .toISOString(),
+        stop: staticStop
+          ? {
+              id:
+                staticStop.id,
+              code:
+                staticStop.code,
+              name:
+                staticStop.name,
+              latitude:
+                staticStop.latitude,
+              longitude:
+                staticStop.longitude,
+            }
+          : {
+              id:
+                normalizedStopId,
+              code:
+                normalizedStopCode,
+              name:
+                '',
+              latitude:
+                null,
+              longitude:
+                null,
+            },
+        count:
+          Math.min(
+            arrivals.length,
+            18
+          ),
+        arrivals:
+          arrivals.slice(
+            0,
+            18
+          ),
+      }
+    }
+    catch (
+      error
+    ) {
+      console.warn(
+        'LIVE TTC ARRIVALS · UMO prediction fallback to GTFS-RT:',
+        error?.message ||
+        error
+      )
+    }
+  }
+
+  return getGtfsArrivalsPayload(
+    normalizedStopId
+  )
+}
+
+
+async function getNearbyArrivalsPayload(
+  latitude,
+  longitude,
+  name =
+    ''
+) {
+  const centerLatitude =
+    numberOrNull(
+      latitude
+    )
+  const centerLongitude =
+    numberOrNull(
+      longitude
+    )
+
+  if (
+    centerLatitude ===
+      null ||
+    centerLongitude ===
+      null
+  ) {
+    throw new Error(
+      'latitude and longitude are required'
+    )
+  }
+
+  const surface =
+    await getSurfaceNetwork()
+
+  const nearbyStops =
+    surface.stops
+      .map(
+        (
+          stop
+        ) => ({
+          stop,
+          distance:
+            distanceMeters(
+              centerLatitude,
+              centerLongitude,
+              stop.latitude,
+              stop.longitude
+            ),
+        })
+      )
+      .filter(
+        (
+          item
+        ) =>
+          item.distance <=
+            240 &&
+          cleanText(
+            item.stop?.code
+          )
+      )
+      .sort(
+        (
+          a,
+          b
+        ) =>
+          a.distance -
+          b.distance
+      )
+
+  const uniqueCodes =
+    []
+  const seenCodes =
+    new Set()
+
+  nearbyStops.forEach(
+    (
+      item
+    ) => {
+      const code =
+        cleanText(
+          item.stop.code
+        )
+
+      if (
+        !code ||
+        seenCodes.has(
+          code
+        ) ||
+        uniqueCodes.length >=
+          8
+      ) {
+        return
+      }
+
+      seenCodes.add(
+        code
+      )
+      uniqueCodes.push({
+        code,
+        stop:
+          item.stop,
+        distance:
+          item.distance,
+      })
+    }
+  )
+
+  const results =
+    await Promise.allSettled(
+      uniqueCodes.map(
+        (
+          item
+        ) =>
+          getUmoArrivalsForStopCode(
+            item.code,
+            surface
+          )
+      )
+    )
+
+  const arrivals =
+    []
+
+  results.forEach(
+    (
+      result,
+      index
+    ) => {
+      if (
+        result.status !==
+          'fulfilled'
+      ) {
+        return
+      }
+
+      result.value.forEach(
+        (
+          arrival
+        ) => {
+          arrivals.push({
+            ...arrival,
+            stopCode:
+              uniqueCodes[index]?.code ||
+              arrival.stopCode ||
+              '',
+            stopName:
+              uniqueCodes[index]?.stop?.name ||
+              '',
+          })
+        }
+      )
+    }
+  )
+
+  const deduped =
+    []
+  const seen =
+    new Set()
+
+  arrivals
+    .sort(
+      (
+        a,
+        b
+      ) =>
+        a.minutes -
+        b.minutes
+    )
+    .forEach(
+      (
+        arrival
+      ) => {
+        const key =
+          [
+            arrival.routeId,
+            arrival.headsign,
+            arrival.vehicleId,
+            arrival.minutes,
+            arrival.stopCode,
+          ]
+            .join(
+              '|'
+            )
+
+        if (
+          seen.has(
+            key
+          )
+        ) {
+          return
+        }
+
+        seen.add(
+          key
+        )
+        deduped.push(
+          arrival
+        )
+      }
+    )
+
+  return {
+    ok:
+      true,
+    source:
+      'TTC Next Vehicle Arrival System · nearby surface stops',
+    upstream:
+      TTC_PREDICTIONS_URL,
+    attribution:
+      TORONTO_ATTRIBUTION,
+    updatedAt:
+      new Date()
+        .toISOString(),
+    station: {
+      name:
+        cleanText(
+          name
+        ),
+      latitude:
+        centerLatitude,
+      longitude:
+        centerLongitude,
+    },
+    stops:
+      uniqueCodes.map(
+        (
+          item
+        ) => ({
+          code:
+            item.code,
+          name:
+            item.stop.name,
+          distanceMeters:
+            Math.round(
+              item.distance
+            ),
+        })
+      ),
+    count:
+      Math.min(
+        deduped.length,
+        20
+      ),
+    arrivals:
+      deduped.slice(
+        0,
+        20
+      ),
+  }
+}
+
+
 // ============================================================
 // PUBLIC VITE / PRODUCTION SERVER PLUGIN
 // ============================================================
@@ -2903,6 +3711,30 @@ export function ttcLiveTransitFeed() {
 
             if (
               pathname ===
+                '/arrivals/nearby' ||
+              pathname ===
+                '/arrivals/nearby/'
+            ) {
+              sendJson(
+                res,
+                200,
+                await getNearbyArrivalsPayload(
+                  url.searchParams.get(
+                    'latitude'
+                  ),
+                  url.searchParams.get(
+                    'longitude'
+                  ),
+                  url.searchParams.get(
+                    'name'
+                  )
+                )
+              )
+              return
+            }
+
+            if (
+              pathname ===
                 '/arrivals' ||
               pathname ===
                 '/arrivals/'
@@ -2911,13 +3743,18 @@ export function ttcLiveTransitFeed() {
                 url.searchParams.get(
                   'stopId'
                 )
+              const stopCode =
+                url.searchParams.get(
+                  'stopCode'
+                )
 
               sendJson(
                 res,
                 200,
-                await getArrivalsPayload(
-                  stopId
-                )
+                await getArrivalsPayload({
+                  stopId,
+                  stopCode,
+                })
               )
               return
             }
@@ -2939,7 +3776,8 @@ export function ttcLiveTransitFeed() {
                   endpoints: [
                     'network',
                     'vehicles',
-                    'arrivals?stopId=...',
+                    'arrivals?stopId=...&stopCode=...',
+                    'arrivals/nearby?latitude=...&longitude=...',
                   ],
                   attribution:
                     TORONTO_ATTRIBUTION,
