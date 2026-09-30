@@ -1939,9 +1939,10 @@ function GeographicApp() {
             }
 
             .timeline-button {
-              min-width: 38px !important;
-              padding: 4px 5px !important;
-              font-size: 6px !important;
+              min-width: 44px !important;
+              min-height: 36px !important;
+              padding: 7px 6px !important;
+              font-size: 6.5px !important;
               line-height: 1 !important;
             }
 

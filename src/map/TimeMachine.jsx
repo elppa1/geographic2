@@ -1,3 +1,9 @@
+import {
+  useEffect,
+  useRef,
+} from 'react'
+
+
 function TimeMachine({
   layers,
   selectedYear,
@@ -5,9 +11,82 @@ function TimeMachine({
   opacity,
   onOpacityChange,
 }) {
+  const yearsRef =
+    useRef(null)
+
+
+  useEffect(
+    () => {
+      const years =
+        yearsRef.current
+
+
+      if (
+        !years
+      ) {
+        return undefined
+      }
+
+
+      const frame =
+        window.requestAnimationFrame(
+          () => {
+            const selectedButton =
+              years.querySelector(
+                '.timeline-button.active'
+              )
+
+
+            if (
+              !selectedButton
+            ) {
+              return
+            }
+
+
+            const targetLeft =
+              selectedButton.offsetLeft -
+              (
+                years.clientWidth -
+                selectedButton.offsetWidth
+              ) /
+                2
+
+
+            years.scrollTo({
+              left:
+                Math.max(
+                  0,
+                  targetLeft
+                ),
+
+              behavior:
+                'smooth',
+            })
+          }
+        )
+
+
+      return () =>
+        window.cancelAnimationFrame(
+          frame
+        )
+    },
+    [
+      selectedYear,
+      layers,
+    ]
+  )
+
+
   return (
     <div className="time-machine">
-      <div className="timeline-years">
+      <div
+        ref={
+          yearsRef
+        }
+        className="timeline-years"
+      >
         {layers.map(
           (item) => (
             <button
