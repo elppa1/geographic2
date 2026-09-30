@@ -98,6 +98,18 @@ function TimeMachine({
                   ? 'timeline-button active'
                   : 'timeline-button'
               }
+              style={
+                item.year ===
+                selectedYear
+                  ? {
+                      transform:
+                        'scale(0.9)',
+
+                      transformOrigin:
+                        'center center',
+                    }
+                  : undefined
+              }
               onClick={() =>
                 onSelectYear(
                   item
