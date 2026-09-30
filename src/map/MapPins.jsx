@@ -6340,6 +6340,9 @@ function appendEmojiMarkerIcon(
     desktopIconShell.style.lineHeight =
       '1'
 
+    desktopIconShell.style.filter =
+      'drop-shadow(0 0 0.35px rgba(0,0,0,0.9))'
+
     desktopIconShell.style.pointerEvents =
       'none'
 
@@ -6398,7 +6401,7 @@ function appendEmojiMarkerIcon(
     'none'
 
   iconShell.style.filter =
-    'none'
+    'drop-shadow(0 0 0.35px rgba(0,0,0,0.9))'
 
   iconShell.style.fontSize =
     '18px'
@@ -8434,21 +8437,29 @@ function createMarker({
     pinType ===
       'news'
   ) {
-    appendNewsImage({
-      parent:
-        popupContent,
+    const policeMobileStory =
+      isTorontoPolicePin(
+        pin
+      )
 
-      pin,
-    })
+
+    if (
+      !policeMobileStory
+    ) {
+      appendNewsImage({
+        parent:
+          popupContent,
+
+        pin,
+      })
+    }
 
 
     const showMobileNewsDate =
       isTorontoFirePin(
         pin
       ) ||
-      isTorontoPolicePin(
-        pin
-      )
+      policeMobileStory
 
 
     if (
@@ -8482,6 +8493,18 @@ function createMarker({
       text:
         pin.title,
     })
+
+
+    if (
+      policeMobileStory
+    ) {
+      appendNewsImage({
+        parent:
+          popupContent,
+
+        pin,
+      })
+    }
 
 
     appendMobileNewsStoryLink({
@@ -8572,16 +8595,21 @@ function createMarker({
     })
   }
   else {
-    appendText({
-      parent:
-        popupContent,
+    if (
+      pinType !==
+        'historic'
+    ) {
+      appendText({
+        parent:
+          popupContent,
 
-      className:
-        'geographic-pin-type',
+        className:
+          'geographic-pin-type',
 
-      text:
-        pinType.toUpperCase(),
-    })
+        text:
+          pinType.toUpperCase(),
+      })
+    }
 
 
     if (
