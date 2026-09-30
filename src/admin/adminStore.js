@@ -3,6 +3,10 @@ import {
   newsRecordIsCurrent,
 } from '../newsPolicy.js'
 
+import {
+  mirrorAdminStoreRecords,
+} from './adminStoreMirror.js'
+
 
 const NEWS_KEY =
   'elppa-geographic-news'
@@ -134,6 +138,12 @@ function writeRecords(
         )
       )
     }
+
+
+    mirrorAdminStoreRecords(
+      key,
+      records
+    )
   } catch (
     error
   ) {

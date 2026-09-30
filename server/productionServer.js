@@ -92,6 +92,10 @@ import {
 } from './feeds/toronto/historic.js'
 
 import {
+  torontoAdminStoreMirrorFeed,
+} from './feeds/toronto/adminStoreMirror.js'
+
+import {
   locationSearchApi,
 } from './locationSearch.js'
 
@@ -368,6 +372,15 @@ function requestNeedsAdminAuth(
   if (
     pathname.startsWith(
       '/api/geographic/toronto/historic/admin'
+    )
+  ) {
+    return true
+  }
+
+
+  if (
+    pathname.startsWith(
+      '/api/geographic/toronto/admin-store'
     )
   ) {
     return true
@@ -1395,6 +1408,7 @@ const plugins = [
   outdoorRecreationFeed(),
   poolsFeed(),
   torontoHistoricFeed(),
+  torontoAdminStoreMirrorFeed(),
 ]
 
 
