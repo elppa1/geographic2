@@ -18,9 +18,9 @@
 // We keep the source-first-seen fields too so the provenance is clear.
 //
 // Historical recovery:
-// the July 31, 2026 NowServing snapshot is also checked for May + June
-// 2026 restaurants so the 2-month and 3-month NEW views can be backfilled.
-// Existing review/published dedupe prevents duplicate leads.
+// the six previous monthly NowServing snapshots are checked and any
+// restaurant with an approximate opening date within the last 180 days
+// is kept. Existing review/published dedupe prevents duplicate leads.
 //
 // ============================================================
 
@@ -36,15 +36,12 @@ const SOURCE = {
 }
 
 
-const BACKFILL_EDITION =
-  '2026-07'
+const BACKFILL_LOOKBACK_DAYS =
+  180
 
 
-const BACKFILL_OPENING_MONTHS =
-  new Set([
-    '2026-05',
-    '2026-06',
-  ])
+const BACKFILL_EDITION_COUNT =
+  6
 
 
 function cleanText(
@@ -895,17 +892,142 @@ async function fetchNowServingRecords(
 }
 
 
-function getOpeningMonth(
-  record
+function getBackfillEditions(
+  referenceDate =
+    new Date()
 ) {
-  return String(
-    record?.openedAt ||
-    ''
-  )
-    .slice(
-      0,
-      7
+  const editions =
+    []
+
+
+  for (
+    let offset =
+      BACKFILL_EDITION_COUNT;
+    offset >=
+      1;
+    offset -=
+      1
+  ) {
+    const date =
+      new Date(
+        referenceDate
+      )
+
+
+    date.setDate(
+      1
     )
+
+
+    date.setMonth(
+      date.getMonth() -
+      offset
+    )
+
+
+    editions.push(
+      (
+        String(
+          date.getFullYear()
+        ) +
+        '-' +
+        String(
+          date.getMonth() +
+          1
+        )
+          .padStart(
+            2,
+            '0'
+          )
+      )
+    )
+  }
+
+
+  return editions
+}
+
+
+function isWithinBackfillWindow(
+  record,
+  referenceDate =
+    new Date()
+) {
+  const openingText =
+    String(
+      record?.openedAt ||
+      ''
+    )
+      .slice(
+        0,
+        10
+      )
+
+
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(
+      openingText
+    )
+  ) {
+    return false
+  }
+
+
+  const openingDate =
+    new Date(
+      `${openingText}T12:00:00`
+    )
+
+
+  if (
+    Number.isNaN(
+      openingDate.getTime()
+    )
+  ) {
+    return false
+  }
+
+
+  const cutoff =
+    new Date(
+      referenceDate
+    )
+
+
+  cutoff.setHours(
+    12,
+    0,
+    0,
+    0
+  )
+
+
+  cutoff.setDate(
+    cutoff.getDate() -
+      BACKFILL_LOOKBACK_DAYS
+  )
+
+
+  const latest =
+    new Date(
+      referenceDate
+    )
+
+
+  latest.setHours(
+    23,
+    59,
+    59,
+    999
+  )
+
+
+  return (
+    openingDate.getTime() >=
+      cutoff.getTime() &&
+    openingDate.getTime() <=
+      latest.getTime()
+  )
 }
 
 
@@ -948,55 +1070,68 @@ export async function scrapeNowServingNew() {
     )
 
 
-  let backfillRecords =
+  const referenceDate =
+    new Date()
+
+
+  const backfillRecords =
     []
 
 
-  try {
-    const archiveUrl =
-      (
-        SOURCE.url +
-        '?edition=' +
-        encodeURIComponent(
-          BACKFILL_EDITION
-        )
-      )
-
-
-    const archiveRecords =
-      await fetchNowServingRecords(
-        archiveUrl
-      )
-
-
-    backfillRecords =
-      archiveRecords
-        .filter(
-          (
-            record
-          ) =>
-            BACKFILL_OPENING_MONTHS
-              .has(
-                getOpeningMonth(
-                  record
-                )
-              )
-        )
-  }
-  catch (
-    error
-  ) {
-    // Current discovery should still work if the historical snapshot
-    // is temporarily unavailable.
-    console.warn(
-      'NOWSERVING BACKFILL FAILED:',
-      error
+  const editions =
+    getBackfillEditions(
+      referenceDate
     )
+
+
+  for (
+    const edition of editions
+  ) {
+    try {
+      const archiveUrl =
+        (
+          SOURCE.url +
+          '?edition=' +
+          encodeURIComponent(
+            edition
+          )
+        )
+
+
+      const archiveRecords =
+        await fetchNowServingRecords(
+          archiveUrl
+        )
+
+
+      backfillRecords.push(
+        ...archiveRecords
+          .filter(
+            (
+              record
+            ) =>
+              isWithinBackfillWindow(
+                record,
+                referenceDate
+              )
+          )
+      )
+    }
+    catch (
+      error
+    ) {
+      // Current discovery and the remaining archive snapshots should
+      // still work if one historical month is temporarily unavailable.
+      console.warn(
+        `NOWSERVING BACKFILL FAILED · ${edition}:`,
+        error
+      )
+    }
   }
 
 
-  // Archive first, current second so the freshest copy wins if a
-  // restaurant appears in both sources.
+  // Oldest archive first, newest archive later, current last so the
+  // freshest copy wins if a restaurant appears in multiple sources.
   return mergeByExternalId([
     ...backfillRecords,
     ...currentRecords,
