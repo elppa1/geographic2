@@ -9060,7 +9060,10 @@ function createMarker({
       isTorontoFirePin(
         pin
       ) ||
-      policeMobileStory
+      policeMobileStory ||
+      isTtcPin(
+        pin
+      )
 
 
     if (
@@ -9268,9 +9271,18 @@ function createMarker({
           'geographic-pin-year',
 
         text:
-          formatNewsDate(
-            pin.publishedAt
-          ),
+          isTtcPin(
+            pin
+          )
+            ? formatNewsDateTime(
+                getNewsRecordTimestamp(
+                  pin
+                ) ||
+                pin.publishedAt
+              )
+            : formatNewsDate(
+                pin.publishedAt
+              ),
       })
     }
 
