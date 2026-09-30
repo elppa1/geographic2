@@ -7470,6 +7470,9 @@ const HISTORIC_STACK_RADIUS_PX =
 const HISTORIC_STACK_RING_GAP_PX =
   44
 
+const NEW_SPORTS_STACK_COORDINATE_PRECISION =
+  5
+
 
 function getHistoricStackKey(
   item
@@ -7511,6 +7514,54 @@ function getHistoricStackKey(
     )}:` +
     `${longitude.toFixed(
       HISTORIC_STACK_COORDINATE_PRECISION
+    )}`
+  )
+}
+
+
+function getNewSportsStackKey(
+  item
+) {
+  if (
+    item?.pinType !==
+      'new' ||
+    !getNewSportsIcon(
+      item?.pin
+    )
+  ) {
+    return ''
+  }
+
+
+  const longitude =
+    Number(
+      item?.pin?.longitude
+    )
+
+  const latitude =
+    Number(
+      item?.pin?.latitude
+    )
+
+
+  if (
+    !Number.isFinite(
+      longitude
+    ) ||
+    !Number.isFinite(
+      latitude
+    )
+  ) {
+    return ''
+  }
+
+
+  return (
+    `${latitude.toFixed(
+      NEW_SPORTS_STACK_COORDINATE_PRECISION
+    )}:` +
+    `${longitude.toFixed(
+      NEW_SPORTS_STACK_COORDINATE_PRECISION
     )}`
   )
 }
@@ -11447,24 +11498,18 @@ function MapPins({
           )
         }
 
+      // Pin visibility is zoom-dependent, not pan-dependent. Rebuilding every
+      // marker after a popup auto-pan tears down the popup that just opened,
+      // which makes NEWS feel like it needs a second click. Keep the marker
+      // set stable while the map pans underneath an open card.
       map.on(
         'zoomend',
-        refreshViewport
-      )
-
-      map.on(
-        'moveend',
         refreshViewport
       )
 
       return () => {
         map.off(
           'zoomend',
-          refreshViewport
-        )
-
-        map.off(
-          'moveend',
           refreshViewport
         )
       }
@@ -11870,6 +11915,9 @@ function MapPins({
     const historicStackGroups =
       new Map()
 
+    const newSportsStackGroups =
+      new Map()
+
 
     if (
       activePinFilter ===
@@ -11918,6 +11966,80 @@ function MapPins({
         (
           group
         ) => {
+          if (
+            group.length <=
+              1
+          ) {
+            return
+          }
+
+
+          const offsets =
+            getHistoricStackOffsets(
+              group.length
+            )
+
+
+          group.forEach(
+            (
+              item,
+              index
+            ) => {
+              item.markerOffset =
+                offsets[
+                  index
+                ] ||
+                [0, 0]
+            }
+          )
+        }
+      )
+    }
+
+
+    // Sports schedules can legitimately place several games on the exact
+    // same venue coordinate. Give each game its own visual hit target while
+    // leaving the stored geographic coordinate untouched.
+    if (
+      activePinFilter ===
+        'new'
+    ) {
+      visiblePins.forEach(
+        (item) => {
+          const stackKey =
+            getNewSportsStackKey(
+              item
+            )
+
+
+          if (
+            !stackKey
+          ) {
+            return
+          }
+
+
+          const group =
+            newSportsStackGroups.get(
+              stackKey
+            ) ||
+            []
+
+
+          group.push(
+            item
+          )
+
+          newSportsStackGroups.set(
+            stackKey,
+            group
+          )
+        }
+      )
+
+
+      newSportsStackGroups.forEach(
+        (group) => {
           if (
             group.length <=
               1
@@ -12234,20 +12356,23 @@ function MapPins({
 
     if (
       activePinFilter !==
-        'historic'
+        'historic' &&
+      activePinFilter !==
+        'news'
     ) {
       return
     }
 
 
-    // SEE IT THEN changes the historical basemap and flies the map.
-    // Some MapLibre transitions can close an attached popup after the
-    // React selection effect has already run. Re-open the same selected
-    // Historic story once that transition finishes so the user never
-    // loses the story they were reading.
+    // Historic layer changes and NEWS focus moves can both rebuild markers
+    // while the camera is moving. Re-open the same selected card after the
+    // transition so it stays visible while the map settles underneath it.
     const reopenAfterMove =
       () => {
-        openSelectedPopup()
+        window.setTimeout(
+          openSelectedPopup,
+          0
+        )
       }
 
 
