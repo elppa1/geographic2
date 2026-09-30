@@ -1873,122 +1873,298 @@ export function farmersMarketsFeed() {
     name:
       'toronto-farmers-markets',
 
-    async handle(
-      req,
-      res,
-      url
+
+    configureServer(
+      server
     ) {
-      if (
-        url.pathname ===
-          STATUS_PATH &&
-        req.method ===
-          'GET'
-      ) {
-        sendJson(
-          res,
-          200,
-          lastStatus
+      const runScheduledSync =
+        () => {
+          syncMarkets()
+            .catch(
+              () => {}
+            )
+        }
+
+
+      runScheduledSync()
+
+
+      const interval =
+        setInterval(
+          runScheduledSync,
+          SYNC_INTERVAL_MS
         )
 
-        return true
-      }
 
-      if (
-        url.pathname ===
-          INCOMING_PATH &&
-        req.method ===
-          'GET'
-      ) {
-        const records =
-          await getIncoming()
+      interval.unref?.()
 
-        sendJson(
-          res,
-          200,
-          {
-            ok:
-              true,
 
-            records,
+      server.httpServer?.once(
+        'close',
+        () => {
+          clearInterval(
+            interval
+          )
+        }
+      )
 
-            status:
-              lastStatus,
-          }
-        )
 
-        return true
-      }
-
-      if (
-        url.pathname ===
-          SYNC_PATH &&
+      server.middlewares.use(
+        STATUS_PATH,
         (
-          req.method ===
-            'POST' ||
-          req.method ===
-            'GET'
-        )
-      ) {
-        const state =
-          await syncMarkets({
-            force:
-              true,
-          })
-
-        const records =
-          await getIncoming()
-
-        sendJson(
+          req,
           res,
-          200,
-          {
-            ok:
-              true,
+          next
+        ) => {
+          if (
+            String(
+              req.method ||
+              'GET'
+            )
+              .toUpperCase() !==
+              'GET'
+          ) {
+            next()
 
-            sourceCount:
-              state.records.length,
-
-            records,
-
-            status:
-              lastStatus,
+            return
           }
-        )
 
-        return true
-      }
 
-      if (
-        url.pathname ===
-          REJECT_PATH &&
-        req.method ===
-          'POST'
-      ) {
-        const body =
-          await readJsonBody(
-            req
+          sendJson(
+            res,
+            200,
+            {
+              ...lastStatus,
+
+              source:
+                SOURCE,
+
+              sourceKey:
+                SOURCE_KEY,
+
+              refreshMinutes:
+                SYNC_INTERVAL_MS /
+                60000,
+            }
           )
+        }
+      )
 
-        const rejected =
-          await rejectSourceId(
-            body?.sourceId
-          )
 
-        sendJson(
+      server.middlewares.use(
+        INCOMING_PATH,
+        async (
+          req,
           res,
-          rejected
-            ? 200
-            : 400,
-          {
-            ok:
-              rejected,
+          next
+        ) => {
+          if (
+            String(
+              req.method ||
+              'GET'
+            )
+              .toUpperCase() !==
+              'GET'
+          ) {
+            next()
+
+            return
           }
-        )
 
-        return true
-      }
 
-      return false
+          try {
+            const records =
+              await getIncoming()
+
+
+            sendJson(
+              res,
+              200,
+              {
+                ok:
+                  true,
+
+                records,
+
+                status:
+                  lastStatus,
+              }
+            )
+          }
+          catch (
+            error
+          ) {
+            sendJson(
+              res,
+              502,
+              {
+                ok:
+                  false,
+
+                records:
+                  [],
+
+                error:
+                  String(
+                    error?.message ||
+                    error
+                  ),
+
+                status:
+                  lastStatus,
+              }
+            )
+          }
+        }
+      )
+
+
+      server.middlewares.use(
+        SYNC_PATH,
+        async (
+          req,
+          res,
+          next
+        ) => {
+          const method =
+            String(
+              req.method ||
+              'GET'
+            )
+              .toUpperCase()
+
+
+          if (
+            method !==
+              'POST' &&
+            method !==
+              'GET'
+          ) {
+            next()
+
+            return
+          }
+
+
+          try {
+            const state =
+              await syncMarkets({
+                force:
+                  true,
+              })
+
+
+            const records =
+              await getIncoming()
+
+
+            sendJson(
+              res,
+              200,
+              {
+                ok:
+                  true,
+
+                sourceCount:
+                  state.records.length,
+
+                records,
+
+                status:
+                  lastStatus,
+              }
+            )
+          }
+          catch (
+            error
+          ) {
+            sendJson(
+              res,
+              502,
+              {
+                ok:
+                  false,
+
+                error:
+                  String(
+                    error?.message ||
+                    error
+                  ),
+
+                status:
+                  lastStatus,
+              }
+            )
+          }
+        }
+      )
+
+
+      server.middlewares.use(
+        REJECT_PATH,
+        async (
+          req,
+          res,
+          next
+        ) => {
+          if (
+            String(
+              req.method ||
+              'GET'
+            )
+              .toUpperCase() !==
+              'POST'
+          ) {
+            next()
+
+            return
+          }
+
+
+          try {
+            const body =
+              await readJsonBody(
+                req
+              )
+
+
+            const rejected =
+              await rejectSourceId(
+                body?.sourceId
+              )
+
+
+            sendJson(
+              res,
+              rejected
+                ? 200
+                : 400,
+              {
+                ok:
+                  rejected,
+              }
+            )
+          }
+          catch (
+            error
+          ) {
+            sendJson(
+              res,
+              400,
+              {
+                ok:
+                  false,
+
+                error:
+                  String(
+                    error?.message ||
+                    error
+                  ),
+              }
+            )
+          }
+        }
+      )
     },
   }
 }
