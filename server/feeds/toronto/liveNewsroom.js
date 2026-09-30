@@ -5121,6 +5121,217 @@ async function archivePublishedNewsRecord({
 }
 
 
+async function publishedPoliceMissingSourcePageIsAvailable(
+  record
+) {
+  const sourceUrl =
+    cleanText(
+      record?.sourceUrl
+    )
+
+
+  if (
+    !/^https?:\/\//i.test(
+      sourceUrl
+    )
+  ) {
+    return false
+  }
+
+
+  try {
+    const response =
+      await fetch(
+        sourceUrl,
+        {
+          headers: {
+            Accept:
+              'text/html,*/*',
+
+            'User-Agent':
+              'ELPPA-Geographic/1.0',
+          },
+
+          cache:
+            'no-store',
+
+          redirect:
+            'follow',
+        }
+      )
+
+
+    return response.ok
+  }
+  catch (
+    error
+  ) {
+    console.warn(
+      'TPS MISSING SOURCE CHECK FAILED:',
+      sourceUrl,
+      error
+    )
+
+
+    return false
+  }
+}
+
+
+async function restoreShelfExpiredPoliceMissingPins() {
+  await ensureLoaded()
+
+
+  const now =
+    new Date()
+      .toISOString()
+
+
+  const restoredRecords =
+    []
+
+
+  for (
+    const [
+      identity,
+      record,
+    ]
+    of Object.entries(
+      store.publishedNews ||
+      {}
+    )
+  ) {
+    if (
+      record?.active !==
+        false ||
+      record?.resolved ===
+        true ||
+      cleanText(
+        record?.archiveReason
+      )
+        .toLowerCase() !==
+        'expired-shelf-life' ||
+      !policeRecordIsMissingOrElopeePerson(
+        record
+      )
+    ) {
+      continue
+    }
+
+
+    const sourceStillAvailable =
+      await publishedPoliceMissingSourcePageIsAvailable(
+        record
+      )
+
+
+    if (
+      !sourceStillAvailable
+    ) {
+      continue
+    }
+
+
+    const restoredRecord = {
+      ...record,
+
+      active:
+        true,
+
+      resolved:
+        false,
+
+      expiresAt:
+        '',
+
+      archivedAt:
+        '',
+
+      archiveReason:
+        '',
+
+      republishedAt:
+        now,
+
+      serverUpdatedAt:
+        now,
+    }
+
+
+    store.publishedNews[
+      identity
+    ] =
+      restoredRecord
+
+
+    const externalId =
+      cleanText(
+        restoredRecord?.externalId
+      )
+
+
+    if (
+      externalId &&
+      store.sources?.police?.[
+        externalId
+      ]
+    ) {
+      store.sources.police[
+        externalId
+      ] = {
+        ...store.sources.police[
+          externalId
+        ],
+
+        published:
+          true,
+
+        resolved:
+          false,
+
+        missingPolls:
+          0,
+      }
+    }
+
+
+    restoredRecords.push(
+      restoredRecord
+    )
+  }
+
+
+  if (
+    restoredRecords.length ===
+      0
+  ) {
+    return 0
+  }
+
+
+  await persistStore()
+
+
+  for (
+    const record
+    of restoredRecords
+  ) {
+    await appendLedgerEvent({
+      eventType:
+        'published-news-republished',
+
+      outcome:
+        'repair-tps-missing-shelf-expiry',
+
+      record,
+    })
+  }
+
+
+  return restoredRecords.length
+}
+
+
 async function expirePublishedNewsShelfLife() {
   await ensureLoaded()
 
@@ -5232,6 +5443,9 @@ async function getPublishedNewsRecords({
     'live',
 } = {}) {
   await ensureLoaded()
+
+
+  await restoreShelfExpiredPoliceMissingPins()
 
 
   await expirePublishedNewsShelfLife()

@@ -18,7 +18,7 @@
 //
 // Current rules:
 //   TTC                         feed-controlled; no fixed timer
-//   TPS missing person          5 days unless officially resolved
+//   TPS missing person / elopee no fixed timer; source-controlled
 //   TPS all other police        7 days
 //   Toronto Fire major          7 days
 //   Toronto Fire standard       5 days
@@ -45,7 +45,7 @@ export const NEWS_SHELF_LIFE_HOURS = {
 
   police: {
     missing:
-      5 * 24,
+      null,
 
     shooting:
       7 * 24,
@@ -270,8 +270,26 @@ function getPoliceShelfLifeHours(
 
 
   if (
-    category ===
-      'missing'
+    [
+      'missing',
+      'missing-person',
+      'missing person',
+      'missing_person',
+    ].includes(
+      category
+    ) ||
+    /\bmissing\s+(?:person|man|woman|boy|girl|child|teen|teenager|youth|adult|senior)\b/i
+      .test(
+        text
+      ) ||
+    (
+      category ===
+        'wanted' &&
+      /\b(?:elopee|warrant of committal)\b/i
+        .test(
+          text
+        )
+    )
   ) {
     return NEWS_SHELF_LIFE_HOURS.police.missing
   }
