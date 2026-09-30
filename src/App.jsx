@@ -2011,6 +2011,41 @@ function GeographicApp() {
              FINAL MAIN MENU MERGE
              ====================================================== */
 
+          .historic-selection-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+            padding: 4px 2px 0;
+            border-top: 1px solid rgba(17,17,17,0.10);
+            color: inherit;
+            font-size: 7px;
+            font-weight: 800;
+            line-height: 1.2;
+            letter-spacing: 0.08em;
+          }
+
+          .historic-selection-row-label {
+            flex: 0 0 auto;
+            opacity: 0.48;
+          }
+
+          .historic-selection-row-value {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+
+          @media (max-width: 700px) {
+            .historic-selection-row {
+              padding-top: 3px;
+              border-top-color: rgba(255,255,255,0.16);
+              font-size: 5.8px;
+              letter-spacing: 0.06em;
+            }
+          }
+
           .brand-primary-filters {
             position: relative;
           }
@@ -3160,6 +3195,25 @@ function GeographicApp() {
               : '▾'}
           </button>
         </div>
+
+
+        {activePinFilter ===
+          'historic' && (
+          <div
+            className="historic-selection-row"
+            aria-label={
+              `Historic view: ${historicArchiveLabel}`
+            }
+          >
+            <span className="historic-selection-row-label">
+              VIEWING
+            </span>
+
+            <span className="historic-selection-row-value">
+              {historicArchiveLabel}
+            </span>
+          </div>
+        )}
 
 
         {activePinFilter ===
