@@ -302,7 +302,7 @@ function getSourceFirstSeenLabel(
 
   const match =
     text.match(
-      /\b(today|yesterday|\d+\s+(?:day|days|week|weeks|month|months)\s+ago)\b/i
+      /(today|yesterday|\d+\s+(?:day|days|week|weeks|month|months)\s+ago)/i
     )
 
 
