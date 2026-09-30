@@ -5003,6 +5003,201 @@ function getHistoricPlacementSummary({
 
 
 // ============================================================
+// FARMERS MARKET SCHEDULE REVIEW
+// ============================================================
+
+function isFarmersMarketRecord(
+  record
+) {
+  return (
+    String(
+      record?.communityType ||
+      ''
+    )
+      .trim()
+      .toLowerCase() ===
+      'farmers-market'
+  )
+}
+
+
+function getFarmersMarketMissingScheduleFields(
+  record
+) {
+  if (
+    !isFarmersMarketRecord(
+      record
+    )
+  ) {
+    return []
+  }
+
+  if (
+    Array.isArray(
+      record?.scheduleMissingFields
+    )
+  ) {
+    return record.scheduleMissingFields
+      .map(
+        (value) =>
+          String(
+            value ||
+            ''
+          )
+            .trim()
+      )
+      .filter(
+        Boolean
+      )
+  }
+
+  const missing =
+    []
+
+  const seasonType =
+    String(
+      record?.seasonType ||
+      ''
+    )
+      .trim()
+      .toLowerCase()
+
+  if (
+    seasonType !==
+      'year-round'
+  ) {
+    if (
+      !String(
+        record?.seasonStart ||
+        ''
+      )
+        .trim()
+    ) {
+      missing.push(
+        'opening-date'
+      )
+    }
+
+    if (
+      !String(
+        record?.seasonEnd ||
+        ''
+      )
+        .trim()
+    ) {
+      missing.push(
+        'closing-date'
+      )
+    }
+  }
+
+  if (
+    !Array.isArray(
+      record?.weekdays
+    ) ||
+    record.weekdays.length ===
+      0
+  ) {
+    missing.push(
+      'days-open'
+    )
+  }
+
+  if (
+    !String(
+      record?.hoursText ||
+      ''
+    )
+      .trim() &&
+    !(
+      String(
+        record?.openTime ||
+        ''
+      )
+        .trim() &&
+      String(
+        record?.closeTime ||
+        ''
+      )
+        .trim()
+    )
+  ) {
+    missing.push(
+      'hours'
+    )
+  }
+
+  return missing
+}
+
+
+function formatFarmersMarketDate(
+  value
+) {
+  const text =
+    String(
+      value ||
+      ''
+    )
+      .trim()
+
+  if (
+    !text
+  ) {
+    return ''
+  }
+
+  const date =
+    new Date(
+      /^\d{4}-\d{2}-\d{2}$/.test(
+        text
+      )
+        ? `${text}T12:00:00`
+        : text
+    )
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return text.toUpperCase()
+  }
+
+  return date
+    .toLocaleDateString(
+      'en-CA',
+      {
+        year:
+          'numeric',
+
+        month:
+          'short',
+
+        day:
+          'numeric',
+      }
+    )
+    .toUpperCase()
+}
+
+
+function formatFarmersMarketMissingField(
+  value
+) {
+  return String(
+    value ||
+    ''
+  )
+    .replace(
+      /-/g,
+      ' '
+    )
+    .toUpperCase()
+}
+
+
+// ============================================================
 // NORMALIZE SOURCE URL
 // ============================================================
 
@@ -17270,6 +17465,38 @@ function AdminRoom() {
   ) {
     if (
       tab ===
+        'new' &&
+      isFarmersMarketRecord(
+        reviewRecord
+      )
+    ) {
+      const missingScheduleFields =
+        getFarmersMarketMissingScheduleFields(
+          reviewRecord
+        )
+
+      if (
+        missingScheduleFields.length >
+          0
+      ) {
+        window.alert(
+          'This farmers market cannot be approved yet. Missing: ' +
+          missingScheduleFields
+            .map(
+              formatFarmersMarketMissingField
+            )
+            .join(
+              ', '
+            )
+        )
+
+        return
+      }
+    }
+
+
+    if (
+      tab ===
         'news' &&
       isTpsNewsroomRecord(
         reviewRecord
@@ -22453,6 +22680,127 @@ function AdminRoom() {
                                     }
                                   </p>
                                 )}
+
+                                {tab ===
+                                  'new' &&
+                                  isFarmersMarketRecord(
+                                    record
+                                  ) && (
+                                  <div
+                                    style={{
+                                      border:
+                                        '1px solid currentColor',
+
+                                      padding:
+                                        '10px',
+
+                                      margin:
+                                        '10px 0',
+                                    }}
+                                  >
+                                    <div className="admin-record-meta">
+                                      FARMERS MARKET SCHEDULE · {
+                                        getFarmersMarketMissingScheduleFields(
+                                          record
+                                        ).length >
+                                          0
+                                          ? 'DATES NEEDED'
+                                          : String(
+                                              record.seasonType ||
+                                              'READY'
+                                            )
+                                              .replace(
+                                                /-/g,
+                                                ' '
+                                              )
+                                              .toUpperCase()
+                                      }
+                                    </div>
+
+                                    {String(
+                                      record.seasonType ||
+                                      ''
+                                    )
+                                      .toLowerCase() !==
+                                        'year-round' && (
+                                      <div className="admin-record-meta">
+                                        SEASON · {
+                                          record.seasonStart
+                                            ? formatFarmersMarketDate(
+                                                record.seasonStart
+                                              )
+                                            : 'OPENING DATE NEEDED'
+                                        }{' → '}{
+                                          record.seasonEnd
+                                            ? formatFarmersMarketDate(
+                                                record.seasonEnd
+                                              )
+                                            : 'CLOSING DATE NEEDED'
+                                        }
+                                      </div>
+                                    )}
+
+                                    <div className="admin-record-meta">
+                                      DAYS · {
+                                        Array.isArray(
+                                          record.weekdays
+                                        ) &&
+                                        record.weekdays.length >
+                                          0
+                                          ? record.weekdays
+                                              .join(
+                                                ' · '
+                                              )
+                                              .toUpperCase()
+                                          : 'NEEDED'
+                                      }
+                                    </div>
+
+                                    <div className="admin-record-meta">
+                                      HOURS · {
+                                        String(
+                                          record.hoursText ||
+                                          ''
+                                        )
+                                          .trim() ||
+                                        (
+                                          record.openTime &&
+                                          record.closeTime
+                                            ? `${record.openTime}–${record.closeTime}`
+                                            : 'NEEDED'
+                                        )
+                                      }
+                                    </div>
+
+                                    {getFarmersMarketMissingScheduleFields(
+                                      record
+                                    ).length >
+                                      0 && (
+                                      <div
+                                        className="admin-record-meta"
+                                        style={{
+                                          marginTop:
+                                            '5px',
+
+                                          fontWeight:
+                                            700,
+                                        }}
+                                      >
+                                        MISSING · {
+                                          getFarmersMarketMissingScheduleFields(
+                                            record
+                                          )
+                                            .map(
+                                              formatFarmersMarketMissingField
+                                            )
+                                            .join(
+                                              ' · '
+                                            )
+                                        }
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </>
                             )}
 
@@ -22782,7 +23130,18 @@ function AdminRoom() {
                                         className="admin-review-approve"
                                         disabled={
                                           approvingReviewId ===
-                                          record.id
+                                            record.id ||
+                                          (
+                                            tab ===
+                                              'new' &&
+                                            isFarmersMarketRecord(
+                                              record
+                                            ) &&
+                                            getFarmersMarketMissingScheduleFields(
+                                              record
+                                            ).length >
+                                              0
+                                          )
                                         }
                                         onClick={() =>
                                           approveReview(
@@ -22799,7 +23158,17 @@ function AdminRoom() {
                                               ? getNewsroomApproveLabel(
                                                   record
                                                 )
-                                              : 'APPROVE'
+                                              : (
+                                                  isFarmersMarketRecord(
+                                                    record
+                                                  ) &&
+                                                  getFarmersMarketMissingScheduleFields(
+                                                    record
+                                                  ).length >
+                                                    0
+                                                    ? 'DATES NEEDED'
+                                                    : 'APPROVE'
+                                                )
                                         }
                                       </button>
 

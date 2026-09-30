@@ -76,6 +76,9 @@ let lastStatus = {
   pendingCount:
     0,
 
+  datesNeededCount:
+    0,
+
   approvedScheduleUpdateCount:
     0,
 
@@ -581,6 +584,97 @@ function normalizeWeekdays(
 }
 
 
+function extractHoursFromDescription(
+  value
+) {
+  const text =
+    cleanText(
+      value
+    )
+
+  const match =
+    text.match(
+      /(\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)?)\s*(?:-|–|—|to)\s*(\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?))/i
+    )
+
+  return cleanText(
+    match?.[0] ||
+    ''
+  )
+}
+
+
+function getFarmersMarketScheduleMissingFields(
+  record
+) {
+  const missing =
+    []
+
+  const seasonType =
+    cleanText(
+      record?.seasonType
+    )
+      .toLowerCase()
+
+  if (
+    seasonType !==
+      'year-round'
+  ) {
+    if (
+      !parseDateValue(
+        record?.seasonStart
+      )
+    ) {
+      missing.push(
+        'opening-date'
+      )
+    }
+
+    if (
+      !parseDateValue(
+        record?.seasonEnd
+      )
+    ) {
+      missing.push(
+        'closing-date'
+      )
+    }
+  }
+
+  if (
+    !Array.isArray(
+      record?.weekdays
+    ) ||
+    record.weekdays.length ===
+      0
+  ) {
+    missing.push(
+      'days-open'
+    )
+  }
+
+  if (
+    !(
+      cleanText(
+        record?.openTime
+      ) &&
+      cleanText(
+        record?.closeTime
+      )
+    ) &&
+    !cleanText(
+      record?.hoursText
+    )
+  ) {
+    missing.push(
+      'hours'
+    )
+  }
+
+  return missing
+}
+
+
 function monthFromDate(
   value
 ) {
@@ -958,13 +1052,17 @@ function normalizeMarketRecord({
       extractSectionValue(
         html,
         'Days Open'
-      )
+      ) ||
+      description
     )
 
   const hoursText =
     extractSectionValue(
       html,
       'Hours'
+    ) ||
+    extractHoursFromDescription(
+      description
     )
 
   const times =
@@ -1127,6 +1225,31 @@ function normalizeMarketRecord({
     displayOverrides:
       previous?.displayOverrides ||
       {},
+  }
+
+  record.scheduleMissingFields =
+    getFarmersMarketScheduleMissingFields(
+      record
+    )
+
+  record.scheduleStatus =
+    record.scheduleMissingFields.length >
+      0
+      ? 'dates-needed'
+      : 'ready'
+
+  if (
+    !previous?.approvalStatus ||
+    previous.approvalStatus ===
+      'new' ||
+    previous.approvalStatus ===
+      'dates-needed'
+  ) {
+    record.approvalStatus =
+      record.scheduleStatus ===
+        'dates-needed'
+        ? 'dates-needed'
+        : 'new'
   }
 
   record.nextCheckAt =
@@ -1704,6 +1827,13 @@ async function syncMarkets({
             nextState.records.length ||
             torontoCount,
 
+          datesNeededCount:
+            nextState.records.filter(
+              (record) =>
+                record.scheduleStatus ===
+                'dates-needed'
+            ).length,
+
           approvedScheduleUpdateCount:
             approvedSync.updatedCount,
 
@@ -1814,7 +1944,10 @@ async function getIncoming() {
             'pending',
 
           approvalStatus:
-            'new',
+            record.scheduleStatus ===
+              'dates-needed'
+              ? 'dates-needed'
+              : 'new',
         })
       )
 
@@ -1823,6 +1956,13 @@ async function getIncoming() {
 
     pendingCount:
       records.length,
+
+    datesNeededCount:
+      records.filter(
+        (record) =>
+          record.scheduleStatus ===
+          'dates-needed'
+      ).length,
   }
 
   return records
