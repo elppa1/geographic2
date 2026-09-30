@@ -1928,10 +1928,10 @@ function GeographicApp() {
               position: fixed !important;
               scale: 1;
               transform-origin: bottom center;
-              transform: translate(-50%, -42px) !important;
+              transform: translateX(-50%) !important;
               width: calc(100vw - 16px) !important;
               max-width: none !important;
-              bottom: max(24px, env(safe-area-inset-bottom)) !important;
+              bottom: max(10px, env(safe-area-inset-bottom)) !important;
               padding: 4px 6px 5px !important;
             }
 
