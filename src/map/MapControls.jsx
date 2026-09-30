@@ -143,7 +143,8 @@ function MapControls({
       </button>
 
 
-      {mobileControls && (
+      {mobileControls &&
+        locationTrackingActive && (
         <button
           type="button"
           className={[
