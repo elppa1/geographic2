@@ -1335,7 +1335,7 @@ async function getPublishedMarkets() {
         'events',
 
       status:
-        'all',
+        'live',
     })
 
   return records.filter(
