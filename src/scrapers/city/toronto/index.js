@@ -609,7 +609,7 @@ export function runTorontoNewScraper() {
       scrapeNowServingNew,
 
     maxAgeDays:
-      90,
+      180,
 
     includeUndated:
       true,
