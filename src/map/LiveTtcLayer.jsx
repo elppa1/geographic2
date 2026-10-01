@@ -1,4 +1,4 @@
-// LIVE TTC ROUTE ENGINE V15 · blue pulse halo + original route colour + route-progress motion
+// LIVE TTC ROUTE ENGINE V16 · priority route indexing + immediate motion promotion
 // Vehicles advance by distance along their TTC route shape; realtime GPS only corrects the route progress.
 // LIVE TTC FAST START V8
 // LIVE TTC STABILITY V6 · 2026-09-30 · stable vehicle retention + continuous interpolation + direction arrows + deduped arrivals
@@ -88,8 +88,8 @@ const VEHICLE_GRACE_MS =
   90 * 1000
 const ANIMATION_FRAME_MS =
   50
-const ROUTE_INDEX_BATCH_SIZE =
-  10
+const ROUTE_INDEX_ROUTE_BATCH_SIZE =
+  4
 const SELECTED_ROUTE_PULSE_MS =
   50
 
@@ -3832,6 +3832,151 @@ function LiveTtcLayer({
           null
       }
 
+      function promoteWaitingVehiclesToRouteProgress(
+        routeIndex
+      ) {
+        const index =
+          routeIndex ||
+          routePathsByRouteRef.current
+        const now =
+          performance.now()
+        let promoted =
+          false
+
+        vehicleAnimationsRef.current
+          .forEach(
+            (
+              vehicleState
+            ) => {
+              if (
+                vehicleState?.path ||
+                !Array.isArray(
+                  vehicleState?.realCoordinate
+                )
+              ) {
+                return
+              }
+
+              const routeId =
+                String(
+                  vehicleState?.properties?.routeId ||
+                  ''
+                )
+
+              if (
+                !routeId ||
+                !index?.has?.(
+                  routeId
+                )
+              ) {
+                return
+              }
+
+              const directionId =
+                normalizeDirectionId(
+                  vehicleState?.properties?.directionId
+                )
+              const bearing =
+                Number.isFinite(
+                  Number(
+                    vehicleState?.properties?.bearing
+                  )
+                )
+                  ? Number(
+                      vehicleState.properties.bearing
+                    )
+                  : Number.isFinite(
+                      Number(
+                        vehicleState?.displayBearing
+                      )
+                    )
+                    ? Number(
+                        vehicleState.displayBearing
+                      )
+                    : null
+              const selection =
+                selectRouteProgressPath({
+                  coordinate:
+                    vehicleState.realCoordinate,
+                  routeId,
+                  directionId,
+                  bearing,
+                  routePathsByRoute:
+                    index,
+                })
+
+              if (
+                !selection
+              ) {
+                return
+              }
+
+              const realProgress =
+                selection.projection.progressMeters
+              const speedState =
+                routeEngineTargetSpeed({
+                  previous:
+                    null,
+                  realProgress,
+                  sampleTimestamp:
+                    vehicleState.sampleTimestamp,
+                  ttcSpeed:
+                    vehicleState?.properties?.speed,
+                  currentStatus:
+                    vehicleState?.properties?.currentStatus,
+                  now,
+                })
+              const routeBearing =
+                bearingAtRouteProgress(
+                  selection.path,
+                  realProgress
+                )
+
+              vehicleState.path =
+                selection.path
+              vehicleState.realProgress =
+                realProgress
+              vehicleState.displayProgress =
+                realProgress
+              vehicleState.filteredSpeed =
+                speedState.filteredSpeed
+              vehicleState.stopped =
+                speedState.stopped
+              vehicleState.lastMovingAt =
+                speedState.lastMovingAt
+              vehicleState.lastFrameAt =
+                now
+              vehicleState.lastRenderedCoordinate =
+                selection.projection.coordinate
+              vehicleState.displayBearing =
+                Number.isFinite(
+                  Number(
+                    routeBearing
+                  )
+                )
+                  ? Number(
+                      routeBearing
+                    )
+                  : bearing
+
+              vehicleState.properties = {
+                ...vehicleState.properties,
+                bearing:
+                  vehicleState.displayBearing,
+              }
+
+              promoted =
+                true
+            }
+          )
+
+        if (
+          promoted
+        ) {
+          renderAnimatedVehicles()
+        }
+      }
+
       function scheduleRouteIndexBuild(
         features
       ) {
@@ -3839,12 +3984,121 @@ function LiveTtcLayer({
 
         const generation =
           routeIndexBuildGeneration
-        const featureList =
+        const activeRouteCounts =
+          new Map()
+
+        vehicleAnimationsRef.current
+          .forEach(
+            (
+              vehicleState
+            ) => {
+              const routeId =
+                String(
+                  vehicleState?.properties?.routeId ||
+                  ''
+                )
+
+              if (
+                !routeId
+              ) {
+                return
+              }
+
+              activeRouteCounts.set(
+                routeId,
+                (
+                  activeRouteCounts.get(
+                    routeId
+                  ) ||
+                  0
+                ) +
+                  1
+              )
+            }
+          )
+
+        const groupedFeatures =
+          new Map()
+
+        ;(
           Array.isArray(
             features
           )
             ? features
             : []
+        ).forEach(
+          (
+            feature
+          ) => {
+            const routeId =
+              String(
+                feature?.properties?.routeId ||
+                ''
+              )
+
+            if (
+              !routeId
+            ) {
+              return
+            }
+
+            if (
+              !groupedFeatures.has(
+                routeId
+              )
+            ) {
+              groupedFeatures.set(
+                routeId,
+                []
+              )
+            }
+
+            groupedFeatures
+              .get(
+                routeId
+              )
+              .push(
+                feature
+              )
+          }
+        )
+
+        const routeGroups =
+          Array.from(
+            groupedFeatures.entries()
+          )
+            .map(
+              ([
+                routeId,
+                routeFeatures,
+              ]) => ({
+                routeId,
+                features:
+                  routeFeatures,
+                priority:
+                  (
+                    selectedRouteRef.current ===
+                      routeId
+                      ? 100000
+                      : 0
+                  ) +
+                  (
+                    activeRouteCounts.get(
+                      routeId
+                    ) ||
+                    0
+                  ),
+              })
+            )
+            .sort(
+              (
+                a,
+                b
+              ) =>
+                b.priority -
+                a.priority
+            )
+
         const nextIndex =
           new Map()
         let cursor =
@@ -3867,9 +4121,9 @@ function LiveTtcLayer({
 
             const end =
               Math.min(
-                featureList.length,
+                routeGroups.length,
                 cursor +
-                ROUTE_INDEX_BATCH_SIZE
+                ROUTE_INDEX_ROUTE_BATCH_SIZE
               )
 
             for (
@@ -3879,43 +4133,55 @@ function LiveTtcLayer({
               cursor +=
                 1
             ) {
-              const path =
-                buildRouteProgressPath(
-                  featureList[
-                    cursor
-                  ]
-                )
+              const group =
+                routeGroups[
+                  cursor
+                ]
+              const paths =
+                group.features
+                  .map(
+                    (
+                      feature
+                    ) =>
+                      buildRouteProgressPath(
+                        feature
+                      )
+                  )
+                  .filter(
+                    (
+                      path
+                    ) =>
+                      path &&
+                      path.routeId
+                  )
 
               if (
-                !path ||
-                !path.routeId
+                paths.length >
+                  0
               ) {
-                continue
-              }
-
-              if (
-                !nextIndex.has(
-                  path.routeId
-                )
-              ) {
+                // A route is published only after every visible shape for that
+                // route is indexed, so a bus cannot lock onto the wrong
+                // direction merely because the opposite shape was processed
+                // first.
                 nextIndex.set(
-                  path.routeId,
-                  []
+                  group.routeId,
+                  paths
                 )
               }
-
-              nextIndex
-                .get(
-                  path.routeId
-                )
-                .push(
-                  path
-                )
             }
+
+            // Publish complete route groups immediately. Routes carrying the
+            // most currently visible vehicles are processed first, so buses
+            // begin moving without waiting for the citywide index to finish.
+            routePathsByRouteRef.current =
+              nextIndex
+            promoteWaitingVehiclesToRouteProgress(
+              nextIndex
+            )
 
             if (
               cursor <
-                featureList.length
+                routeGroups.length
             ) {
               routeIndexBuildTimer =
                 window.setTimeout(
@@ -3924,35 +4190,15 @@ function LiveTtcLayer({
                 )
               return
             }
-
-            routePathsByRouteRef.current =
-              nextIndex
-
-            // Promote already visible raw-GPS vehicles into route-progress
-            // motion as soon as the background index is ready.
-            refreshVehicles()
           }
 
-        if (
-          typeof window.requestIdleCallback ===
-            'function'
-        ) {
-          routeIndexBuildIdle =
-            window.requestIdleCallback(
-              processBatch,
-              {
-                timeout:
-                  120,
-              }
-            )
-        }
-        else {
-          routeIndexBuildTimer =
-            window.setTimeout(
-              processBatch,
-              0
-            )
-        }
+        // Start priority routes immediately instead of waiting for an idle
+        // callback. Each following batch yields back to the browser.
+        routeIndexBuildTimer =
+          window.setTimeout(
+            processBatch,
+            0
+          )
       }
 
       function setSelectedRoute(
