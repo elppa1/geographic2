@@ -2318,7 +2318,7 @@ function GeographicApp() {
             .brand {
               top: 12px !important;
               left: 18px !important;
-              width: auto !important;
+              width: min(620px, calc(100vw - 36px)) !important;
               max-width: calc(100vw - 36px) !important;
               padding: 4px 8px 4px 12px !important;
               gap: 4px !important;
@@ -2438,15 +2438,12 @@ function GeographicApp() {
             .brand-main-row {
               display: grid !important;
               grid-template-columns:
-                minmax(86px, auto)
-                minmax(70px, auto)
-                auto
-                auto !important;
-              grid-template-rows: 36px 34px !important;
+                repeat(4, minmax(0, 1fr)) !important;
+              grid-template-rows: 42px 36px !important;
               align-items: stretch !important;
               gap: 0 !important;
-              width: auto !important;
-              min-height: 70px !important;
+              width: 100% !important;
+              min-height: 78px !important;
               padding-right: 0 !important;
             }
 
@@ -2479,7 +2476,7 @@ function GeographicApp() {
               grid-column: 4 !important;
               grid-row: 1 !important;
               align-self: stretch !important;
-              min-height: 36px !important;
+              min-height: 42px !important;
               border-left: 1px solid rgba(17,17,17,0.13) !important;
               border-bottom: 1px solid rgba(17,17,17,0.13) !important;
             }
@@ -2492,12 +2489,12 @@ function GeographicApp() {
 
             .brand-primary-filters > .historic-menu-anchor > .brand-mode-button {
               width: 100% !important;
-              min-height: 34px !important;
+              min-height: 36px !important;
               padding: 0 14px !important;
             }
 
             .brand-primary-filters > .brand-mode-button:not(.about-button) {
-              min-height: 34px !important;
+              min-height: 36px !important;
               padding: 0 14px !important;
               border-left: 1px solid rgba(17,17,17,0.10) !important;
             }
@@ -2517,8 +2514,21 @@ function GeographicApp() {
               grid-row: 2 !important;
             }
 
+            .brand-primary-filters .search-control {
+              align-self: stretch !important;
+            }
+
+            .brand-primary-filters .search-control .map-utility-button {
+              height: 100% !important;
+            }
+
             .brand-primary-filters .search-panel {
-              top: calc(100% + 38px) !important;
+              top: calc(100% + 36px) !important;
+              right: 0 !important;
+              left: auto !important;
+              width: min(360px, calc(100vw - 48px)) !important;
+              border-top-color: rgba(17,17,17,0.10) !important;
+              box-shadow: 0 12px 26px rgba(0,0,0,0.14) !important;
             }
 
             .news-history-control,
