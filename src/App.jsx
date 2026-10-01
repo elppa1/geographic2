@@ -2431,6 +2431,96 @@ function GeographicApp() {
               letter-spacing: 0 !important;
             }
 
+            /* Desktop: split the global menu into a clean two-row header.
+               Row 1 = identity + GPS/Search/How-to.
+               Row 2 = primary content categories.
+               Markup and all mobile behavior remain unchanged. */
+            .brand-main-row {
+              display: grid !important;
+              grid-template-columns:
+                minmax(86px, auto)
+                minmax(70px, auto)
+                auto
+                auto !important;
+              grid-template-rows: 36px 34px !important;
+              align-items: stretch !important;
+              gap: 0 !important;
+              width: auto !important;
+              min-height: 70px !important;
+              padding-right: 0 !important;
+            }
+
+            .brand-title {
+              grid-column: 1 / 3 !important;
+              grid-row: 1 !important;
+              align-self: stretch !important;
+              display: flex !important;
+              align-items: center !important;
+              margin: 0 !important;
+              padding: 0 14px 0 2px !important;
+              border-right: 0 !important;
+              border-bottom: 1px solid rgba(17,17,17,0.13) !important;
+            }
+
+            .brand-primary-filters {
+              display: contents !important;
+            }
+
+            .brand-primary-filters > .map-utilities {
+              grid-column: 3 !important;
+              grid-row: 1 !important;
+              align-self: stretch !important;
+              margin: 0 !important;
+              border-left: 1px solid rgba(17,17,17,0.13) !important;
+              border-bottom: 1px solid rgba(17,17,17,0.13) !important;
+            }
+
+            .brand-primary-filters > .about-button {
+              grid-column: 4 !important;
+              grid-row: 1 !important;
+              align-self: stretch !important;
+              min-height: 36px !important;
+              border-left: 1px solid rgba(17,17,17,0.13) !important;
+              border-bottom: 1px solid rgba(17,17,17,0.13) !important;
+            }
+
+            .brand-primary-filters > .historic-menu-anchor {
+              grid-column: 1 !important;
+              grid-row: 2 !important;
+              min-width: 86px !important;
+            }
+
+            .brand-primary-filters > .historic-menu-anchor > .brand-mode-button {
+              width: 100% !important;
+              min-height: 34px !important;
+              padding: 0 14px !important;
+            }
+
+            .brand-primary-filters > .brand-mode-button:not(.about-button) {
+              min-height: 34px !important;
+              padding: 0 14px !important;
+              border-left: 1px solid rgba(17,17,17,0.10) !important;
+            }
+
+            .brand-primary-filters > .brand-mode-button:not(.about-button):nth-of-type(1) {
+              grid-column: 2 !important;
+              grid-row: 2 !important;
+            }
+
+            .brand-primary-filters > .brand-mode-button:not(.about-button):nth-of-type(2) {
+              grid-column: 3 !important;
+              grid-row: 2 !important;
+            }
+
+            .brand-primary-filters > .brand-mode-button:not(.about-button):nth-of-type(3) {
+              grid-column: 4 !important;
+              grid-row: 2 !important;
+            }
+
+            .brand-primary-filters .search-panel {
+              top: calc(100% + 38px) !important;
+            }
+
             .news-history-control,
             .content-subfilters {
               padding-top: 4px !important;
