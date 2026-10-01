@@ -1,3 +1,4 @@
+// LIVE TTC FAST START V8
 // LIVE TTC STABILITY V6 · 2026-09-30 · stable vehicle retention + continuous interpolation + direction arrows + deduped arrivals
 import {
   useEffect,
@@ -726,6 +727,100 @@ function currentAnimatedCoordinate(
         animation.from[1]
       ) *
         progress,
+  ]
+}
+
+
+function projectCoordinateFromVehicleMotion(
+  longitude,
+  latitude,
+  bearing,
+  speedMetersPerSecond,
+  durationMs
+) {
+  const normalizedBearing =
+    Number(
+      bearing
+    )
+  const normalizedSpeed =
+    Number(
+      speedMetersPerSecond
+    )
+
+  if (
+    !Number.isFinite(
+      longitude
+    ) ||
+    !Number.isFinite(
+      latitude
+    ) ||
+    !Number.isFinite(
+      normalizedBearing
+    ) ||
+    !Number.isFinite(
+      normalizedSpeed
+    ) ||
+    normalizedSpeed <=
+      0.25
+  ) {
+    return null
+  }
+
+  // GTFS-RT speed is metres/second and bearing is degrees clockwise
+  // from true north. Use that first sample immediately so a newly
+  // loaded vehicle does not have to wait for a second GPS point before
+  // it begins moving. Cap implausible spikes defensively.
+  const seconds =
+    Math.max(
+      0,
+      Number(
+        durationMs ||
+        0
+      ) /
+      1000
+    )
+  const distanceMeters =
+    Math.min(
+      normalizedSpeed,
+      35
+    ) *
+    seconds
+  const radians =
+    normalizedBearing *
+    Math.PI /
+    180
+  const northMeters =
+    Math.cos(
+      radians
+    ) *
+    distanceMeters
+  const eastMeters =
+    Math.sin(
+      radians
+    ) *
+    distanceMeters
+  const latitudeRadians =
+    latitude *
+    Math.PI /
+    180
+  const longitudeScale =
+    Math.max(
+      0.2,
+      Math.cos(
+        latitudeRadians
+      )
+    )
+
+  return [
+    longitude +
+      eastMeters /
+      (
+        111320 *
+        longitudeScale
+      ),
+    latitude +
+      northMeters /
+      111320,
   ]
 }
 
@@ -2851,6 +2946,57 @@ function LiveTtcLayer({
                       vehicle.id
                     )
 
+                const bearing =
+                  Number.isFinite(
+                    Number(
+                      vehicle.bearing
+                    )
+                  )
+                    ? Number(
+                        vehicle.bearing
+                      )
+                    : null
+                const speed =
+                  Number.isFinite(
+                    Number(
+                      vehicle.speed
+                    )
+                  )
+                    ? Number(
+                        vehicle.speed
+                      )
+                    : null
+                const timestamp =
+                  Number(
+                    vehicle.timestamp ||
+                    0
+                  )
+
+                // If TTC returned the same realtime sample again, keep the
+                // current motion vector instead of resetting the vehicle back
+                // toward the same GPS coordinate. This prevents startup jitter
+                // and lets continuous motion carry through cached feed frames.
+                if (
+                  previous &&
+                  timestamp >
+                    0 &&
+                  Number(
+                    previous?.properties?.timestamp ||
+                    0
+                  ) ===
+                    timestamp
+                ) {
+                  nextAnimations.set(
+                    vehicle.id,
+                    {
+                      ...previous,
+                      lastSeenAt:
+                        now,
+                    }
+                  )
+                  return
+                }
+
                 const displayed =
                   currentAnimatedCoordinate(
                     previous,
@@ -2863,10 +3009,22 @@ function LiveTtcLayer({
                     latitude,
                   ]
 
-                const to = [
-                  longitude,
-                  latitude,
-                ]
+                const firstSampleProjection =
+                  !previous
+                    ? projectCoordinateFromVehicleMotion(
+                        longitude,
+                        latitude,
+                        bearing,
+                        speed,
+                        VEHICLE_INTERPOLATION_MS
+                      )
+                    : null
+
+                const to =
+                  firstSampleProjection || [
+                    longitude,
+                    latitude,
+                  ]
 
                 const unchanged =
                   Math.abs(
@@ -2928,31 +3086,9 @@ function LiveTtcLayer({
                       stopName:
                         vehicle.stopName ||
                         '',
-                      timestamp:
-                        Number(
-                          vehicle.timestamp ||
-                          0
-                        ),
-                      bearing:
-                        Number.isFinite(
-                          Number(
-                            vehicle.bearing
-                          )
-                        )
-                          ? Number(
-                              vehicle.bearing
-                            )
-                          : null,
-                      speed:
-                        Number.isFinite(
-                          Number(
-                            vehicle.speed
-                          )
-                        )
-                          ? Number(
-                              vehicle.speed
-                            )
-                          : null,
+                      timestamp,
+                      bearing,
+                      speed,
                       occupancyStatus:
                         vehicle.occupancyStatus ||
                         '',

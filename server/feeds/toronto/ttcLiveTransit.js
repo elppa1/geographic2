@@ -1,3 +1,4 @@
+// LIVE TTC FAST START V8
 // LIVE TTC STABILITY V6 · 2026-09-30 · reject empty realtime feeds + deduped arrivals + resilient vehicle retention
 import https from 'node:https'
 import { inflateRawSync } from 'node:zlib'
@@ -2519,14 +2520,30 @@ function routeMode(
 async function getVehiclesPayload(
   url
 ) {
-  const [
-    feed,
-    surface,
-  ] =
-    await Promise.all([
-      getRawVehicleFeed(),
-      getSurfaceNetwork(),
-    ])
+  // Live GPS should never wait for the much larger static SurfaceGTFS ZIP.
+  // Return realtime vehicles immediately and enrich route/stop metadata from
+  // the static cache once it has warmed in the background.
+  const feed =
+    await getRawVehicleFeed()
+
+  const surface =
+    surfaceCache
+
+  if (
+    !surface
+  ) {
+    getSurfaceNetwork()
+      .catch(
+        (
+          error
+        ) => {
+          console.warn(
+            'LIVE TTC STATIC WARMUP:',
+            error
+          )
+        }
+      )
+  }
 
   const nowSeconds =
     Math.floor(
@@ -2582,7 +2599,7 @@ async function getVehiclesPayload(
             )
 
           const staticTrip =
-            surface.trips.get(
+            surface?.trips?.get(
               tripId
             )
 
@@ -2594,7 +2611,7 @@ async function getVehiclesPayload(
             ''
 
           const route =
-            surface.routes.get(
+            surface?.routes?.get(
               routeId
             )
 
@@ -2604,7 +2621,7 @@ async function getVehiclesPayload(
             )
 
           const stop =
-            surface.stopsById.get(
+            surface?.stopsById?.get(
               stopId
             )
 
