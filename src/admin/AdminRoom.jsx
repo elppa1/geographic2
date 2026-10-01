@@ -15014,23 +15014,66 @@ function AdminRoom() {
       }
 
 
-      saveHistoricCategories(
-        nextCategories
-      )
+      const categorySave =
+        await saveHistoricCategories(
+          nextCategories
+        )
 
 
-      saveHistoricLayers(
-        nextLayers
-      )
+      if (
+        !categorySave
+      ) {
+        throw new Error(
+          'Historic categories were not saved to the server.'
+        )
+      }
+
+
+      const layerSave =
+        await saveHistoricLayers(
+          nextLayers
+        )
+
+
+      if (
+        !layerSave
+      ) {
+        throw new Error(
+          'Historic layers were not saved to the server.'
+        )
+      }
+
+
+      const nextHistoric = [
+        ...imported,
+        ...currentHistoric,
+      ]
+
+
+      const persistedSnapshot =
+        await saveHistoricItems(
+          nextHistoric
+        )
+
+
+      if (
+        !persistedSnapshot ||
+        persistedSnapshot.items.length !==
+          nextHistoric.length
+      ) {
+        throw new Error(
+          'Historic pins were not saved to the server.'
+        )
+      }
 
 
       setHistoricCategories(
-        nextCategories
+        persistedSnapshot.categories
       )
 
 
       setHistoricLayers(
-        nextLayers
+        persistedSnapshot.layers
       )
 
 
@@ -15049,19 +15092,11 @@ function AdminRoom() {
       )
 
 
-      const nextHistoric = [
-        ...imported,
-        ...currentHistoric,
-      ]
-
-
-      saveHistoricItems(
-        nextHistoric
-      )
-
-
       setAllHistoricItems(
-        nextHistoric
+        persistedSnapshot.items
+          .map(
+            normalizeHistoricRecord
+          )
       )
 
 

@@ -15,6 +15,8 @@ import {
 } from 'vite'
 
 import {
+  postgresMirrorEnabled,
+  readPostgresDocument,
   seedPostgresDocument,
   writePostgresDocument,
 } from '../../db/postgresMirror.js'
@@ -53,32 +55,8 @@ let writeQueue =
   Promise.resolve()
 
 
-let postgresSeedAttempted =
-  false
-
-
-function seedPostgresSnapshotOnce(
-  snapshot
-) {
-  if (
-    postgresSeedAttempted
-  ) {
-    return
-  }
-
-
-  postgresSeedAttempted =
-    true
-
-
-  void seedPostgresDocument({
-    storeKey:
-      'toronto-historic',
-
-    payload:
-      snapshot,
-  })
-}
+const HISTORIC_POSTGRES_KEY =
+  'toronto-historic'
 
 
 function getDataDirectory() {
@@ -184,7 +162,7 @@ function snapshotHasData(
 }
 
 
-async function readSnapshot() {
+async function readFileSnapshot() {
   try {
     const raw =
       await readFile(
@@ -193,20 +171,11 @@ async function readSnapshot() {
       )
 
 
-    const snapshot =
-      normalizeSnapshot(
-        JSON.parse(
-          raw
-        )
+    return normalizeSnapshot(
+      JSON.parse(
+        raw
       )
-
-
-    seedPostgresSnapshotOnce(
-      snapshot
     )
-
-
-    return snapshot
   }
   catch (
     error
@@ -215,21 +184,72 @@ async function readSnapshot() {
       error?.code ===
         'ENOENT'
     ) {
-      const snapshot =
-        normalizeSnapshot(
-          EMPTY_SNAPSHOT
-        )
-
-
-      seedPostgresSnapshotOnce(
-        snapshot
+      return normalizeSnapshot(
+        EMPTY_SNAPSHOT
       )
-
-
-      return snapshot
     }
 
 
+    throw error
+  }
+}
+
+
+async function readSnapshot() {
+  if (
+    postgresMirrorEnabled()
+  ) {
+    try {
+      const postgres =
+        await readPostgresDocument({
+          storeKey:
+            HISTORIC_POSTGRES_KEY,
+        })
+
+
+      if (
+        postgres.found
+      ) {
+        return normalizeSnapshot(
+          postgres.payload
+        )
+      }
+    }
+    catch (
+      error
+    ) {
+      console.warn(
+        'HISTORIC POSTGRES READ FAILED · USING FILE FALLBACK:',
+        error?.message ||
+        error
+      )
+    }
+  }
+
+
+  try {
+    const snapshot =
+      await readFileSnapshot()
+
+
+    if (
+      postgresMirrorEnabled()
+    ) {
+      await seedPostgresDocument({
+        storeKey:
+          HISTORIC_POSTGRES_KEY,
+
+        payload:
+          snapshot,
+      })
+    }
+
+
+    return snapshot
+  }
+  catch (
+    error
+  ) {
     console.error(
       'HISTORIC STORE READ ERROR:',
       error
@@ -254,33 +274,73 @@ async function writeSnapshot(
     })
 
 
-  await mkdir(
-    getDataDirectory(),
-    {
-      recursive:
-        true,
+  if (
+    postgresMirrorEnabled()
+  ) {
+    const persisted =
+      await writePostgresDocument({
+        storeKey:
+          HISTORIC_POSTGRES_KEY,
+
+        payload:
+          normalized,
+      })
+
+
+    if (
+      !persisted
+    ) {
+      const error =
+        new Error(
+          'Historic Postgres persistence failed.'
+        )
+
+
+      error.statusCode =
+        503
+
+
+      throw error
     }
-  )
+  }
 
 
-  await writeFile(
-    getHistoricFilePath(),
-    JSON.stringify(
-      normalized,
-      null,
-      2
-    ),
-    'utf8'
-  )
+  try {
+    await mkdir(
+      getDataDirectory(),
+      {
+        recursive:
+          true,
+      }
+    )
 
 
-  void writePostgresDocument({
-    storeKey:
-      'toronto-historic',
+    await writeFile(
+      getHistoricFilePath(),
+      JSON.stringify(
+        normalized,
+        null,
+        2
+      ),
+      'utf8'
+    )
+  }
+  catch (
+    error
+  ) {
+    if (
+      !postgresMirrorEnabled()
+    ) {
+      throw error
+    }
 
-    payload:
-      normalized,
-  })
+
+    console.warn(
+      'HISTORIC FILE MIRROR WRITE FAILED:',
+      error?.message ||
+      error
+    )
+  }
 
 
   return normalized

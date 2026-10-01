@@ -1657,77 +1657,105 @@ async function migrateLocalHistoricSnapshot(
 }
 
 
-function persistHistoricCollection(
+async function persistHistoricCollection(
   collection,
   records
 ) {
+  const normalizedRecords =
+    Array.isArray(
+      records
+    )
+      ? records
+      : []
+
+
   if (
     !isHistoricAdminPath()
   ) {
-    return
+    return null
   }
 
 
-  fetch(
-    `${ADMIN_HISTORIC_ENDPOINT}/${collection}`,
-    {
-      method:
-        'PUT',
+  try {
+    const response =
+      await fetch(
+        `${ADMIN_HISTORIC_ENDPOINT}/${collection}`,
+        {
+          method:
+            'PUT',
 
-      headers: {
-        'Content-Type':
-          'application/json',
-      },
+          credentials:
+            'same-origin',
 
-      body:
-        JSON.stringify({
-          records:
-            Array.isArray(
-              records
-            )
-              ? records
-              : [],
-        }),
-    }
-  )
-    .then(
-      async (
-        response
-      ) => {
-        if (
-          response.ok
-        ) {
-          return
+          headers: {
+            Accept:
+              'application/json',
+
+            'Content-Type':
+              'application/json',
+          },
+
+          body:
+            JSON.stringify({
+              records:
+                normalizedRecords,
+            }),
         }
+      )
 
 
-        const payload =
-          await response.json()
-            .catch(
-              () => null
-            )
-
-
-        throw new Error(
-          payload?.error ||
-          (
-            `Historic ${collection} save failed ` +
-            `(${response.status})`
-          )
+    const payload =
+      await response.json()
+        .catch(
+          () => null
         )
-      }
-    )
-    .catch(
-      (
-        error
-      ) => {
-        console.error(
-          'HISTORIC SERVER SAVE ERROR:',
-          collection,
-          error
+
+
+    if (
+      !response.ok ||
+      payload?.ok !==
+        true
+    ) {
+      throw new Error(
+        payload?.error ||
+        (
+          `Historic ${collection} save failed ` +
+          `(${response.status})`
         )
-      }
+      )
+    }
+
+
+    const snapshot =
+      normalizeHistoricSnapshot(
+        payload?.snapshot
+      )
+
+
+    if (
+      snapshot[collection]?.length !==
+        normalizedRecords.length
+    ) {
+      throw new Error(
+        `Historic ${collection} save was not verified by the server.`
+      )
+    }
+
+
+    return snapshot
+  }
+  catch (
+    error
+  ) {
+    console.error(
+      'HISTORIC SERVER SAVE ERROR:',
+      collection,
+      error
     )
+
+
+    return null
+  }
 }
 
 
@@ -1853,8 +1881,7 @@ export async function initializeHistoricAdminPersistence() {
 
 
   if (
-    serverHasData &&
-    !localHasData
+    serverHasData
   ) {
     writeLocalHistoricSnapshot(
       serverSnapshot
@@ -1865,13 +1892,6 @@ export async function initializeHistoricAdminPersistence() {
 
 
     return serverSnapshot
-  }
-
-
-  if (
-    serverHasData
-  ) {
-    markHistoricServerMigrationComplete()
   }
 
 
@@ -1999,7 +2019,7 @@ export function saveHistoricItems(
   markHistoricLegacyCleanupComplete()
 
 
-  persistHistoricCollection(
+  return persistHistoricCollection(
     'items',
     records
   )
@@ -2036,7 +2056,7 @@ export function saveHistoricIssues(
   )
 
 
-  persistHistoricCollection(
+  return persistHistoricCollection(
     'issues',
     records
   )
@@ -2073,7 +2093,7 @@ export function saveHistoricCategories(
   )
 
 
-  persistHistoricCollection(
+  return persistHistoricCollection(
     'categories',
     records
   )
@@ -2110,7 +2130,7 @@ export function saveHistoricLayers(
   )
 
 
-  persistHistoricCollection(
+  return persistHistoricCollection(
     'layers',
     records
   )
