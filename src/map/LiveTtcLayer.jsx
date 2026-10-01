@@ -1,4 +1,4 @@
-// LIVE TTC ROUTE ENGINE V12 · fast startup + selected route pulse + route-progress motion
+// LIVE TTC ROUTE ENGINE V15 · blue pulse halo + original route colour + route-progress motion
 // Vehicles advance by distance along their TTC route shape; realtime GPS only corrects the route progress.
 // LIVE TTC FAST START V8
 // LIVE TTC STABILITY V6 · 2026-09-30 · stable vehicle retention + continuous interpolation + direction arrows + deduped arrivals
@@ -91,7 +91,7 @@ const ANIMATION_FRAME_MS =
 const ROUTE_INDEX_BATCH_SIZE =
   10
 const SELECTED_ROUTE_PULSE_MS =
-  90
+  50
 
 const EMPTY_FEATURE_COLLECTION = {
   type:
@@ -3194,24 +3194,13 @@ function LiveTtcLayer({
             ],
             paint: {
               'line-color':
-                '#ffffff',
-              'line-width': [
-                'interpolate',
-                [
-                  'linear',
-                ],
-                [
-                  'zoom',
-                ],
-                9,
-                5,
-                13,
-                7,
-                17,
-                10,
-              ],
+                '#00AEEF',
+              'line-width':
+                selectedRouteCasingWidthExpression(
+                  1
+                ),
               'line-opacity':
-                0.96,
+                0.9,
             },
           })
         }
@@ -3259,14 +3248,14 @@ function LiveTtcLayer({
                   'zoom',
                 ],
                 9,
-                2.4,
+                1,
                 13,
-                4.3,
+                2.2,
                 17,
-                7,
+                4,
               ],
               'line-opacity':
-                0.98,
+                1,
             },
           })
         }
@@ -3658,6 +3647,49 @@ function LiveTtcLayer({
         }
       }
 
+      function selectedRouteCoreWidthExpression(
+        multiplier =
+          1
+      ) {
+        return [
+          'interpolate',
+          [
+            'linear',
+          ],
+          [
+            'zoom',
+          ],
+          9,
+          3.4 * multiplier,
+          13,
+          5.8 * multiplier,
+          17,
+          9.2 * multiplier,
+        ]
+      }
+
+      function selectedRouteCasingWidthExpression(
+        multiplier =
+          1
+      ) {
+        return [
+          'interpolate',
+          [
+            'linear',
+          ],
+          [
+            'zoom',
+          ],
+          9,
+          7 * multiplier,
+          13,
+          10 * multiplier,
+          17,
+          14 * multiplier,
+        ]
+      }
+
+
       function stopSelectedRoutePulse() {
         window.clearInterval(
           selectedRoutePulseTimer
@@ -3673,7 +3705,26 @@ function LiveTtcLayer({
           map.setPaintProperty(
             SELECTED_ROUTE_LAYER_ID,
             'line-opacity',
-            0.98
+            1
+          )
+          map.setPaintProperty(
+            SELECTED_ROUTE_LAYER_ID,
+            'line-width',
+            [
+              'interpolate',
+              [
+                'linear',
+              ],
+              [
+                'zoom',
+              ],
+              9,
+              1,
+              13,
+              2.2,
+              17,
+              4,
+            ]
           )
         }
 
@@ -3685,7 +3736,14 @@ function LiveTtcLayer({
           map.setPaintProperty(
             SELECTED_ROUTE_CASING_LAYER_ID,
             'line-opacity',
-            0.96
+            0.9
+          )
+          map.setPaintProperty(
+            SELECTED_ROUTE_CASING_LAYER_ID,
+            'line-width',
+            selectedRouteCasingWidthExpression(
+              1
+            )
           )
         }
       }
@@ -3711,7 +3769,7 @@ function LiveTtcLayer({
                   performance.now() -
                   startedAt
                 ) /
-                760
+                1250
               const wave =
                 (
                   Math.sin(
@@ -3725,29 +3783,24 @@ function LiveTtcLayer({
 
               if (
                 map.getLayer(
-                  SELECTED_ROUTE_LAYER_ID
-                )
-              ) {
-                map.setPaintProperty(
-                  SELECTED_ROUTE_LAYER_ID,
-                  'line-opacity',
-                  0.58 +
-                  wave *
-                  0.4
-                )
-              }
-
-              if (
-                map.getLayer(
                   SELECTED_ROUTE_CASING_LAYER_ID
                 )
               ) {
                 map.setPaintProperty(
                   SELECTED_ROUTE_CASING_LAYER_ID,
                   'line-opacity',
-                  0.34 +
+                  0.12 +
                   wave *
-                  0.62
+                  0.78
+                )
+                map.setPaintProperty(
+                  SELECTED_ROUTE_CASING_LAYER_ID,
+                  'line-width',
+                  selectedRouteCasingWidthExpression(
+                    0.94 +
+                    wave *
+                    0.64
+                  )
                 )
               }
             },
@@ -3954,9 +4007,7 @@ function LiveTtcLayer({
           map.setPaintProperty(
             ROUTES_LAYER_ID,
             'line-opacity',
-            normalized
-              ? 0.22
-              : 0.34
+            0.34
           )
         }
 
