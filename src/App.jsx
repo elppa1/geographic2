@@ -2318,9 +2318,9 @@ function GeographicApp() {
             .brand {
               top: 12px !important;
               left: 18px !important;
-              width: min(620px, calc(100vw - 36px)) !important;
+              width: min(560px, calc(100vw - 36px)) !important;
               max-width: calc(100vw - 36px) !important;
-              padding: 4px 8px 4px 12px !important;
+              padding: 3px 6px 3px 10px !important;
               gap: 4px !important;
               border: 1px solid rgba(17,17,17,0.12) !important;
               border-radius: 2px !important;
@@ -2431,19 +2431,20 @@ function GeographicApp() {
               letter-spacing: 0 !important;
             }
 
-            /* Desktop: split the global menu into a clean two-row header.
-               Row 1 = identity + GPS/Search/How-to.
-               Row 2 = primary content categories.
-               Markup and all mobile behavior remain unchanged. */
+            /* Desktop: compact two-row header.
+               Row 1 = identity + open white search space + GPS/Search.
+               Row 2 = Historic / News / Live TTC / To-Do / How-To.
+               Search expands into row 1 instead of growing below the menu.
+               Mobile markup and behavior remain unchanged. */
             .brand-main-row {
               display: grid !important;
               grid-template-columns:
-                repeat(4, minmax(0, 1fr)) !important;
-              grid-template-rows: 42px 36px !important;
+                repeat(5, minmax(0, 1fr)) !important;
+              grid-template-rows: 38px 34px !important;
               align-items: stretch !important;
               gap: 0 !important;
               width: 100% !important;
-              min-height: 78px !important;
+              min-height: 72px !important;
               padding-right: 0 !important;
             }
 
@@ -2454,7 +2455,7 @@ function GeographicApp() {
               display: flex !important;
               align-items: center !important;
               margin: 0 !important;
-              padding: 0 14px 0 2px !important;
+              padding: 0 12px 0 2px !important;
               border-right: 0 !important;
               border-bottom: 1px solid rgba(17,17,17,0.13) !important;
             }
@@ -2463,39 +2464,44 @@ function GeographicApp() {
               display: contents !important;
             }
 
+            /* Keep the utility controls at the far right of the upper row.
+               Columns 3-4 intentionally remain white so Search can open there. */
             .brand-primary-filters > .map-utilities {
-              grid-column: 3 !important;
+              grid-column: 5 !important;
               grid-row: 1 !important;
               align-self: stretch !important;
+              justify-self: stretch !important;
               margin: 0 !important;
+              gap: 0 !important;
               border-left: 1px solid rgba(17,17,17,0.13) !important;
               border-bottom: 1px solid rgba(17,17,17,0.13) !important;
             }
 
+            /* How-To belongs with the content/navigation row on desktop. */
             .brand-primary-filters > .about-button {
-              grid-column: 4 !important;
-              grid-row: 1 !important;
+              grid-column: 5 !important;
+              grid-row: 2 !important;
               align-self: stretch !important;
-              min-height: 42px !important;
-              border-left: 1px solid rgba(17,17,17,0.13) !important;
-              border-bottom: 1px solid rgba(17,17,17,0.13) !important;
+              min-height: 34px !important;
+              border-left: 1px solid rgba(17,17,17,0.10) !important;
+              border-bottom: 0 !important;
             }
 
             .brand-primary-filters > .historic-menu-anchor {
               grid-column: 1 !important;
               grid-row: 2 !important;
-              min-width: 86px !important;
+              min-width: 78px !important;
             }
 
             .brand-primary-filters > .historic-menu-anchor > .brand-mode-button {
               width: 100% !important;
-              min-height: 36px !important;
-              padding: 0 14px !important;
+              min-height: 34px !important;
+              padding: 0 10px !important;
             }
 
             .brand-primary-filters > .brand-mode-button:not(.about-button) {
-              min-height: 36px !important;
-              padding: 0 14px !important;
+              min-height: 34px !important;
+              padding: 0 10px !important;
               border-left: 1px solid rgba(17,17,17,0.10) !important;
             }
 
@@ -2516,19 +2522,44 @@ function GeographicApp() {
 
             .brand-primary-filters .search-control {
               align-self: stretch !important;
+              position: relative !important;
             }
 
             .brand-primary-filters .search-control .map-utility-button {
               height: 100% !important;
             }
 
+            /* Open Search inside the unused white space in row 1.
+               Keep GPS and the search trigger visible on the right. */
             .brand-primary-filters .search-panel {
-              top: calc(100% + 36px) !important;
-              right: 0 !important;
+              top: 0 !important;
+              right: 72px !important;
               left: auto !important;
-              width: min(360px, calc(100vw - 48px)) !important;
-              border-top-color: rgba(17,17,17,0.10) !important;
-              box-shadow: 0 12px 26px rgba(0,0,0,0.14) !important;
+              width: 230px !important;
+              max-width: calc(100vw - 300px) !important;
+              border: 1px solid rgba(17,17,17,0.12) !important;
+              border-radius: 0 !important;
+              background: rgba(255,255,255,0.99) !important;
+              box-shadow: none !important;
+              z-index: 40 !important;
+            }
+
+            .brand-primary-filters .search-panel .search-form {
+              min-height: 36px !important;
+            }
+
+            .brand-primary-filters .search-panel .search-input {
+              font-size: 11px !important;
+              padding-left: 10px !important;
+            }
+
+            .brand-primary-filters .search-panel .search-submit {
+              min-width: 38px !important;
+              padding: 0 9px !important;
+            }
+
+            .brand-primary-filters .search-panel .search-close {
+              width: 34px !important;
             }
 
             .news-history-control,
