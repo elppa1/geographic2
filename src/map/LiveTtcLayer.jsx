@@ -1,4 +1,5 @@
-// LIVE TTC MOTION V10 · continuous buffered motion + route highlight only
+// LIVE TTC ROUTE ENGINE V11 · route-progress vehicle motion
+// Vehicles advance by distance along their TTC route shape; realtime GPS only corrects the route progress.
 // LIVE TTC FAST START V8
 // LIVE TTC STABILITY V6 · 2026-09-30 · stable vehicle retention + continuous interpolation + direction arrows + deduped arrivals
 import {
@@ -71,18 +72,22 @@ const ARRIVALS_ENDPOINT =
 
 const VEHICLE_POLL_MS =
   5000
-const VEHICLE_INTERPOLATION_MIN_MS =
-  9000
 const VEHICLE_VISUAL_MAX_SPEED_MPS =
-  10
-const VEHICLE_INITIAL_PROJECTION_MS =
-  1800
-const VEHICLE_POST_TARGET_DRIFT_RATIO =
-  0.08
+  8.5
+const VEHICLE_DEFAULT_MOVING_SPEED_MPS =
+  3.2
+const VEHICLE_MIN_CONTINUOUS_SPEED_MPS =
+  0.85
+const VEHICLE_ROUTE_LOCK_MAX_METERS =
+  160
+const VEHICLE_STALE_SLOWDOWN_MS =
+  15 * 1000
+const VEHICLE_STALE_STOP_MS =
+  75 * 1000
 const VEHICLE_GRACE_MS =
   90 * 1000
 const ANIMATION_FRAME_MS =
-  60
+  50
 
 const EMPTY_FEATURE_COLLECTION = {
   type:
@@ -689,162 +694,6 @@ function featureCollection(
 }
 
 
-function currentAnimatedCoordinate(
-  animation,
-  now
-) {
-  if (
-    !animation
-  ) {
-    return null
-  }
-
-  const duration =
-    Math.max(
-      1,
-      animation.duration ||
-      1
-    )
-
-  const rawProgress =
-    Math.max(
-      0,
-      (
-        now -
-        animation.startedAt
-      ) /
-      duration
-    )
-
-  // Normal TTC samples should arrive before progress reaches 1 because the
-  // visual interpolation window is deliberately longer than the poll cadence.
-  // If an update is late, keep the marker moving at a small fraction of its
-  // previous segment speed rather than visibly stopping at a timer boundary.
-  const progress =
-    rawProgress <=
-      1
-      ? rawProgress
-      : 1 +
-        (
-          rawProgress -
-          1
-        ) *
-        VEHICLE_POST_TARGET_DRIFT_RATIO
-
-  return [
-    animation.from[0] +
-      (
-        animation.to[0] -
-        animation.from[0]
-      ) *
-        progress,
-    animation.from[1] +
-      (
-        animation.to[1] -
-        animation.from[1]
-      ) *
-        progress,
-  ]
-}
-
-
-function projectCoordinateFromVehicleMotion(
-  longitude,
-  latitude,
-  bearing,
-  speedMetersPerSecond,
-  durationMs
-) {
-  const normalizedBearing =
-    Number(
-      bearing
-    )
-  const normalizedSpeed =
-    Number(
-      speedMetersPerSecond
-    )
-
-  if (
-    !Number.isFinite(
-      longitude
-    ) ||
-    !Number.isFinite(
-      latitude
-    ) ||
-    !Number.isFinite(
-      normalizedBearing
-    ) ||
-    !Number.isFinite(
-      normalizedSpeed
-    ) ||
-    normalizedSpeed <=
-      0.25
-  ) {
-    return null
-  }
-
-  // GTFS-RT speed is metres/second and bearing is degrees clockwise
-  // from true north. Use that first sample immediately so a newly
-  // loaded vehicle does not have to wait for a second GPS point before
-  // it begins moving. Cap implausible spikes defensively.
-  const seconds =
-    Math.max(
-      0,
-      Number(
-        durationMs ||
-        0
-      ) /
-      1000
-    )
-  const distanceMeters =
-    Math.min(
-      24,
-      Math.min(
-        normalizedSpeed,
-        14
-      ) *
-      seconds
-    )
-  const radians =
-    normalizedBearing *
-    Math.PI /
-    180
-  const northMeters =
-    Math.cos(
-      radians
-    ) *
-    distanceMeters
-  const eastMeters =
-    Math.sin(
-      radians
-    ) *
-    distanceMeters
-  const latitudeRadians =
-    latitude *
-    Math.PI /
-    180
-  const longitudeScale =
-    Math.max(
-      0.2,
-      Math.cos(
-        latitudeRadians
-      )
-    )
-
-  return [
-    longitude +
-      eastMeters /
-      (
-        111320 *
-        longitudeScale
-      ),
-    latitude +
-      northMeters /
-      111320,
-  ]
-}
-
-
 function distanceMetersBetweenCoordinates(
   a,
   b
@@ -1102,6 +951,7 @@ function nearestPointOnSegment(
         point,
         coordinate
       ),
+    t,
   }
 }
 
@@ -1192,6 +1042,903 @@ function snapCoordinateToRoute(
       140
     ? best.coordinate
     : coordinate
+}
+
+
+function clampNumber(
+  value,
+  minimum,
+  maximum
+) {
+  return Math.max(
+    minimum,
+    Math.min(
+      maximum,
+      Number(
+        value
+      )
+    )
+  )
+}
+
+
+function normalizeDirectionId(
+  value
+) {
+  if (
+    value ===
+      null ||
+    value ===
+      undefined ||
+    value ===
+      ''
+  ) {
+    return ''
+  }
+
+  const number =
+    Number(
+      value
+    )
+
+  return Number.isFinite(
+    number
+  )
+    ? String(
+        number
+      )
+    : String(
+        value
+      )
+}
+
+
+function buildRouteProgressPath(
+  feature
+) {
+  if (
+    feature?.geometry?.type !==
+      'LineString' ||
+    !Array.isArray(
+      feature?.geometry?.coordinates
+    ) ||
+    feature.geometry.coordinates.length <
+      2
+  ) {
+    return null
+  }
+
+  const coordinates =
+    feature.geometry.coordinates
+      .filter(
+        (
+          coordinate
+        ) =>
+          Array.isArray(
+            coordinate
+          ) &&
+          Number.isFinite(
+            Number(
+              coordinate[0]
+            )
+          ) &&
+          Number.isFinite(
+            Number(
+              coordinate[1]
+            )
+          )
+      )
+      .map(
+        (
+          coordinate
+        ) => [
+          Number(
+            coordinate[0]
+          ),
+          Number(
+            coordinate[1]
+          ),
+        ]
+      )
+
+  if (
+    coordinates.length <
+      2
+  ) {
+    return null
+  }
+
+  const cumulativeMeters = [
+    0,
+  ]
+  const segmentMeters = []
+  let totalMeters =
+    0
+
+  for (
+    let index =
+      1;
+    index <
+      coordinates.length;
+    index +=
+      1
+  ) {
+    const distance =
+      distanceMetersBetweenCoordinates(
+        coordinates[
+          index -
+          1
+        ],
+        coordinates[
+          index
+        ]
+      )
+
+    const safeDistance =
+      Number.isFinite(
+        distance
+      )
+        ? Math.max(
+            0,
+            distance
+          )
+        : 0
+
+    segmentMeters.push(
+      safeDistance
+    )
+    totalMeters +=
+      safeDistance
+    cumulativeMeters.push(
+      totalMeters
+    )
+  }
+
+  if (
+    totalMeters <=
+      0
+  ) {
+    return null
+  }
+
+  return {
+    shapeId:
+      String(
+        feature?.properties?.shapeId ||
+        feature?.id ||
+        ''
+      ),
+    routeId:
+      String(
+        feature?.properties?.routeId ||
+        ''
+      ),
+    directionId:
+      normalizeDirectionId(
+        feature?.properties?.directionId
+      ),
+    headsign:
+      String(
+        feature?.properties?.headsign ||
+        ''
+      ),
+    coordinates,
+    cumulativeMeters,
+    segmentMeters,
+    totalMeters,
+  }
+}
+
+
+function buildRouteProgressIndex(
+  features
+) {
+  const index =
+    new Map()
+
+  ;(
+    Array.isArray(
+      features
+    )
+      ? features
+      : []
+  )
+    .forEach(
+      (
+        feature
+      ) => {
+        const path =
+          buildRouteProgressPath(
+            feature
+          )
+
+        if (
+          !path ||
+          !path.routeId
+        ) {
+          return
+        }
+
+        if (
+          !index.has(
+            path.routeId
+          )
+        ) {
+          index.set(
+            path.routeId,
+            []
+          )
+        }
+
+        index
+          .get(
+            path.routeId
+          )
+          .push(
+            path
+          )
+      }
+    )
+
+  return index
+}
+
+
+function projectCoordinateOntoRoutePath(
+  coordinate,
+  path
+) {
+  if (
+    !path ||
+    !Array.isArray(
+      path.coordinates
+    ) ||
+    path.coordinates.length <
+      2
+  ) {
+    return null
+  }
+
+  let best =
+    null
+
+  for (
+    let index =
+      1;
+    index <
+      path.coordinates.length;
+    index +=
+      1
+  ) {
+    const candidate =
+      nearestPointOnSegment(
+        coordinate,
+        path.coordinates[
+          index -
+          1
+        ],
+        path.coordinates[
+          index
+        ]
+      )
+
+    const segmentDistance =
+      path.segmentMeters[
+        index -
+        1
+      ] ||
+      0
+    const progressMeters =
+      path.cumulativeMeters[
+        index -
+        1
+      ] +
+      segmentDistance *
+        clampNumber(
+          candidate.t ??
+          0,
+          0,
+          1
+        )
+    const segmentBearing =
+      bearingBetweenCoordinates(
+        path.coordinates[
+          index -
+          1
+        ],
+        path.coordinates[
+          index
+        ]
+      )
+
+    if (
+      !best ||
+      candidate.distanceMeters <
+        best.distanceMeters
+    ) {
+      best = {
+        coordinate:
+          candidate.coordinate,
+        distanceMeters:
+          candidate.distanceMeters,
+        progressMeters,
+        segmentIndex:
+          index -
+          1,
+        bearing:
+          segmentBearing,
+      }
+    }
+  }
+
+  return best
+}
+
+
+function routeSegmentIndexAtProgress(
+  path,
+  progressMeters
+) {
+  if (
+    !path ||
+    !Array.isArray(
+      path.cumulativeMeters
+    ) ||
+    path.cumulativeMeters.length <
+      2
+  ) {
+    return 0
+  }
+
+  const progress =
+    clampNumber(
+      progressMeters,
+      0,
+      path.totalMeters
+    )
+  let low =
+    0
+  let high =
+    path.cumulativeMeters.length -
+    2
+
+  while (
+    low <=
+    high
+  ) {
+    const middle =
+      Math.floor(
+        (
+          low +
+          high
+        ) /
+        2
+      )
+    const start =
+      path.cumulativeMeters[
+        middle
+      ]
+    const end =
+      path.cumulativeMeters[
+        middle +
+        1
+      ]
+
+    if (
+      progress <
+        start
+    ) {
+      high =
+        middle -
+        1
+    }
+    else if (
+      progress >
+        end
+    ) {
+      low =
+        middle +
+        1
+    }
+    else {
+      return middle
+    }
+  }
+
+  return Math.max(
+    0,
+    Math.min(
+      path.segmentMeters.length -
+      1,
+      low
+    )
+  )
+}
+
+
+function coordinateAtRouteProgress(
+  path,
+  progressMeters
+) {
+  if (
+    !path ||
+    !Array.isArray(
+      path.coordinates
+    ) ||
+    path.coordinates.length ===
+      0
+  ) {
+    return null
+  }
+
+  const progress =
+    clampNumber(
+      progressMeters,
+      0,
+      path.totalMeters
+    )
+  const segmentIndex =
+    routeSegmentIndexAtProgress(
+      path,
+      progress
+    )
+  const start =
+    path.coordinates[
+      segmentIndex
+    ]
+  const end =
+    path.coordinates[
+      segmentIndex +
+      1
+    ] ||
+    start
+  const segmentStart =
+    path.cumulativeMeters[
+      segmentIndex
+    ] ||
+    0
+  const segmentLength =
+    path.segmentMeters[
+      segmentIndex
+    ] ||
+    0
+  const t =
+    segmentLength >
+      0
+      ? clampNumber(
+          (
+            progress -
+            segmentStart
+          ) /
+          segmentLength,
+          0,
+          1
+        )
+      : 0
+
+  return [
+    start[0] +
+      (
+        end[0] -
+        start[0]
+      ) *
+      t,
+    start[1] +
+      (
+        end[1] -
+        start[1]
+      ) *
+      t,
+  ]
+}
+
+
+function bearingAtRouteProgress(
+  path,
+  progressMeters
+) {
+  if (
+    !path ||
+    !Array.isArray(
+      path.coordinates
+    ) ||
+    path.coordinates.length <
+      2
+  ) {
+    return null
+  }
+
+  const segmentIndex =
+    routeSegmentIndexAtProgress(
+      path,
+      progressMeters
+    )
+
+  return bearingBetweenCoordinates(
+    path.coordinates[
+      segmentIndex
+    ],
+    path.coordinates[
+      segmentIndex +
+      1
+    ] ||
+    path.coordinates[
+      segmentIndex
+    ]
+  )
+}
+
+
+function bearingDifferenceDegrees(
+  a,
+  b
+) {
+  if (
+    !Number.isFinite(
+      Number(
+        a
+      )
+    ) ||
+    !Number.isFinite(
+      Number(
+        b
+      )
+    )
+  ) {
+    return 0
+  }
+
+  const difference =
+    Math.abs(
+      (
+        Number(
+          a
+        ) -
+        Number(
+          b
+        ) +
+        540
+      ) %
+        360 -
+      180
+    )
+
+  return difference
+}
+
+
+function selectRouteProgressPath({
+  coordinate,
+  routeId,
+  directionId,
+  bearing,
+  routePathsByRoute,
+}) {
+  const normalizedRouteId =
+    String(
+      routeId ||
+      ''
+    )
+  const normalizedDirectionId =
+    normalizeDirectionId(
+      directionId
+    )
+  const candidates =
+    routePathsByRoute
+      ?.get?.(
+        normalizedRouteId
+      ) ||
+    []
+
+  if (
+    candidates.length ===
+      0
+  ) {
+    return null
+  }
+
+  const directionalCandidates =
+    normalizedDirectionId
+      ? candidates.filter(
+          (
+            path
+          ) =>
+            path.directionId ===
+            normalizedDirectionId
+        )
+      : []
+  const pool =
+    directionalCandidates.length >
+      0
+      ? directionalCandidates
+      : candidates
+
+  let best =
+    null
+
+  pool.forEach(
+    (
+      path
+    ) => {
+      const projection =
+        projectCoordinateOntoRoutePath(
+          coordinate,
+          path
+        )
+
+      if (
+        !projection
+      ) {
+        return
+      }
+
+      const bearingPenalty =
+        Number.isFinite(
+          Number(
+            bearing
+          )
+        ) &&
+        Number.isFinite(
+          Number(
+            projection.bearing
+          )
+        )
+          ? bearingDifferenceDegrees(
+              bearing,
+              projection.bearing
+            ) *
+            0.35
+          : 0
+      const score =
+        projection.distanceMeters +
+        bearingPenalty
+
+      if (
+        !best ||
+        score <
+          best.score
+      ) {
+        best = {
+          path,
+          projection,
+          score,
+        }
+      }
+    }
+  )
+
+  return best &&
+    best.projection.distanceMeters <=
+      VEHICLE_ROUTE_LOCK_MAX_METERS
+    ? best
+    : null
+}
+
+
+function routeEngineTargetSpeed({
+  previous,
+  realProgress,
+  sampleTimestamp,
+  ttcSpeed,
+  currentStatus,
+  now,
+}) {
+  const normalizedTtcSpeed =
+    Number.isFinite(
+      Number(
+        ttcSpeed
+      )
+    )
+      ? clampNumber(
+          Number(
+            ttcSpeed
+          ),
+          0,
+          VEHICLE_VISUAL_MAX_SPEED_MPS
+        )
+      : null
+  const normalizedStatus =
+    String(
+      currentStatus ||
+      ''
+    )
+      .toUpperCase()
+  const stopped =
+    normalizedStatus.includes(
+      'STOPPED'
+    )
+
+  let observedSpeed =
+    null
+
+  if (
+    previous &&
+    Number.isFinite(
+      Number(
+        previous.realProgress
+      )
+    ) &&
+    Number.isFinite(
+      Number(
+        previous.sampleTimestamp
+      )
+    ) &&
+    Number.isFinite(
+      Number(
+        sampleTimestamp
+      )
+    )
+  ) {
+    const elapsedSeconds =
+      Number(
+        sampleTimestamp
+      ) -
+      Number(
+        previous.sampleTimestamp
+      )
+    const progressDelta =
+      Number(
+        realProgress
+      ) -
+      Number(
+        previous.realProgress
+      )
+
+    if (
+      elapsedSeconds >
+        0.5 &&
+      elapsedSeconds <
+        60 &&
+      progressDelta >=
+        -4
+    ) {
+      observedSpeed =
+        clampNumber(
+          Math.max(
+            0,
+            progressDelta
+          ) /
+            elapsedSeconds,
+          0,
+          VEHICLE_VISUAL_MAX_SPEED_MPS
+        )
+    }
+  }
+
+  let targetSpeed =
+    observedSpeed !==
+      null &&
+    normalizedTtcSpeed !==
+      null
+      ? observedSpeed *
+          0.72 +
+        normalizedTtcSpeed *
+          0.28
+      : observedSpeed !==
+          null
+        ? observedSpeed
+        : normalizedTtcSpeed !==
+            null
+          ? normalizedTtcSpeed
+          : previous?.filteredSpeed ??
+            VEHICLE_DEFAULT_MOVING_SPEED_MPS
+
+  // TTC sometimes publishes a fresh timestamp while the GPS coordinate is
+  // unchanged. If its own speed still says the vehicle is moving, do not let
+  // that one repeated point collapse the visual speed toward zero.
+  if (
+    !stopped &&
+    observedSpeed !==
+      null &&
+    observedSpeed <
+      0.45 &&
+    normalizedTtcSpeed !==
+      null &&
+    normalizedTtcSpeed >
+      0.8
+  ) {
+    targetSpeed =
+      Math.max(
+        targetSpeed,
+        normalizedTtcSpeed *
+        0.78
+      )
+  }
+
+  if (
+    stopped &&
+    (
+      observedSpeed ===
+        null ||
+      observedSpeed <
+        0.6
+    ) &&
+    (
+      normalizedTtcSpeed ===
+        null ||
+      normalizedTtcSpeed <
+        0.6
+    )
+  ) {
+    targetSpeed =
+      0
+  }
+
+  const previousSpeed =
+    Number.isFinite(
+      Number(
+        previous?.filteredSpeed
+      )
+    )
+      ? Number(
+          previous.filteredSpeed
+        )
+      : targetSpeed
+  const smoothing =
+    targetSpeed >
+      previousSpeed
+      ? 0.34
+      : 0.18
+  let filteredSpeed =
+    previous
+      ? previousSpeed +
+        (
+          targetSpeed -
+          previousSpeed
+        ) *
+        smoothing
+      : targetSpeed
+
+  const movementEvidence =
+    (
+      observedSpeed !==
+        null &&
+      observedSpeed >
+        0.65
+    ) ||
+    (
+      normalizedTtcSpeed !==
+        null &&
+      normalizedTtcSpeed >
+        0.65
+    ) ||
+    normalizedStatus.includes(
+      'IN_TRANSIT'
+    ) ||
+    normalizedStatus.includes(
+      'INCOMING'
+    )
+  const lastMovingAt =
+    movementEvidence
+      ? now
+      : previous?.lastMovingAt ??
+        0
+
+  if (
+    !stopped &&
+    lastMovingAt >
+      0 &&
+    now -
+      lastMovingAt <
+      15 *
+      1000 &&
+    filteredSpeed <
+      VEHICLE_MIN_CONTINUOUS_SPEED_MPS
+  ) {
+    filteredSpeed =
+      VEHICLE_MIN_CONTINUOUS_SPEED_MPS
+  }
+
+  return {
+    filteredSpeed:
+      clampNumber(
+        filteredSpeed,
+        0,
+        VEHICLE_VISUAL_MAX_SPEED_MPS
+      ),
+    lastMovingAt,
+    stopped,
+  }
 }
 
 
@@ -1482,6 +2229,10 @@ function LiveTtcLayer({
     useRef(null)
   const routeFeaturesRef =
     useRef([])
+  const routePathsByRouteRef =
+    useRef(
+      new Map()
+    )
 
 
   useEffect(
@@ -3023,6 +3774,10 @@ function LiveTtcLayer({
             )
               ? payload.routes.features
               : []
+          routePathsByRouteRef.current =
+            buildRouteProgressIndex(
+              routeFeaturesRef.current
+            )
 
           updateRouteSelector(
             payload?.routeCatalog
@@ -3112,82 +3867,252 @@ function LiveTtcLayer({
 
         const now =
           performance.now()
-
         const features =
           []
 
         vehicleAnimationsRef.current
           .forEach(
             (
-              animation,
+              vehicleState,
               vehicleId
             ) => {
-              const rawCoordinate =
-                currentAnimatedCoordinate(
-                  animation,
-                  now
+              let coordinate =
+                null
+              let displayBearing =
+                vehicleState.displayBearing
+
+              if (
+                vehicleState.path &&
+                Number.isFinite(
+                  Number(
+                    vehicleState.displayProgress
+                  )
+                ) &&
+                Number.isFinite(
+                  Number(
+                    vehicleState.realProgress
+                  )
                 )
-
-              if (
-                !rawCoordinate
               ) {
-                return
-              }
-
-              // The real TTC sample is route-snapped once when it arrives.
-              // Do not rescan route geometry on every animation frame; at
-              // citywide zoom that work causes visible pauses and zoom stutter.
-              const coordinate =
-                rawCoordinate
-
-              const properties = {
-                ...animation.properties,
-              }
-
-              const previousRendered =
-                animation.lastRenderedCoordinate
-              const movedMeters =
-                previousRendered
-                  ? distanceMetersBetweenCoordinates(
-                      previousRendered,
-                      coordinate
+                const previousFrameAt =
+                  Number(
+                    vehicleState.lastFrameAt ||
+                    now
+                  )
+                const elapsedSeconds =
+                  Math.max(
+                    0,
+                    Math.min(
+                      0.25,
+                      (
+                        now -
+                        previousFrameAt
+                      ) /
+                      1000
                     )
-                  : 0
+                  )
+                vehicleState.lastFrameAt =
+                  now
 
-              if (
-                previousRendered &&
-                movedMeters >
-                  0.35
-              ) {
-                const movementBearing =
-                  bearingBetweenCoordinates(
-                    previousRendered,
-                    coordinate
+                const staleMs =
+                  Math.max(
+                    0,
+                    now -
+                    Number(
+                      vehicleState.lastSeenAt ||
+                      now
+                    )
+                  )
+                let staleFactor =
+                  1
+
+                if (
+                  staleMs >
+                    VEHICLE_STALE_SLOWDOWN_MS
+                ) {
+                  staleFactor =
+                    1 -
+                    clampNumber(
+                      (
+                        staleMs -
+                        VEHICLE_STALE_SLOWDOWN_MS
+                      ) /
+                      Math.max(
+                        1,
+                        VEHICLE_STALE_STOP_MS -
+                        VEHICLE_STALE_SLOWDOWN_MS
+                      ),
+                      0,
+                      1
+                    ) *
+                    0.9
+                }
+
+                if (
+                  staleMs >=
+                    VEHICLE_STALE_STOP_MS
+                ) {
+                  staleFactor =
+                    0
+                }
+
+                const progressError =
+                  Number(
+                    vehicleState.realProgress
+                  ) -
+                  Number(
+                    vehicleState.displayProgress
+                  )
+                let visualSpeed =
+                  Number(
+                    vehicleState.filteredSpeed ||
+                    0
+                  ) *
+                  staleFactor
+
+                // Catch up gently when the real TTC sample is ahead. If the
+                // display is slightly ahead, slow down instead of ever moving
+                // the marker backwards.
+                if (
+                  progressError >
+                    3
+                ) {
+                  visualSpeed +=
+                    Math.min(
+                      1.8,
+                      progressError *
+                      0.055
+                    )
+                }
+                else if (
+                  progressError <
+                    -5
+                ) {
+                  visualSpeed *=
+                    Math.max(
+                      0.16,
+                      1 -
+                      Math.min(
+                        0.84,
+                        (
+                          -progressError -
+                          5
+                        ) /
+                        50
+                      )
+                    )
+                }
+
+                const recentlyMoving =
+                  Number(
+                    vehicleState.lastMovingAt ||
+                    0
+                  ) >
+                    0 &&
+                  now -
+                    Number(
+                      vehicleState.lastMovingAt
+                    ) <
+                    15 *
+                    1000
+
+                if (
+                  recentlyMoving &&
+                  !vehicleState.stopped &&
+                  staleFactor >
+                    0.2 &&
+                  visualSpeed <
+                    VEHICLE_MIN_CONTINUOUS_SPEED_MPS
+                ) {
+                  visualSpeed =
+                    VEHICLE_MIN_CONTINUOUS_SPEED_MPS
+                }
+
+                visualSpeed =
+                  clampNumber(
+                    visualSpeed,
+                    0,
+                    VEHICLE_VISUAL_MAX_SPEED_MPS
+                  )
+
+                const nextProgress =
+                  Math.max(
+                    Number(
+                      vehicleState.displayProgress
+                    ),
+                    Math.min(
+                      vehicleState.path.totalMeters,
+                      Number(
+                        vehicleState.displayProgress
+                      ) +
+                      visualSpeed *
+                      elapsedSeconds
+                    )
+                  )
+
+                vehicleState.displayProgress =
+                  nextProgress
+                coordinate =
+                  coordinateAtRouteProgress(
+                    vehicleState.path,
+                    nextProgress
+                  )
+                const routeBearing =
+                  bearingAtRouteProgress(
+                    vehicleState.path,
+                    nextProgress
                   )
 
                 if (
                   Number.isFinite(
-                    movementBearing
+                    Number(
+                      routeBearing
+                    )
                   )
                 ) {
-                  animation.displayBearing =
-                    movementBearing
+                  displayBearing =
+                    Number(
+                      routeBearing
+                    )
+                  vehicleState.displayBearing =
+                    displayBearing
                 }
               }
+              else {
+                // The live vehicle feed can arrive before the static route
+                // geometry. Show the real TTC coordinate immediately; once the
+                // network arrives, the next poll promotes this vehicle into the
+                // route-progress engine without clearing the layer.
+                coordinate =
+                  vehicleState.realCoordinate ||
+                  vehicleState.lastRenderedCoordinate
+              }
 
-              animation.lastRenderedCoordinate =
+              if (
+                !Array.isArray(
+                  coordinate
+                )
+              ) {
+                return
+              }
+
+              vehicleState.lastRenderedCoordinate =
                 coordinate
+
+              const properties = {
+                ...vehicleState.properties,
+              }
 
               if (
                 Number.isFinite(
                   Number(
-                    animation.displayBearing
+                    displayBearing
                   )
                 )
               ) {
                 properties.bearing =
                   Number(
-                    animation.displayBearing
+                    displayBearing
                   )
               }
               else if (
@@ -3255,7 +4180,6 @@ function LiveTtcLayer({
         try {
           const bounds =
             map.getBounds()
-
           const params =
             new URLSearchParams({
               west:
@@ -3310,17 +4234,16 @@ function LiveTtcLayer({
 
           const now =
             performance.now()
-
-          const nextAnimations =
-            new Map()
-
-          ;(
+          const nextVehicles =
             Array.isArray(
               payload?.vehicles
             )
               ? payload.vehicles
               : []
-          )
+          const nextAnimations =
+            new Map()
+
+          nextVehicles
             .forEach(
               (
                 vehicle
@@ -3333,8 +4256,14 @@ function LiveTtcLayer({
                   Number(
                     vehicle.latitude
                   )
+                const vehicleId =
+                  String(
+                    vehicle.id ||
+                    ''
+                  )
 
                 if (
+                  !vehicleId ||
                   !Number.isFinite(
                     longitude
                   ) ||
@@ -3348,9 +4277,22 @@ function LiveTtcLayer({
                 const previous =
                   vehicleAnimationsRef.current
                     .get(
-                      vehicle.id
+                      vehicleId
                     )
-
+                const routeId =
+                  String(
+                    vehicle.routeId ||
+                    ''
+                  )
+                const tripId =
+                  String(
+                    vehicle.tripId ||
+                    ''
+                  )
+                const directionId =
+                  normalizeDirectionId(
+                    vehicle.directionId
+                  )
                 const bearing =
                   Number.isFinite(
                     Number(
@@ -3376,188 +4318,311 @@ function LiveTtcLayer({
                     vehicle.timestamp ||
                     0
                   )
+                const currentStatus =
+                  String(
+                    vehicle.currentStatus ||
+                    ''
+                  )
+                const realCoordinate = [
+                  longitude,
+                  latitude,
+                ]
 
-                // If TTC returned the same realtime sample again, keep the
-                // current motion vector instead of resetting the vehicle back
-                // toward the same GPS coordinate. This prevents startup jitter
-                // and lets continuous motion carry through cached feed frames.
-                if (
+                const sameRealtimeSample =
                   previous &&
                   timestamp >
                     0 &&
                   Number(
-                    previous?.properties?.timestamp ||
+                    previous.sampleTimestamp ||
                     0
                   ) ===
                     timestamp
+
+                if (
+                  sameRealtimeSample
                 ) {
                   nextAnimations.set(
-                    vehicle.id,
+                    vehicleId,
                     {
                       ...previous,
-                      lastSeenAt:
-                        now,
+                      // A repeated feed timestamp is cached data, not a new
+                      // position sample. Keep lastSeenAt unchanged so stale
+                      // feeds naturally slow instead of driving forever.
+                      properties: {
+                        ...previous.properties,
+                        routeShortName:
+                          vehicle.routeShortName ||
+                          previous.properties?.routeShortName ||
+                          routeId,
+                        routeLongName:
+                          vehicle.routeLongName ||
+                          previous.properties?.routeLongName ||
+                          '',
+                        headsign:
+                          vehicle.headsign ||
+                          previous.properties?.headsign ||
+                          '',
+                        stopId:
+                          vehicle.stopId ||
+                          previous.properties?.stopId ||
+                          '',
+                        stopName:
+                          vehicle.stopName ||
+                          previous.properties?.stopName ||
+                          '',
+                        occupancyStatus:
+                          vehicle.occupancyStatus ||
+                          previous.properties?.occupancyStatus ||
+                          '',
+                      },
                     }
                   )
                   return
                 }
 
-                const displayed =
-                  previous?.lastRenderedCoordinate ||
-                  currentAnimatedCoordinate(
-                    previous,
-                    now
-                  )
-
-                const from =
-                  displayed || [
-                    longitude,
-                    latitude,
-                  ]
-
-                const realCoordinate =
-                  snapCoordinateToRoute(
-                    [
-                      longitude,
-                      latitude,
-                    ],
-                    vehicle.routeId ||
-                    '',
-                    routeFeaturesRef.current
-                  )
-
-                const firstSampleProjection =
-                  !previous
-                    ? projectCoordinateFromVehicleMotion(
-                        realCoordinate[0],
-                        realCoordinate[1],
-                        bearing,
-                        speed,
-                        VEHICLE_INITIAL_PROJECTION_MS
-                      )
-                    : null
-
-                const projectedCoordinate =
-                  firstSampleProjection
-                    ? snapCoordinateToRoute(
-                        firstSampleProjection,
-                        vehicle.routeId ||
-                        '',
-                        routeFeaturesRef.current
-                      )
-                    : null
-
-                let to =
-                  projectedCoordinate ||
-                  realCoordinate
-
-                let segmentDistanceMeters =
-                  distanceMetersBetweenCoordinates(
-                    from,
-                    to
-                  )
-
-                // Some TTC refreshes advance the feed timestamp while a moving
-                // vehicle repeats the same coordinate. Do not turn that into a
-                // visible stop. Use only a short, route-snapped projection from
-                // TTC speed/bearing until the next real coordinate arrives.
-                if (
-                  previous &&
-                  segmentDistanceMeters <
-                    0.35 &&
-                  Number.isFinite(
-                    speed
+                let path =
+                  null
+                let projection =
+                  null
+                const previousPathReusable =
+                  previous?.path &&
+                  previous.path.routeId ===
+                    routeId &&
+                  (
+                    !directionId ||
+                    !previous.path.directionId ||
+                    previous.path.directionId ===
+                      directionId
                   ) &&
-                  speed >
-                    0.5 &&
-                  Number.isFinite(
-                    bearing
+                  (
+                    !tripId ||
+                    !previous?.properties?.tripId ||
+                    previous.properties.tripId ===
+                      tripId
                   )
+
+                if (
+                  previousPathReusable
                 ) {
-                  const repeatedSampleProjection =
-                    projectCoordinateFromVehicleMotion(
-                      realCoordinate[0],
-                      realCoordinate[1],
-                      bearing,
-                      speed,
-                      VEHICLE_INITIAL_PROJECTION_MS
+                  const previousProjection =
+                    projectCoordinateOntoRoutePath(
+                      realCoordinate,
+                      previous.path
                     )
 
                   if (
-                    repeatedSampleProjection
+                    previousProjection &&
+                    previousProjection.distanceMeters <=
+                      VEHICLE_ROUTE_LOCK_MAX_METERS
                   ) {
-                    to =
-                      snapCoordinateToRoute(
-                        repeatedSampleProjection,
-                        vehicle.routeId ||
-                        '',
-                        routeFeaturesRef.current
+                    path =
+                      previous.path
+                    projection =
+                      previousProjection
+                  }
+                }
+
+                if (
+                  !path
+                ) {
+                  const selection =
+                    selectRouteProgressPath({
+                      coordinate:
+                        realCoordinate,
+                      routeId,
+                      directionId,
+                      bearing,
+                      routePathsByRoute:
+                        routePathsByRouteRef.current,
+                    })
+
+                  if (
+                    selection
+                  ) {
+                    path =
+                      selection.path
+                    projection =
+                      selection.projection
+                  }
+                }
+
+                const pathMatchesPrevious =
+                  path &&
+                  previous?.path &&
+                  path.shapeId ===
+                    previous.path.shapeId &&
+                  path.directionId ===
+                    previous.path.directionId
+                let realProgress =
+                  projection?.progressMeters ??
+                  null
+
+                if (
+                  pathMatchesPrevious &&
+                  Number.isFinite(
+                    Number(
+                      previous.realProgress
+                    )
+                  ) &&
+                  Number.isFinite(
+                    Number(
+                      realProgress
+                    )
+                  ) &&
+                  realProgress <
+                    Number(
+                      previous.realProgress
+                    ) -
+                    5
+                ) {
+                  // GPS jitter must never make a bus reverse visually. A real
+                  // direction/trip change selects a new shape above instead.
+                  realProgress =
+                    Number(
+                      previous.realProgress
+                    )
+                }
+
+                const speedState =
+                  path &&
+                  Number.isFinite(
+                    Number(
+                      realProgress
+                    )
+                  )
+                    ? routeEngineTargetSpeed({
+                        previous:
+                          pathMatchesPrevious
+                            ? previous
+                            : null,
+                        realProgress,
+                        sampleTimestamp:
+                          timestamp,
+                        ttcSpeed:
+                          speed,
+                        currentStatus,
+                        now,
+                      })
+                    : {
+                        filteredSpeed:
+                          Number.isFinite(
+                            Number(
+                              speed
+                            )
+                          )
+                            ? clampNumber(
+                                speed,
+                                0,
+                                VEHICLE_VISUAL_MAX_SPEED_MPS
+                              )
+                            : 0,
+                        lastMovingAt:
+                          previous?.lastMovingAt ??
+                          0,
+                        stopped:
+                          currentStatus
+                            .toUpperCase()
+                            .includes(
+                              'STOPPED'
+                            ),
+                      }
+
+                let displayProgress =
+                  null
+
+                if (
+                  path &&
+                  Number.isFinite(
+                    Number(
+                      realProgress
+                    )
+                  )
+                ) {
+                  if (
+                    pathMatchesPrevious &&
+                    Number.isFinite(
+                      Number(
+                        previous.displayProgress
                       )
-                    segmentDistanceMeters =
-                      distanceMetersBetweenCoordinates(
-                        from,
-                        to
+                    )
+                  ) {
+                    displayProgress =
+                      clampNumber(
+                        previous.displayProgress,
+                        0,
+                        path.totalMeters
+                      )
+                  }
+                  else {
+                    displayProgress =
+                      clampNumber(
+                        realProgress,
+                        0,
+                        path.totalMeters
                       )
                   }
                 }
 
-                const unchanged =
-                  segmentDistanceMeters <
-                    0.35
-
-                const movementDuration =
-                  !previous &&
-                  projectedCoordinate
-                    ? Math.max(
-                        3200,
-                        Math.min(
-                          6000,
-                          segmentDistanceMeters /
-                            VEHICLE_VISUAL_MAX_SPEED_MPS *
-                            1000
-                        )
+                const routeBearing =
+                  path &&
+                  Number.isFinite(
+                    Number(
+                      displayProgress
+                    )
+                  )
+                    ? bearingAtRouteProgress(
+                        path,
+                        displayProgress
                       )
-                    : Math.max(
-                        VEHICLE_INTERPOLATION_MIN_MS,
-                        segmentDistanceMeters /
-                          VEHICLE_VISUAL_MAX_SPEED_MPS *
-                          1000
-                      )
+                    : bearing
 
                 nextAnimations.set(
-                  vehicle.id,
+                  vehicleId,
                   {
-                    from,
-                    to,
-                    startedAt:
-                      now,
+                    path,
+                    realProgress,
+                    displayProgress,
+                    filteredSpeed:
+                      speedState.filteredSpeed,
+                    stopped:
+                      speedState.stopped,
+                    sampleTimestamp:
+                      timestamp,
                     lastSeenAt:
+                      now,
+                    lastMovingAt:
+                      speedState.lastMovingAt,
+                    lastFrameAt:
+                      previous?.lastFrameAt ||
                       now,
                     lastRenderedCoordinate:
                       previous?.lastRenderedCoordinate ||
-                      null,
+                      projection?.coordinate ||
+                      realCoordinate,
+                    realCoordinate,
                     displayBearing:
-                      previous?.displayBearing ??
-                      bearing,
-                    duration:
-                      unchanged
-                        ? 1
-                        : movementDuration,
+                      Number.isFinite(
+                        Number(
+                          routeBearing
+                        )
+                      )
+                        ? Number(
+                            routeBearing
+                          )
+                        : previous?.displayBearing ??
+                          bearing,
                     properties: {
                       id:
-                        vehicle.id,
-                      vehicleId:
-                        vehicle.id,
+                        vehicleId,
+                      vehicleId,
                       label:
                         vehicle.label ||
-                        vehicle.id,
-                      routeId:
-                        vehicle.routeId ||
-                        '',
+                        vehicleId,
+                      tripId,
+                      routeId,
                       routeShortName:
                         vehicle.routeShortName ||
-                        vehicle.routeId ||
-                        '',
+                        routeId,
                       routeLongName:
                         vehicle.routeLongName ||
                         '',
@@ -3572,14 +4637,17 @@ function LiveTtcLayer({
                       headsign:
                         vehicle.headsign ||
                         '',
+                      directionId,
                       stopId:
                         vehicle.stopId ||
                         '',
                       stopName:
                         vehicle.stopName ||
                         '',
+                      currentStatus,
                       timestamp,
-                      bearing,
+                      bearing:
+                        routeBearing,
                       speed,
                       occupancyStatus:
                         vehicle.occupancyStatus ||
@@ -3607,7 +4675,6 @@ function LiveTtcLayer({
                 const lastSeenAt =
                   Number(
                     previous?.lastSeenAt ??
-                    previous?.startedAt ??
                     0
                   )
 
@@ -4194,6 +5261,8 @@ function LiveTtcLayer({
           new Map()
         routeFeaturesRef.current =
           []
+        routePathsByRouteRef.current =
+          new Map()
         selectedRouteRef.current =
           ''
       }
