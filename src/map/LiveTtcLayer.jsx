@@ -1,4 +1,4 @@
-// LIVE TTC ROUTE-LOCK V9 · bounded continuous motion + route snap
+// LIVE TTC MOTION V10 · continuous buffered motion + route highlight only
 // LIVE TTC FAST START V8
 // LIVE TTC STABILITY V6 · 2026-09-30 · stable vehicle retention + continuous interpolation + direction arrows + deduped arrivals
 import {
@@ -70,19 +70,19 @@ const ARRIVALS_ENDPOINT =
   '/api/geographic/toronto/ttc/live/arrivals'
 
 const VEHICLE_POLL_MS =
-  7000
-const VEHICLE_INTERPOLATION_MS =
-  10000
+  5000
+const VEHICLE_INTERPOLATION_MIN_MS =
+  9000
+const VEHICLE_VISUAL_MAX_SPEED_MPS =
+  10
 const VEHICLE_INITIAL_PROJECTION_MS =
-  3000
-const VEHICLE_MAX_OVERSHOOT_RATIO =
-  0.18
-const VEHICLE_OVERSHOOT_EASE_MS =
-  3200
+  1800
+const VEHICLE_POST_TARGET_DRIFT_RATIO =
+  0.08
 const VEHICLE_GRACE_MS =
   90 * 1000
 const ANIMATION_FRAME_MS =
-  90
+  60
 
 const EMPTY_FEATURE_COLLECTION = {
   type:
@@ -716,29 +716,20 @@ function currentAnimatedCoordinate(
       duration
     )
 
-  // Keep normal TTC motion continuous, but never let a delayed poll send a
-  // vehicle running indefinitely beyond its last real GPS segment. After the
-  // interpolation reaches the reported point, continue with a small
-  // asymptotic creep until the next real sample arrives. This removes the
-  // visible pause without allowing runaway extrapolation.
+  // Normal TTC samples should arrive before progress reaches 1 because the
+  // visual interpolation window is deliberately longer than the poll cadence.
+  // If an update is late, keep the marker moving at a small fraction of its
+  // previous segment speed rather than visibly stopping at a timer boundary.
   const progress =
     rawProgress <=
       1
       ? rawProgress
       : 1 +
-        VEHICLE_MAX_OVERSHOOT_RATIO *
-          (
-            1 -
-            Math.exp(
-              -
-              (
-                now -
-                animation.startedAt -
-                duration
-              ) /
-              VEHICLE_OVERSHOOT_EASE_MS
-            )
-          )
+        (
+          rawProgress -
+          1
+        ) *
+        VEHICLE_POST_TARGET_DRIFT_RATIO
 
   return [
     animation.from[0] +
@@ -807,10 +798,10 @@ function projectCoordinateFromVehicleMotion(
     )
   const distanceMeters =
     Math.min(
-      45,
+      24,
       Math.min(
         normalizedSpeed,
-        22
+        14
       ) *
       seconds
     )
@@ -2943,36 +2934,11 @@ function LiveTtcLayer({
             ROUTES_LAYER_ID,
             'line-opacity',
             normalized
-              ? 0.10
+              ? 0.22
               : 0.34
           )
         }
 
-        ;[
-          VEHICLE_CIRCLE_LAYER_ID,
-          VEHICLE_ICON_LAYER_ID,
-          VEHICLE_ROUTE_LABEL_LAYER_ID,
-        ]
-          .forEach(
-            (
-              layerId
-            ) => {
-              if (
-                !map.getLayer(
-                  layerId
-                )
-              ) {
-                return
-              }
-
-              map.setFilter(
-                layerId,
-                normalized
-                  ? routeFilter
-                  : null
-              )
-            }
-          )
 
         if (
           routeSelect &&
@@ -3121,9 +3087,8 @@ function LiveTtcLayer({
           window.setTimeout(
             () => {
               refreshNetwork()
-              refreshVehicles()
             },
-            180
+            220
           )
       }
 
@@ -3169,12 +3134,11 @@ function LiveTtcLayer({
                 return
               }
 
+              // The real TTC sample is route-snapped once when it arrives.
+              // Do not rescan route geometry on every animation frame; at
+              // citywide zoom that work causes visible pauses and zoom stutter.
               const coordinate =
-                snapCoordinateToRoute(
-                  rawCoordinate,
-                  animation?.properties?.routeId,
-                  routeFeaturesRef.current
-                )
+                rawCoordinate
 
               const properties = {
                 ...animation.properties,
@@ -3451,34 +3415,114 @@ function LiveTtcLayer({
                     latitude,
                   ]
 
+                const realCoordinate =
+                  snapCoordinateToRoute(
+                    [
+                      longitude,
+                      latitude,
+                    ],
+                    vehicle.routeId ||
+                    '',
+                    routeFeaturesRef.current
+                  )
+
                 const firstSampleProjection =
                   !previous
                     ? projectCoordinateFromVehicleMotion(
-                        longitude,
-                        latitude,
+                        realCoordinate[0],
+                        realCoordinate[1],
                         bearing,
                         speed,
                         VEHICLE_INITIAL_PROJECTION_MS
                       )
                     : null
 
-                const to =
-                  firstSampleProjection || [
-                    longitude,
-                    latitude,
-                  ]
+                const projectedCoordinate =
+                  firstSampleProjection
+                    ? snapCoordinateToRoute(
+                        firstSampleProjection,
+                        vehicle.routeId ||
+                        '',
+                        routeFeaturesRef.current
+                      )
+                    : null
+
+                let to =
+                  projectedCoordinate ||
+                  realCoordinate
+
+                let segmentDistanceMeters =
+                  distanceMetersBetweenCoordinates(
+                    from,
+                    to
+                  )
+
+                // Some TTC refreshes advance the feed timestamp while a moving
+                // vehicle repeats the same coordinate. Do not turn that into a
+                // visible stop. Use only a short, route-snapped projection from
+                // TTC speed/bearing until the next real coordinate arrives.
+                if (
+                  previous &&
+                  segmentDistanceMeters <
+                    0.35 &&
+                  Number.isFinite(
+                    speed
+                  ) &&
+                  speed >
+                    0.5 &&
+                  Number.isFinite(
+                    bearing
+                  )
+                ) {
+                  const repeatedSampleProjection =
+                    projectCoordinateFromVehicleMotion(
+                      realCoordinate[0],
+                      realCoordinate[1],
+                      bearing,
+                      speed,
+                      VEHICLE_INITIAL_PROJECTION_MS
+                    )
+
+                  if (
+                    repeatedSampleProjection
+                  ) {
+                    to =
+                      snapCoordinateToRoute(
+                        repeatedSampleProjection,
+                        vehicle.routeId ||
+                        '',
+                        routeFeaturesRef.current
+                      )
+                    segmentDistanceMeters =
+                      distanceMetersBetweenCoordinates(
+                        from,
+                        to
+                      )
+                  }
+                }
 
                 const unchanged =
-                  Math.abs(
-                    from[0] -
-                    to[0]
-                  ) <
-                    0.0000005 &&
-                  Math.abs(
-                    from[1] -
-                    to[1]
-                  ) <
-                    0.0000005
+                  segmentDistanceMeters <
+                    0.35
+
+                const movementDuration =
+                  !previous &&
+                  projectedCoordinate
+                    ? Math.max(
+                        3200,
+                        Math.min(
+                          6000,
+                          segmentDistanceMeters /
+                            VEHICLE_VISUAL_MAX_SPEED_MPS *
+                            1000
+                        )
+                      )
+                    : Math.max(
+                        VEHICLE_INTERPOLATION_MIN_MS,
+                        segmentDistanceMeters /
+                          VEHICLE_VISUAL_MAX_SPEED_MPS *
+                          1000
+                      )
 
                 nextAnimations.set(
                   vehicle.id,
@@ -3498,7 +3542,7 @@ function LiveTtcLayer({
                     duration:
                       unchanged
                         ? 1
-                        : VEHICLE_INTERPOLATION_MS,
+                        : movementDuration,
                     properties: {
                       id:
                         vehicle.id,
