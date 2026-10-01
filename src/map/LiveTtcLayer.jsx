@@ -1,3 +1,4 @@
+// LIVE TTC ROUTE-LOCK V9 · bounded continuous motion + route snap
 // LIVE TTC FAST START V8
 // LIVE TTC STABILITY V6 · 2026-09-30 · stable vehicle retention + continuous interpolation + direction arrows + deduped arrivals
 import {
@@ -72,6 +73,12 @@ const VEHICLE_POLL_MS =
   7000
 const VEHICLE_INTERPOLATION_MS =
   10000
+const VEHICLE_INITIAL_PROJECTION_MS =
+  3000
+const VEHICLE_MAX_OVERSHOOT_RATIO =
+  0.18
+const VEHICLE_OVERSHOOT_EASE_MS =
+  3200
 const VEHICLE_GRACE_MS =
   90 * 1000
 const ANIMATION_FRAME_MS =
@@ -699,12 +706,7 @@ function currentAnimatedCoordinate(
       1
     )
 
-  // Do not clamp progress at 1. TTC vehicle positions arrive in discrete
-  // updates. For a moving vehicle, continuing along the last measured
-  // movement vector prevents the marker from freezing between updates.
-  // A genuinely stationary vehicle still remains stationary because
-  // animation.from and animation.to are the same coordinate.
-  const progress =
+  const rawProgress =
     Math.max(
       0,
       (
@@ -713,6 +715,30 @@ function currentAnimatedCoordinate(
       ) /
       duration
     )
+
+  // Keep normal TTC motion continuous, but never let a delayed poll send a
+  // vehicle running indefinitely beyond its last real GPS segment. After the
+  // interpolation reaches the reported point, continue with a small
+  // asymptotic creep until the next real sample arrives. This removes the
+  // visible pause without allowing runaway extrapolation.
+  const progress =
+    rawProgress <=
+      1
+      ? rawProgress
+      : 1 +
+        VEHICLE_MAX_OVERSHOOT_RATIO *
+          (
+            1 -
+            Math.exp(
+              -
+              (
+                now -
+                animation.startedAt -
+                duration
+              ) /
+              VEHICLE_OVERSHOOT_EASE_MS
+            )
+          )
 
   return [
     animation.from[0] +
@@ -781,10 +807,13 @@ function projectCoordinateFromVehicleMotion(
     )
   const distanceMeters =
     Math.min(
-      normalizedSpeed,
-      35
-    ) *
-    seconds
+      45,
+      Math.min(
+        normalizedSpeed,
+        22
+      ) *
+      seconds
+    )
   const radians =
     normalizedBearing *
     Math.PI /
@@ -822,6 +851,356 @@ function projectCoordinateFromVehicleMotion(
       northMeters /
       111320,
   ]
+}
+
+
+function distanceMetersBetweenCoordinates(
+  a,
+  b
+) {
+  if (
+    !Array.isArray(
+      a
+    ) ||
+    !Array.isArray(
+      b
+    )
+  ) {
+    return Infinity
+  }
+
+  const latitude =
+    (
+      Number(
+        a[1]
+      ) +
+      Number(
+        b[1]
+      )
+    ) /
+    2
+  const longitudeScale =
+    Math.max(
+      0.2,
+      Math.cos(
+        latitude *
+        Math.PI /
+        180
+      )
+    )
+  const east =
+    (
+      Number(
+        b[0]
+      ) -
+      Number(
+        a[0]
+      )
+    ) *
+    111320 *
+    longitudeScale
+  const north =
+    (
+      Number(
+        b[1]
+      ) -
+      Number(
+        a[1]
+      )
+    ) *
+    111320
+
+  return Math.hypot(
+    east,
+    north
+  )
+}
+
+
+function bearingBetweenCoordinates(
+  from,
+  to
+) {
+  if (
+    !Array.isArray(
+      from
+    ) ||
+    !Array.isArray(
+      to
+    )
+  ) {
+    return null
+  }
+
+  const latitude =
+    (
+      Number(
+        from[1]
+      ) +
+      Number(
+        to[1]
+      )
+    ) /
+    2
+  const longitudeScale =
+    Math.max(
+      0.2,
+      Math.cos(
+        latitude *
+        Math.PI /
+        180
+      )
+    )
+  const east =
+    (
+      Number(
+        to[0]
+      ) -
+      Number(
+        from[0]
+      )
+    ) *
+    longitudeScale
+  const north =
+    Number(
+      to[1]
+    ) -
+    Number(
+      from[1]
+    )
+
+  if (
+    Math.abs(
+      east
+    ) +
+    Math.abs(
+      north
+    ) <
+      0.00000001
+  ) {
+    return null
+  }
+
+  return (
+    Math.atan2(
+      east,
+      north
+    ) *
+    180 /
+    Math.PI +
+    360
+  ) %
+    360
+}
+
+
+function nearestPointOnSegment(
+  point,
+  start,
+  end
+) {
+  const latitude =
+    Number(
+      point[1]
+    )
+  const longitudeScale =
+    Math.max(
+      0.2,
+      Math.cos(
+        latitude *
+        Math.PI /
+        180
+      )
+    )
+  const px =
+    Number(
+      point[0]
+    ) *
+    longitudeScale
+  const py =
+    Number(
+      point[1]
+    )
+  const ax =
+    Number(
+      start[0]
+    ) *
+    longitudeScale
+  const ay =
+    Number(
+      start[1]
+    )
+  const bx =
+    Number(
+      end[0]
+    ) *
+    longitudeScale
+  const by =
+    Number(
+      end[1]
+    )
+  const dx =
+    bx -
+    ax
+  const dy =
+    by -
+    ay
+  const denominator =
+    dx *
+      dx +
+    dy *
+      dy
+  const t =
+    denominator >
+      0
+      ? Math.max(
+          0,
+          Math.min(
+            1,
+            (
+              (
+                px -
+                ax
+              ) *
+                dx +
+              (
+                py -
+                ay
+              ) *
+                dy
+            ) /
+            denominator
+          )
+        )
+      : 0
+  const longitude =
+    Number(
+      start[0]
+    ) +
+    (
+      Number(
+        end[0]
+      ) -
+      Number(
+        start[0]
+      )
+    ) *
+      t
+  const resultLatitude =
+    Number(
+      start[1]
+    ) +
+    (
+      Number(
+        end[1]
+      ) -
+      Number(
+        start[1]
+      )
+    ) *
+      t
+  const coordinate = [
+    longitude,
+    resultLatitude,
+  ]
+
+  return {
+    coordinate,
+    distanceMeters:
+      distanceMetersBetweenCoordinates(
+        point,
+        coordinate
+      ),
+  }
+}
+
+
+function snapCoordinateToRoute(
+  coordinate,
+  routeId,
+  routeFeatures
+) {
+  const normalizedRouteId =
+    String(
+      routeId ||
+      ''
+    )
+
+  if (
+    !normalizedRouteId ||
+    !Array.isArray(
+      routeFeatures
+    ) ||
+    routeFeatures.length ===
+      0
+  ) {
+    return coordinate
+  }
+
+  let best =
+    null
+
+  routeFeatures.forEach(
+    (
+      feature
+    ) => {
+      if (
+        String(
+          feature?.properties?.routeId ||
+          ''
+        ) !==
+          normalizedRouteId ||
+        feature?.geometry?.type !==
+          'LineString' ||
+        !Array.isArray(
+          feature?.geometry?.coordinates
+        )
+      ) {
+        return
+      }
+
+      const coordinates =
+        feature.geometry.coordinates
+
+      for (
+        let index =
+          1;
+        index <
+          coordinates.length;
+        index +=
+          1
+      ) {
+        const candidate =
+          nearestPointOnSegment(
+            coordinate,
+            coordinates[
+              index -
+              1
+            ],
+            coordinates[
+              index
+            ]
+          )
+
+        if (
+          !best ||
+          candidate.distanceMeters <
+            best.distanceMeters
+        ) {
+          best =
+            candidate
+        }
+      }
+    }
+  )
+
+  // Never drag a vehicle across the map to an unrelated route segment if the
+  // visible route geometry has not loaded yet. Within 140 m, route-lock it.
+  return best &&
+    best.distanceMeters <=
+      140
+    ? best.coordinate
+    : coordinate
 }
 
 
@@ -1110,6 +1489,8 @@ function LiveTtcLayer({
     useRef(null)
   const vehicleAbortRef =
     useRef(null)
+  const routeFeaturesRef =
+    useRef([])
 
 
   useEffect(
@@ -2670,6 +3051,13 @@ function LiveTtcLayer({
           const payload =
             await response.json()
 
+          routeFeaturesRef.current =
+            Array.isArray(
+              payload?.routes?.features
+            )
+              ? payload.routes.features
+              : []
+
           updateRouteSelector(
             payload?.routeCatalog
           )
@@ -2769,23 +3157,76 @@ function LiveTtcLayer({
               animation,
               vehicleId
             ) => {
-              const coordinate =
+              const rawCoordinate =
                 currentAnimatedCoordinate(
                   animation,
                   now
                 )
 
               if (
-                !coordinate
+                !rawCoordinate
               ) {
                 return
               }
+
+              const coordinate =
+                snapCoordinateToRoute(
+                  rawCoordinate,
+                  animation?.properties?.routeId,
+                  routeFeaturesRef.current
+                )
 
               const properties = {
                 ...animation.properties,
               }
 
+              const previousRendered =
+                animation.lastRenderedCoordinate
+              const movedMeters =
+                previousRendered
+                  ? distanceMetersBetweenCoordinates(
+                      previousRendered,
+                      coordinate
+                    )
+                  : 0
+
               if (
+                previousRendered &&
+                movedMeters >
+                  0.35
+              ) {
+                const movementBearing =
+                  bearingBetweenCoordinates(
+                    previousRendered,
+                    coordinate
+                  )
+
+                if (
+                  Number.isFinite(
+                    movementBearing
+                  )
+                ) {
+                  animation.displayBearing =
+                    movementBearing
+                }
+              }
+
+              animation.lastRenderedCoordinate =
+                coordinate
+
+              if (
+                Number.isFinite(
+                  Number(
+                    animation.displayBearing
+                  )
+                )
+              ) {
+                properties.bearing =
+                  Number(
+                    animation.displayBearing
+                  )
+              }
+              else if (
                 properties.bearing ===
                   null ||
                 !Number.isFinite(
@@ -2998,6 +3439,7 @@ function LiveTtcLayer({
                 }
 
                 const displayed =
+                  previous?.lastRenderedCoordinate ||
                   currentAnimatedCoordinate(
                     previous,
                     now
@@ -3016,7 +3458,7 @@ function LiveTtcLayer({
                         latitude,
                         bearing,
                         speed,
-                        VEHICLE_INTERPOLATION_MS
+                        VEHICLE_INITIAL_PROJECTION_MS
                       )
                     : null
 
@@ -3047,6 +3489,12 @@ function LiveTtcLayer({
                       now,
                     lastSeenAt:
                       now,
+                    lastRenderedCoordinate:
+                      previous?.lastRenderedCoordinate ||
+                      null,
+                    displayBearing:
+                      previous?.displayBearing ??
+                      bearing,
                     duration:
                       unchanged
                         ? 1
@@ -3700,6 +4148,8 @@ function LiveTtcLayer({
 
         vehicleAnimationsRef.current =
           new Map()
+        routeFeaturesRef.current =
+          []
         selectedRouteRef.current =
           ''
       }
