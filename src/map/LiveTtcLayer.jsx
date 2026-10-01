@@ -8,6 +8,8 @@ import {
   Popup,
 } from 'maplibre-gl'
 
+// LIVE TTC CONTINUOUS MOTION V7
+
 
 const ROUTES_SOURCE_ID =
   'ttc-live-routes-source'
@@ -696,17 +698,19 @@ function currentAnimatedCoordinate(
       1
     )
 
+  // Do not clamp progress at 1. TTC vehicle positions arrive in discrete
+  // updates. For a moving vehicle, continuing along the last measured
+  // movement vector prevents the marker from freezing between updates.
+  // A genuinely stationary vehicle still remains stationary because
+  // animation.from and animation.to are the same coordinate.
   const progress =
     Math.max(
       0,
-      Math.min(
-        1,
-        (
-          now -
-          animation.startedAt
-        ) /
-        duration
-      )
+      (
+        now -
+        animation.startedAt
+      ) /
+      duration
     )
 
   return [
