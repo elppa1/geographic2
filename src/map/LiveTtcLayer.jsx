@@ -1,4 +1,4 @@
-// LIVE TTC ROUTE ENGINE V11 · route-progress vehicle motion
+// LIVE TTC ROUTE ENGINE V12 · fast startup + selected route pulse + route-progress motion
 // Vehicles advance by distance along their TTC route shape; realtime GPS only corrects the route progress.
 // LIVE TTC FAST START V8
 // LIVE TTC STABILITY V6 · 2026-09-30 · stable vehicle retention + continuous interpolation + direction arrows + deduped arrivals
@@ -88,6 +88,10 @@ const VEHICLE_GRACE_MS =
   90 * 1000
 const ANIMATION_FRAME_MS =
   50
+const ROUTE_INDEX_BATCH_SIZE =
+  10
+const SELECTED_ROUTE_PULSE_MS =
+  90
 
 const EMPTY_FEATURE_COLLECTION = {
   type:
@@ -2258,6 +2262,14 @@ function LiveTtcLayer({
         new Map()
       let gpsPrompt =
         null
+      let routeIndexBuildTimer =
+        null
+      let routeIndexBuildIdle =
+        null
+      let routeIndexBuildGeneration =
+        0
+      let selectedRoutePulseTimer =
+        null
 
       function removePopup() {
         popupRef.current
@@ -3632,6 +3644,250 @@ function LiveTtcLayer({
         }
       }
 
+      function stopSelectedRoutePulse() {
+        window.clearInterval(
+          selectedRoutePulseTimer
+        )
+        selectedRoutePulseTimer =
+          null
+
+        if (
+          map.getLayer(
+            SELECTED_ROUTE_LAYER_ID
+          )
+        ) {
+          map.setPaintProperty(
+            SELECTED_ROUTE_LAYER_ID,
+            'line-opacity',
+            0.98
+          )
+        }
+
+        if (
+          map.getLayer(
+            SELECTED_ROUTE_CASING_LAYER_ID
+          )
+        ) {
+          map.setPaintProperty(
+            SELECTED_ROUTE_CASING_LAYER_ID,
+            'line-opacity',
+            0.96
+          )
+        }
+      }
+
+      function startSelectedRoutePulse() {
+        stopSelectedRoutePulse()
+
+        const startedAt =
+          performance.now()
+
+        selectedRoutePulseTimer =
+          window.setInterval(
+            () => {
+              if (
+                disposed ||
+                !selectedRouteRef.current
+              ) {
+                return
+              }
+
+              const phase =
+                (
+                  performance.now() -
+                  startedAt
+                ) /
+                760
+              const wave =
+                (
+                  Math.sin(
+                    phase *
+                    Math.PI *
+                    2
+                  ) +
+                  1
+                ) /
+                2
+
+              if (
+                map.getLayer(
+                  SELECTED_ROUTE_LAYER_ID
+                )
+              ) {
+                map.setPaintProperty(
+                  SELECTED_ROUTE_LAYER_ID,
+                  'line-opacity',
+                  0.58 +
+                  wave *
+                  0.4
+                )
+              }
+
+              if (
+                map.getLayer(
+                  SELECTED_ROUTE_CASING_LAYER_ID
+                )
+              ) {
+                map.setPaintProperty(
+                  SELECTED_ROUTE_CASING_LAYER_ID,
+                  'line-opacity',
+                  0.34 +
+                  wave *
+                  0.62
+                )
+              }
+            },
+            SELECTED_ROUTE_PULSE_MS
+          )
+      }
+
+      function cancelRouteIndexBuild() {
+        routeIndexBuildGeneration +=
+          1
+
+        window.clearTimeout(
+          routeIndexBuildTimer
+        )
+        routeIndexBuildTimer =
+          null
+
+        if (
+          routeIndexBuildIdle !==
+            null &&
+          typeof window.cancelIdleCallback ===
+            'function'
+        ) {
+          window.cancelIdleCallback(
+            routeIndexBuildIdle
+          )
+        }
+        routeIndexBuildIdle =
+          null
+      }
+
+      function scheduleRouteIndexBuild(
+        features
+      ) {
+        cancelRouteIndexBuild()
+
+        const generation =
+          routeIndexBuildGeneration
+        const featureList =
+          Array.isArray(
+            features
+          )
+            ? features
+            : []
+        const nextIndex =
+          new Map()
+        let cursor =
+          0
+
+        const processBatch =
+          () => {
+            routeIndexBuildIdle =
+              null
+            routeIndexBuildTimer =
+              null
+
+            if (
+              disposed ||
+              generation !==
+                routeIndexBuildGeneration
+            ) {
+              return
+            }
+
+            const end =
+              Math.min(
+                featureList.length,
+                cursor +
+                ROUTE_INDEX_BATCH_SIZE
+              )
+
+            for (
+              ;
+              cursor <
+                end;
+              cursor +=
+                1
+            ) {
+              const path =
+                buildRouteProgressPath(
+                  featureList[
+                    cursor
+                  ]
+                )
+
+              if (
+                !path ||
+                !path.routeId
+              ) {
+                continue
+              }
+
+              if (
+                !nextIndex.has(
+                  path.routeId
+                )
+              ) {
+                nextIndex.set(
+                  path.routeId,
+                  []
+                )
+              }
+
+              nextIndex
+                .get(
+                  path.routeId
+                )
+                .push(
+                  path
+                )
+            }
+
+            if (
+              cursor <
+                featureList.length
+            ) {
+              routeIndexBuildTimer =
+                window.setTimeout(
+                  processBatch,
+                  0
+                )
+              return
+            }
+
+            routePathsByRouteRef.current =
+              nextIndex
+
+            // Promote already visible raw-GPS vehicles into route-progress
+            // motion as soon as the background index is ready.
+            refreshVehicles()
+          }
+
+        if (
+          typeof window.requestIdleCallback ===
+            'function'
+        ) {
+          routeIndexBuildIdle =
+            window.requestIdleCallback(
+              processBatch,
+              {
+                timeout:
+                  120,
+              }
+            )
+        }
+        else {
+          routeIndexBuildTimer =
+            window.setTimeout(
+              processBatch,
+              0
+            )
+        }
+      }
+
       function setSelectedRoute(
         routeId
       ) {
@@ -3688,6 +3944,15 @@ function LiveTtcLayer({
               ? 0.22
               : 0.34
           )
+        }
+
+        if (
+          normalized
+        ) {
+          startSelectedRoutePulse()
+        }
+        else {
+          stopSelectedRoutePulse()
         }
 
 
@@ -3774,10 +4039,6 @@ function LiveTtcLayer({
             )
               ? payload.routes.features
               : []
-          routePathsByRouteRef.current =
-            buildRouteProgressIndex(
-              routeFeaturesRef.current
-            )
 
           updateRouteSelector(
             payload?.routeCatalog
@@ -3789,6 +4050,9 @@ function LiveTtcLayer({
             return
           }
 
+          // Paint the network first. Building the route-progress index can be
+          // expensive at citywide zoom, so do it incrementally after the map
+          // has had a chance to render the first frame.
           map
             .getSource(
               ROUTES_SOURCE_ID
@@ -3815,6 +4079,10 @@ function LiveTtcLayer({
               payload.stations ||
               EMPTY_FEATURE_COLLECTION
             )
+
+          scheduleRouteIndexBuild(
+            routeFeaturesRef.current
+          )
         }
         catch (
           error
@@ -3923,6 +4191,14 @@ function LiveTtcLayer({
                       now
                     )
                   )
+
+                if (
+                  staleMs >
+                    VEHICLE_GRACE_MS
+                ) {
+                  return
+                }
+
                 let staleFactor =
                   1
 
@@ -4339,7 +4615,8 @@ function LiveTtcLayer({
                     timestamp
 
                 if (
-                  sameRealtimeSample
+                  sameRealtimeSample &&
+                  previous?.path
                 ) {
                   nextAnimations.set(
                     vehicleId,
@@ -5125,9 +5402,22 @@ function LiveTtcLayer({
           }
         )
 
-      refreshNetwork()
-      refreshVehicles()
+      // Live vehicles are the first-paint priority. Reuse any recent frame
+      // immediately, start animation, fetch fresh positions, then warm the
+      // heavier route network/index in the background.
+      renderAnimatedVehicles()
       startAnimationLoop()
+      refreshVehicles()
+
+      window.requestAnimationFrame(
+        () => {
+          if (
+            !disposed
+          ) {
+            refreshNetwork()
+          }
+        }
+      )
 
       vehicleTimer =
         window.setInterval(
@@ -5153,6 +5443,8 @@ function LiveTtcLayer({
         window.clearInterval(
           animationTimerRef.current
         )
+        stopSelectedRoutePulse()
+        cancelRouteIndexBuild()
 
         removePopup()
         gpsPrompt?.remove?.()
@@ -5257,12 +5549,9 @@ function LiveTtcLayer({
             safeRemoveSource
           )
 
-        vehicleAnimationsRef.current =
-          new Map()
-        routeFeaturesRef.current =
-          []
-        routePathsByRouteRef.current =
-          new Map()
+        // Keep the most recent vehicle and route-progress state in refs so
+        // re-entering LIVE TTC can paint immediately. Stale vehicles naturally
+        // age out through VEHICLE_GRACE_MS.
         selectedRouteRef.current =
           ''
       }
