@@ -1,4 +1,4 @@
-// LIVE TTC UX V5 · 2026-09-30 · realtime failover + stop predictions + route catalog + nearby station arrivals
+// LIVE TTC STABILITY V6 · 2026-09-30 · reject empty realtime feeds + deduped arrivals + resilient vehicle retention
 import https from 'node:https'
 import { inflateRawSync } from 'node:zlib'
 
@@ -36,7 +36,7 @@ const REALTIME_FETCH_TIMEOUT_MS =
   8 * 1000
 
 const REALTIME_STALE_FALLBACK_MS =
-  2 * 60 * 1000
+  3 * 60 * 1000
 
 const STATIC_CACHE_MS =
   6 * 60 * 60 * 1000
@@ -2290,6 +2290,93 @@ async function fetchRealtimeFeedWithFallback(
 }
 
 
+function vehicleFeedHasPositions(
+  feed
+) {
+  return (
+    Array.isArray(
+      feed?.entity
+    ) &&
+    feed.entity.some(
+      (
+        entity
+      ) => {
+        const position =
+          entity?.vehicle?.position
+
+        return (
+          numberOrNull(
+            position?.latitude
+          ) !==
+            null &&
+          numberOrNull(
+            position?.longitude
+          ) !==
+            null
+        )
+      }
+    )
+  )
+}
+
+
+async function fetchVehicleRealtimeFeed() {
+  let primaryError =
+    null
+
+  try {
+    const feed =
+      await fetchRealtimeFeed(
+        TTC_VEHICLES_URL
+      )
+
+    if (
+      !vehicleFeedHasPositions(
+        feed
+      )
+    ) {
+      throw new Error(
+        'TTC primary vehicle feed returned no usable positions'
+      )
+    }
+
+    return feed
+  }
+  catch (
+    error
+  ) {
+    primaryError =
+      error
+  }
+
+  try {
+    const feed =
+      await fetchRealtimeFeed(
+        TTC_VEHICLES_FALLBACK_URL
+      )
+
+    if (
+      !vehicleFeedHasPositions(
+        feed
+      )
+    ) {
+      throw new Error(
+        'TTC fallback vehicle feed returned no usable positions'
+      )
+    }
+
+    return feed
+  }
+  catch (
+    fallbackError
+  ) {
+    throw new Error(
+      `TTC vehicle feeds unavailable · primary: ${primaryError?.message || primaryError} · fallback: ${fallbackError?.message || fallbackError}`
+    )
+  }
+}
+
+
 async function getRawVehicleFeed() {
   if (
     vehicleCache &&
@@ -2307,10 +2394,7 @@ async function getRawVehicleFeed() {
   }
 
   vehiclePromise =
-    fetchRealtimeFeedWithFallback(
-      TTC_VEHICLES_URL,
-      TTC_VEHICLES_FALLBACK_URL
-    )
+    fetchVehicleRealtimeFeed()
       .then(
         (
           feed
@@ -2727,6 +2811,88 @@ async function fetchJson(
 }
 
 
+function dedupeArrivalsByVehicleOrTrip(
+  arrivals
+) {
+  const seen =
+    new Set()
+  const deduped =
+    []
+
+  ;(
+    Array.isArray(
+      arrivals
+    )
+      ? arrivals
+      : []
+  )
+    .sort(
+      (
+        a,
+        b
+      ) =>
+        Number(
+          a?.arrivalTime ??
+          a?.minutes ??
+          0
+        ) -
+        Number(
+          b?.arrivalTime ??
+          b?.minutes ??
+          0
+        )
+    )
+    .forEach(
+      (
+        arrival
+      ) => {
+        const vehicleId =
+          cleanText(
+            arrival?.vehicleId
+          )
+        const tripId =
+          cleanText(
+            arrival?.tripId
+          )
+        const routeId =
+          cleanText(
+            arrival?.routeId
+          )
+
+        const key =
+          vehicleId
+            ? `vehicle:${routeId}:${vehicleId}`
+            : tripId
+              ? `trip:${routeId}:${tripId}`
+              : ''
+
+        if (
+          key &&
+          seen.has(
+            key
+          )
+        ) {
+          return
+        }
+
+        if (
+          key
+        ) {
+          seen.add(
+            key
+          )
+        }
+
+        deduped.push(
+          arrival
+        )
+      }
+    )
+
+  return deduped
+}
+
+
 async function getUmoArrivalsForStopCode(
   stopCode,
   surface
@@ -2946,16 +3112,9 @@ async function getUmoArrivalsForStopCode(
       }
     )
 
-  arrivals.sort(
-    (
-      a,
-      b
-    ) =>
-      a.minutes -
-      b.minutes
+  return dedupeArrivalsByVehicleOrTrip(
+    arrivals
   )
-
-  return arrivals
 }
 
 
@@ -3277,11 +3436,15 @@ async function getGtfsArrivalsPayload(
         },
     count:
       Math.min(
-        arrivals.length,
+        dedupeArrivalsByVehicleOrTrip(
+          arrivals
+        ).length,
         16
       ),
     arrivals:
-      arrivals.slice(
+      dedupeArrivalsByVehicleOrTrip(
+        arrivals
+      ).slice(
         0,
         16
       ),
@@ -3537,50 +3700,8 @@ async function getNearbyArrivalsPayload(
   )
 
   const deduped =
-    []
-  const seen =
-    new Set()
-
-  arrivals
-    .sort(
-      (
-        a,
-        b
-      ) =>
-        a.minutes -
-        b.minutes
-    )
-    .forEach(
-      (
-        arrival
-      ) => {
-        const key =
-          [
-            arrival.routeId,
-            arrival.headsign,
-            arrival.vehicleId,
-            arrival.minutes,
-            arrival.stopCode,
-          ]
-            .join(
-              '|'
-            )
-
-        if (
-          seen.has(
-            key
-          )
-        ) {
-          return
-        }
-
-        seen.add(
-          key
-        )
-        deduped.push(
-          arrival
-        )
-      }
+    dedupeArrivalsByVehicleOrTrip(
+      arrivals
     )
 
   return {

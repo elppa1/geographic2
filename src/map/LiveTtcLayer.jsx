@@ -1,4 +1,4 @@
-// LIVE TTC UX V5 · 2026-09-30 · existing vehicle icons at all zooms + continuous motion + stop arrivals + route selector + GPS prompt
+// LIVE TTC STABILITY V6 · 2026-09-30 · stable vehicle retention + continuous interpolation + direction arrows + deduped arrivals
 import {
   useEffect,
   useRef,
@@ -67,6 +67,10 @@ const ARRIVALS_ENDPOINT =
 
 const VEHICLE_POLL_MS =
   7000
+const VEHICLE_INTERPOLATION_MS =
+  10000
+const VEHICLE_GRACE_MS =
+  90 * 1000
 const ANIMATION_FRAME_MS =
   90
 
@@ -2270,13 +2274,13 @@ function LiveTtcLayer({
                   'zoom',
                 ],
                 5.5,
-                0.55,
+                0.68,
                 9,
-                0.66,
+                0.78,
                 13,
-                0.82,
+                0.94,
                 17,
-                0.96,
+                1.08,
               ],
               'icon-rotate': [
                 'coalesce',
@@ -2356,7 +2360,7 @@ function LiveTtcLayer({
             source:
               VEHICLES_SOURCE_ID,
             minzoom:
-              24,
+              VEHICLE_ICON_MIN_ZOOM,
             filter: [
               'has',
               'bearing',
@@ -2364,11 +2368,24 @@ function LiveTtcLayer({
             layout: {
               'text-field':
                 '▲',
-              'text-size':
+              'text-size': [
+                'interpolate',
+                [
+                  'linear',
+                ],
+                [
+                  'zoom',
+                ],
+                5.5,
+                7,
+                11,
                 8,
+                17,
+                10,
+              ],
               'text-offset': [
                 0,
-                -2.15,
+                -1.55,
               ],
               'text-rotate': [
                 'get',
@@ -2866,10 +2883,12 @@ function LiveTtcLayer({
                     to,
                     startedAt:
                       now,
+                    lastSeenAt:
+                      now,
                     duration:
                       unchanged
                         ? 1
-                        : VEHICLE_POLL_MS,
+                        : VEHICLE_INTERPOLATION_MS,
                     properties: {
                       id:
                         vehicle.id,
@@ -2935,6 +2954,44 @@ function LiveTtcLayer({
                         '',
                     },
                   }
+                )
+              }
+            )
+
+          vehicleAnimationsRef.current
+            .forEach(
+              (
+                previous,
+                vehicleId
+              ) => {
+                if (
+                  nextAnimations.has(
+                    vehicleId
+                  )
+                ) {
+                  return
+                }
+
+                const lastSeenAt =
+                  Number(
+                    previous?.lastSeenAt ??
+                    previous?.startedAt ??
+                    0
+                  )
+
+                if (
+                  lastSeenAt <=
+                    0 ||
+                  now -
+                    lastSeenAt >
+                    VEHICLE_GRACE_MS
+                ) {
+                  return
+                }
+
+                nextAnimations.set(
+                  vehicleId,
+                  previous
                 )
               }
             )
