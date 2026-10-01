@@ -549,6 +549,8 @@ const GeographicMap =
           false,
         activePinFilter =
           'historic',
+        liveBusesEnabled =
+          false,
         onChangePinFilter,
         historicIssueFilter =
           'all',
@@ -2891,8 +2893,7 @@ const GeographicMap =
                 mapRef.current
               }
               active={
-                activePinFilter ===
-                  'ttc-live'
+                liveBusesEnabled
               }
             />
           )}

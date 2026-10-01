@@ -267,6 +267,15 @@ function GeographicApp() {
 
 
   const [
+    liveBusesEnabled,
+    setLiveBusesEnabled,
+  ] =
+    useState(
+      false
+    )
+
+
+  const [
     historicIssueFilter,
     setHistoricIssueFilter,
   ] =
@@ -2046,6 +2055,28 @@ function GeographicApp() {
             }
           }
 
+          .live-buses-toggle {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 4px !important;
+          }
+
+          .live-buses-check {
+            display: inline-block;
+            width: 11px;
+            flex: 0 0 11px;
+            text-align: center;
+            font-size: 10px;
+            font-weight: 900;
+            line-height: 1;
+            letter-spacing: 0;
+          }
+
+          .live-buses-toggle-active {
+            font-weight: 900 !important;
+          }
+
           .brand-primary-filters {
             position: relative;
           }
@@ -2433,7 +2464,7 @@ function GeographicApp() {
 
             /* Desktop: compact two-row header.
                Row 1 = identity + open white search space + GPS/Search.
-               Row 2 = Historic / News / Live TTC / To-Do / How-To.
+               Row 2 = Historic / News / To-Do / Live Buses / How-To.
                Search expands into row 1 instead of growing below the menu.
                Mobile markup and behavior remain unchanged. */
             .brand-main-row {
@@ -2689,6 +2720,10 @@ function GeographicApp() {
 
         activePinFilter={
           activePinFilter
+        }
+
+        liveBusesEnabled={
+          liveBusesEnabled
         }
 
         onChangePinFilter={
@@ -3223,58 +3258,6 @@ function GeographicApp() {
               type="button"
               className={
                 activePinFilter ===
-                  'ttc-live'
-                  ? 'brand-mode-button brand-mode-button-active'
-                  : 'brand-mode-button'
-              }
-              onClick={() =>
-                chooseContentMode(
-                  'ttc-live'
-                )
-              }
-              style={{
-                border:
-                  '1px solid rgba(0,0,0,0.18)',
-
-                padding:
-                  '5px 8px',
-
-                background:
-                  activePinFilter ===
-                  'ttc-live'
-                    ? '#111'
-                    : '#fff',
-
-                color:
-                  activePinFilter ===
-                  'ttc-live'
-                    ? '#fff'
-                    : '#111',
-
-                font:
-                  'inherit',
-
-                fontSize:
-                  '8px',
-
-                fontWeight:
-                  '700',
-
-                letterSpacing:
-                  '0.08em',
-
-                cursor:
-                  'pointer',
-              }}
-            >
-              LIVE TTC
-            </button>
-
-
-            <button
-              type="button"
-              className={
-                activePinFilter ===
                   'new'
                   ? 'brand-mode-button brand-mode-button-active'
                   : 'brand-mode-button'
@@ -3320,6 +3303,40 @@ function GeographicApp() {
               }}
             >
               TO-DO
+            </button>
+
+
+            <button
+              type="button"
+              className={
+                liveBusesEnabled
+                  ? 'brand-mode-button live-buses-toggle live-buses-toggle-active'
+                  : 'brand-mode-button live-buses-toggle'
+              }
+              onClick={() =>
+                setLiveBusesEnabled(
+                  (current) =>
+                    !current
+                )
+              }
+              aria-pressed={
+                liveBusesEnabled
+              }
+              title={
+                liveBusesEnabled
+                  ? 'Hide live buses and streetcars'
+                  : 'Show live buses and streetcars'
+              }
+            >
+              <span
+                className="live-buses-check"
+                aria-hidden="true"
+              >
+                {liveBusesEnabled
+                  ? '✓'
+                  : '□'}
+              </span>
+              LIVE BUSES
             </button>
 
 

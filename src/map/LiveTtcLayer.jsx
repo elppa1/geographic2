@@ -2753,7 +2753,7 @@ function LiveTtcLayer({
           parent:
             gpsPrompt,
           text:
-            'LIVE TTC',
+            'LIVE BUSES',
           style: {
             fontSize:
               '10px',
@@ -5861,7 +5861,7 @@ function LiveTtcLayer({
           )
 
         // Keep the most recent vehicle and route-progress state in refs so
-        // re-entering LIVE TTC can paint immediately. Stale vehicles naturally
+        // re-entering LIVE BUSES can paint immediately. Stale vehicles naturally
         // age out through VEHICLE_GRACE_MS.
         selectedRouteRef.current =
           ''
