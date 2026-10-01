@@ -59,7 +59,7 @@ const VEHICLE_DOT_MIN_ZOOM =
 const VEHICLE_ICON_MIN_ZOOM =
   5.5
 const VEHICLE_LABEL_MIN_ZOOM =
-  13.5
+  10.5
 const GPS_PROMPT_SESSION_KEY =
   'toronto-geographic-live-ttc-gps-prompted'
 
@@ -3562,12 +3562,20 @@ function LiveTtcLayer({
                 [
                   'zoom',
                 ],
-                13.5,
-                7,
-                16,
+                10.5,
                 8,
-                18,
+                13,
                 9,
+                16,
+                10,
+                18,
+                11,
+              ],
+              'text-anchor':
+                'bottom',
+              'text-offset': [
+                0,
+                -2.6,
               ],
               'text-allow-overlap':
                 true,
@@ -3576,7 +3584,13 @@ function LiveTtcLayer({
             },
             paint: {
               'text-color':
+                '#111111',
+              'text-halo-color':
                 '#ffffff',
+              'text-halo-width':
+                1.6,
+              'text-halo-blur':
+                0.25,
             },
           })
         }
