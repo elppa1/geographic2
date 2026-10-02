@@ -1627,6 +1627,23 @@ async function fetchAdminHistoricSnapshot() {
 }
 
 
+export async function refreshHistoricAdminPersistence() {
+  const serverSnapshot =
+    await fetchAdminHistoricSnapshot()
+
+
+  writeLocalHistoricSnapshot(
+    serverSnapshot
+  )
+
+
+  markHistoricServerMigrationComplete()
+
+
+  return serverSnapshot
+}
+
+
 async function migrateLocalHistoricSnapshot(
   snapshot
 ) {

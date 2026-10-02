@@ -18,6 +18,7 @@ import {
   getHistoricItems,
   getHistoricLayers,
   initializeHistoricAdminPersistence,
+  refreshHistoricAdminPersistence,
   getNewsItems,
   getNewsReviewItems,
   getNewItems,
@@ -14133,6 +14134,13 @@ function AdminRoom() {
           .toISOString()
 
 
+      // Always merge from the authoritative server snapshot.
+      // localStorage is only a working cache and can lag behind a
+      // previously confirmed save.
+      const authoritativeSnapshot =
+        await refreshHistoricAdminPersistence()
+
+
       const normalizeTitle =
         (value) =>
           String(
@@ -14144,7 +14152,7 @@ function AdminRoom() {
 
 
       const existingCategories =
-        getHistoricCategories()
+        authoritativeSnapshot.categories
 
 
       let category =
@@ -14250,7 +14258,7 @@ function AdminRoom() {
 
 
       const existingLayers =
-        getHistoricLayers()
+        authoritativeSnapshot.layers
 
 
       let layer =
@@ -14356,7 +14364,7 @@ function AdminRoom() {
 
 
       const currentHistoric =
-        getHistoricItems()
+        authoritativeSnapshot.items
           .map(
             normalizeHistoricRecord
           )
