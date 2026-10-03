@@ -2,6 +2,10 @@ const ADMIN_STORE_MIRROR_ENDPOINT =
   '/api/geographic/toronto/admin-store'
 
 
+const LOCAL_FALLBACK_MAX_CHARS =
+  1_500_000
+
+
 const ADMIN_STORE_MIRROR_KEYS =
   new Set([
     'elppa-geographic-news',
@@ -117,17 +121,39 @@ function writeLocalFallback(
     typeof localStorage ===
       'undefined'
   ) {
-    return
+    return false
   }
 
 
   try {
-    localStorage.setItem(
-      key,
+    const serialized =
       JSON.stringify(
         records
       )
+
+
+    if (
+      serialized.length >
+      LOCAL_FALLBACK_MAX_CHARS
+    ) {
+      console.warn(
+        'ADMIN STORE · LOCAL FALLBACK SKIPPED · PAYLOAD TOO LARGE:',
+        key,
+        serialized.length
+      )
+
+
+      return false
+    }
+
+
+    localStorage.setItem(
+      key,
+      serialized
     )
+
+
+    return true
   }
   catch (
     error
@@ -138,6 +164,9 @@ function writeLocalFallback(
       error?.message ||
       error
     )
+
+
+    return false
   }
 }
 
@@ -226,10 +255,20 @@ async function sendMirror({
       )
 
 
+    const payload =
+      await response.json()
+        .catch(
+          () => null
+        )
+
+
     if (
-      !response.ok
+      !response.ok ||
+      payload?.ok !==
+        true
     ) {
       throw new Error(
+        payload?.error ||
         `HTTP ${response.status}`
       )
     }
@@ -279,17 +318,35 @@ async function fetchPostgresRecords(
     )
 
 
+  const payload =
+    await response.json()
+      .catch(
+        () => null
+      )
+
+
+  if (
+    response.status ===
+      404
+  ) {
+    return {
+      found:
+        false,
+
+      records:
+        [],
+    }
+  }
+
+
   if (
     !response.ok
   ) {
     throw new Error(
+      payload?.error ||
       `HTTP ${response.status}`
     )
   }
-
-
-  const payload =
-    await response.json()
 
 
   if (
@@ -305,7 +362,13 @@ async function fetchPostgresRecords(
   }
 
 
-  return payload.records
+  return {
+    found:
+      true,
+
+    records:
+      payload.records,
+  }
 }
 
 
@@ -337,7 +400,8 @@ function queueRemoteWrite(
 
 
           if (
-            !written
+            !written &&
+            !postgresAuthorityReady
           ) {
             writeLocalFallback(
               key,
@@ -443,7 +507,7 @@ export function writeAdminStoreRecords(
   }
 
 
-  void queueRemoteWrite(
+  return queueRemoteWrite(
     key,
     snapshot
   )
@@ -485,15 +549,56 @@ export function hydrateAdminStoresFromPostgres() {
         of ADMIN_STORE_MIRROR_KEYS
       ) {
         try {
-          const records =
+          const snapshot =
             await fetchPostgresRecords(
               key
             )
 
 
+          if (
+            snapshot.found
+          ) {
+            loaded.set(
+              key,
+              snapshot.records
+            )
+
+
+            continue
+          }
+
+
+          const localRecords = [
+            ...ensureMemoryStore(
+              key
+            ),
+          ]
+
+
+          const seeded =
+            await sendMirror({
+              key,
+
+              records:
+                localRecords,
+
+              mode:
+                'seed',
+            })
+
+
+          if (
+            !seeded
+          ) {
+            throw new Error(
+              'Initial Postgres migration failed.'
+            )
+          }
+
+
           loaded.set(
             key,
-            records
+            localRecords
           )
         }
         catch (

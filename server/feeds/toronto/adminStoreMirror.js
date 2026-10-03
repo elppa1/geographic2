@@ -11,7 +11,7 @@ const BASE_PATH =
 
 
 const MAX_BODY_BYTES =
-  12_000_000
+  64_000_000
 
 
 const STORE_DOCUMENT_KEYS =
@@ -71,29 +71,72 @@ function sendJson(
 async function readJsonBody(
   req
 ) {
-  let raw =
-    ''
+  const chunks =
+    []
+
+
+  let totalBytes =
+    0
 
 
   for await (
     const chunk
     of req
   ) {
-    raw +=
-      chunk.toString(
-        'utf8'
+    const buffer =
+      Buffer.isBuffer(
+        chunk
       )
+        ? chunk
+        : Buffer.from(
+            chunk
+          )
+
+
+    totalBytes +=
+      buffer.length
 
 
     if (
-      raw.length >
+      totalBytes >
       MAX_BODY_BYTES
     ) {
-      throw new Error(
-        'Admin store mirror request body is too large.'
-      )
+      const error =
+        new Error(
+          'Admin store mirror request body is too large.'
+        )
+
+
+      error.statusCode =
+        413
+
+
+      throw error
     }
+
+
+    chunks.push(
+      buffer
+    )
   }
+
+
+  if (
+    chunks.length ===
+      0
+  ) {
+    return {}
+  }
+
+
+  const raw =
+    Buffer.concat(
+      chunks,
+      totalBytes
+    )
+      .toString(
+        'utf8'
+      )
 
 
   if (
@@ -433,6 +476,9 @@ export function torontoAdminStoreMirrorFeed() {
 
             sendJson(
               res,
+              Number(
+                error?.statusCode
+              ) ||
               500,
               {
                 ok:

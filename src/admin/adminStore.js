@@ -1281,21 +1281,21 @@ export function addNewReviewItem(
 // HISTORIC SERVER PERSISTENCE
 // ============================================================
 //
-// HISTORIC is the only content type using this path.
+// Production Postgres is authoritative for Historic.
 //
-// Public pages read the production Historic snapshot into an in-memory
-// cache. They do NOT copy production data into localStorage, so opening
-// the public map in the same browser cannot destroy Admin drafts.
-//
-// Admin keeps its existing localStorage workflow as a local working copy.
-// The first Admin load migrates that working copy to the dedicated
-// production Historic store only when the production store is empty.
-// After that, Historic saves are mirrored to production automatically.
+// The browser keeps Historic in memory while Admin is open. localStorage is
+// read only as a one-time legacy migration source when the server snapshot is
+// empty. Server snapshots are never copied back into the large Historic
+// localStorage keys.
 //
 // NEWS / NEW stores and endpoints are not used here.
 // ============================================================
 
 let publicHistoricSnapshot =
+  null
+
+
+let adminHistoricSnapshot =
   null
 
 
@@ -1423,6 +1423,41 @@ function dispatchHistoricServerChange() {
 }
 
 
+function setAdminHistoricSnapshot(
+  snapshot
+) {
+  adminHistoricSnapshot =
+    normalizeHistoricSnapshot(
+      snapshot
+    )
+
+
+  return adminHistoricSnapshot
+}
+
+
+function setAdminHistoricCollection(
+  collection,
+  records
+) {
+  const current =
+    adminHistoricSnapshot ||
+    getLocalHistoricSnapshot()
+
+
+  return setAdminHistoricSnapshot({
+    ...current,
+
+    [collection]:
+      Array.isArray(
+        records
+      )
+        ? records
+        : [],
+  })
+}
+
+
 async function readHistoricServerResponse(
   response,
   label
@@ -1476,13 +1511,13 @@ function getLocalHistoricSnapshot() {
 }
 
 
-export function downloadHistoricMigrationSnapshot() {
-  const snapshot =
-    getLocalHistoricSnapshot()
-
-
+function downloadHistoricSnapshotFile(
+  snapshot
+) {
   const payload = {
-    ...snapshot,
+    ...normalizeHistoricSnapshot(
+      snapshot
+    ),
 
     exportedAt:
       new Date()
@@ -1556,43 +1591,47 @@ export function downloadHistoricMigrationSnapshot() {
   )
 
 
-  return snapshot
+  return payload
 }
 
 
-function writeLocalHistoricSnapshot(
-  snapshot
-) {
-  const normalized =
-    normalizeHistoricSnapshot(
-      snapshot
+export async function downloadHistoricMigrationSnapshot() {
+  if (
+    isHistoricAdminPath()
+  ) {
+    const serverSnapshot =
+      await fetchAdminHistoricSnapshot()
+
+
+    setAdminHistoricSnapshot(
+      serverSnapshot
     )
 
 
-  writeRecords(
-    HISTORIC_KEY,
-    normalized.items
+    markHistoricServerMigrationComplete()
+
+
+    downloadHistoricSnapshotFile(
+      serverSnapshot
+    )
+
+
+    return serverSnapshot
+  }
+
+
+  const snapshot =
+    publicHistoricSnapshot ||
+    getLocalHistoricSnapshot()
+
+
+  downloadHistoricSnapshotFile(
+    snapshot
   )
 
 
-  writeRecords(
-    HISTORIC_ISSUES_KEY,
-    normalized.issues
-  )
-
-
-  writeRecords(
-    HISTORIC_CATEGORIES_KEY,
-    normalized.categories
-  )
-
-
-  writeRecords(
-    HISTORIC_LAYERS_KEY,
-    normalized.layers
-  )
+  return snapshot
 }
-
 
 
 function markHistoricServerMigrationComplete() {
@@ -1614,6 +1653,9 @@ async function fetchAdminHistoricSnapshot() {
     await fetch(
       ADMIN_HISTORIC_ENDPOINT,
       {
+        credentials:
+          'same-origin',
+
         cache:
           'no-store',
       }
@@ -1632,7 +1674,7 @@ export async function refreshHistoricAdminPersistence() {
     await fetchAdminHistoricSnapshot()
 
 
-  writeLocalHistoricSnapshot(
+  setAdminHistoricSnapshot(
     serverSnapshot
   )
 
@@ -1653,6 +1695,9 @@ async function migrateLocalHistoricSnapshot(
       {
         method:
           'POST',
+
+        credentials:
+          'same-origin',
 
         headers: {
           'Content-Type':
@@ -1759,6 +1804,14 @@ async function persistHistoricCollection(
     }
 
 
+    setAdminHistoricSnapshot(
+      snapshot
+    )
+
+
+    dispatchHistoricServerChange()
+
+
     return snapshot
   }
   catch (
@@ -1851,6 +1904,11 @@ export async function initializeHistoricAdminPersistence() {
     )
 
 
+    setAdminHistoricSnapshot(
+      localSnapshot
+    )
+
+
     return localSnapshot
   }
 
@@ -1873,9 +1931,21 @@ export async function initializeHistoricAdminPersistence() {
   ) {
     try {
       const migrated =
-        await migrateLocalHistoricSnapshot(
-          localSnapshot
-        )
+        await migrateLocalHistoricSnapshot({
+          ...localSnapshot,
+
+          items:
+            localSnapshot.items.filter(
+              (record) =>
+                record?.migratedFromPins !==
+                  true
+            ),
+        })
+
+
+      setAdminHistoricSnapshot(
+        migrated
+      )
 
 
       markHistoricServerMigrationComplete()
@@ -1892,27 +1962,25 @@ export async function initializeHistoricAdminPersistence() {
       )
 
 
+      setAdminHistoricSnapshot(
+        localSnapshot
+      )
+
+
       return localSnapshot
     }
   }
 
 
-  if (
-    serverHasData
-  ) {
-    writeLocalHistoricSnapshot(
-      serverSnapshot
-    )
+  setAdminHistoricSnapshot(
+    serverSnapshot
+  )
 
 
-    markHistoricServerMigrationComplete()
+  markHistoricServerMigrationComplete()
 
 
-    return serverSnapshot
-  }
-
-
-  return localSnapshot
+  return serverSnapshot
 }
 
 
@@ -1986,9 +2054,11 @@ export function getHistoricItems() {
 
 
   const existing =
-    readRecords(
-      HISTORIC_KEY
-    )
+    adminHistoricSnapshot
+      ? adminHistoricSnapshot.items
+      : readRecords(
+          HISTORIC_KEY
+        )
 
 
   if (
@@ -2010,10 +2080,18 @@ export function getHistoricItems() {
     cleaned.length !==
       existing.length
   ) {
-    writeRecords(
-      HISTORIC_KEY,
-      cleaned
-    )
+    if (
+      adminHistoricSnapshot
+    ) {
+      setAdminHistoricCollection(
+        'items',
+        cleaned
+      )
+    }
+    else {
+      // Legacy localStorage is migration input only. Do not rewrite the
+      // large Historic payload back into browser storage.
+    }
   }
 
 
@@ -2027,8 +2105,8 @@ export function getHistoricItems() {
 export function saveHistoricItems(
   records
 ) {
-  writeRecords(
-    HISTORIC_KEY,
+  setAdminHistoricCollection(
+    'items',
     records
   )
 
@@ -2058,17 +2136,19 @@ export function getHistoricIssues() {
   }
 
 
-  return readRecords(
-    HISTORIC_ISSUES_KEY
-  )
+  return adminHistoricSnapshot
+    ? adminHistoricSnapshot.issues
+    : readRecords(
+        HISTORIC_ISSUES_KEY
+      )
 }
 
 
 export function saveHistoricIssues(
   records
 ) {
-  writeRecords(
-    HISTORIC_ISSUES_KEY,
+  setAdminHistoricCollection(
+    'issues',
     records
   )
 
@@ -2095,17 +2175,19 @@ export function getHistoricCategories() {
   }
 
 
-  return readRecords(
-    HISTORIC_CATEGORIES_KEY
-  )
+  return adminHistoricSnapshot
+    ? adminHistoricSnapshot.categories
+    : readRecords(
+        HISTORIC_CATEGORIES_KEY
+      )
 }
 
 
 export function saveHistoricCategories(
   records
 ) {
-  writeRecords(
-    HISTORIC_CATEGORIES_KEY,
+  setAdminHistoricCollection(
+    'categories',
     records
   )
 
@@ -2132,17 +2214,19 @@ export function getHistoricLayers() {
   }
 
 
-  return readRecords(
-    HISTORIC_LAYERS_KEY
-  )
+  return adminHistoricSnapshot
+    ? adminHistoricSnapshot.layers
+    : readRecords(
+        HISTORIC_LAYERS_KEY
+      )
 }
 
 
 export function saveHistoricLayers(
   records
 ) {
-  writeRecords(
-    HISTORIC_LAYERS_KEY,
+  setAdminHistoricCollection(
+    'layers',
     records
   )
 
