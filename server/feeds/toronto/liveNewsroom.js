@@ -2564,8 +2564,9 @@ export async function queueLiveNewsroomRecord({
 
 
     // TPS LOCATED / FOUND is authoritative. Remove the existing MISSING /
-    // ELOPEE pin immediately. The LOCATED story itself remains pending in
-    // NEWSROOM as an UPDATE until the editor approves or rejects it.
+    // ELOPEE pin immediately. The LOCATED notice remains pending in NEWSROOM
+    // as a RESOLVE acknowledgement only. It must never auto-publish as a
+    // replacement story; the editor can add a separate LOCATED story manually.
     await archivePublishedPoliceMissingPersonPin(
       resolutionRecord
     )
@@ -2600,7 +2601,7 @@ export async function queueLiveNewsroomRecord({
       forceAction:
         sameHandledResolutionVersion
           ? ''
-          : 'update',
+          : 'resolve',
     })
   }
 

@@ -4160,34 +4160,20 @@ async function buildPoliceRecord(
       : 'review'
 
 
-  // Ordinary records keep TPS's current release headline.
-  // LOCATED is different: once resolved, the public-facing title
-  // must describe the current state instead of saying the person
-  // is still missing.
+  // Keep TPS's release headline for every newsroom lead, including
+  // LOCATED notices. LOCATED is acknowledgement-only and is never
+  // auto-published as a replacement public story.
   const publicTitle =
-    category ===
-      'located'
-      ? buildGeographicTitle({
-          category,
+    cleanedSubject ||
+    buildGeographicTitle({
+      category,
 
-          subject:
-            cleanedSubject,
+      subject:
+        cleanedSubject,
 
-          location:
-            geographic.location,
-        })
-      : (
-          cleanedSubject ||
-          buildGeographicTitle({
-            category,
-
-            subject:
-              cleanedSubject,
-
-            location:
-              geographic.location,
-          })
-        )
+      location:
+        geographic.location,
+    })
 
 
   const publicDescription =
@@ -4233,7 +4219,8 @@ async function buildPoliceRecord(
 
     // The Admin Room turns ordinary review items into either
     // PUBLISH or UPDATE based on whether this Case # is already
-    // on the map. LOCATED is explicitly a pending RESOLVE.
+    // on the map. LOCATED is explicitly a pending RESOLVE
+    // acknowledgement after the missing-person pin is removed.
     newsroomAction,
 
     reviewStatus:

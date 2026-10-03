@@ -3910,21 +3910,6 @@ function getNewsroomApproveLabel(
     )
 
 
-  if (
-    isTpsNewsroomRecord(
-      record
-    ) &&
-    String(
-      record?.category ||
-      ''
-    )
-      .toLowerCase() ===
-      'located'
-  ) {
-    return 'APPROVE'
-  }
-
-
   // Official-source UPDATE / RESOLVE cards are audit notices.
   // The server has already applied the factual change to the public
   // NEWS record, so Admin only acknowledges that the editor saw it.
@@ -8563,8 +8548,7 @@ function AdminRoom() {
 
           const isResolve =
             requestedNewsroomAction ===
-              'resolve' &&
-            !isLocatedResolution
+              'resolve'
 
 
           // --------------------------------------------------
@@ -8716,7 +8700,7 @@ function AdminRoom() {
 
           const newsroomAction =
             isLocatedResolution
-              ? 'update'
+              ? 'resolve'
               : isResolve
                 ? 'resolve'
                 : matchingPublished
@@ -16437,7 +16421,7 @@ function AdminRoom() {
 
     const newsroomAction =
       isLocatedResolution
-        ? 'update'
+        ? 'resolve'
         : (
             candidate.newsroomAction ===
               'resolve' ||
@@ -17828,28 +17812,6 @@ function AdminRoom() {
 
       setApprovingReviewId(
         null
-      )
-
-
-      return
-    }
-
-
-    if (
-      tab ===
-        'news' &&
-      isTpsNewsroomRecord(
-        reviewRecord
-      ) &&
-      String(
-        reviewRecord?.category ||
-        ''
-      )
-        .toLowerCase() ===
-        'located'
-    ) {
-      await approveTpsNewsroomRecord(
-        reviewRecord
       )
 
 
@@ -23083,7 +23045,7 @@ function AdminRoom() {
                                   }}
                                 >
                                   <div className="admin-record-meta">
-                                    CURRENT PIN TO CLOSE
+                                    PUBLIC MISSING PIN ALREADY CLOSED
                                   </div>
 
                                   <h2>
@@ -23118,7 +23080,7 @@ function AdminRoom() {
                                   {isTpsNewsroomRecord(
                                     record
                                   )
-                                    ? 'OFFICIAL TPS RESOLUTION / LOCATED UPDATE'
+                                    ? 'OFFICIAL TPS LOCATED NOTICE · ACKNOWLEDGE ONLY'
                                     : (
                                         record.resolutionReason ===
                                           'missing-from-live-feed'
@@ -23133,6 +23095,71 @@ function AdminRoom() {
                                           : 'OFFICIAL SOURCE REQUESTS RESOLUTION'
                                       )}
                                 </div>
+
+
+                                {isTpsNewsroomRecord(
+                                  record
+                                ) &&
+                                  String(
+                                    record?.category ||
+                                    ''
+                                  )
+                                    .toLowerCase() ===
+                                    'located' && (
+                                  <div
+                                    style={{
+                                      border:
+                                        '1px solid currentColor',
+
+                                      padding:
+                                        '12px',
+
+                                      margin:
+                                        '12px 0',
+                                    }}
+                                  >
+                                    <div className="admin-record-meta">
+                                      LOCATED RELEASE · MANUAL STORY LEAD
+                                    </div>
+
+                                    <h2>
+                                      {
+                                        incomingRecord.tpsReleaseTitle ||
+                                        record.tpsReleaseTitle ||
+                                        incomingRecord.title ||
+                                        record.title
+                                      }
+                                    </h2>
+
+                                    {incomingRecord.description && (
+                                      <p>
+                                        {
+                                          getAdminDisplayDescription(
+                                            incomingRecord
+                                          )
+                                        }
+                                      </p>
+                                    )}
+
+                                    {(incomingRecord.sourceUrl ||
+                                      record.sourceUrl) && (
+                                      <div className="admin-record-meta">
+                                        SOURCE · {
+                                          <a
+                                            href={
+                                              incomingRecord.sourceUrl ||
+                                              record.sourceUrl
+                                            }
+                                            target="_blank"
+                                            rel="noreferrer"
+                                          >
+                                            Toronto Police Service
+                                          </a>
+                                        }
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </>
                             )}
 
@@ -23541,7 +23568,7 @@ function AdminRoom() {
                                   )
                                     .toLowerCase() ===
                                     'located'
-                                    ? 'LOCATED STORY · AWAITING APPROVAL'
+                                    ? 'LOCATED NOTICE · PUBLIC MISSING PIN ALREADY CLOSED · ACKNOWLEDGE ONLY'
                                     : (
                                         'AUTOMATIC · ' +
                                         (
