@@ -612,11 +612,6 @@ const GeographicMap =
         setMapReady,
       ] =
         useState(false)
-      const [
-        ttcStyleReady,
-        setTtcStyleReady,
-      ] =
-        useState(false)
 
       const [
         locationTrackingActive,
@@ -983,24 +978,6 @@ const GeographicMap =
         mapRef.current =
           map
 
-        const markTtcStyleReady =
-          () => {
-            setTtcStyleReady(
-              true
-            )
-          }
-
-        map.on(
-          'style.load',
-          markTtcStyleReady
-        )
-
-        if (
-          map.isStyleLoaded?.()
-        ) {
-          markTtcStyleReady()
-        }
-
         // Keep map interaction feeling immediate. These only tune MapLibre's
         // native gesture handlers; they do not animate or recenter the camera.
         map.scrollZoom?.setWheelZoomRate?.(
@@ -1046,13 +1023,6 @@ const GeographicMap =
           }
         )
         return () => {
-          map.off(
-            'style.load',
-            markTtcStyleReady
-          )
-          setTtcStyleReady(
-            false
-          )
           setLayersReady(
             false
           )
@@ -2919,7 +2889,7 @@ const GeographicMap =
                 'halloween'
             }
           />
-          {ttcStyleReady && (
+          {mapReady && (
             <LiveTtcLayer
               map={
                 mapRef.current
