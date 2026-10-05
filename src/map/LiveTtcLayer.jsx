@@ -3514,24 +3514,14 @@ function LiveTtcLayer({
               ROUTES_SOURCE_ID,
             paint: {
               'line-color':
-                '#111111',
-              'line-width': [
-                'interpolate',
-                [
-                  'linear',
-                ],
-                [
-                  'zoom',
-                ],
-                9,
-                1.8,
-                13,
-                3.5,
-                17,
-                5.8,
-              ],
+                '#000000',
+              // Keep the casing layer structurally present, but make it
+              // non-contributing so every visible TTC route is one clean,
+              // solid-black line with no grey/transparent halo.
+              'line-width':
+                0,
               'line-opacity':
-                0.16,
+                1,
             },
           },
             streetLabelLayerId
@@ -3552,7 +3542,7 @@ function LiveTtcLayer({
               ROUTES_SOURCE_ID,
             paint: {
               'line-color':
-                '#111111',
+                '#000000',
               'line-width': [
                 'interpolate',
                 [
@@ -3562,14 +3552,14 @@ function LiveTtcLayer({
                   'zoom',
                 ],
                 9,
-                0.85,
+                0.55,
                 13,
-                1.8,
+                1.05,
                 17,
-                3.2,
+                1.7,
               ],
               'line-opacity':
-                0.34,
+                1,
             },
           },
             streetLabelLayerId
@@ -3598,13 +3588,11 @@ function LiveTtcLayer({
             ],
             paint: {
               'line-color':
-                '#111111',
+                '#000000',
               'line-width':
-                selectedRouteCasingWidthExpression(
-                  1
-                ),
+                0,
               'line-opacity':
-                0.9,
+                1,
             },
           },
             streetLabelLayerId
@@ -3633,7 +3621,7 @@ function LiveTtcLayer({
             ],
             paint: {
               'line-color':
-                '#111111',
+                '#000000',
               'line-width': [
                 'interpolate',
                 [
@@ -3643,11 +3631,11 @@ function LiveTtcLayer({
                   'zoom',
                 ],
                 9,
-                0.85,
+                0.7,
                 13,
-                1.8,
+                1.3,
                 17,
-                3.2,
+                2.0,
               ],
               'line-opacity':
                 1,
@@ -4127,11 +4115,11 @@ function LiveTtcLayer({
                 'zoom',
               ],
               9,
-              0.85,
+              0.7,
               13,
-              1.8,
+              1.3,
               17,
-              3.2,
+              2.0,
             ]
           )
         }
@@ -4144,14 +4132,12 @@ function LiveTtcLayer({
           map.setPaintProperty(
             SELECTED_ROUTE_CASING_LAYER_ID,
             'line-opacity',
-            0.9
+            1
           )
           map.setPaintProperty(
             SELECTED_ROUTE_CASING_LAYER_ID,
             'line-width',
-            selectedRouteCasingWidthExpression(
-              1
-            )
+            0
           )
         }
       }
@@ -4189,26 +4175,44 @@ function LiveTtcLayer({
                 ) /
                 2
 
+              // Keep selected-route emphasis black and fully opaque.
+              // Pulse only its width slightly; never fade it or add a grey halo.
               if (
                 map.getLayer(
-                  SELECTED_ROUTE_CASING_LAYER_ID
+                  SELECTED_ROUTE_LAYER_ID
                 )
               ) {
-                map.setPaintProperty(
-                  SELECTED_ROUTE_CASING_LAYER_ID,
-                  'line-opacity',
-                  0.12 +
+                const pulseMultiplier =
+                  1 +
                   wave *
-                  0.78
+                  0.18
+
+                map.setPaintProperty(
+                  SELECTED_ROUTE_LAYER_ID,
+                  'line-opacity',
+                  1
                 )
                 map.setPaintProperty(
-                  SELECTED_ROUTE_CASING_LAYER_ID,
+                  SELECTED_ROUTE_LAYER_ID,
                   'line-width',
-                  selectedRouteCasingWidthExpression(
-                    0.9 +
-                    wave *
-                    0.4
-                  )
+                  [
+                    'interpolate',
+                    [
+                      'linear',
+                    ],
+                    [
+                      'zoom',
+                    ],
+                    9,
+                    0.7 *
+                      pulseMultiplier,
+                    13,
+                    1.3 *
+                      pulseMultiplier,
+                    17,
+                    2.0 *
+                      pulseMultiplier,
+                  ]
                 )
               }
             },
@@ -4680,7 +4684,7 @@ function LiveTtcLayer({
           map.setPaintProperty(
             ROUTES_LAYER_ID,
             'line-opacity',
-            0.34
+            1
           )
         }
 

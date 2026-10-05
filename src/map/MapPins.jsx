@@ -8815,41 +8815,8 @@ function createMarker({
     )
 
 
-    const historicIconShell =
-      element.firstElementChild
-
-
-    if (
-      historicIconShell
-    ) {
-      const shellSize =
-        Math.max(
-          13,
-          Math.round(
-            22 *
-              historicMarkerScale
-          )
-        )
-
-
-      historicIconShell.style.width =
-        `${shellSize}px`
-
-      historicIconShell.style.height =
-        `${shellSize}px`
-
-      historicIconShell.style.flex =
-        `0 0 ${shellSize}px`
-
-      historicIconShell.style.fontSize =
-        `${Math.max(
-          12,
-          Math.round(
-            19 *
-              historicMarkerScale
-          )
-        )}px`
-    }
+    // Use the same emoji sizing as Police / Fire / TTC news markers.
+    // appendEmojiMarkerIcon() already applies the correct desktop/mobile size.
 
 
   }
