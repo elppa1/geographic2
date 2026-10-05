@@ -17627,6 +17627,14 @@ function AdminRoom() {
       ...existingPublished,
       ...candidate,
 
+      newsroomFirstSeenAt:
+        existingPublished?.newsroomFirstSeenAt ||
+        candidate.newsroomFirstSeenAt ||
+        candidate.receivedAt ||
+        candidate.queuedAt ||
+        candidate.firstSeenAt ||
+        now,
+
       firstSeenAt:
         existingPublished?.firstSeenAt ||
         candidate.firstSeenAt ||
@@ -18837,6 +18845,13 @@ function AdminRoom() {
       ...(tab ===
         'news'
         ? {
+            newsroomFirstSeenAt:
+              publishCandidate.newsroomFirstSeenAt ||
+              publishCandidate.receivedAt ||
+              publishCandidate.queuedAt ||
+              publishCandidate.firstSeenAt ||
+              now,
+
             firstSeenAt:
               publishCandidate.firstSeenAt ||
               now,

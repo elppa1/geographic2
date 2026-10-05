@@ -7134,8 +7134,8 @@ function appendEmojiMarkerIcon(
 //
 // NEWS:
 //   - an active TTC alert keeps pulsing while it remains active
-//   - Police pulse for their first 3 hours
-//   - Fire pulses for its first 8 hours
+//   - Police pulse for 4 hours from first newsroom arrival
+//   - Fire pulses for 4 hours from first newsroom arrival
 //
 // NEW:
 //   - Events pulse only while their scheduled event is happening
@@ -7149,14 +7149,14 @@ function appendEmojiMarkerIcon(
 // ============================================================
 
 const POLICE_NEWS_MARKER_WINDOW_MS =
-  3 *
+  4 *
   60 *
   60 *
   1000
 
 
 const FIRE_NEWS_MARKER_WINDOW_MS =
-  8 *
+  4 *
   60 *
   60 *
   1000
@@ -7523,6 +7523,49 @@ function getLiveScheduledNewPulseState(
 }
 
 
+function getNewsroomPulseTimestamp(
+  pin
+) {
+  const values = [
+    pin?.newsroomFirstSeenAt,
+    pin?.receivedAt,
+    pin?.queuedAt,
+    pin?.firstSeenAt,
+    pin?.publishedAt,
+    pin?.createdAt,
+  ]
+
+
+  for (
+    const value of values
+  ) {
+    if (
+      !value
+    ) {
+      continue
+    }
+
+
+    const date =
+      new Date(
+        value
+      )
+
+
+    if (
+      !Number.isNaN(
+        date.getTime()
+      )
+    ) {
+      return date
+    }
+  }
+
+
+  return null
+}
+
+
 function getMarkerPulseState({
   pin,
   pinType,
@@ -7589,7 +7632,7 @@ function getMarkerPulseState({
 
 
   const date =
-    getNewsRecordTimestamp(
+    getNewsroomPulseTimestamp(
       pin
     )
 
@@ -8578,6 +8621,46 @@ function createHistoricStackMarker({
 // CREATE MARKER
 // ============================================================
 
+function getHistoricMarkerScale(
+  zoom
+) {
+  const numericZoom =
+    Number(
+      zoom
+    )
+
+
+  if (
+    !Number.isFinite(
+      numericZoom
+    ) ||
+    numericZoom >=
+      14
+  ) {
+    return 1
+  }
+
+
+  if (
+    numericZoom >=
+      12
+  ) {
+    return 0.84
+  }
+
+
+  if (
+    numericZoom >=
+      10
+  ) {
+    return 0.70
+  }
+
+
+  return 0.58
+}
+
+
 function createMarker({
   map,
   pin,
@@ -8695,11 +8778,23 @@ function createMarker({
     element.className =
       'geographic-pin-emoji-marker geographic-pin-historic-emoji-marker'
 
+    const historicMarkerScale =
+      getHistoricMarkerScale(
+        map?.getZoom?.()
+      )
+
+
     element.style.width =
-      '32px'
+      `${Math.round(
+        32 *
+          historicMarkerScale
+      )}px`
 
     element.style.height =
-      '32px'
+      `${Math.round(
+        32 *
+          historicMarkerScale
+      )}px`
 
     element.style.padding =
       '0'
@@ -8748,6 +8843,43 @@ function createMarker({
       element,
       historicIcon.emoji
     )
+
+
+    const historicIconShell =
+      element.firstElementChild
+
+
+    if (
+      historicIconShell
+    ) {
+      const shellSize =
+        Math.max(
+          13,
+          Math.round(
+            22 *
+              historicMarkerScale
+          )
+        )
+
+
+      historicIconShell.style.width =
+        `${shellSize}px`
+
+      historicIconShell.style.height =
+        `${shellSize}px`
+
+      historicIconShell.style.flex =
+        `0 0 ${shellSize}px`
+
+      historicIconShell.style.fontSize =
+        `${Math.max(
+          12,
+          Math.round(
+            19 *
+              historicMarkerScale
+          )
+        )}px`
+    }
 
 
   }

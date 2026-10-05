@@ -271,7 +271,16 @@ function GeographicApp() {
     setLiveBusesEnabled,
   ] =
     useState(
-      false
+      true
+    )
+
+
+  const [
+    liveBusesInitializing,
+    setLiveBusesInitializing,
+  ] =
+    useState(
+      true
     )
 
 
@@ -1237,6 +1246,47 @@ function GeographicApp() {
   }
 
 
+  useEffect(
+    () => {
+      if (
+        !liveBusesEnabled
+      ) {
+        setLiveBusesInitializing(
+          false
+        )
+
+        return undefined
+      }
+
+
+      setLiveBusesInitializing(
+        true
+      )
+
+
+      const timer =
+        window.setTimeout(
+          () => {
+            setLiveBusesInitializing(
+              false
+            )
+          },
+          10000
+        )
+
+
+      return () => {
+        window.clearTimeout(
+          timer
+        )
+      }
+    },
+    [
+      liveBusesEnabled,
+    ]
+  )
+
+
   // ==========================================================
   // CONTENT MODE
   // ==========================================================
@@ -1250,6 +1300,16 @@ function GeographicApp() {
     ) {
       setNewSubtypeFilter(
         'all'
+      )
+    }
+
+
+    if (
+      mode ===
+        'news'
+    ) {
+      setLiveBusesEnabled(
+        true
       )
     }
 
@@ -1270,6 +1330,43 @@ function GeographicApp() {
         {`
           .mobile-brand-toggle {
             display: none;
+          }
+
+          .live-buses-initializing {
+            position: fixed;
+            top: 76px;
+            left: 50%;
+            z-index: 70;
+            width: min(390px, calc(100vw - 28px));
+            transform: translateX(-50%);
+            border: 1px solid rgba(0,0,0,0.28);
+            background: rgba(255,255,255,0.97);
+            box-shadow: 0 5px 18px rgba(0,0,0,0.14);
+            padding: 10px 12px;
+            text-align: center;
+            pointer-events: none;
+          }
+
+          .live-buses-initializing-title {
+            color: #111;
+            font-size: 10px;
+            font-weight: 900;
+            letter-spacing: 0.11em;
+          }
+
+          .live-buses-initializing-copy {
+            margin-top: 4px;
+            color: #333;
+            font-size: 10px;
+            font-weight: 600;
+            line-height: 1.35;
+          }
+
+          @media (max-width: 760px) {
+            .live-buses-initializing {
+              top: 66px;
+              padding: 9px 11px;
+            }
           }
 
           .about-button {
@@ -2740,7 +2837,7 @@ function GeographicApp() {
         }
 
         onChangePinFilter={
-          setActivePinFilter
+          chooseContentMode
         }
 
         historicIssueFilter={
@@ -2776,6 +2873,22 @@ function GeographicApp() {
         }
       />
 
+
+      {liveBusesEnabled &&
+        liveBusesInitializing && (
+          <div
+            className="live-buses-initializing"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="live-buses-initializing-title">
+              LIVE BUSES ARE INITIALIZING
+            </div>
+            <div className="live-buses-initializing-copy">
+              Buses and streetcars may take up to 10 seconds to appear.
+            </div>
+          </div>
+        )}
 
 
       <div

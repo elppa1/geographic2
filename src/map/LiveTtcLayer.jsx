@@ -3244,7 +3244,7 @@ function LiveTtcLayer({
         ) {
           const busMarker =
             createVehicleMarkerImage(
-              '#111111'
+              '#C8102E'
             )
 
           if (
@@ -3391,7 +3391,7 @@ function LiveTtcLayer({
               ROUTES_SOURCE_ID,
             paint: {
               'line-color':
-                '#ffffff',
+                '#111111',
               'line-width': [
                 'interpolate',
                 [
@@ -3408,7 +3408,7 @@ function LiveTtcLayer({
                 5.8,
               ],
               'line-opacity':
-                0.72,
+                0.16,
             },
           },
             streetLabelLayerId
@@ -3428,19 +3428,8 @@ function LiveTtcLayer({
             source:
               ROUTES_SOURCE_ID,
             paint: {
-              'line-color': [
-                'case',
-                [
-                  '==',
-                  [
-                    'get',
-                    'routeType',
-                  ],
-                  0,
-                ],
-                '#C8102E',
+              'line-color':
                 '#111111',
-              ],
               'line-width': [
                 'interpolate',
                 [
@@ -3486,7 +3475,7 @@ function LiveTtcLayer({
             ],
             paint: {
               'line-color':
-                '#00AEEF',
+                '#111111',
               'line-width':
                 selectedRouteCasingWidthExpression(
                   1
@@ -3520,19 +3509,8 @@ function LiveTtcLayer({
               '__none__',
             ],
             paint: {
-              'line-color': [
-                'case',
-                [
-                  '==',
-                  [
-                    'get',
-                    'routeType',
-                  ],
-                  0,
-                ],
-                '#C8102E',
+              'line-color':
                 '#111111',
-              ],
               'line-width': [
                 'interpolate',
                 [
@@ -3933,7 +3911,7 @@ function LiveTtcLayer({
             },
             paint: {
               'text-color':
-                '#111111',
+                '#C8102E',
               'text-halo-color':
                 '#ffffff',
               'text-halo-width':
