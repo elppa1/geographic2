@@ -1430,6 +1430,15 @@ function GeographicApp() {
             letter-spacing: 0.08em;
           }
 
+          .about-panel-loading-status {
+            margin-top: 6px;
+            font-size: 7px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            line-height: 1.45;
+            opacity: 0.48;
+          }
+
           .about-close {
             flex: 0 0 auto;
             width: 27px;
@@ -3801,6 +3810,13 @@ function GeographicApp() {
 
                 <div className="about-panel-title">
                   HOW TO USE THIS TOOL
+                </div>
+
+                <div
+                  className="about-panel-loading-status"
+                  aria-hidden="true"
+                >
+                  LOADING MAP… &nbsp; POPULATING MAP… &nbsp; INITIALIZING TTC BUSES…
                 </div>
               </div>
 
