@@ -2546,6 +2546,22 @@ function LiveTtcLayer({
       }
 
 
+      function clickStartedOnGeographicPin(
+        event
+      ) {
+        const target =
+          event?.originalEvent?.target
+
+        return Boolean(
+          target?.closest?.(
+            '.geographic-pin, ' +
+            '.geographic-pin-emoji-marker, ' +
+            '.geographic-pin-historic-stack'
+          )
+        )
+      }
+
+
       function popupOptions({
         offset =
           14,
@@ -5647,6 +5663,14 @@ function LiveTtcLayer({
       function handleVehicleClick(
         event
       ) {
+        if (
+          clickStartedOnGeographicPin(
+            event
+          )
+        ) {
+          return
+        }
+
         const feature =
           event.features?.[0]
 
@@ -5687,6 +5711,14 @@ function LiveTtcLayer({
       async function handleStopClick(
         event
       ) {
+        if (
+          clickStartedOnGeographicPin(
+            event
+          )
+        ) {
+          return
+        }
+
         const feature =
           event.features?.[0]
 
@@ -5817,6 +5849,14 @@ function LiveTtcLayer({
       async function handleStationClick(
         event
       ) {
+        if (
+          clickStartedOnGeographicPin(
+            event
+          )
+        ) {
+          return
+        }
+
         const feature =
           event.features?.[0]
 
@@ -5961,6 +6001,14 @@ function LiveTtcLayer({
       function handleRouteClick(
         event
       ) {
+        if (
+          clickStartedOnGeographicPin(
+            event
+          )
+        ) {
+          return
+        }
+
         const feature =
           event.features?.[0]
 

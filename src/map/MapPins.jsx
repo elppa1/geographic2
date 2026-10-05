@@ -9171,26 +9171,6 @@ function createMarker({
     })
   }
 
-  // DOM markers sit above MapLibre layers. Stop their click from
-  // bubbling into LIVE BUSES so an overlapping TTC stop cannot also open.
-  // The custom event also closes any TTC popup that was already open.
-  element.addEventListener(
-    'click',
-    (
-      event
-    ) => {
-      event.stopPropagation()
-
-      map
-        ?.getContainer?.()
-        ?.dispatchEvent(
-          new CustomEvent(
-            'geographic:map-pin-click'
-          )
-        )
-    }
-  )
-
   const compactMobilePopup =
     typeof window !==
       'undefined' &&
@@ -10603,6 +10583,17 @@ function createMarker({
   popup.on(
     'open',
     () => {
+      // Tell LIVE BUSES only after this map pin has actually opened.
+      // This preserves MapLibre's normal marker click handling.
+      map
+        ?.getContainer?.()
+        ?.dispatchEvent(
+          new CustomEvent(
+            'geographic:map-pin-click'
+          )
+        )
+
+
       const resetPopupScroll =
         () => {
           // Popup content and MapLibre's shell can both retain an old scroll
