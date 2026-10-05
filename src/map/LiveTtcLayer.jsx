@@ -5112,7 +5112,7 @@ function LiveTtcLayer({
             )
           }
 
-          const payload =
+          let payload =
             await response.json()
 
           if (
@@ -5121,14 +5121,95 @@ function LiveTtcLayer({
             return
           }
 
-          const now =
-            performance.now()
-          const nextVehicles =
+          let nextVehicles =
             Array.isArray(
               payload?.vehicles
             )
               ? payload.vehicles
               : []
+
+          if (
+            nextVehicles.length ===
+              0
+          ) {
+            try {
+              const fallbackResponse =
+                await fetch(
+                  VEHICLES_ENDPOINT,
+                  {
+                    cache:
+                      'no-store',
+                    signal:
+                      controller.signal,
+                  }
+                )
+
+              if (
+                fallbackResponse.ok
+              ) {
+                const fallbackPayload =
+                  await fallbackResponse.json()
+
+                const fallbackVehicles =
+                  Array.isArray(
+                    fallbackPayload?.vehicles
+                  )
+                    ? fallbackPayload.vehicles
+                    : []
+
+                if (
+                  fallbackVehicles.length >
+                    0
+                ) {
+                  payload =
+                    fallbackPayload
+                  nextVehicles =
+                    fallbackVehicles
+                }
+              }
+            }
+            catch (
+              fallbackError
+            ) {
+              if (
+                fallbackError?.name !==
+                  'AbortError'
+              ) {
+                console.warn(
+                  'LIVE TTC VEHICLES FALLBACK:',
+                  fallbackError
+                )
+              }
+            }
+          }
+
+          if (
+            nextVehicles.length ===
+              0
+          ) {
+            console.warn(
+              'LIVE TTC VEHICLES EMPTY:',
+              {
+                count:
+                  payload?.count,
+                rawCount:
+                  payload?.rawCount,
+                freshCount:
+                  payload?.freshCount,
+                candidateCount:
+                  payload?.candidateCount,
+                usedStaleTimestampFallback:
+                  payload?.usedStaleTimestampFallback,
+                usedBoundsFallback:
+                  payload?.usedBoundsFallback,
+                upstream:
+                  payload?.upstream,
+              }
+            )
+          }
+
+          const now =
+            performance.now()
           const nextAnimations =
             new Map()
 

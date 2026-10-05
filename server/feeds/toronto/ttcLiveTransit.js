@@ -2253,13 +2253,88 @@ function decodeRealtimeFeed(
 async function fetchRealtimeFeed(
   url
 ) {
-  return decodeRealtimeFeed(
-    await fetchBuffer(
-      url,
-      0,
-      REALTIME_FETCH_TIMEOUT_MS
+  let fetchError =
+    null
+
+  try {
+    const controller =
+      new AbortController()
+
+    const timeoutId =
+      setTimeout(
+        () => {
+          controller.abort()
+        },
+        REALTIME_FETCH_TIMEOUT_MS
+      )
+
+    try {
+      const response =
+        await fetch(
+          url,
+          {
+            method:
+              'GET',
+            headers: {
+              Accept:
+                'application/x-protobuf, application/octet-stream, */*',
+              'User-Agent':
+                'TorontoGeographic/1.0',
+            },
+            cache:
+              'no-store',
+            signal:
+              controller.signal,
+          }
+        )
+
+      if (
+        !response.ok
+      ) {
+        throw new Error(
+          `TTC fetch failed (${response.status}) · ${url}`
+        )
+      }
+
+      const arrayBuffer =
+        await response.arrayBuffer()
+
+      return decodeRealtimeFeed(
+        Buffer.from(
+          arrayBuffer
+        )
+      )
+    }
+    finally {
+      clearTimeout(
+        timeoutId
+      )
+    }
+  }
+  catch (
+    error
+  ) {
+    fetchError =
+      error
+  }
+
+  // Retain the original HTTPS code path as a second transport.
+  try {
+    return decodeRealtimeFeed(
+      await fetchBuffer(
+        url,
+        0,
+        REALTIME_FETCH_TIMEOUT_MS
+      )
     )
-  )
+  }
+  catch (
+    httpsError
+  ) {
+    throw new Error(
+      `TTC realtime fetch failed · fetch: ${fetchError?.message || fetchError} · https: ${httpsError?.message || httpsError}`
+    )
+  }
 }
 
 
@@ -2740,18 +2815,32 @@ async function getVehiclesPayload(
       .filter(
         Boolean
       )
-      .filter(
-        (
-          vehicle
-        ) =>
-          vehicle.ageSeconds <=
-          5 *
-            60
-      )
+
+  const freshVehicles =
+    allVehicles.filter(
+      (
+        vehicle
+      ) =>
+        vehicle.ageSeconds <=
+        15 *
+          60
+    )
+
+  const candidateVehicles =
+    freshVehicles.length >
+      0
+      ? freshVehicles
+      : allVehicles
+
+  const usedStaleTimestampFallback =
+    freshVehicles.length ===
+      0 &&
+    allVehicles.length >
+      0
 
 
   let vehicles =
-    allVehicles.filter(
+    candidateVehicles.filter(
       (
         vehicle
       ) =>
@@ -2768,13 +2857,13 @@ async function getVehiclesPayload(
   if (
     vehicles.length ===
       0 &&
-    allVehicles.length >
+    candidateVehicles.length >
       0
   ) {
     // A healthy TTC feed should never become a blank map because of a bad
     // transient viewport/bounds value. MapLibre will only draw what is in view.
     vehicles =
-      allVehicles
+      candidateVehicles
     usedBoundsFallback =
       true
   }
@@ -2799,6 +2888,11 @@ async function getVehiclesPayload(
       vehicles.length,
     rawCount:
       allVehicles.length,
+    freshCount:
+      freshVehicles.length,
+    candidateCount:
+      candidateVehicles.length,
+    usedStaleTimestampFallback,
     usedBoundsFallback,
     vehicles,
   }
