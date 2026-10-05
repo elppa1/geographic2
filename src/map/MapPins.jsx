@@ -2117,7 +2117,11 @@ function appendNewsImage({
       : '220px'
 
   image.style.objectFit =
-    'cover'
+    isTorontoPolicePin(
+      pin
+    )
+      ? 'contain'
+      : 'cover'
 
   image.style.margin =
     compactMobileCard
@@ -8541,6 +8545,14 @@ function createHistoricStackMarker({
       event.preventDefault()
       event.stopPropagation()
 
+      map
+        ?.getContainer?.()
+        ?.dispatchEvent(
+          new CustomEvent(
+            'geographic:map-pin-click'
+          )
+        )
+
       onExpand?.()
     }
   )
@@ -9158,6 +9170,26 @@ function createMarker({
       pinType,
     })
   }
+
+  // DOM markers sit above MapLibre layers. Stop their click from
+  // bubbling into LIVE BUSES so an overlapping TTC stop cannot also open.
+  // The custom event also closes any TTC popup that was already open.
+  element.addEventListener(
+    'click',
+    (
+      event
+    ) => {
+      event.stopPropagation()
+
+      map
+        ?.getContainer?.()
+        ?.dispatchEvent(
+          new CustomEvent(
+            'geographic:map-pin-click'
+          )
+        )
+    }
+  )
 
   const compactMobilePopup =
     typeof window !==
@@ -10453,7 +10485,7 @@ function createMarker({
           historicMobileImage
             ? '99px'
             : policeMobileImage
-              ? '128px'
+              ? 'auto'
               : '66px'
 
         mobileImageLink.style.float =
@@ -10476,7 +10508,9 @@ function createMarker({
             : 'none'
 
         mobileImageLink.style.overflow =
-          'hidden'
+          policeMobileImage
+            ? 'visible'
+            : 'hidden'
 
         mobileImageLink.style.borderRadius =
           '2px'
@@ -10494,14 +10528,14 @@ function createMarker({
         historicMobileImage
           ? '99px'
           : policeMobileImage
-            ? '128px'
+            ? 'auto'
             : '66px'
 
       mobileImage.style.maxHeight =
         historicMobileImage
           ? '99px'
           : policeMobileImage
-            ? '128px'
+            ? '180px'
             : '66px'
 
       mobileImage.style.margin =
@@ -10511,7 +10545,9 @@ function createMarker({
           : '0'
 
       mobileImage.style.objectFit =
-        'cover'
+        policeMobileImage
+          ? 'contain'
+          : 'cover'
 
       mobileImage.style.borderRadius =
         '2px'

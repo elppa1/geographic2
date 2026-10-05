@@ -3385,11 +3385,11 @@ function LiveTtcLayer({
                   'zoom',
                 ],
                 9,
-                2.2,
+                1.8,
                 13,
-                4.3,
+                3.5,
                 17,
-                7,
+                5.8,
               ],
               'line-opacity':
                 0.72,
@@ -3434,11 +3434,11 @@ function LiveTtcLayer({
                   'zoom',
                 ],
                 9,
-                1,
+                0.85,
                 13,
-                2.2,
+                1.8,
                 17,
-                4,
+                3.2,
               ],
               'line-opacity':
                 0.34,
@@ -3526,11 +3526,11 @@ function LiveTtcLayer({
                   'zoom',
                 ],
                 9,
-                1,
+                0.85,
                 13,
-                2.2,
+                1.8,
                 17,
-                4,
+                3.2,
               ],
               'line-opacity':
                 1,
@@ -3566,11 +3566,11 @@ function LiveTtcLayer({
                   'zoom',
                 ],
                 12.5,
-                0.42,
+                0.36,
                 15,
-                0.52,
+                0.45,
                 18,
-                0.62,
+                0.54,
               ],
               'icon-allow-overlap':
                 false,
@@ -3777,13 +3777,13 @@ function LiveTtcLayer({
                   'zoom',
                 ],
                 5.5,
-                0.68,
+                0.58,
                 9,
-                0.78,
+                0.68,
                 13,
-                0.94,
+                0.82,
                 17,
-                1.08,
+                0.94,
               ],
               'icon-rotate': [
                 'coalesce',
@@ -3832,13 +3832,13 @@ function LiveTtcLayer({
                   'zoom',
                 ],
                 10.5,
-                8,
+                7,
                 13,
-                9,
+                8,
                 16,
-                10,
+                9,
                 18,
-                11,
+                10,
               ],
               'text-anchor':
                 'bottom',
@@ -3894,11 +3894,11 @@ function LiveTtcLayer({
                   'zoom',
                 ],
                 5.5,
-                7,
+                6,
                 11,
-                8,
+                7,
                 17,
-                10,
+                9,
               ],
               'text-offset': [
                 0,
@@ -3961,11 +3961,11 @@ function LiveTtcLayer({
             'zoom',
           ],
           9,
-          7 * multiplier,
+          5.8 * multiplier,
           13,
-          10 * multiplier,
+          8.4 * multiplier,
           17,
-          14 * multiplier,
+          11.8 * multiplier,
         ]
       }
 
@@ -3999,11 +3999,11 @@ function LiveTtcLayer({
                 'zoom',
               ],
               9,
-              1,
+              0.85,
               13,
-              2.2,
+              1.8,
               17,
-              4,
+              3.2,
             ]
           )
         }
@@ -4077,9 +4077,9 @@ function LiveTtcLayer({
                   SELECTED_ROUTE_CASING_LAYER_ID,
                   'line-width',
                   selectedRouteCasingWidthExpression(
-                    0.94 +
+                    0.9 +
                     wave *
-                    0.64
+                    0.4
                   )
                 )
               }
@@ -5984,6 +5984,51 @@ function LiveTtcLayer({
         )
       }
 
+      function handleMapBackgroundClick(
+        event
+      ) {
+        const popupLayers =
+          [
+            VEHICLE_CIRCLE_LAYER_ID,
+            STOPS_HIT_LAYER_ID,
+            STATIONS_LAYER_ID,
+          ]
+            .filter(
+              (
+                layerId
+              ) =>
+                Boolean(
+                  map.getLayer(
+                    layerId
+                  )
+                )
+            )
+
+        if (
+          popupLayers.length >
+            0 &&
+          map
+            .queryRenderedFeatures(
+              event.point,
+              {
+                layers:
+                  popupLayers,
+              }
+            )
+            .length >
+            0
+        ) {
+          return
+        }
+
+        removePopup()
+      }
+
+      function handleMapPinClick() {
+        removePopup()
+      }
+
+
       function pointerCursor() {
         map.getCanvas().style.cursor =
           'pointer'
@@ -6028,6 +6073,18 @@ function LiveTtcLayer({
         ROUTES_LAYER_ID,
         handleRouteClick
       )
+
+      map.on(
+        'click',
+        handleMapBackgroundClick
+      )
+
+      map
+        .getContainer()
+        .addEventListener(
+          'geographic:map-pin-click',
+          handleMapPinClick
+        )
 
       ;[
         VEHICLE_CIRCLE_LAYER_ID,
@@ -6136,6 +6193,18 @@ function LiveTtcLayer({
           ROUTES_LAYER_ID,
           handleRouteClick
         )
+
+        map.off(
+          'click',
+          handleMapBackgroundClick
+        )
+
+        map
+          .getContainer()
+          .removeEventListener(
+            'geographic:map-pin-click',
+            handleMapPinClick
+          )
 
         ;[
           VEHICLE_CIRCLE_LAYER_ID,

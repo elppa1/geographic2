@@ -949,7 +949,10 @@ function GeographicApp() {
       defaultLayer?.layerType
 
 
-  function resetHistoricMapHome() {
+  function resetHistoricMapHome(
+    recenter =
+      true
+  ) {
     setSelectedLayer(
       defaultLayer
     )
@@ -959,6 +962,13 @@ function GeographicApp() {
       () => {
         geographicMapRef.current
           ?.clearSelectedPin?.()
+
+
+        if (
+          !recenter
+        ) {
+          return
+        }
 
 
         const map =
@@ -1044,7 +1054,10 @@ function GeographicApp() {
     }
 
 
-    resetHistoricMapHome()
+    resetHistoricMapHome(
+      value !==
+        'all'
+    )
   }
 
 
