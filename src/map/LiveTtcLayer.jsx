@@ -2217,8 +2217,10 @@ function createVehicleMarkerImage(
     color
   context.strokeStyle =
     '#ffffff'
+  // Strong white casing keeps a black vehicle visible on top of black TTC
+  // route lines and dark aerial imagery.
   context.lineWidth =
-    3
+    4
 
   context.beginPath()
   context.moveTo(
@@ -3231,42 +3233,34 @@ function LiveTtcLayer({
         }
       }
 
-      function addSourcesAndLayers() {
-        const streetLabelLayerId =
-          getStreetLabelInsertionLayerId(
-            map
-          )
-
+      function ensureLiveTtcImage(
+        imageId
+      ) {
         if (
-          !map.hasImage(
-            BUS_MARKER_IMAGE_ID
+          map.hasImage(
+            imageId
           )
         ) {
-          const busMarker =
+          return
+        }
+
+        let image =
+          null
+
+        if (
+          imageId ===
+            BUS_MARKER_IMAGE_ID
+        ) {
+          image =
             createVehicleMarkerImage(
               '#000000'
             )
-
-          if (
-            busMarker
-          ) {
-            map.addImage(
-              BUS_MARKER_IMAGE_ID,
-              busMarker,
-              {
-                pixelRatio:
-                  2,
-              }
-            )
-          }
         }
-
-        if (
-          !map.hasImage(
+        else if (
+          imageId ===
             STREETCAR_MARKER_IMAGE_ID
-          )
         ) {
-          const streetcarMarker =
+          image =
             createVehicleMarkerImage(
               '#000000',
               {
@@ -3274,42 +3268,98 @@ function LiveTtcLayer({
                   true,
               }
             )
-
-          if (
-            streetcarMarker
-          ) {
-            map.addImage(
-              STREETCAR_MARKER_IMAGE_ID,
-              streetcarMarker,
-              {
-                pixelRatio:
-                  2,
-              }
-            )
-          }
+        }
+        else if (
+          imageId ===
+            STOP_MARKER_IMAGE_ID
+        ) {
+          image =
+            createStopMarkerImage()
         }
 
         if (
-          !map.hasImage(
-            STOP_MARKER_IMAGE_ID
+          !image ||
+          map.hasImage(
+            imageId
           )
         ) {
-          const stopMarker =
-            createStopMarkerImage()
-
-          if (
-            stopMarker
-          ) {
-            map.addImage(
-              STOP_MARKER_IMAGE_ID,
-              stopMarker,
-              {
-                pixelRatio:
-                  2,
-              }
-            )
-          }
+          return
         }
+
+        try {
+          map.addImage(
+            imageId,
+            image,
+            {
+              pixelRatio:
+                2,
+            }
+          )
+        }
+        catch (
+          error
+        ) {
+          // A style swap can race image registration by a frame.
+          // styleimagemissing/styledata will immediately try again.
+          console.warn(
+            'LIVE TTC IMAGE:',
+            imageId,
+            error
+          )
+        }
+      }
+
+      function ensureLiveTtcImages() {
+        ;[
+          BUS_MARKER_IMAGE_ID,
+          STREETCAR_MARKER_IMAGE_ID,
+          STOP_MARKER_IMAGE_ID,
+        ]
+          .forEach(
+            ensureLiveTtcImage
+          )
+      }
+
+      function handleStyleImageMissing(
+        event
+      ) {
+        const imageId =
+          String(
+            event?.id ||
+            ''
+          )
+
+        if (
+          imageId ===
+            BUS_MARKER_IMAGE_ID ||
+          imageId ===
+            STREETCAR_MARKER_IMAGE_ID ||
+          imageId ===
+            STOP_MARKER_IMAGE_ID
+        ) {
+          ensureLiveTtcImage(
+            imageId
+          )
+        }
+      }
+
+      function handleStyleData() {
+        if (
+          disposed
+        ) {
+          return
+        }
+
+        ensureLiveTtcImages()
+      }
+
+      function addSourcesAndLayers() {
+        const streetLabelLayerId =
+          getStreetLabelInsertionLayerId(
+            map
+          )
+
+        ensureLiveTtcImages()
 
         if (
           !map.getSource(
@@ -3810,7 +3860,13 @@ function LiveTtcLayer({
                 true,
               'icon-ignore-placement':
                 true,
+              'icon-padding':
+                0,
 
+            },
+            paint: {
+              'icon-opacity':
+                1,
             },
           })
         }
@@ -6167,6 +6223,16 @@ function LiveTtcLayer({
       )
 
       map.on(
+        'styleimagemissing',
+        handleStyleImageMissing
+      )
+
+      map.on(
+        'styledata',
+        handleStyleData
+      )
+
+      map.on(
         'click',
         VEHICLE_CIRCLE_LAYER_ID,
         handleVehicleClick
@@ -6284,6 +6350,16 @@ function LiveTtcLayer({
         map.off(
           'moveend',
           scheduleNetworkRefresh
+        )
+
+        map.off(
+          'styleimagemissing',
+          handleStyleImageMissing
+        )
+
+        map.off(
+          'styledata',
+          handleStyleData
         )
 
         map.off(
