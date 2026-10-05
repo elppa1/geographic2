@@ -62,6 +62,38 @@ body {
 
 
 /* ============================================================
+   MAP OVERLAY STACK
+   ============================================================ */
+
+/*
+ * MapLibre style layers (base map, aerials, TTC routes/stops/vehicles) live
+ * on the canvas. Geographic pins and cards are DOM overlays and must always
+ * remain above that canvas. The .map parent itself stays at z-index 0, so
+ * these values cannot jump above the app header/timeline outside the map.
+ */
+.map .maplibregl-canvas {
+  z-index: 0;
+}
+
+.map .maplibregl-marker {
+  z-index: 300;
+}
+
+.map .geographic-map-marker-news {
+  z-index: 700 !important;
+}
+
+.map .maplibregl-popup {
+  z-index: 1400 !important;
+}
+
+.map .maplibregl-popup-content {
+  position: relative;
+  z-index: 1;
+}
+
+
+/* ============================================================
    MAPLIBRE ATTRIBUTION CONTROL
    ============================================================ */
 

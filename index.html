@@ -5,8 +5,15 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>elppa-geographic</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
     <script>
       (() => {
+        // The module request above is discovered first so TTC preloading cannot
+        // delay the critical application/map bundle. This still starts before
+        // deferred module execution and while the intro panel is on screen.
         const endpoint =
           '/api/geographic/toronto/ttc/live/vehicles'
 
@@ -43,9 +50,5 @@
         }
       })()
     </script>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

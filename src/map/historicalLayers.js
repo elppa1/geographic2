@@ -93,6 +93,9 @@ export function addHistoricalLayers({
             paint: {
               'raster-opacity':
                 1,
+
+              'raster-fade-duration':
+                0,
             },
           })
         }

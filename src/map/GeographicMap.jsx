@@ -967,6 +967,10 @@ const GeographicMap =
                     'raster',
                   source:
                     'osm',
+                  paint: {
+                    'raster-fade-duration':
+                      0,
+                  },
                 },
               ],
             },

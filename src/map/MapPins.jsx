@@ -9240,6 +9240,12 @@ function createMarker({
     })
   }
 
+  element.classList.add(
+    'geographic-map-marker',
+    `geographic-map-marker-${pinType}`
+  )
+
+
   const compactMobilePopup =
     typeof window !==
       'undefined' &&
@@ -10643,6 +10649,9 @@ function createMarker({
         compactMobilePopup
           ? '164px'
           : '280px',
+
+      className:
+        'geographic-map-card-popup',
     })
       .setDOMContent(
         popupContent
@@ -10706,8 +10715,13 @@ function createMarker({
           !mapContainer ||
           !popupElement
         ) {
-          return
+          return false
         }
+
+        // Cards always sit above every map marker/TTC overlay. App chrome is
+        // outside the .map stacking context and therefore still wins.
+        popupElement.style.zIndex =
+          '1400'
 
         const mapRect =
           mapContainer.getBoundingClientRect()
@@ -10769,58 +10783,43 @@ function createMarker({
             )
         }
 
-        if (
-          compactMobilePopup
-        ) {
-          popupContent.style.maxHeight =
-            'none'
+        // The old mobile "max-height: none" path could create a card taller
+        // than the usable map viewport, making a correct snap impossible.
+        // Constrain BOTH desktop and mobile cards to the current safe region.
+        const availableHeight =
+          Math.max(
+            92,
+            safeBottom -
+              safeTop -
+              24
+          )
 
-          popupContent.style.overflowY =
-            'visible'
-
-          popupContent.style.overscrollBehavior =
-            'auto'
-        }
-        else {
-          popupContent.style.maxHeight =
+        const preferredHeight =
+          parseFloat(
             preferredPopupMaxHeight ||
-            'none'
+            ''
+          )
 
-          const preferredHeight =
-            parseFloat(
-              window
-                .getComputedStyle(
-                  popupContent
-                )
-                .maxHeight
-            )
-
-          const availableHeight =
-            Math.max(
-              96,
-              safeBottom -
-                safeTop -
-                38
-            )
-
-          popupContent.style.maxHeight =
-            `${Math.floor(
-              Number.isFinite(
+        const maxContentHeight =
+          Number.isFinite(
+            preferredHeight
+          )
+            ? Math.min(
+                availableHeight,
                 preferredHeight
               )
-                ? Math.min(
-                    availableHeight,
-                    preferredHeight
-                  )
-                : availableHeight
-            )}px`
+            : availableHeight
 
-          popupContent.style.overflowY =
-            'auto'
+        popupContent.style.maxHeight =
+          `${Math.floor(
+            maxContentHeight
+          )}px`
 
-          popupContent.style.overscrollBehavior =
-            'contain'
-        }
+        popupContent.style.overflowY =
+          'auto'
+
+        popupContent.style.overscrollBehavior =
+          'contain'
 
         const popupRect =
           popupElement.getBoundingClientRect()
@@ -10872,29 +10871,63 @@ function createMarker({
             ],
             {
               duration:
-                180,
+                140,
+
+              essential:
+                true,
             }
           )
+
+          return true
         }
+
+        return false
       }
 
+      let snapCorrections =
+        0
 
       const refreshPopupLayout =
         () => {
           resetPopupScroll()
-          fitPopupIntoViewport()
+
+          const panned =
+            fitPopupIntoViewport()
+
+          if (
+            panned &&
+            snapCorrections <
+              2
+          ) {
+            snapCorrections +=
+              1
+
+            map.once(
+              'moveend',
+              refreshPopupLayout
+            )
+          }
         }
 
 
       refreshPopupLayout()
 
       window.requestAnimationFrame(
-        refreshPopupLayout
+        () => {
+          window.requestAnimationFrame(
+            refreshPopupLayout
+          )
+        }
       )
 
       window.setTimeout(
         refreshPopupLayout,
-        180
+        120
+      )
+
+      window.setTimeout(
+        refreshPopupLayout,
+        320
       )
 
 
@@ -10955,18 +10988,18 @@ function createMarker({
         'news'
     ) {
       markerElement.style.zIndex =
-        '120'
+        '700'
     }
     else if (
       pinType ===
         'historic'
     ) {
       markerElement.style.zIndex =
-        '80'
+        '360'
     }
     else {
       markerElement.style.zIndex =
-        '90'
+        '420'
     }
   }
 

@@ -75,9 +75,7 @@ const ARRIVALS_ENDPOINT =
   '/api/geographic/toronto/ttc/live/arrivals'
 
 const VEHICLE_PRELOAD_MAX_AGE_MS =
-  45 * 1000
-const VEHICLE_LOCAL_SNAPSHOT_KEY =
-  'toronto-geographic-ttc-vehicle-snapshot-v1'
+  20 * 1000
 const BUS_ACCURACY_ZOOM_THRESHOLD =
   14
 
@@ -89,93 +87,16 @@ let initialVehiclePreloadPromise =
   null
 
 
-function readLocalVehicleSnapshot() {
-  if (
-    typeof window ===
-      'undefined'
-  ) {
-    return null
-  }
-
-  try {
-    const raw =
-      window.localStorage
-        ?.getItem?.(
-          VEHICLE_LOCAL_SNAPSHOT_KEY
-        )
-
-    if (
-      !raw
-    ) {
-      return null
-    }
-
-    const parsed =
-      JSON.parse(
-        raw
-      )
-    const savedAt =
-      Number(
-        parsed?.savedAt ||
-        0
-      )
-    const payload =
-      parsed?.payload
-
-    if (
-      !savedAt ||
-      Date.now() -
-        savedAt >
-        VEHICLE_PRELOAD_MAX_AGE_MS ||
-      !Array.isArray(
-        payload?.vehicles
-      ) ||
-      payload.vehicles.length ===
-        0
-    ) {
-      return null
-    }
-
-    return {
-      payload,
-      savedAt,
-    }
-  }
-  catch {
-    return null
-  }
-}
-
-
-function saveLocalVehicleSnapshot(
+function validVehiclePayload(
   payload
 ) {
-  if (
-    typeof window ===
-      'undefined' ||
-    !Array.isArray(
+  return (
+    Array.isArray(
       payload?.vehicles
-    ) ||
-    payload.vehicles.length ===
+    ) &&
+    payload.vehicles.length >
       0
-  ) {
-    return
-  }
-
-  try {
-    window.localStorage
-      ?.setItem?.(
-        VEHICLE_LOCAL_SNAPSHOT_KEY,
-        JSON.stringify({
-          savedAt:
-            Date.now(),
-          payload,
-        })
-      )
-  }
-  catch {
-    // Storage is only a startup optimization.
-  }
+  )
 }
 
 
@@ -183,19 +104,14 @@ function acceptInitialVehiclePayload(
   payload
 ) {
   if (
-    Array.isArray(
-      payload?.vehicles
-    ) &&
-    payload.vehicles.length >
-      0
+    validVehiclePayload(
+      payload
+    )
   ) {
     initialVehiclePreloadPayload =
       payload
     initialVehiclePreloadAt =
       Date.now()
-    saveLocalVehicleSnapshot(
-      payload
-    )
   }
 
   return payload
@@ -209,22 +125,6 @@ function startInitialVehiclePreload() {
     initialVehiclePreloadPromise
   ) {
     return
-  }
-
-  if (
-    !initialVehiclePreloadPayload
-  ) {
-    const localSnapshot =
-      readLocalVehicleSnapshot()
-
-    if (
-      localSnapshot
-    ) {
-      initialVehiclePreloadPayload =
-        localSnapshot.payload
-      initialVehiclePreloadAt =
-        localSnapshot.savedAt
-    }
   }
 
   const earlyPromise =
@@ -282,7 +182,7 @@ function startInitialVehiclePreload() {
 }
 
 
-function getInitialVehiclePreloadSnapshot() {
+function takeInitialVehiclePreloadSnapshot() {
   if (
     initialVehiclePreloadPayload &&
     Date.now() -
@@ -292,8 +192,6 @@ function getInitialVehiclePreloadSnapshot() {
     const payload =
       initialVehiclePreloadPayload
 
-    // Startup optimization only: consume this snapshot ONCE.
-    // Every subsequent refresh must hit the live vehicle endpoint.
     initialVehiclePreloadPayload =
       null
     initialVehiclePreloadAt =
@@ -306,8 +204,9 @@ function getInitialVehiclePreloadSnapshot() {
 }
 
 
-// Begin loading before React mounts. index.html starts the request even earlier;
-// this adopts that promise instead of issuing another cold request.
+// Adopt the page-level preload. It is memory-only: never stringify the full
+// fleet into localStorage during live operation, which was causing main-thread
+// stalls while the user panned/zoomed the map.
 startInitialVehiclePreload()
 
 
@@ -3026,6 +2925,12 @@ function LiveTtcLayer({
         0
       let selectedRoutePulseTimer =
         null
+      let mapIsMoving =
+        false
+      let accuracyHintVisible =
+        null
+      let firstVehicleRefresh =
+        true
 
       function removePopup() {
         popupRef.current
@@ -3276,6 +3181,16 @@ function LiveTtcLayer({
             map.getZoom()
           ) <
           BUS_ACCURACY_ZOOM_THRESHOLD
+
+        if (
+          accuracyHintVisible ===
+            showHint
+        ) {
+          return
+        }
+
+        accuracyHintVisible =
+          showHint
 
         accuracyHint.textContent =
           'ZOOM IN FOR MORE BUS ACCURACY'
@@ -5378,21 +5293,34 @@ function LiveTtcLayer({
             () => {
               refreshNetwork()
             },
-            220
+            380
           )
       }
 
 
+      function handleMapMoveStart() {
+        mapIsMoving =
+          true
+      }
+
+
       function handleMapMoveEnd() {
+        mapIsMoving =
+          false
         scheduleNetworkRefresh()
         updateAccuracyHint()
-        refreshVehicles()
+
+        // Paint the latest interpolated vehicle frame immediately after the
+        // camera settles. Normal 2 s polling handles fresh GPS requests; we
+        // do not launch an extra network request for every pan/zoom.
+        renderAnimatedVehicles()
       }
 
 
       function renderAnimatedVehicles() {
         if (
-          disposed
+          disposed ||
+          mapIsMoving
         ) {
           return
         }
@@ -5758,34 +5686,118 @@ function LiveTtcLayer({
                 ),
             })
 
+          const fetchLivePayload =
+            async (
+              preferFresh =
+                false
+            ) => {
+              if (
+                preferFresh
+              ) {
+                params.set(
+                  'fresh',
+                  '1'
+                )
+              }
+
+              const response =
+                await fetch(
+                  `${VEHICLES_ENDPOINT}?${params.toString()}`,
+                  {
+                    cache:
+                      'no-store',
+                    signal:
+                      controller.signal,
+                  }
+                )
+
+              if (
+                !response.ok
+              ) {
+                throw new Error(
+                  `Live TTC vehicle request failed: ${response.status}`
+                )
+              }
+
+              return response.json()
+            }
+
           let payload =
-            getInitialVehiclePreloadSnapshot()
+            firstVehicleRefresh
+              ? takeInitialVehiclePreloadSnapshot()
+              : null
+
+          if (
+            !payload &&
+            firstVehicleRefresh &&
+            initialVehiclePreloadPromise
+          ) {
+            // The page-level preload and a bounded request are already in
+            // flight. Use whichever valid payload arrives first; do not wait
+            // behind a slow preload just because it started earlier.
+            const boundedPromise =
+              fetchLivePayload(
+                false
+              )
+
+            try {
+              payload =
+                await Promise.any([
+                  initialVehiclePreloadPromise
+                    .then(
+                      (
+                        value
+                      ) => {
+                        if (
+                          !validVehiclePayload(
+                            value
+                          )
+                        ) {
+                          throw new Error(
+                            'Empty TTC preload'
+                          )
+                        }
+
+                        return value
+                      }
+                    ),
+                  boundedPromise
+                    .then(
+                      (
+                        value
+                      ) => {
+                        if (
+                          !validVehiclePayload(
+                            value
+                          )
+                        ) {
+                          throw new Error(
+                            'Empty TTC vehicle response'
+                          )
+                        }
+
+                        return value
+                      }
+                    ),
+                ])
+            }
+            catch {
+              payload =
+                await boundedPromise
+            }
+          }
 
           if (
             !payload
           ) {
-            const response =
-              await fetch(
-                `${VEHICLES_ENDPOINT}?${params.toString()}`,
-                {
-                  cache:
-                    'no-store',
-                  signal:
-                    controller.signal,
-                }
-              )
-
-            if (
-              !response.ok
-            ) {
-              throw new Error(
-                `Live TTC vehicle request failed: ${response.status}`
-              )
-            }
-
             payload =
-              await response.json()
+              await fetchLivePayload(
+                !firstVehicleRefresh
+              )
           }
+
+          firstVehicleRefresh =
+            false
 
           if (
             disposed
@@ -5799,18 +5811,6 @@ function LiveTtcLayer({
             )
               ? payload.vehicles
               : []
-
-          if (
-            nextVehicles.length >
-              0
-          ) {
-            // Persist only for a future page reload. Do NOT recycle a normal
-            // network response into the current session's one-shot preload,
-            // otherwise alternate polls can reuse old vehicle positions.
-            saveLocalVehicleSnapshot(
-              payload
-            )
-          }
 
           if (
             nextVehicles.length ===
@@ -6882,6 +6882,11 @@ function LiveTtcLayer({
       )
 
       map.on(
+        'movestart',
+        handleMapMoveStart
+      )
+
+      map.on(
         'moveend',
         handleMapMoveEnd
       )
@@ -7017,6 +7022,11 @@ function LiveTtcLayer({
           null
         routeCatalogById =
           new Map()
+
+        map.off(
+          'movestart',
+          handleMapMoveStart
+        )
 
         map.off(
           'moveend',

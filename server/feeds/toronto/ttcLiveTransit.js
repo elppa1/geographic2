@@ -2561,7 +2561,10 @@ function refreshVehicleFeedInBackground() {
 }
 
 
-async function getRawVehicleFeed() {
+async function getRawVehicleFeed({
+  preferFresh =
+    false,
+} = {}) {
   const cacheAge =
     vehicleCache
       ? Date.now() -
@@ -2577,12 +2580,45 @@ async function getRawVehicleFeed() {
   }
 
   if (
+    preferFresh
+  ) {
+    const refreshPromise =
+      refreshVehicleFeedInBackground()
+
+    if (
+      vehicleCache
+    ) {
+      // Live polling prefers the new upstream sample, but never freezes the
+      // map behind a slow TTC request. Fall back to the recent cache quickly.
+      return Promise.race([
+        refreshPromise,
+        new Promise(
+          (
+            resolve
+          ) => {
+            setTimeout(
+              () => {
+                resolve(
+                  vehicleCache.feed
+                )
+              },
+              900
+            )
+          }
+        ),
+      ])
+    }
+
+    return refreshPromise
+  }
+
+  if (
     vehicleCache &&
     cacheAge <
       REALTIME_STALE_FALLBACK_MS
   ) {
-    // Never hold first paint for a new upstream request when a usable recent
-    // fleet exists. Return it now and replace it in the background.
+    // Startup/first paint: show a recent fleet immediately and refresh it in
+    // the background. Subsequent client polls request fresh=1.
     refreshVehicleFeedInBackground()
       .catch(
         (
@@ -2611,7 +2647,7 @@ let vehicleWarmTimer =
 
 
 function warmVehicleFeed() {
-  getRawVehicleFeed()
+  refreshVehicleFeedInBackground()
     .catch(
       (
         error
@@ -2749,8 +2785,16 @@ async function getVehiclesPayload(
   // Live GPS should never wait for the much larger static SurfaceGTFS ZIP.
   // Return realtime vehicles immediately and enrich route/stop metadata from
   // the static cache once it has warmed in the background.
+  const preferFresh =
+    url.searchParams.get(
+      'fresh'
+    ) ===
+      '1'
+
   const feed =
-    await getRawVehicleFeed()
+    await getRawVehicleFeed({
+      preferFresh,
+    })
 
   const surface =
     surfaceCache
