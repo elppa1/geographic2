@@ -63,7 +63,7 @@ const VEHICLE_ICON_MIN_ZOOM =
 const VEHICLE_DIRECTION_MIN_ZOOM =
   5.5
 const VEHICLE_LABEL_MIN_ZOOM =
-  10.5
+  13.5
 const GPS_PROMPT_SESSION_KEY =
   'toronto-geographic-live-ttc-gps-prompted'
 
@@ -3988,11 +3988,24 @@ function LiveTtcLayer({
             ],
             paint: {
               'line-color':
-                '#000000',
-              'line-width':
-                0,
+                '#ffffff',
+              'line-width': [
+                'interpolate',
+                [
+                  'linear',
+                ],
+                [
+                  'zoom',
+                ],
+                9,
+                5.8,
+                13,
+                8.4,
+                17,
+                11.8,
+              ],
               'line-opacity':
-                1,
+                0.92,
             },
           },
             streetLabelLayerId
@@ -4021,7 +4034,7 @@ function LiveTtcLayer({
             ],
             paint: {
               'line-color':
-                '#000000',
+                '#1677ff',
               'line-width': [
                 'interpolate',
                 [
@@ -4031,14 +4044,14 @@ function LiveTtcLayer({
                   'zoom',
                 ],
                 9,
-                0.7,
+                3.4,
                 13,
-                1.3,
+                5.8,
                 17,
-                2.0,
+                9.2,
               ],
               'line-opacity':
-                1,
+                0.96,
             },
           },
             streetLabelLayerId
@@ -4287,11 +4300,11 @@ function LiveTtcLayer({
                 13,
                 0.94,
                 15,
-                1.20,
+                1.30,
                 17,
-                1.34,
+                1.48,
                 18,
-                1.42,
+                1.58,
               ],
               'icon-rotate': [
                 'coalesce',
@@ -4411,14 +4424,14 @@ function LiveTtcLayer({
                 [
                   'zoom',
                 ],
-                10.5,
-                7,
-                13,
+                13.5,
                 8,
-                16,
+                15,
                 9,
-                18,
+                17,
                 10,
+                18,
+                11,
               ],
               'text-anchor':
                 'bottom',
@@ -4565,26 +4578,14 @@ function LiveTtcLayer({
           map.setPaintProperty(
             SELECTED_ROUTE_LAYER_ID,
             'line-opacity',
-            1
+            0.96
           )
           map.setPaintProperty(
             SELECTED_ROUTE_LAYER_ID,
             'line-width',
-            [
-              'interpolate',
-              [
-                'linear',
-              ],
-              [
-                'zoom',
-              ],
-              9,
-              0.7,
-              13,
-              1.3,
-              17,
-              2.0,
-            ]
+            selectedRouteCoreWidthExpression(
+              1
+            )
           )
         }
 
@@ -4596,12 +4597,14 @@ function LiveTtcLayer({
           map.setPaintProperty(
             SELECTED_ROUTE_CASING_LAYER_ID,
             'line-opacity',
-            1
+            0.92
           )
           map.setPaintProperty(
             SELECTED_ROUTE_CASING_LAYER_ID,
             'line-width',
-            0
+            selectedRouteCasingWidthExpression(
+              1
+            )
           )
         }
       }
@@ -4647,12 +4650,41 @@ function LiveTtcLayer({
                 map.setPaintProperty(
                   SELECTED_ROUTE_CASING_LAYER_ID,
                   'line-opacity',
-                  1
+                  0.78 +
+                    wave *
+                    0.18
                 )
                 map.setPaintProperty(
                   SELECTED_ROUTE_CASING_LAYER_ID,
                   'line-width',
-                  0
+                  selectedRouteCasingWidthExpression(
+                    1 +
+                      wave *
+                      0.10
+                  )
+                )
+              }
+
+              if (
+                map.getLayer(
+                  SELECTED_ROUTE_LAYER_ID
+                )
+              ) {
+                map.setPaintProperty(
+                  SELECTED_ROUTE_LAYER_ID,
+                  'line-opacity',
+                  0.74 +
+                    wave *
+                    0.26
+                )
+                map.setPaintProperty(
+                  SELECTED_ROUTE_LAYER_ID,
+                  'line-width',
+                  selectedRouteCoreWidthExpression(
+                    0.94 +
+                      wave *
+                      0.16
+                  )
                 )
               }
             },
