@@ -57,8 +57,10 @@ const STREETCAR_MARKER_IMAGE_ID =
 const STOP_MARKER_IMAGE_ID =
   'ttc-live-stop-marker'
 const VEHICLE_DOT_MIN_ZOOM =
-  5.5
+  0
 const VEHICLE_ICON_MIN_ZOOM =
+  0
+const VEHICLE_DIRECTION_MIN_ZOOM =
   5.5
 const VEHICLE_LABEL_MIN_ZOOM =
   10.5
@@ -2487,6 +2489,7 @@ function LiveTtcLayer({
   map,
   active =
     false,
+  onVehiclesReady,
 }) {
   const popupRef =
     useRef(null)
@@ -2541,6 +2544,8 @@ function LiveTtcLayer({
         0
       let selectedRoutePulseTimer =
         null
+      let vehiclesReadyNotified =
+        false
 
       function removePopup() {
         popupRef.current
@@ -3808,17 +3813,17 @@ function LiveTtcLayer({
                   'zoom',
                 ],
                 5.5,
-                0.58,
-                9,
                 0.68,
+                9,
+                0.78,
                 13,
-                0.82,
+                0.94,
                 15,
-                1.08,
-                17,
                 1.20,
+                17,
+                1.34,
                 18,
-                1.26,
+                1.42,
               ],
               'icon-rotate': [
                 'coalesce',
@@ -3984,7 +3989,7 @@ function LiveTtcLayer({
             source:
               VEHICLES_SOURCE_ID,
             minzoom:
-              VEHICLE_ICON_MIN_ZOOM,
+              VEHICLE_DIRECTION_MIN_ZOOM,
             filter: [
               'has',
               'bearing',
@@ -5302,6 +5307,13 @@ function LiveTtcLayer({
                   payload?.upstream,
               }
             )
+          }
+          else if (
+            !vehiclesReadyNotified
+          ) {
+            vehiclesReadyNotified =
+              true
+            onVehiclesReady?.()
           }
 
           const now =

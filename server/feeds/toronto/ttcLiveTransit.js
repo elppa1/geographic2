@@ -2515,6 +2515,69 @@ async function getRawVehicleFeed() {
 }
 
 
+const VEHICLE_WARM_INTERVAL_MS =
+  4500
+
+let vehicleWarmTimer =
+  null
+
+
+function warmVehicleFeed() {
+  getRawVehicleFeed()
+    .catch(
+      (
+        error
+      ) => {
+        console.warn(
+          'LIVE TTC VEHICLE WARMUP:',
+          error?.message ||
+            error
+        )
+      }
+    )
+}
+
+
+function startVehicleWarmLoop(
+  httpServer
+) {
+  if (
+    vehicleWarmTimer
+  ) {
+    return
+  }
+
+  // Start immediately during server boot so the first map visitor normally
+  // receives an already-decoded realtime vehicle feed.
+  warmVehicleFeed()
+
+  vehicleWarmTimer =
+    setInterval(
+      warmVehicleFeed,
+      VEHICLE_WARM_INTERVAL_MS
+    )
+
+  vehicleWarmTimer
+    ?.unref?.()
+
+  httpServer
+    ?.once?.(
+      'close',
+      () => {
+        if (
+          vehicleWarmTimer
+        ) {
+          clearInterval(
+            vehicleWarmTimer
+          )
+          vehicleWarmTimer =
+            null
+        }
+      }
+    )
+}
+
+
 async function getRawTripUpdateFeed() {
   if (
     tripUpdateCache &&
@@ -3901,6 +3964,10 @@ export function ttcLiveTransitFeed() {
     configureServer(
       server
     ) {
+      startVehicleWarmLoop(
+        server?.httpServer
+      )
+
       server.middlewares.use(
         LIVE_TTC_ENDPOINT,
         async (

@@ -1271,7 +1271,7 @@ function GeographicApp() {
               false
             )
           },
-          10000
+          6000
         )
 
 
@@ -2836,6 +2836,12 @@ function GeographicApp() {
           liveBusesEnabled
         }
 
+        onLiveTtcVehiclesReady={() => {
+          setLiveBusesInitializing(
+            false
+          )
+        }}
+
         onChangePinFilter={
           chooseContentMode
         }
@@ -2885,7 +2891,7 @@ function GeographicApp() {
               LIVE BUSES ARE INITIALIZING
             </div>
             <div className="live-buses-initializing-copy">
-              Buses and streetcars may take up to 10 seconds to appear.
+              Live positions are loading now.
             </div>
           </div>
         )}

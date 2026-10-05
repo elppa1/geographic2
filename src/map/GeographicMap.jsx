@@ -551,6 +551,7 @@ const GeographicMap =
           'historic',
         liveBusesEnabled =
           false,
+        onLiveTtcVehiclesReady,
         onChangePinFilter,
         historicIssueFilter =
           'all',
@@ -2896,6 +2897,9 @@ const GeographicMap =
               }
               active={
                 liveBusesEnabled
+              }
+              onVehiclesReady={
+                onLiveTtcVehiclesReady
               }
             />
           )}
