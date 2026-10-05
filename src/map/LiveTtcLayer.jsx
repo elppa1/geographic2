@@ -43,15 +43,17 @@ const VEHICLE_CIRCLE_LAYER_ID =
   'ttc-live-vehicle-circles'
 const VEHICLE_ICON_LAYER_ID =
   'ttc-live-vehicle-icons'
+const STREETCAR_ICON_LAYER_ID =
+  'ttc-live-streetcar-icons'
 const VEHICLE_ROUTE_LABEL_LAYER_ID =
   'ttc-live-vehicle-route-labels'
 const VEHICLE_DIRECTION_LAYER_ID =
   'ttc-live-vehicle-direction'
 
 const BUS_MARKER_IMAGE_ID =
-  'ttc-live-bus-marker-v2'
+  'ttc-live-bus-marker-v3'
 const STREETCAR_MARKER_IMAGE_ID =
-  'ttc-live-streetcar-marker-v2'
+  'ttc-live-streetcar-marker-v3'
 const STOP_MARKER_IMAGE_ID =
   'ttc-live-stop-marker'
 const VEHICLE_DOT_MIN_ZOOM =
@@ -3774,10 +3776,9 @@ function LiveTtcLayer({
             VEHICLE_ICON_LAYER_ID
           )
         ) {
-          // Render the moving vehicle body as a normal text glyph instead of
-          // a custom sprite. The route numbers and direction arrows already
-          // prove the symbol/glyph pipeline is working reliably; this avoids
-          // the disappearing custom-image problem entirely.
+          // Use a literal runtime image ID for buses. TTC stop icons already
+          // prove this exact MapLibre addImage -> literal icon-image path works.
+          // Avoid the previous data-driven icon-image expression entirely.
           map.addLayer({
             id:
               VEHICLE_ICON_LAYER_ID,
@@ -3787,59 +3788,39 @@ function LiveTtcLayer({
               VEHICLES_SOURCE_ID,
             minzoom:
               VEHICLE_ICON_MIN_ZOOM,
-            layout: {
-              'text-field':
-                '▮',
-              'text-size': [
-                'case',
-                [
-                  '==',
-                  [
-                    'get',
-                    'mode',
-                  ],
-                  'streetcar',
-                ],
-                [
-                  'interpolate',
-                  [
-                    'linear',
-                  ],
-                  [
-                    'zoom',
-                  ],
-                  5.5,
-                  15,
-                  9,
-                  17,
-                  13,
-                  20,
-                  17,
-                  23,
-                ],
-                [
-                  'interpolate',
-                  [
-                    'linear',
-                  ],
-                  [
-                    'zoom',
-                  ],
-                  5.5,
-                  15,
-                  9,
-                  17,
-                  13,
-                  20,
-                  15,
-                  25,
-                  17,
-                  29,
-                  18,
-                  31,
-                ],
+            filter: [
+              '!=',
+              [
+                'get',
+                'mode',
               ],
-              'text-rotate': [
+              'streetcar',
+            ],
+            layout: {
+              'icon-image':
+                BUS_MARKER_IMAGE_ID,
+              'icon-size': [
+                'interpolate',
+                [
+                  'linear',
+                ],
+                [
+                  'zoom',
+                ],
+                5.5,
+                0.58,
+                9,
+                0.68,
+                13,
+                0.82,
+                15,
+                1.08,
+                17,
+                1.20,
+                18,
+                1.26,
+              ],
+              'icon-rotate': [
                 'coalesce',
                 [
                   'get',
@@ -3847,27 +3828,84 @@ function LiveTtcLayer({
                 ],
                 0,
               ],
-              'text-rotation-alignment':
+              'icon-rotation-alignment':
                 'map',
-              'text-pitch-alignment':
-                'map',
-              'text-allow-overlap':
+              'icon-allow-overlap':
                 true,
-              'text-ignore-placement':
+              'icon-ignore-placement':
                 true,
-              'text-padding':
+              'icon-padding':
                 0,
             },
             paint: {
-              'text-color':
-                '#000000',
-              'text-halo-color':
-                '#ffffff',
-              'text-halo-width':
-                2.4,
-              'text-halo-blur':
-                0.15,
-              'text-opacity':
+              'icon-opacity':
+                1,
+            },
+          })
+        }
+
+        if (
+          !map.getLayer(
+            STREETCAR_ICON_LAYER_ID
+          )
+        ) {
+          // Streetcars get their own literal icon layer for the same reason.
+          map.addLayer({
+            id:
+              STREETCAR_ICON_LAYER_ID,
+            type:
+              'symbol',
+            source:
+              VEHICLES_SOURCE_ID,
+            minzoom:
+              VEHICLE_ICON_MIN_ZOOM,
+            filter: [
+              '==',
+              [
+                'get',
+                'mode',
+              ],
+              'streetcar',
+            ],
+            layout: {
+              'icon-image':
+                STREETCAR_MARKER_IMAGE_ID,
+              'icon-size': [
+                'interpolate',
+                [
+                  'linear',
+                ],
+                [
+                  'zoom',
+                ],
+                5.5,
+                0.58,
+                9,
+                0.68,
+                13,
+                0.82,
+                17,
+                0.94,
+              ],
+              'icon-rotate': [
+                'coalesce',
+                [
+                  'get',
+                  'bearing',
+                ],
+                0,
+              ],
+              'icon-rotation-alignment':
+                'map',
+              'icon-allow-overlap':
+                true,
+              'icon-ignore-placement':
+                true,
+              'icon-padding':
+                0,
+            },
+            paint: {
+              'icon-opacity':
                 1,
             },
           })
@@ -6428,6 +6466,7 @@ function LiveTtcLayer({
         ;[
           VEHICLE_DIRECTION_LAYER_ID,
           VEHICLE_ROUTE_LABEL_LAYER_ID,
+          STREETCAR_ICON_LAYER_ID,
           VEHICLE_ICON_LAYER_ID,
           VEHICLE_CIRCLE_LAYER_ID,
           STATION_LABELS_LAYER_ID,
