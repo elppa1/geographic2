@@ -67,6 +67,8 @@ const NETWORK_ENDPOINT =
   '/api/geographic/toronto/ttc/live/network'
 const VEHICLES_ENDPOINT =
   '/api/geographic/toronto/ttc/live/vehicles'
+const VEHICLES_STREAM_ENDPOINT =
+  '/api/geographic/toronto/ttc/live/vehicles/stream'
 const ARRIVALS_ENDPOINT =
   '/api/geographic/toronto/ttc/live/arrivals'
 
@@ -2541,6 +2543,14 @@ function LiveTtcLayer({
         false
       let vehicleRefreshQueued =
         false
+      let vehicleStream =
+        null
+      let vehicleStreamOpen =
+        false
+      let vehicleStreamReconnectTimer =
+        null
+      let lastVehicleStreamMessageAt =
+        0
       let routeCatalogById =
         new Map()
       let gpsPrompt =
@@ -2671,7 +2681,7 @@ function LiveTtcLayer({
 
         accuracyHint.textContent =
           focused
-            ? 'FOCUSED LIVE UPDATES'
+            ? 'FOCUSED LIVE STREAM'
             : 'ZOOM IN FOR MORE ACCURATE LIVE POSITIONS'
 
         accuracyHint.style.opacity =
@@ -5180,6 +5190,683 @@ function LiveTtcLayer({
           )
       }
 
+      function applyVehiclePayload(
+        payload
+      ) {
+        if (
+          disposed
+        ) {
+          return
+        }
+
+        const now =
+          performance.now()
+        const nextVehicles =
+          Array.isArray(
+            payload?.vehicles
+          )
+            ? payload.vehicles
+            : []
+        const nextAnimations =
+          new Map()
+
+        nextVehicles
+          .forEach(
+            (
+              vehicle
+            ) => {
+              const longitude =
+                Number(
+                  vehicle.longitude
+                )
+              const latitude =
+                Number(
+                  vehicle.latitude
+                )
+              const vehicleId =
+                String(
+                  vehicle.id ||
+                  ''
+                )
+
+              if (
+                !vehicleId ||
+                !Number.isFinite(
+                  longitude
+                ) ||
+                !Number.isFinite(
+                  latitude
+                )
+              ) {
+                return
+              }
+
+              const previous =
+                vehicleAnimationsRef.current
+                  .get(
+                    vehicleId
+                  )
+              const routeId =
+                String(
+                  vehicle.routeId ||
+                  ''
+                )
+              const tripId =
+                String(
+                  vehicle.tripId ||
+                  ''
+                )
+              const directionId =
+                normalizeDirectionId(
+                  vehicle.directionId
+                )
+              const bearing =
+                Number.isFinite(
+                  Number(
+                    vehicle.bearing
+                  )
+                )
+                  ? Number(
+                      vehicle.bearing
+                    )
+                  : null
+              const speed =
+                Number.isFinite(
+                  Number(
+                    vehicle.speed
+                  )
+                )
+                  ? Number(
+                      vehicle.speed
+                    )
+                  : null
+              const timestamp =
+                Number(
+                  vehicle.timestamp ||
+                  0
+                )
+              const currentStatus =
+                String(
+                  vehicle.currentStatus ||
+                  ''
+                )
+              const realCoordinate = [
+                longitude,
+                latitude,
+              ]
+
+              const sameRealtimeSample =
+                previous &&
+                timestamp >
+                  0 &&
+                Number(
+                  previous.sampleTimestamp ||
+                  0
+                ) ===
+                  timestamp
+
+              if (
+                sameRealtimeSample &&
+                previous?.path
+              ) {
+                nextAnimations.set(
+                  vehicleId,
+                  {
+                    ...previous,
+                    // A repeated feed timestamp is cached data, not a new
+                    // position sample. Keep lastSeenAt unchanged so stale
+                    // feeds naturally slow instead of driving forever.
+                    properties: {
+                      ...previous.properties,
+                      routeShortName:
+                        vehicle.routeShortName ||
+                        previous.properties?.routeShortName ||
+                        routeId,
+                      routeLongName:
+                        vehicle.routeLongName ||
+                        previous.properties?.routeLongName ||
+                        '',
+                      headsign:
+                        vehicle.headsign ||
+                        previous.properties?.headsign ||
+                        '',
+                      stopId:
+                        vehicle.stopId ||
+                        previous.properties?.stopId ||
+                        '',
+                      stopName:
+                        vehicle.stopName ||
+                        previous.properties?.stopName ||
+                        '',
+                      occupancyStatus:
+                        vehicle.occupancyStatus ||
+                        previous.properties?.occupancyStatus ||
+                        '',
+                    },
+                  }
+                )
+                return
+              }
+
+              let path =
+                null
+              let projection =
+                null
+              const previousPathReusable =
+                previous?.path &&
+                previous.path.routeId ===
+                  routeId &&
+                (
+                  !directionId ||
+                  !previous.path.directionId ||
+                  previous.path.directionId ===
+                    directionId
+                ) &&
+                (
+                  !tripId ||
+                  !previous?.properties?.tripId ||
+                  previous.properties.tripId ===
+                    tripId
+                )
+
+              if (
+                previousPathReusable
+              ) {
+                const previousProjection =
+                  projectCoordinateOntoRoutePath(
+                    realCoordinate,
+                    previous.path
+                  )
+
+                if (
+                  previousProjection &&
+                  previousProjection.distanceMeters <=
+                    VEHICLE_ROUTE_LOCK_MAX_METERS
+                ) {
+                  path =
+                    previous.path
+                  projection =
+                    previousProjection
+                }
+              }
+
+              if (
+                !path
+              ) {
+                const selection =
+                  selectRouteProgressPath({
+                    coordinate:
+                      realCoordinate,
+                    routeId,
+                    directionId,
+                    bearing,
+                    routePathsByRoute:
+                      routePathsByRouteRef.current,
+                  })
+
+                if (
+                  selection
+                ) {
+                  path =
+                    selection.path
+                  projection =
+                    selection.projection
+                }
+              }
+
+              const pathMatchesPrevious =
+                path &&
+                previous?.path &&
+                path.shapeId ===
+                  previous.path.shapeId &&
+                path.directionId ===
+                  previous.path.directionId
+              let sampleProgress =
+                projection?.progressMeters ??
+                null
+              const previousSampleProgress =
+                previous?.sampleProgress ??
+                previous?.realProgress
+
+              if (
+                pathMatchesPrevious &&
+                Number.isFinite(
+                  Number(
+                    previousSampleProgress
+                  )
+                ) &&
+                Number.isFinite(
+                  Number(
+                    sampleProgress
+                  )
+                ) &&
+                sampleProgress <
+                  Number(
+                    previousSampleProgress
+                  ) -
+                  5
+              ) {
+                // GPS jitter must never make a bus reverse visually. A real
+                // direction/trip change selects a new shape above instead.
+                sampleProgress =
+                  Number(
+                    previousSampleProgress
+                  )
+              }
+
+              const speedState =
+                path &&
+                Number.isFinite(
+                  Number(
+                    sampleProgress
+                  )
+                )
+                  ? routeEngineTargetSpeed({
+                      previous:
+                        pathMatchesPrevious
+                          ? previous
+                          : null,
+                      realProgress:
+                        sampleProgress,
+                      sampleTimestamp:
+                        timestamp,
+                      ttcSpeed:
+                        speed,
+                      currentStatus,
+                      now,
+                    })
+                  : {
+                      filteredSpeed:
+                        Number.isFinite(
+                          Number(
+                            speed
+                          )
+                        )
+                          ? clampNumber(
+                              speed,
+                              0,
+                              VEHICLE_VISUAL_MAX_SPEED_MPS
+                            )
+                          : 0,
+                      lastMovingAt:
+                        previous?.lastMovingAt ??
+                        0,
+                      stopped:
+                        currentStatus
+                          .toUpperCase()
+                          .includes(
+                            'STOPPED'
+                          ),
+                    }
+
+              const realProgress =
+                path &&
+                Number.isFinite(
+                  Number(
+                    sampleProgress
+                  )
+                )
+                  ? timestampCompensatedRouteProgress({
+                      path,
+                      sampleProgress,
+                      sampleTimestamp:
+                        timestamp,
+                      reportedAgeSeconds:
+                        vehicle.ageSeconds,
+                      ttcSpeed:
+                        speed,
+                      speedState,
+                      previous:
+                        pathMatchesPrevious
+                          ? previous
+                          : null,
+                      now,
+                    })
+                  : sampleProgress
+
+              let displayProgress =
+                null
+
+              if (
+                path &&
+                Number.isFinite(
+                  Number(
+                    realProgress
+                  )
+                )
+              ) {
+                if (
+                  pathMatchesPrevious &&
+                  Number.isFinite(
+                    Number(
+                      previous.displayProgress
+                    )
+                  )
+                ) {
+                  displayProgress =
+                    clampNumber(
+                      previous.displayProgress,
+                      0,
+                      path.totalMeters
+                    )
+                }
+                else {
+                  displayProgress =
+                    clampNumber(
+                      realProgress,
+                      0,
+                      path.totalMeters
+                    )
+                }
+              }
+
+              const routeBearing =
+                path &&
+                Number.isFinite(
+                  Number(
+                    displayProgress
+                  )
+                )
+                  ? bearingAtRouteProgress(
+                      path,
+                      displayProgress
+                    )
+                  : bearing
+
+              nextAnimations.set(
+                vehicleId,
+                {
+                  path,
+                  sampleProgress,
+                  realProgress,
+                  displayProgress,
+                  filteredSpeed:
+                    speedState.filteredSpeed,
+                  stopped:
+                    speedState.stopped,
+                  sampleTimestamp:
+                    timestamp,
+                  lastSeenAt:
+                    now,
+                  lastMovingAt:
+                    speedState.lastMovingAt,
+                  lastFrameAt:
+                    previous?.lastFrameAt ||
+                    now,
+                  lastRenderedCoordinate:
+                    previous?.lastRenderedCoordinate ||
+                    projection?.coordinate ||
+                    realCoordinate,
+                  realCoordinate,
+                  displayBearing:
+                    Number.isFinite(
+                      Number(
+                        routeBearing
+                      )
+                    )
+                      ? Number(
+                          routeBearing
+                        )
+                      : previous?.displayBearing ??
+                        bearing,
+                  properties: {
+                    id:
+                      vehicleId,
+                    vehicleId,
+                    label:
+                      vehicle.label ||
+                      vehicleId,
+                    tripId,
+                    routeId,
+                    routeShortName:
+                      vehicle.routeShortName ||
+                      routeId,
+                    routeLongName:
+                      vehicle.routeLongName ||
+                      '',
+                    routeType:
+                      Number(
+                        vehicle.routeType ??
+                        3
+                      ),
+                    mode:
+                      vehicle.mode ||
+                      'bus',
+                    headsign:
+                      vehicle.headsign ||
+                      '',
+                    directionId,
+                    stopId:
+                      vehicle.stopId ||
+                      '',
+                    stopName:
+                      vehicle.stopName ||
+                      '',
+                    currentStatus,
+                    timestamp,
+                    ageSeconds:
+                      Number.isFinite(
+                        Number(
+                          vehicle.ageSeconds
+                        )
+                      )
+                        ? Number(
+                            vehicle.ageSeconds
+                          )
+                        : 0,
+                    bearing:
+                      routeBearing,
+                    speed,
+                    occupancyStatus:
+                      vehicle.occupancyStatus ||
+                      '',
+                  },
+                }
+              )
+            }
+          )
+
+        vehicleAnimationsRef.current
+          .forEach(
+            (
+              previous,
+              vehicleId
+            ) => {
+              if (
+                nextAnimations.has(
+                  vehicleId
+                )
+              ) {
+                return
+              }
+
+              const lastSeenAt =
+                Number(
+                  previous?.lastSeenAt ??
+                  0
+                )
+
+              if (
+                lastSeenAt <=
+                  0 ||
+                now -
+                  lastSeenAt >
+                  VEHICLE_GRACE_MS
+              ) {
+                return
+              }
+
+              nextAnimations.set(
+                vehicleId,
+                previous
+              )
+            }
+          )
+
+        vehicleAnimationsRef.current =
+          nextAnimations
+
+        renderAnimatedVehicles()
+      }
+
+
+      function vehicleViewportParams() {
+        const bounds =
+          map.getBounds()
+
+        return new URLSearchParams({
+          west:
+            String(
+              bounds.getWest()
+            ),
+          south:
+            String(
+              bounds.getSouth()
+            ),
+          east:
+            String(
+              bounds.getEast()
+            ),
+          north:
+            String(
+              bounds.getNorth()
+            ),
+          zoom:
+            String(
+              map.getZoom()
+            ),
+        })
+      }
+
+
+      function stopVehicleStream() {
+        if (
+          vehicleStreamReconnectTimer
+        ) {
+          window.clearTimeout(
+            vehicleStreamReconnectTimer
+          )
+          vehicleStreamReconnectTimer =
+            null
+        }
+
+        if (
+          vehicleStream
+        ) {
+          vehicleStream.close()
+          vehicleStream =
+            null
+        }
+
+        vehicleStreamOpen =
+          false
+      }
+
+
+      function startVehicleStream() {
+        if (
+          disposed ||
+          typeof window.EventSource !==
+            'function'
+        ) {
+          return false
+        }
+
+        stopVehicleStream()
+
+        const generationStream =
+          new window.EventSource(
+            `${VEHICLES_STREAM_ENDPOINT}?${vehicleViewportParams().toString()}`
+          )
+
+        vehicleStream =
+          generationStream
+
+        generationStream.onopen =
+          () => {
+            if (
+              disposed ||
+              vehicleStream !==
+                generationStream
+            ) {
+              return
+            }
+
+            vehicleStreamOpen =
+              true
+          }
+
+        generationStream.onmessage =
+          (
+            event
+          ) => {
+            if (
+              disposed ||
+              vehicleStream !==
+                generationStream
+            ) {
+              return
+            }
+
+            try {
+              const payload =
+                JSON.parse(
+                  event.data
+                )
+
+              lastVehicleStreamMessageAt =
+                Date.now()
+              vehicleStreamOpen =
+                true
+              applyVehiclePayload(
+                payload
+              )
+            }
+            catch (
+              error
+            ) {
+              console.warn(
+                'LIVE TTC STREAM PAYLOAD:',
+                error
+              )
+            }
+          }
+
+        generationStream.onerror =
+          () => {
+            if (
+              disposed ||
+              vehicleStream !==
+                generationStream
+            ) {
+              return
+            }
+
+            generationStream.close()
+            vehicleStream =
+              null
+            vehicleStreamOpen =
+              false
+
+            // Immediately use the ordinary JSON endpoint as a fallback, then
+            // reconnect the pushed stream. The server endpoint is backed by
+            // the same always-hot ingest cache, so fallback is still fast.
+            refreshVehicles({
+              priority:
+                true,
+            })
+
+            vehicleStreamReconnectTimer =
+              window.setTimeout(
+                startVehicleStream,
+                1800
+              )
+          }
+
+        return true
+      }
+
+
       async function refreshVehicles({
         priority =
           false,
@@ -5211,31 +5898,8 @@ function LiveTtcLayer({
           controller
 
         try {
-          const bounds =
-            map.getBounds()
           const params =
-            new URLSearchParams({
-              west:
-                String(
-                  bounds.getWest()
-                ),
-              south:
-                String(
-                  bounds.getSouth()
-                ),
-              east:
-                String(
-                  bounds.getEast()
-                ),
-              north:
-                String(
-                  bounds.getNorth()
-                ),
-              zoom:
-                String(
-                  map.getZoom()
-                ),
-            })
+            vehicleViewportParams()
 
           const response =
             await fetch(
@@ -5265,514 +5929,9 @@ function LiveTtcLayer({
             return
           }
 
-          const now =
-            performance.now()
-          const nextVehicles =
-            Array.isArray(
-              payload?.vehicles
-            )
-              ? payload.vehicles
-              : []
-          const nextAnimations =
-            new Map()
-
-          nextVehicles
-            .forEach(
-              (
-                vehicle
-              ) => {
-                const longitude =
-                  Number(
-                    vehicle.longitude
-                  )
-                const latitude =
-                  Number(
-                    vehicle.latitude
-                  )
-                const vehicleId =
-                  String(
-                    vehicle.id ||
-                    ''
-                  )
-
-                if (
-                  !vehicleId ||
-                  !Number.isFinite(
-                    longitude
-                  ) ||
-                  !Number.isFinite(
-                    latitude
-                  )
-                ) {
-                  return
-                }
-
-                const previous =
-                  vehicleAnimationsRef.current
-                    .get(
-                      vehicleId
-                    )
-                const routeId =
-                  String(
-                    vehicle.routeId ||
-                    ''
-                  )
-                const tripId =
-                  String(
-                    vehicle.tripId ||
-                    ''
-                  )
-                const directionId =
-                  normalizeDirectionId(
-                    vehicle.directionId
-                  )
-                const bearing =
-                  Number.isFinite(
-                    Number(
-                      vehicle.bearing
-                    )
-                  )
-                    ? Number(
-                        vehicle.bearing
-                      )
-                    : null
-                const speed =
-                  Number.isFinite(
-                    Number(
-                      vehicle.speed
-                    )
-                  )
-                    ? Number(
-                        vehicle.speed
-                      )
-                    : null
-                const timestamp =
-                  Number(
-                    vehicle.timestamp ||
-                    0
-                  )
-                const currentStatus =
-                  String(
-                    vehicle.currentStatus ||
-                    ''
-                  )
-                const realCoordinate = [
-                  longitude,
-                  latitude,
-                ]
-
-                const sameRealtimeSample =
-                  previous &&
-                  timestamp >
-                    0 &&
-                  Number(
-                    previous.sampleTimestamp ||
-                    0
-                  ) ===
-                    timestamp
-
-                if (
-                  sameRealtimeSample &&
-                  previous?.path
-                ) {
-                  nextAnimations.set(
-                    vehicleId,
-                    {
-                      ...previous,
-                      // A repeated feed timestamp is cached data, not a new
-                      // position sample. Keep lastSeenAt unchanged so stale
-                      // feeds naturally slow instead of driving forever.
-                      properties: {
-                        ...previous.properties,
-                        routeShortName:
-                          vehicle.routeShortName ||
-                          previous.properties?.routeShortName ||
-                          routeId,
-                        routeLongName:
-                          vehicle.routeLongName ||
-                          previous.properties?.routeLongName ||
-                          '',
-                        headsign:
-                          vehicle.headsign ||
-                          previous.properties?.headsign ||
-                          '',
-                        stopId:
-                          vehicle.stopId ||
-                          previous.properties?.stopId ||
-                          '',
-                        stopName:
-                          vehicle.stopName ||
-                          previous.properties?.stopName ||
-                          '',
-                        occupancyStatus:
-                          vehicle.occupancyStatus ||
-                          previous.properties?.occupancyStatus ||
-                          '',
-                      },
-                    }
-                  )
-                  return
-                }
-
-                let path =
-                  null
-                let projection =
-                  null
-                const previousPathReusable =
-                  previous?.path &&
-                  previous.path.routeId ===
-                    routeId &&
-                  (
-                    !directionId ||
-                    !previous.path.directionId ||
-                    previous.path.directionId ===
-                      directionId
-                  ) &&
-                  (
-                    !tripId ||
-                    !previous?.properties?.tripId ||
-                    previous.properties.tripId ===
-                      tripId
-                  )
-
-                if (
-                  previousPathReusable
-                ) {
-                  const previousProjection =
-                    projectCoordinateOntoRoutePath(
-                      realCoordinate,
-                      previous.path
-                    )
-
-                  if (
-                    previousProjection &&
-                    previousProjection.distanceMeters <=
-                      VEHICLE_ROUTE_LOCK_MAX_METERS
-                  ) {
-                    path =
-                      previous.path
-                    projection =
-                      previousProjection
-                  }
-                }
-
-                if (
-                  !path
-                ) {
-                  const selection =
-                    selectRouteProgressPath({
-                      coordinate:
-                        realCoordinate,
-                      routeId,
-                      directionId,
-                      bearing,
-                      routePathsByRoute:
-                        routePathsByRouteRef.current,
-                    })
-
-                  if (
-                    selection
-                  ) {
-                    path =
-                      selection.path
-                    projection =
-                      selection.projection
-                  }
-                }
-
-                const pathMatchesPrevious =
-                  path &&
-                  previous?.path &&
-                  path.shapeId ===
-                    previous.path.shapeId &&
-                  path.directionId ===
-                    previous.path.directionId
-                let sampleProgress =
-                  projection?.progressMeters ??
-                  null
-                const previousSampleProgress =
-                  previous?.sampleProgress ??
-                  previous?.realProgress
-
-                if (
-                  pathMatchesPrevious &&
-                  Number.isFinite(
-                    Number(
-                      previousSampleProgress
-                    )
-                  ) &&
-                  Number.isFinite(
-                    Number(
-                      sampleProgress
-                    )
-                  ) &&
-                  sampleProgress <
-                    Number(
-                      previousSampleProgress
-                    ) -
-                    5
-                ) {
-                  // GPS jitter must never make a bus reverse visually. A real
-                  // direction/trip change selects a new shape above instead.
-                  sampleProgress =
-                    Number(
-                      previousSampleProgress
-                    )
-                }
-
-                const speedState =
-                  path &&
-                  Number.isFinite(
-                    Number(
-                      sampleProgress
-                    )
-                  )
-                    ? routeEngineTargetSpeed({
-                        previous:
-                          pathMatchesPrevious
-                            ? previous
-                            : null,
-                        realProgress:
-                          sampleProgress,
-                        sampleTimestamp:
-                          timestamp,
-                        ttcSpeed:
-                          speed,
-                        currentStatus,
-                        now,
-                      })
-                    : {
-                        filteredSpeed:
-                          Number.isFinite(
-                            Number(
-                              speed
-                            )
-                          )
-                            ? clampNumber(
-                                speed,
-                                0,
-                                VEHICLE_VISUAL_MAX_SPEED_MPS
-                              )
-                            : 0,
-                        lastMovingAt:
-                          previous?.lastMovingAt ??
-                          0,
-                        stopped:
-                          currentStatus
-                            .toUpperCase()
-                            .includes(
-                              'STOPPED'
-                            ),
-                      }
-
-                const realProgress =
-                  path &&
-                  Number.isFinite(
-                    Number(
-                      sampleProgress
-                    )
-                  )
-                    ? timestampCompensatedRouteProgress({
-                        path,
-                        sampleProgress,
-                        sampleTimestamp:
-                          timestamp,
-                        reportedAgeSeconds:
-                          vehicle.ageSeconds,
-                        ttcSpeed:
-                          speed,
-                        speedState,
-                        previous:
-                          pathMatchesPrevious
-                            ? previous
-                            : null,
-                        now,
-                      })
-                    : sampleProgress
-
-                let displayProgress =
-                  null
-
-                if (
-                  path &&
-                  Number.isFinite(
-                    Number(
-                      realProgress
-                    )
-                  )
-                ) {
-                  if (
-                    pathMatchesPrevious &&
-                    Number.isFinite(
-                      Number(
-                        previous.displayProgress
-                      )
-                    )
-                  ) {
-                    displayProgress =
-                      clampNumber(
-                        previous.displayProgress,
-                        0,
-                        path.totalMeters
-                      )
-                  }
-                  else {
-                    displayProgress =
-                      clampNumber(
-                        realProgress,
-                        0,
-                        path.totalMeters
-                      )
-                  }
-                }
-
-                const routeBearing =
-                  path &&
-                  Number.isFinite(
-                    Number(
-                      displayProgress
-                    )
-                  )
-                    ? bearingAtRouteProgress(
-                        path,
-                        displayProgress
-                      )
-                    : bearing
-
-                nextAnimations.set(
-                  vehicleId,
-                  {
-                    path,
-                    sampleProgress,
-                    realProgress,
-                    displayProgress,
-                    filteredSpeed:
-                      speedState.filteredSpeed,
-                    stopped:
-                      speedState.stopped,
-                    sampleTimestamp:
-                      timestamp,
-                    lastSeenAt:
-                      now,
-                    lastMovingAt:
-                      speedState.lastMovingAt,
-                    lastFrameAt:
-                      previous?.lastFrameAt ||
-                      now,
-                    lastRenderedCoordinate:
-                      previous?.lastRenderedCoordinate ||
-                      projection?.coordinate ||
-                      realCoordinate,
-                    realCoordinate,
-                    displayBearing:
-                      Number.isFinite(
-                        Number(
-                          routeBearing
-                        )
-                      )
-                        ? Number(
-                            routeBearing
-                          )
-                        : previous?.displayBearing ??
-                          bearing,
-                    properties: {
-                      id:
-                        vehicleId,
-                      vehicleId,
-                      label:
-                        vehicle.label ||
-                        vehicleId,
-                      tripId,
-                      routeId,
-                      routeShortName:
-                        vehicle.routeShortName ||
-                        routeId,
-                      routeLongName:
-                        vehicle.routeLongName ||
-                        '',
-                      routeType:
-                        Number(
-                          vehicle.routeType ??
-                          3
-                        ),
-                      mode:
-                        vehicle.mode ||
-                        'bus',
-                      headsign:
-                        vehicle.headsign ||
-                        '',
-                      directionId,
-                      stopId:
-                        vehicle.stopId ||
-                        '',
-                      stopName:
-                        vehicle.stopName ||
-                        '',
-                      currentStatus,
-                      timestamp,
-                      ageSeconds:
-                        Number.isFinite(
-                          Number(
-                            vehicle.ageSeconds
-                          )
-                        )
-                          ? Number(
-                              vehicle.ageSeconds
-                            )
-                          : 0,
-                      bearing:
-                        routeBearing,
-                      speed,
-                      occupancyStatus:
-                        vehicle.occupancyStatus ||
-                        '',
-                    },
-                  }
-                )
-              }
-            )
-
-          vehicleAnimationsRef.current
-            .forEach(
-              (
-                previous,
-                vehicleId
-              ) => {
-                if (
-                  nextAnimations.has(
-                    vehicleId
-                  )
-                ) {
-                  return
-                }
-
-                const lastSeenAt =
-                  Number(
-                    previous?.lastSeenAt ??
-                    0
-                  )
-
-                if (
-                  lastSeenAt <=
-                    0 ||
-                  now -
-                    lastSeenAt >
-                    VEHICLE_GRACE_MS
-                ) {
-                  return
-                }
-
-                nextAnimations.set(
-                  vehicleId,
-                  previous
-                )
-              }
-            )
-
-          vehicleAnimationsRef.current =
-            nextAnimations
-
-          renderAnimatedVehicles()
+          applyVehiclePayload(
+            payload
+          )
         }
         catch (
           error
@@ -6273,6 +6432,7 @@ function LiveTtcLayer({
       function handleViewportSettled() {
         scheduleNetworkRefresh()
         updateAccuracyHint()
+        startVehicleStream()
         refreshVehicles({
           priority:
             true,
@@ -6349,6 +6509,7 @@ function LiveTtcLayer({
       renderAnimatedVehicles()
       startAnimationLoop()
       refreshVehicles()
+      startVehicleStream()
 
       window.requestAnimationFrame(
         () => {
@@ -6366,10 +6527,20 @@ function LiveTtcLayer({
             vehicleTimer
           )
 
+          const streamFresh =
+            vehicleStreamOpen &&
+            Date.now() -
+              lastVehicleStreamMessageAt <
+              12 * 1000
+
           vehicleTimer =
             window.setTimeout(
               async () => {
-                await refreshVehicles()
+                if (
+                  !streamFresh
+                ) {
+                  await refreshVehicles()
+                }
 
                 if (
                   !disposed
@@ -6377,7 +6548,9 @@ function LiveTtcLayer({
                   scheduleVehiclePoll()
                 }
               },
-              vehiclePollDelay()
+              streamFresh
+                ? 10 * 1000
+                : vehiclePollDelay()
             )
         }
 
@@ -6391,6 +6564,7 @@ function LiveTtcLayer({
           ?.abort?.()
         vehicleAbortRef.current
           ?.abort?.()
+        stopVehicleStream()
 
         window.clearTimeout(
           networkTimer

@@ -49,6 +49,12 @@ const REALTIME_FOCUSED_CACHE_MS =
 const REALTIME_STALE_IMMEDIATE_MS =
   45 * 1000
 
+const REALTIME_INGEST_INTERVAL_MS =
+  2 * 1000
+
+const VEHICLE_STREAM_KEEPALIVE_MS =
+  15 * 1000
+
 const TORONTO_ATTRIBUTION =
   'Contains information licensed under the Open Government Licence - Toronto'
 
@@ -68,6 +74,13 @@ let vehicleCache = null
 let vehiclePromise = null
 let tripUpdateCache = null
 let tripUpdatePromise = null
+
+let vehicleIngestTimer = null
+let vehicleIngestInFlight = false
+let vehicleStreamKeepaliveTimer = null
+let latestVehicleFeedSignature = ''
+const vehicleStreamClients =
+  new Set()
 
 
 // ============================================================
@@ -2382,35 +2395,10 @@ async function fetchVehicleRealtimeFeed() {
 }
 
 
-async function getRawVehicleFeed(
-  maxAgeMs =
-    REALTIME_CACHE_MS
-) {
-  const cacheAge =
-    vehicleCache
-      ? Date.now() -
-        vehicleCache.cachedAt
-      : Infinity
-
-  if (
-    vehicleCache &&
-    cacheAge <
-      maxAgeMs
-  ) {
-    return vehicleCache.feed
-  }
-
+async function refreshVehicleCacheFromUpstream() {
   if (
     vehiclePromise
   ) {
-    if (
-      vehicleCache &&
-      cacheAge <
-        REALTIME_STALE_IMMEDIATE_MS
-    ) {
-      return vehicleCache.feed
-    }
-
     return vehiclePromise
   }
 
@@ -2456,18 +2444,42 @@ async function getRawVehicleFeed(
         }
       )
 
+  return vehiclePromise
+}
+
+
+async function getRawVehicleFeed(
+  maxAgeMs =
+    REALTIME_CACHE_MS
+) {
+  const cacheAge =
+    vehicleCache
+      ? Date.now() -
+        vehicleCache.cachedAt
+      : Infinity
+
+  if (
+    vehicleCache &&
+    cacheAge <
+      maxAgeMs
+  ) {
+    return vehicleCache.feed
+  }
+
+  const refreshPromise =
+    refreshVehicleCacheFromUpstream()
+
   if (
     vehicleCache &&
     cacheAge <
       REALTIME_STALE_IMMEDIATE_MS
   ) {
-    // Serve a recent snapshot immediately while a fresh TTC fetch runs in the
-    // background. This removes most open/toggle delay while preserving the
-    // actual TTC timestamp on every vehicle.
+    // Serve the hot snapshot immediately while the single server-side ingest
+    // fetch refreshes in the background. All browser clients share this cache.
     return vehicleCache.feed
   }
 
-  return vehiclePromise
+  return refreshPromise
 }
 
 
@@ -4105,6 +4117,451 @@ async function getNearbyArrivalsPayload(
 
 
 // ============================================================
+// ALWAYS-ON VEHICLE INGEST + SERVER-SENT EVENTS
+// ============================================================
+
+function vehicleFeedSignature(
+  feed
+) {
+  const entities =
+    Array.isArray(
+      feed?.entity
+    )
+      ? feed.entity
+      : []
+
+  let newestVehicleTimestamp =
+    0
+  let positionedVehicleCount =
+    0
+  let rollingHash =
+    2166136261
+
+  entities.forEach(
+    (
+      entity
+    ) => {
+      const vehicle =
+        entity?.vehicle
+      const position =
+        vehicle?.position
+      const latitude =
+        numberOrNull(
+          position?.latitude
+        )
+      const longitude =
+        numberOrNull(
+          position?.longitude
+        )
+
+      if (
+        latitude === null ||
+        longitude === null
+      ) {
+        return
+      }
+
+      positionedVehicleCount +=
+        1
+
+      const timestamp =
+        numberOrNull(
+          vehicle?.timestamp
+        ) ||
+        0
+
+      newestVehicleTimestamp =
+        Math.max(
+          newestVehicleTimestamp,
+          timestamp
+        )
+
+      // Include vehicle identity, its real TTC timestamp and coordinates. This
+      // catches partial-feed changes even when the feed-wide header timestamp,
+      // newest vehicle timestamp and vehicle count happen to stay the same.
+      const signaturePart =
+        `${cleanText(vehicle?.vehicle?.id || vehicle?.vehicle?.label || entity?.id)}|${timestamp}|${latitude.toFixed(5)}|${longitude.toFixed(5)}`
+
+      for (
+        let index =
+          0;
+        index <
+          signaturePart.length;
+        index +=
+          1
+      ) {
+        rollingHash ^=
+          signaturePart.charCodeAt(
+            index
+          )
+        rollingHash =
+          Math.imul(
+            rollingHash,
+            16777619
+          )
+      }
+    }
+  )
+
+  return [
+    numberOrNull(
+      feed?.header?.timestamp
+    ) ||
+      0,
+    newestVehicleTimestamp,
+    positionedVehicleCount,
+    rollingHash >>>
+      0,
+  ].join(
+    ':'
+  )
+}
+
+
+function writeVehicleStreamEvent(
+  res,
+  payload
+) {
+  if (
+    res.writableEnded ||
+    res.destroyed
+  ) {
+    return false
+  }
+
+  try {
+    res.write(
+      `data: ${JSON.stringify(payload)}\n\n`
+    )
+    return true
+  }
+  catch (
+    error
+  ) {
+    return false
+  }
+}
+
+
+function removeVehicleStreamClient(
+  client
+) {
+  vehicleStreamClients.delete(
+    client
+  )
+}
+
+
+async function sendVehicleStreamSnapshot(
+  client,
+  signature,
+  {
+    force =
+      false,
+  } = {}
+) {
+  if (
+    !client ||
+    client.res.writableEnded ||
+    client.res.destroyed
+  ) {
+    removeVehicleStreamClient(
+      client
+    )
+    return
+  }
+
+  if (
+    !force &&
+    signature &&
+    client.lastSignature ===
+      signature
+  ) {
+    return
+  }
+
+  try {
+    const payload =
+      await getVehiclesPayload(
+        client.url
+      )
+
+    payload.delivery =
+      'server-push'
+    payload.serverIngestIntervalMs =
+      REALTIME_INGEST_INTERVAL_MS
+    payload.pushedAt =
+      new Date()
+        .toISOString()
+
+    if (
+      writeVehicleStreamEvent(
+        client.res,
+        payload
+      )
+    ) {
+      client.lastSignature =
+        signature ||
+        vehicleFeedSignature(
+          vehicleCache?.feed
+        )
+    }
+    else {
+      removeVehicleStreamClient(
+        client
+      )
+    }
+  }
+  catch (
+    error
+  ) {
+    if (
+      !client.res.writableEnded &&
+      !client.res.destroyed
+    ) {
+      try {
+        client.res.write(
+          `event: warning\ndata: ${JSON.stringify({
+            error:
+              cleanText(
+                error?.message ||
+                error
+              ) ||
+              'Live TTC stream snapshot failed',
+          })}\n\n`
+        )
+      }
+      catch (
+        writeError
+      ) {
+        removeVehicleStreamClient(
+          client
+        )
+      }
+    }
+  }
+}
+
+
+async function broadcastVehicleStream(
+  signature
+) {
+  const clients = [
+    ...vehicleStreamClients,
+  ]
+
+  if (
+    clients.length ===
+      0
+  ) {
+    return
+  }
+
+  await Promise.allSettled(
+    clients.map(
+      (
+        client
+      ) =>
+        sendVehicleStreamSnapshot(
+          client,
+          signature
+        )
+    )
+  )
+}
+
+
+async function ingestVehicleFeedOnce() {
+  if (
+    vehicleIngestInFlight
+  ) {
+    return
+  }
+
+  vehicleIngestInFlight =
+    true
+
+  try {
+    const feed =
+      await refreshVehicleCacheFromUpstream()
+    const signature =
+      vehicleFeedSignature(
+        feed
+      )
+
+    if (
+      signature &&
+      signature !==
+        latestVehicleFeedSignature
+    ) {
+      latestVehicleFeedSignature =
+        signature
+
+      await broadcastVehicleStream(
+        signature
+      )
+    }
+  }
+  catch (
+    error
+  ) {
+    console.warn(
+      'LIVE TTC INGEST:',
+      error?.message ||
+        error
+    )
+  }
+  finally {
+    vehicleIngestInFlight =
+      false
+  }
+}
+
+
+function startVehicleIngestLoop() {
+  if (
+    vehicleIngestTimer
+  ) {
+    return
+  }
+
+  // Start immediately when the server starts. This keeps TTC hot even when no
+  // browser currently has LIVE BUSES open, so first paint can use a ready
+  // snapshot rather than waiting for the first visitor to warm the feed.
+  ingestVehicleFeedOnce()
+
+  vehicleIngestTimer =
+    setInterval(
+      ingestVehicleFeedOnce,
+      REALTIME_INGEST_INTERVAL_MS
+    )
+
+  vehicleIngestTimer.unref?.()
+
+  vehicleStreamKeepaliveTimer =
+    setInterval(
+      () => {
+        vehicleStreamClients.forEach(
+          (
+            client
+          ) => {
+            if (
+              client.res.writableEnded ||
+              client.res.destroyed
+            ) {
+              removeVehicleStreamClient(
+                client
+              )
+              return
+            }
+
+            try {
+              client.res.write(
+                ': keepalive\n\n'
+              )
+            }
+            catch (
+              error
+            ) {
+              removeVehicleStreamClient(
+                client
+              )
+            }
+          }
+        )
+      },
+      VEHICLE_STREAM_KEEPALIVE_MS
+    )
+
+  vehicleStreamKeepaliveTimer.unref?.()
+}
+
+
+function openVehicleStream({
+  req,
+  res,
+  url,
+}) {
+  startVehicleIngestLoop()
+
+  res.statusCode =
+    200
+  res.setHeader(
+    'Content-Type',
+    'text/event-stream; charset=utf-8'
+  )
+  res.setHeader(
+    'Cache-Control',
+    'no-cache, no-transform'
+  )
+  res.setHeader(
+    'Connection',
+    'keep-alive'
+  )
+  res.setHeader(
+    'X-Accel-Buffering',
+    'no'
+  )
+  res.flushHeaders?.()
+
+  res.write(
+    'retry: 1500\n\n'
+  )
+
+  const client = {
+    req,
+    res,
+    url,
+    lastSignature:
+      '',
+  }
+
+  vehicleStreamClients.add(
+    client
+  )
+
+  const close =
+    () => {
+      removeVehicleStreamClient(
+        client
+      )
+    }
+
+  req.on(
+    'close',
+    close
+  )
+  req.on(
+    'aborted',
+    close
+  )
+  res.on(
+    'close',
+    close
+  )
+
+  // Send the current hot cache immediately. If startup is still fetching the
+  // first TTC snapshot, the ingest broadcast will fill this connection as soon
+  // as that fetch completes.
+  if (
+    vehicleCache?.feed
+  ) {
+    sendVehicleStreamSnapshot(
+      client,
+      latestVehicleFeedSignature ||
+        vehicleFeedSignature(
+          vehicleCache.feed
+        ),
+      {
+        force:
+          true,
+      }
+    )
+  }
+}
+
+
+// ============================================================
 // PUBLIC VITE / PRODUCTION SERVER PLUGIN
 // ============================================================
 
@@ -4116,6 +4573,8 @@ export function ttcLiveTransitFeed() {
     configureServer(
       server
     ) {
+      startVehicleIngestLoop()
+
       server.middlewares.use(
         LIVE_TTC_ENDPOINT,
         async (
@@ -4160,6 +4619,20 @@ export function ttcLiveTransitFeed() {
                     'public, max-age=20, stale-while-revalidate=60',
                 }
               )
+              return
+            }
+
+            if (
+              pathname ===
+                '/vehicles/stream' ||
+              pathname ===
+                '/vehicles/stream/'
+            ) {
+              openVehicleStream({
+                req,
+                res,
+                url,
+              })
               return
             }
 
@@ -4246,6 +4719,7 @@ export function ttcLiveTransitFeed() {
                   endpoints: [
                     'network',
                     'vehicles',
+                    'vehicles/stream',
                     'arrivals?stopId=...&stopCode=...',
                     'arrivals/nearby?latitude=...&longitude=...',
                   ],
