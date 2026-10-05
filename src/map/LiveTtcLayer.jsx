@@ -74,8 +74,110 @@ const VEHICLES_ENDPOINT =
 const ARRIVALS_ENDPOINT =
   '/api/geographic/toronto/ttc/live/arrivals'
 
+const VEHICLE_PRELOAD_MAX_AGE_MS =
+  30 * 1000
+
+let initialVehiclePreloadPayload =
+  null
+let initialVehiclePreloadAt =
+  0
+let initialVehiclePreloadPromise =
+  null
+
+
+function startInitialVehiclePreload() {
+  if (
+    typeof window ===
+      'undefined' ||
+    initialVehiclePreloadPromise
+  ) {
+    return
+  }
+
+  initialVehiclePreloadPromise =
+    fetch(
+      VEHICLES_ENDPOINT,
+      {
+        cache:
+          'no-store',
+      }
+    )
+      .then(
+        async (
+          response
+        ) => {
+          if (
+            !response.ok
+          ) {
+            return null
+          }
+
+          const payload =
+            await response.json()
+
+          if (
+            Array.isArray(
+              payload?.vehicles
+            ) &&
+            payload.vehicles.length >
+              0
+          ) {
+            initialVehiclePreloadPayload =
+              payload
+            initialVehiclePreloadAt =
+              Date.now()
+          }
+
+          return payload
+        }
+      )
+      .catch(
+        (
+          error
+        ) => {
+          console.warn(
+            'LIVE TTC PRELOAD:',
+            error
+          )
+          return null
+        }
+      )
+      .finally(
+        () => {
+          initialVehiclePreloadPromise =
+            null
+        }
+      )
+}
+
+
+function getInitialVehiclePreloadSnapshot() {
+  if (
+    initialVehiclePreloadPayload &&
+    Date.now() -
+      initialVehiclePreloadAt <=
+      VEHICLE_PRELOAD_MAX_AGE_MS
+  ) {
+    const payload =
+      initialVehiclePreloadPayload
+
+    // Consume once. Normal bounded polling immediately takes over.
+    initialVehiclePreloadPayload =
+      null
+
+    return payload
+  }
+
+  return null
+}
+
+
+// Start TTC loading during initial JavaScript evaluation.
+// The HOW-TO popup is visual only and never blocks this work.
+startInitialVehiclePreload()
+
 const VEHICLE_POLL_MS =
-  5000
+  3500
 const VEHICLE_VISUAL_MAX_SPEED_MPS =
   8.5
 const VEHICLE_DEFAULT_MOVING_SPEED_MPS =
@@ -93,9 +195,9 @@ const VEHICLE_GRACE_MS =
 const VEHICLE_TIMESTAMP_COMPENSATION_MIN_AGE_SECONDS =
   2
 const VEHICLE_TIMESTAMP_COMPENSATION_MAX_SECONDS =
-  45
+  24
 const VEHICLE_TIMESTAMP_COMPENSATION_MAX_METERS =
-  220
+  120
 const VEHICLE_TIMESTAMP_COMPENSATION_MIN_SPEED_MPS =
   0.7
 const ANIMATION_FRAME_MS =
@@ -1731,12 +1833,202 @@ function selectRouteProgressPath({
 }
 
 
+function medianNumber(
+  values
+) {
+  const numbers =
+    (
+      Array.isArray(
+        values
+      )
+        ? values
+        : []
+    )
+      .map(
+        Number
+      )
+      .filter(
+        Number.isFinite
+      )
+      .sort(
+        (
+          a,
+          b
+        ) =>
+          a -
+          b
+      )
+
+  if (
+    numbers.length ===
+      0
+  ) {
+    return null
+  }
+
+  const middle =
+    Math.floor(
+      numbers.length /
+      2
+    )
+
+  return numbers.length %
+    2
+    ? numbers[
+        middle
+      ]
+    : (
+        numbers[
+          middle -
+          1
+        ] +
+        numbers[
+          middle
+        ]
+      ) /
+      2
+}
+
+
+function appendVehicleSampleHistory({
+  previous,
+  progress,
+  timestamp,
+  samePath,
+}) {
+  const history =
+    samePath &&
+    Array.isArray(
+      previous?.sampleHistory
+    )
+      ? [
+          ...previous.sampleHistory,
+        ]
+      : []
+
+  const normalizedTimestamp =
+    Number(
+      timestamp ||
+      0
+    )
+  const normalizedProgress =
+    Number(
+      progress
+    )
+
+  if (
+    normalizedTimestamp >
+      0 &&
+    Number.isFinite(
+      normalizedProgress
+    )
+  ) {
+    const last =
+      history[
+        history.length -
+        1
+      ]
+
+    if (
+      !last ||
+      Number(
+        last.timestamp
+      ) !==
+        normalizedTimestamp
+    ) {
+      history.push({
+        timestamp:
+          normalizedTimestamp,
+        progress:
+          normalizedProgress,
+      })
+    }
+  }
+
+  return history.slice(
+    -5
+  )
+}
+
+
+function medianVehicleHistorySpeed(
+  history
+) {
+  const samples =
+    Array.isArray(
+      history
+    )
+      ? history
+      : []
+  const speeds =
+    []
+
+  for (
+    let index = 1;
+    index <
+      samples.length;
+    index +=
+      1
+  ) {
+    const previous =
+      samples[
+        index -
+        1
+      ]
+    const current =
+      samples[
+        index
+      ]
+    const elapsed =
+      Number(
+        current?.timestamp
+      ) -
+      Number(
+        previous?.timestamp
+      )
+    const distance =
+      Number(
+        current?.progress
+      ) -
+      Number(
+        previous?.progress
+      )
+
+    if (
+      elapsed >=
+        1 &&
+      elapsed <=
+        90 &&
+      distance >=
+        -3
+    ) {
+      speeds.push(
+        clampNumber(
+          Math.max(
+            0,
+            distance
+          ) /
+            elapsed,
+          0,
+          VEHICLE_VISUAL_MAX_SPEED_MPS
+        )
+      )
+    }
+  }
+
+  return medianNumber(
+    speeds
+  )
+}
+
+
 function routeEngineTargetSpeed({
   previous,
   realProgress,
   sampleTimestamp,
   ttcSpeed,
   currentStatus,
+  historySpeed,
   now,
 }) {
   const normalizedTtcSpeed =
@@ -1824,23 +2116,49 @@ function routeEngineTargetSpeed({
     }
   }
 
+  const robustHistorySpeed =
+    Number.isFinite(
+      Number(
+        historySpeed
+      )
+    )
+      ? clampNumber(
+          Number(
+            historySpeed
+          ),
+          0,
+          VEHICLE_VISUAL_MAX_SPEED_MPS
+        )
+      : null
+
   let targetSpeed =
-    observedSpeed !==
+    robustHistorySpeed !==
       null &&
     normalizedTtcSpeed !==
       null
-      ? observedSpeed *
-          0.72 +
+      ? robustHistorySpeed *
+          0.68 +
         normalizedTtcSpeed *
-          0.28
-      : observedSpeed !==
+          0.32
+      : robustHistorySpeed !==
           null
-        ? observedSpeed
-        : normalizedTtcSpeed !==
+        ? robustHistorySpeed
+        : observedSpeed !==
+            null &&
+          normalizedTtcSpeed !==
             null
-          ? normalizedTtcSpeed
-          : previous?.filteredSpeed ??
-            VEHICLE_DEFAULT_MOVING_SPEED_MPS
+          ? observedSpeed *
+              0.72 +
+            normalizedTtcSpeed *
+              0.28
+          : observedSpeed !==
+              null
+            ? observedSpeed
+            : normalizedTtcSpeed !==
+                null
+              ? normalizedTtcSpeed
+              : previous?.filteredSpeed ??
+                VEHICLE_DEFAULT_MOVING_SPEED_MPS
 
   // TTC sometimes publishes a fresh timestamp while the GPS coordinate is
   // unchanged. If its own speed still says the vehicle is moving, do not let
@@ -2156,12 +2474,40 @@ function timestampCompensatedRouteProgress({
     return sampleProgress
   }
 
+  // Trust extrapolation strongly only while TTC's genuine GPS sample is young.
+  // As it ages, progressively reduce forward prediction so a bus cannot visually
+  // run far ahead of the next true TTC position.
+  const ageConfidence =
+    ageSeconds <=
+      8
+      ? 1
+      : ageSeconds <=
+          16
+        ? 1 -
+          (
+            ageSeconds -
+            8
+          ) /
+          8 *
+          0.50
+        : Math.max(
+            0.20,
+            0.50 -
+              (
+                ageSeconds -
+                16
+              ) /
+              8 *
+              0.30
+          )
+
   const compensationMeters =
     Math.min(
       VEHICLE_TIMESTAMP_COMPENSATION_MAX_METERS,
       compensationSpeed *
         ageSeconds *
-        confidenceFactor
+        confidenceFactor *
+        ageConfidence
     )
 
   return clampNumber(
@@ -2489,7 +2835,6 @@ function LiveTtcLayer({
   map,
   active =
     false,
-  onVehiclesReady,
 }) {
   const popupRef =
     useRef(null)
@@ -2544,8 +2889,6 @@ function LiveTtcLayer({
         0
       let selectedRoutePulseTimer =
         null
-      let vehiclesReadyNotified =
-        false
 
       function removePopup() {
         popupRef.current
@@ -5194,27 +5537,34 @@ function LiveTtcLayer({
                 ),
             })
 
-          const response =
-            await fetch(
-              `${VEHICLES_ENDPOINT}?${params.toString()}`,
-              {
-                cache:
-                  'no-store',
-                signal:
-                  controller.signal,
-              }
-            )
+          let payload =
+            getInitialVehiclePreloadSnapshot()
 
           if (
-            !response.ok
+            !payload
           ) {
-            throw new Error(
-              `Live TTC vehicle request failed: ${response.status}`
-            )
-          }
+            const response =
+              await fetch(
+                `${VEHICLES_ENDPOINT}?${params.toString()}`,
+                {
+                  cache:
+                    'no-store',
+                  signal:
+                    controller.signal,
+                }
+              )
 
-          let payload =
-            await response.json()
+            if (
+              !response.ok
+            ) {
+              throw new Error(
+                `Live TTC vehicle request failed: ${response.status}`
+              )
+            }
+
+            payload =
+              await response.json()
+          }
 
           if (
             disposed
@@ -5308,14 +5658,6 @@ function LiveTtcLayer({
               }
             )
           }
-          else if (
-            !vehiclesReadyNotified
-          ) {
-            vehiclesReadyNotified =
-              true
-            onVehiclesReady?.()
-          }
-
           const now =
             performance.now()
           const nextAnimations =
@@ -5565,6 +5907,31 @@ function LiveTtcLayer({
                     )
                 }
 
+                const sampleHistory =
+                  path &&
+                  Number.isFinite(
+                    Number(
+                      sampleProgress
+                    )
+                  )
+                    ? appendVehicleSampleHistory({
+                        previous:
+                          pathMatchesPrevious
+                            ? previous
+                            : null,
+                        progress:
+                          sampleProgress,
+                        timestamp,
+                        samePath:
+                          pathMatchesPrevious,
+                      })
+                    : []
+
+                const historySpeed =
+                  medianVehicleHistorySpeed(
+                    sampleHistory
+                  )
+
                 const speedState =
                   path &&
                   Number.isFinite(
@@ -5584,6 +5951,7 @@ function LiveTtcLayer({
                         ttcSpeed:
                           speed,
                         currentStatus,
+                        historySpeed,
                         now,
                       })
                     : {
@@ -5697,6 +6065,7 @@ function LiveTtcLayer({
                       speedState.stopped,
                     sampleTimestamp:
                       timestamp,
+                    sampleHistory,
                     lastSeenAt:
                       now,
                     lastMovingAt:
@@ -5750,6 +6119,16 @@ function LiveTtcLayer({
                       stopId:
                         vehicle.stopId ||
                         '',
+                      currentStopSequence:
+                        Number.isFinite(
+                          Number(
+                            vehicle.currentStopSequence
+                          )
+                        )
+                          ? Number(
+                              vehicle.currentStopSequence
+                            )
+                          : null,
                       stopName:
                         vehicle.stopName ||
                         '',

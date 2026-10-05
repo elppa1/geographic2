@@ -43,7 +43,10 @@ const STATIC_CACHE_MS =
   6 * 60 * 60 * 1000
 
 const REALTIME_CACHE_MS =
-  4 * 1000
+  2500
+
+const VEHICLE_IMMEDIATE_CACHE_MS =
+  30 * 1000
 
 const TORONTO_ATTRIBUTION =
   'Contains information licensed under the Open Government Licence - Toronto'
@@ -2453,16 +2456,7 @@ async function fetchVehicleRealtimeFeed() {
 }
 
 
-async function getRawVehicleFeed() {
-  if (
-    vehicleCache &&
-    Date.now() -
-      vehicleCache.cachedAt <
-      REALTIME_CACHE_MS
-  ) {
-    return vehicleCache.feed
-  }
-
+function refreshVehicleFeedInBackground() {
   if (
     vehiclePromise
   ) {
@@ -2494,7 +2488,7 @@ async function getRawVehicleFeed() {
               REALTIME_STALE_FALLBACK_MS
           ) {
             console.warn(
-              'LIVE TTC VEHICLES · using recent cached feed after upstream failure:',
+              'LIVE TTC VEHICLES · keeping cached feed after upstream failure:',
               error?.message ||
                 error
             )
@@ -2515,8 +2509,50 @@ async function getRawVehicleFeed() {
 }
 
 
+async function getRawVehicleFeed() {
+  const cacheAge =
+    vehicleCache
+      ? Date.now() -
+        vehicleCache.cachedAt
+      : Infinity
+
+  if (
+    vehicleCache &&
+    cacheAge <
+      REALTIME_CACHE_MS
+  ) {
+    return vehicleCache.feed
+  }
+
+  if (
+    vehicleCache &&
+    cacheAge <
+      VEHICLE_IMMEDIATE_CACHE_MS
+  ) {
+    // Stale-while-revalidate: first paint never waits on TTC when we already
+    // have a recent fleet snapshot.
+    refreshVehicleFeedInBackground()
+      .catch(
+        (
+          error
+        ) => {
+          console.warn(
+            'LIVE TTC VEHICLES · background refresh failed:',
+            error?.message ||
+              error
+          )
+        }
+      )
+
+    return vehicleCache.feed
+  }
+
+  return refreshVehicleFeedInBackground()
+}
+
+
 const VEHICLE_WARM_INTERVAL_MS =
-  4500
+  3000
 
 let vehicleWarmTimer =
   null

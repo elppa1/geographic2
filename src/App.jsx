@@ -276,15 +276,6 @@ function GeographicApp() {
 
 
   const [
-    liveBusesInitializing,
-    setLiveBusesInitializing,
-  ] =
-    useState(
-      true
-    )
-
-
-  const [
     historicIssueFilter,
     setHistoricIssueFilter,
   ] =
@@ -1246,47 +1237,6 @@ function GeographicApp() {
   }
 
 
-  useEffect(
-    () => {
-      if (
-        !liveBusesEnabled
-      ) {
-        setLiveBusesInitializing(
-          false
-        )
-
-        return undefined
-      }
-
-
-      setLiveBusesInitializing(
-        true
-      )
-
-
-      const timer =
-        window.setTimeout(
-          () => {
-            setLiveBusesInitializing(
-              false
-            )
-          },
-          6000
-        )
-
-
-      return () => {
-        window.clearTimeout(
-          timer
-        )
-      }
-    },
-    [
-      liveBusesEnabled,
-    ]
-  )
-
-
   // ==========================================================
   // CONTENT MODE
   // ==========================================================
@@ -1330,43 +1280,6 @@ function GeographicApp() {
         {`
           .mobile-brand-toggle {
             display: none;
-          }
-
-          .live-buses-initializing {
-            position: fixed;
-            top: 76px;
-            left: 50%;
-            z-index: 70;
-            width: min(390px, calc(100vw - 28px));
-            transform: translateX(-50%);
-            border: 1px solid rgba(0,0,0,0.28);
-            background: rgba(255,255,255,0.97);
-            box-shadow: 0 5px 18px rgba(0,0,0,0.14);
-            padding: 10px 12px;
-            text-align: center;
-            pointer-events: none;
-          }
-
-          .live-buses-initializing-title {
-            color: #111;
-            font-size: 10px;
-            font-weight: 900;
-            letter-spacing: 0.11em;
-          }
-
-          .live-buses-initializing-copy {
-            margin-top: 4px;
-            color: #333;
-            font-size: 10px;
-            font-weight: 600;
-            line-height: 1.35;
-          }
-
-          @media (max-width: 760px) {
-            .live-buses-initializing {
-              top: 66px;
-              padding: 9px 11px;
-            }
           }
 
           .about-button {
@@ -2845,12 +2758,6 @@ function GeographicApp() {
           liveBusesEnabled
         }
 
-        onLiveTtcVehiclesReady={() => {
-          setLiveBusesInitializing(
-            false
-          )
-        }}
-
         onChangePinFilter={
           chooseContentMode
         }
@@ -2887,23 +2794,6 @@ function GeographicApp() {
           newBusinessRangeFilter
         }
       />
-
-
-      {liveBusesEnabled &&
-        liveBusesInitializing && (
-          <div
-            className="live-buses-initializing"
-            role="status"
-            aria-live="polite"
-          >
-            <div className="live-buses-initializing-title">
-              LIVE BUSES ARE INITIALIZING
-            </div>
-            <div className="live-buses-initializing-copy">
-              Live positions are loading now.
-            </div>
-          </div>
-        )}
 
 
       <div
