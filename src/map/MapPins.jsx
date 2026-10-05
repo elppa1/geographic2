@@ -8624,40 +8624,10 @@ function createHistoricStackMarker({
 function getHistoricMarkerScale(
   zoom
 ) {
-  const numericZoom =
-    Number(
-      zoom
-    )
-
-
-  if (
-    !Number.isFinite(
-      numericZoom
-    ) ||
-    numericZoom >=
-      14
-  ) {
-    return 1
-  }
-
-
-  if (
-    numericZoom >=
-      12
-  ) {
-    return 0.90
-  }
-
-
-  if (
-    numericZoom >=
-      10
-  ) {
-    return 0.82
-  }
-
-
-  return 0.74
+  // Historic markers use their natural/original size at every zoom.
+  // Keep the helper in place so marker creation remains otherwise untouched.
+  void zoom
+  return 1
 }
 
 

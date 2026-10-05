@@ -3391,7 +3391,7 @@ function LiveTtcLayer({
         ) {
           const streetcarMarker =
             createVehicleMarkerImage(
-              '#C8102E',
+              '#111111',
               {
                 streetcar:
                   true,
@@ -4043,7 +4043,7 @@ function LiveTtcLayer({
                   ],
                   'streetcar',
                 ],
-                '#C8102E',
+                '#111111',
                 '#111111',
               ],
               'text-halo-color':
