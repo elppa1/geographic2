@@ -72,14 +72,6 @@ const ARRIVALS_ENDPOINT =
 
 const VEHICLE_POLL_MS =
   5000
-const VEHICLE_FOCUSED_POLL_MS =
-  2500
-const VEHICLE_DEEP_FOCUS_POLL_MS =
-  1800
-const VEHICLE_FOCUSED_ZOOM =
-  13.5
-const VEHICLE_DEEP_FOCUS_ZOOM =
-  15
 const VEHICLE_VISUAL_MAX_SPEED_MPS =
   8.5
 const VEHICLE_DEFAULT_MOVING_SPEED_MPS =
@@ -89,9 +81,9 @@ const VEHICLE_MIN_CONTINUOUS_SPEED_MPS =
 const VEHICLE_ROUTE_LOCK_MAX_METERS =
   160
 const VEHICLE_STALE_SLOWDOWN_MS =
-  40 * 1000
+  15 * 1000
 const VEHICLE_STALE_STOP_MS =
-  85 * 1000
+  75 * 1000
 const VEHICLE_GRACE_MS =
   90 * 1000
 const VEHICLE_TIMESTAMP_COMPENSATION_MIN_AGE_SECONDS =
@@ -2527,20 +2519,12 @@ function LiveTtcLayer({
         false
       let vehicleTimer =
         null
-      let popupRefreshTimer =
-        null
       let networkTimer =
         null
       let controlsRoot =
         null
       let routeSelect =
         null
-      let accuracyHint =
-        null
-      let vehicleRefreshInFlight =
-        false
-      let vehicleRefreshQueued =
-        false
       let routeCatalogById =
         new Map()
       let gpsPrompt =
@@ -2555,16 +2539,6 @@ function LiveTtcLayer({
         null
 
       function removePopup() {
-        if (
-          popupRefreshTimer
-        ) {
-          window.clearInterval(
-            popupRefreshTimer
-          )
-          popupRefreshTimer =
-            null
-        }
-
         popupRef.current
           ?.remove?.()
         popupRef.current =
@@ -2631,53 +2605,6 @@ function LiveTtcLayer({
           essential:
             true,
         })
-      }
-
-      function vehiclePollDelay() {
-        const zoom =
-          Number(
-            map.getZoom()
-          )
-
-        if (
-          zoom >=
-            VEHICLE_DEEP_FOCUS_ZOOM
-        ) {
-          return VEHICLE_DEEP_FOCUS_POLL_MS
-        }
-
-        if (
-          zoom >=
-            VEHICLE_FOCUSED_ZOOM
-        ) {
-          return VEHICLE_FOCUSED_POLL_MS
-        }
-
-        return VEHICLE_POLL_MS
-      }
-
-      function updateAccuracyHint() {
-        if (
-          !accuracyHint
-        ) {
-          return
-        }
-
-        const focused =
-          Number(
-            map.getZoom()
-          ) >=
-          VEHICLE_FOCUSED_ZOOM
-
-        accuracyHint.textContent =
-          focused
-            ? 'FOCUSED LIVE UPDATES'
-            : 'ZOOM IN FOR MORE ACCURATE LIVE POSITIONS'
-
-        accuracyHint.style.opacity =
-          focused
-            ? '0.72'
-            : '0.9'
       }
 
       function requestGpsCenter() {
@@ -3049,56 +2976,6 @@ function LiveTtcLayer({
           controlsRoot
         )
 
-        accuracyHint =
-          document.createElement(
-            'div'
-          )
-        accuracyHint.dataset.ttcAccuracyHint =
-          '1'
-        Object.assign(
-          accuracyHint.style,
-          {
-            position:
-              'absolute',
-            top:
-              '112px',
-            left:
-              '50%',
-            transform:
-              'translateX(-50%)',
-            zIndex:
-              '18',
-            maxWidth:
-              'calc(100% - 30px)',
-            background:
-              'rgba(255,255,255,0.94)',
-            color:
-              '#111',
-            border:
-              '1px solid rgba(0,0,0,0.16)',
-            borderRadius:
-              '999px',
-            padding:
-              '5px 9px',
-            fontSize:
-              '8px',
-            fontWeight:
-              '900',
-            letterSpacing:
-              '0.08em',
-            whiteSpace:
-              'nowrap',
-            boxShadow:
-              '0 2px 8px rgba(0,0,0,0.10)',
-            pointerEvents:
-              'none',
-          }
-        )
-        container.appendChild(
-          accuracyHint
-        )
-        updateAccuracyHint()
-
         let alreadyPrompted =
           false
         try {
@@ -3367,7 +3244,7 @@ function LiveTtcLayer({
         ) {
           const busMarker =
             createVehicleMarkerImage(
-              '#111111'
+              '#000000'
             )
 
           if (
@@ -3391,7 +3268,7 @@ function LiveTtcLayer({
         ) {
           const streetcarMarker =
             createVehicleMarkerImage(
-              '#111111',
+              '#000000',
               {
                 streetcar:
                   true,
@@ -3515,9 +3392,6 @@ function LiveTtcLayer({
             paint: {
               'line-color':
                 '#000000',
-              // Keep the casing layer structurally present, but make it
-              // non-contributing so every visible TTC route is one clean,
-              // solid-black line with no grey/transparent halo.
               'line-width':
                 0,
               'line-opacity':
@@ -4053,19 +3927,8 @@ function LiveTtcLayer({
                 true,
             },
             paint: {
-              'text-color': [
-                'case',
-                [
-                  '==',
-                  [
-                    'get',
-                    'mode',
-                  ],
-                  'streetcar',
-                ],
-                '#111111',
-                '#111111',
-              ],
+              'text-color':
+                '#000000',
               'text-halo-color':
                 '#ffffff',
               'text-halo-width':
@@ -4207,44 +4070,20 @@ function LiveTtcLayer({
                 ) /
                 2
 
-              // Keep selected-route emphasis black and fully opaque.
-              // Pulse only its width slightly; never fade it or add a grey halo.
               if (
                 map.getLayer(
-                  SELECTED_ROUTE_LAYER_ID
+                  SELECTED_ROUTE_CASING_LAYER_ID
                 )
               ) {
-                const pulseMultiplier =
-                  1 +
-                  wave *
-                  0.18
-
                 map.setPaintProperty(
-                  SELECTED_ROUTE_LAYER_ID,
+                  SELECTED_ROUTE_CASING_LAYER_ID,
                   'line-opacity',
                   1
                 )
                 map.setPaintProperty(
-                  SELECTED_ROUTE_LAYER_ID,
+                  SELECTED_ROUTE_CASING_LAYER_ID,
                   'line-width',
-                  [
-                    'interpolate',
-                    [
-                      'linear',
-                    ],
-                    [
-                      'zoom',
-                    ],
-                    9,
-                    0.7 *
-                      pulseMultiplier,
-                    13,
-                    1.3 *
-                      pulseMultiplier,
-                    17,
-                    2.0 *
-                      pulseMultiplier,
-                  ]
+                  0
                 )
               }
             },
@@ -5212,30 +5051,15 @@ function LiveTtcLayer({
           )
       }
 
-      async function refreshVehicles({
-        priority =
-          false,
-      } = {}) {
+      async function refreshVehicles() {
         if (
           disposed
         ) {
           return
         }
 
-        if (
-          vehicleRefreshInFlight
-        ) {
-          if (
-            priority
-          ) {
-            vehicleRefreshQueued =
-              true
-          }
-          return
-        }
-
-        vehicleRefreshInFlight =
-          true
+        vehicleAbortRef.current
+          ?.abort?.()
 
         const controller =
           new AbortController()
@@ -5810,32 +5634,16 @@ function LiveTtcLayer({
           error
         ) {
           if (
-            error?.name !==
+            error?.name ===
             'AbortError'
           ) {
-            console.warn(
-              'LIVE TTC VEHICLES:',
-              error
-            )
+            return
           }
-        }
-        finally {
-          vehicleRefreshInFlight =
-            false
 
-          if (
-            !disposed &&
-            vehicleRefreshQueued
-          ) {
-            vehicleRefreshQueued =
-              false
-            window.setTimeout(
-              () => {
-                refreshVehicles()
-              },
-              0
-            )
-          }
+          console.warn(
+            'LIVE TTC VEHICLES:',
+            error
+          )
         }
       }
 
@@ -5961,97 +5769,67 @@ function LiveTtcLayer({
         popupRef.current =
           popup
 
-        const refreshStopArrivals =
-          async () => {
-            try {
-              const response =
-                await fetch(
-                  `${ARRIVALS_ENDPOINT}?stopId=${encodeURIComponent(stopId)}&stopCode=${encodeURIComponent(stopCode)}`,
-                  {
-                    cache:
-                      'no-store',
-                  }
-                )
-
-              if (
-                !response.ok
-              ) {
-                throw new Error(
-                  `TTC arrivals request failed: ${response.status}`
-                )
+        try {
+          const response =
+            await fetch(
+              `${ARRIVALS_ENDPOINT}?stopId=${encodeURIComponent(stopId)}&stopCode=${encodeURIComponent(stopCode)}`,
+              {
+                cache:
+                  'no-store',
               }
+            )
 
-              const payload =
-                await response.json()
-
-              if (
-                popupRef.current ===
-                  popup
-              ) {
-                fillStopArrivals({
-                  shell,
-                  payload,
-                })
-              }
-            }
-            catch (
-              error
-            ) {
-              console.warn(
-                'LIVE TTC ARRIVALS:',
-                error
-              )
-
-              if (
-                popupRef.current ===
-                  popup &&
-                !shell.querySelector(
-                  '.ttc-live-stop-arrivals'
-                )
-              ) {
-                shell
-                  .querySelectorAll(
-                    '.ttc-live-stop-loading'
-                  )
-                  .forEach(
-                    (
-                      child
-                    ) =>
-                      child.remove()
-                  )
-
-                addTextLine({
-                  parent:
-                    shell,
-                  text:
-                    'Live arrivals are temporarily unavailable.',
-                  style: {
-                    fontSize:
-                      '10px',
-                    marginTop:
-                      '7px',
-                    opacity:
-                      '0.65',
-                  },
-                })
-              }
-            }
+          if (
+            !response.ok
+          ) {
+            throw new Error(
+              `TTC arrivals request failed: ${response.status}`
+            )
           }
 
-        await refreshStopArrivals()
+          const payload =
+            await response.json()
 
-        if (
-          popupRef.current ===
-            popup
-        ) {
-          popupRefreshTimer =
-            window.setInterval(
-              refreshStopArrivals,
-              Math.max(
-                2500,
-                vehiclePollDelay()
-              )
+          if (
+            popupRef.current ===
+              popup
+          ) {
+            fillStopArrivals({
+              shell,
+              payload,
+            })
+            snapPopupToScreen(
+              event.lngLat
             )
+          }
+        }
+        catch (
+          error
+        ) {
+          console.warn(
+            'LIVE TTC ARRIVALS:',
+            error
+          )
+
+          if (
+            popupRef.current ===
+              popup
+          ) {
+            addTextLine({
+              parent:
+                shell,
+              text:
+                'Live arrivals are temporarily unavailable.',
+              style: {
+                fontSize:
+                  '10px',
+                marginTop:
+                  '7px',
+                opacity:
+                  '0.65',
+              },
+            })
+          }
         }
       }
 
@@ -6302,18 +6080,9 @@ function LiveTtcLayer({
         ''
       )
 
-      function handleViewportSettled() {
-        scheduleNetworkRefresh()
-        updateAccuracyHint()
-        refreshVehicles({
-          priority:
-            true,
-        })
-      }
-
       map.on(
         'moveend',
-        handleViewportSettled
+        scheduleNetworkRefresh
       )
 
       map.on(
@@ -6392,28 +6161,11 @@ function LiveTtcLayer({
         }
       )
 
-      const scheduleVehiclePoll =
-        () => {
-          window.clearTimeout(
-            vehicleTimer
-          )
-
-          vehicleTimer =
-            window.setTimeout(
-              async () => {
-                await refreshVehicles()
-
-                if (
-                  !disposed
-                ) {
-                  scheduleVehiclePoll()
-                }
-              },
-              vehiclePollDelay()
-            )
-        }
-
-      scheduleVehiclePoll()
+      vehicleTimer =
+        window.setInterval(
+          refreshVehicles,
+          VEHICLE_POLL_MS
+        )
 
       return () => {
         disposed =
@@ -6427,7 +6179,7 @@ function LiveTtcLayer({
         window.clearTimeout(
           networkTimer
         )
-        window.clearTimeout(
+        window.clearInterval(
           vehicleTimer
         )
         window.clearInterval(
@@ -6443,9 +6195,6 @@ function LiveTtcLayer({
         controlsRoot?.remove?.()
         controlsRoot =
           null
-        accuracyHint?.remove?.()
-        accuracyHint =
-          null
         routeSelect =
           null
         routeCatalogById =
@@ -6453,7 +6202,7 @@ function LiveTtcLayer({
 
         map.off(
           'moveend',
-          handleViewportSettled
+          scheduleNetworkRefresh
         )
 
         map.off(
