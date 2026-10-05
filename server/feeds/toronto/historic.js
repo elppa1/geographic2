@@ -523,6 +523,19 @@ function getPublishedSnapshot(
           layer?.status ===
           'published'
       )
+      .filter(
+        (
+          layer
+        ) =>
+          !layer?.categoryId ||
+          snapshot.categories.some(
+            (category) =>
+              category?.id ===
+                layer.categoryId &&
+              category?.status ===
+                'published'
+          )
+      )
 
 
   const issues =
@@ -578,20 +591,59 @@ function getPublishedSnapshot(
       .filter(
         (
           item
-        ) =>
-          !item?.historicCategoryId ||
-          publishedCategoryIds.has(
-            item.historicCategoryId
+        ) => {
+          const membershipLayerIds =
+            Array.from(
+              new Set(
+                [
+                  String(
+                    item?.historicLayerId ||
+                    ''
+                  )
+                    .trim(),
+                  ...(
+                    Array.isArray(
+                      item?.additionalHistoricLayerIds
+                    )
+                      ? item.additionalHistoricLayerIds
+                      : []
+                  )
+                    .map(
+                      (layerId) =>
+                        String(
+                          layerId ||
+                          ''
+                        )
+                          .trim()
+                    ),
+                ]
+                  .filter(
+                    Boolean
+                  )
+              )
+            )
+
+
+          if (
+            membershipLayerIds.length >
+              0
+          ) {
+            return membershipLayerIds.some(
+              (layerId) =>
+                publishedLayerIds.has(
+                  layerId
+                )
+            )
+          }
+
+
+          return (
+            !item?.historicCategoryId ||
+            publishedCategoryIds.has(
+              item.historicCategoryId
+            )
           )
-      )
-      .filter(
-        (
-          item
-        ) =>
-          !item?.historicLayerId ||
-          publishedLayerIds.has(
-            item.historicLayerId
-          )
+        }
       )
 
 

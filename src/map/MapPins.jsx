@@ -12603,7 +12603,10 @@ function MapPins({
         (pin, layerId) => {
           if (
             pin?.historicLayerId ===
+              layerId &&
+            sharedHistoricLayerIsPublished(
               layerId
+            )
           ) {
             return true
           }
@@ -12629,7 +12632,39 @@ function MapPins({
             pin?.historicCategoryId ===
               categoryId
           ) {
-            return true
+            if (
+              pin?.historicLayerId
+            ) {
+              const primaryLayer =
+                historicLayerById.get(
+                  pin.historicLayerId
+                )
+
+
+              if (
+                primaryLayer?.categoryId ===
+                  categoryId &&
+                sharedHistoricLayerIsPublished(
+                  pin.historicLayerId
+                )
+              ) {
+                return true
+              }
+            }
+            else {
+              const primaryCategory =
+                historicCategoryById.get(
+                  categoryId
+                )
+
+
+              if (
+                primaryCategory?.status ===
+                  'published'
+              ) {
+                return true
+              }
+            }
           }
 
 
@@ -12658,6 +12693,50 @@ function MapPins({
         }
 
 
+      const historicRecordHasPublishedMembership =
+        (pin) => {
+          const membershipLayerIds =
+            [
+              String(
+                pin?.historicLayerId ||
+                ''
+              )
+                .trim(),
+              ...getAdditionalHistoricLayerIds(
+                pin
+              ),
+            ]
+              .filter(
+                Boolean
+              )
+
+
+          if (
+            membershipLayerIds.length >
+              0
+          ) {
+            return membershipLayerIds.some(
+              sharedHistoricLayerIsPublished
+            )
+          }
+
+
+          if (
+            pin?.historicCategoryId
+          ) {
+            return (
+              historicCategoryById.get(
+                pin.historicCategoryId
+              )?.status ===
+                'published'
+            )
+          }
+
+
+          return true
+        }
+
+
       visiblePins =
         getHistoricItems()
           .filter(
@@ -12670,47 +12749,7 @@ function MapPins({
                 false
           )
           .filter(
-            (pin) => {
-              if (
-                pin.historicCategoryId
-              ) {
-                const category =
-                  historicCategoryById.get(
-                    pin.historicCategoryId
-                  )
-
-
-                if (
-                  !category ||
-                  category.status !==
-                    'published'
-                ) {
-                  return false
-                }
-              }
-
-
-              if (
-                pin.historicLayerId
-              ) {
-                const layer =
-                  historicLayerById.get(
-                    pin.historicLayerId
-                  )
-
-
-                if (
-                  !layer ||
-                  layer.status !==
-                    'published'
-                ) {
-                  return false
-                }
-              }
-
-
-              return true
-            }
+            historicRecordHasPublishedMembership
           )
           .filter(
             (pin) =>
@@ -12749,16 +12788,86 @@ function MapPins({
           )
           .map(
             (pin) => {
+              const membershipLayerIds =
+                [
+                  String(
+                    pin.historicLayerId ||
+                    ''
+                  )
+                    .trim(),
+                  ...getAdditionalHistoricLayerIds(
+                    pin
+                  ),
+                ]
+                  .filter(
+                    Boolean
+                  )
+
+
+              let layer =
+                historicLayerFilter !==
+                  'all'
+                  ? historicLayerById.get(
+                      historicLayerFilter
+                    )
+                  : null
+
+
+              if (
+                !layer &&
+                historicCategoryFilter !==
+                  'all'
+              ) {
+                layer =
+                  membershipLayerIds
+                    .map(
+                      (layerId) =>
+                        historicLayerById.get(
+                          layerId
+                        )
+                    )
+                    .find(
+                      (candidate) =>
+                        candidate?.categoryId ===
+                          historicCategoryFilter &&
+                        sharedHistoricLayerIsPublished(
+                          candidate.id
+                        )
+                    ) ||
+                  null
+              }
+
+
+              if (
+                !layer
+              ) {
+                layer =
+                  membershipLayerIds
+                    .map(
+                      (layerId) =>
+                        historicLayerById.get(
+                          layerId
+                        )
+                    )
+                    .find(
+                      (candidate) =>
+                        candidate &&
+                        sharedHistoricLayerIsPublished(
+                          candidate.id
+                        )
+                    ) ||
+                  null
+              }
+
+
               const category =
-                historicCategoryById.get(
-                  pin.historicCategoryId
-                )
-
-
-              const layer =
-                historicLayerById.get(
-                  pin.historicLayerId
-                )
+                layer?.categoryId
+                  ? historicCategoryById.get(
+                      layer.categoryId
+                    )
+                  : historicCategoryById.get(
+                      pin.historicCategoryId
+                    )
 
 
               const storyPinIcon =
