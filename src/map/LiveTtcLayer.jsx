@@ -2212,6 +2212,48 @@ function createStopMarkerImage() {
 }
 
 
+function getStreetLabelInsertionLayerId(
+  map
+) {
+  const layers =
+    map?.getStyle?.()
+      ?.layers ||
+    []
+
+
+  const preferred =
+    layers.find(
+      (layer) => {
+        if (
+          layer?.type !==
+            'symbol' ||
+          String(
+            layer?.id ||
+            ''
+          )
+            .startsWith(
+              'ttc-live-'
+            )
+        ) {
+          return false
+        }
+
+
+        return Boolean(
+          layer?.layout?.[
+            'text-field'
+          ]
+        )
+      }
+    )
+
+
+  return (
+    preferred?.id ||
+    undefined
+  )
+}
+
 function LiveTtcLayer({
   map,
   active =
@@ -2949,6 +2991,11 @@ function LiveTtcLayer({
       }
 
       function addSourcesAndLayers() {
+        const streetLabelLayerId =
+          getStreetLabelInsertionLayerId(
+            map
+          )
+
         if (
           !map.hasImage(
             BUS_MARKER_IMAGE_ID
@@ -3122,7 +3169,9 @@ function LiveTtcLayer({
               'line-opacity':
                 0.72,
             },
-          })
+          },
+            streetLabelLayerId
+          )
         }
 
         if (
@@ -3169,7 +3218,9 @@ function LiveTtcLayer({
               'line-opacity':
                 0.34,
             },
-          })
+          },
+            streetLabelLayerId
+          )
         }
 
         if (
@@ -3202,7 +3253,9 @@ function LiveTtcLayer({
               'line-opacity':
                 0.9,
             },
-          })
+          },
+            streetLabelLayerId
+          )
         }
 
         if (
@@ -3257,7 +3310,9 @@ function LiveTtcLayer({
               'line-opacity':
                 1,
             },
-          })
+          },
+            streetLabelLayerId
+          )
         }
 
         if (

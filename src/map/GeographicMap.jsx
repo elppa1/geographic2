@@ -1067,14 +1067,16 @@ const GeographicMap =
         setStreetLabelsVisible({
           map,
           visible:
+            liveBusesEnabled ||
             selectedLayer.layerType ===
-            'aerial',
+              'aerial',
         })
       }, [
         city,
         layersReady,
         selectedLayer,
         opacity,
+        liveBusesEnabled,
       ])
       // ========================================================
       // ENHANCE
@@ -2913,6 +2915,9 @@ const GeographicMap =
               }
               activePinFilter={
                 activePinFilter
+              }
+              liveTtcAlertsVisible={
+                liveBusesEnabled
               }
               historicIssueFilter={
                 historicIssueFilter

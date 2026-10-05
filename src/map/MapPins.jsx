@@ -6666,6 +6666,41 @@ function removeTtcRouteArtifact({
 }
 
 
+function getTtcRouteStreetLabelLayerId(
+  map
+) {
+  const layers =
+    map?.getStyle?.()
+      ?.layers ||
+    []
+
+
+  const preferred =
+    layers.find(
+      (layer) =>
+        layer?.type ===
+          'symbol' &&
+        Boolean(
+          layer?.layout?.[
+            'text-field'
+          ]
+        ) &&
+        !String(
+          layer?.id ||
+          ''
+        )
+          .startsWith(
+            'ttc-live-'
+          )
+    )
+
+
+  return (
+    preferred?.id ||
+    undefined
+  )
+}
+
 function addTtcRouteToMap({
   map,
   pin,
@@ -6726,6 +6761,11 @@ function addTtcRouteToMap({
   ) {
     return null
   }
+
+  const streetLabelLayerId =
+    getTtcRouteStreetLabelLayerId(
+      map
+    )
 
 
   map.addSource(
@@ -6788,7 +6828,9 @@ function addTtcRouteToMap({
       'line-opacity':
         0.42,
     },
-  })
+  },
+    streetLabelLayerId
+  )
 
 
   map.addLayer({
@@ -6819,7 +6861,9 @@ function addTtcRouteToMap({
       'line-opacity':
         1,
     },
-  })
+  },
+    streetLabelLayerId
+  )
 
 
   const reducedMotion =
@@ -11719,6 +11763,8 @@ function MapPins({
   homeLayer,
   selectedPinId,
   activePinFilter,
+  liveTtcAlertsVisible =
+    false,
   historicIssueFilter =
     'all',
   historicCategoryFilter =
@@ -11870,7 +11916,8 @@ function MapPins({
 
 
   const markerServerNewsItems =
-    historicModeActive
+    historicModeActive &&
+    !liveTtcAlertsVisible
       ? null
       : serverNewsItems
 
@@ -12665,8 +12712,72 @@ function MapPins({
     }
 
     if (
-      activePinFilter ===
+      liveTtcAlertsVisible &&
+      cityKey ===
+        'toronto' &&
+      activePinFilter !==
         'news'
+    ) {
+      const existingIds =
+        new Set(
+          visiblePins
+            .map(
+              (item) =>
+                String(
+                  item?.pin?.id ||
+                  ''
+                )
+            )
+            .filter(
+              Boolean
+            )
+        )
+
+
+      const liveTtcPins =
+        serverNewsItems
+          .filter(
+            (pin) =>
+              belongsToCity(
+                pin,
+                cityKey
+              ) &&
+              isTtcPin(
+                pin
+              ) &&
+              pin?.active !==
+                false
+          )
+          .filter(
+            (pin) =>
+              !existingIds.has(
+                String(
+                  pin?.id ||
+                  ''
+                )
+              )
+          )
+          .map(
+            (pin) => ({
+              pin,
+
+              pinType:
+                'news',
+            })
+          )
+
+
+      visiblePins = [
+        ...visiblePins,
+        ...liveTtcPins,
+      ]
+    }
+
+
+    if (
+      activePinFilter ===
+        'news' ||
+      liveTtcAlertsVisible
     ) {
       visiblePins =
         spreadActiveTtcMarkers({
@@ -13062,6 +13173,7 @@ function MapPins({
     cityKey,
     markerSelectedLayerKey,
     activePinFilter,
+    liveTtcAlertsVisible,
     historicIssueFilter,
     historicCategoryFilter,
     historicLayerFilter,
