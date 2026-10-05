@@ -1,3 +1,56 @@
+function getHistoricalCollections(
+  city
+) {
+  return [
+    {
+      layerType:
+        'map',
+
+      records:
+        city?.maps,
+    },
+
+    {
+      layerType:
+        'aerial',
+
+      records:
+        city?.aerials,
+    },
+  ]
+}
+
+
+function forEachHistoricalLayerId({
+  city,
+  callback,
+}) {
+  getHistoricalCollections(
+    city
+  )
+    .forEach(
+      ({
+        layerType,
+        records,
+      }) => {
+        Object.keys(
+          records ||
+          {}
+        )
+          .forEach(
+            (
+              year
+            ) => {
+              callback(
+                `${city.key}-${layerType}-${year}`
+              )
+            }
+          )
+      }
+    )
+}
+
+
 export function addHistoricalLayers({
   map,
   city,
@@ -10,104 +63,94 @@ export function addHistoricalLayers({
   }
 
 
-  const collections = [
-    {
-      layerType:
-        'map',
-
-      records:
-        city.maps,
-    },
-
-    {
-      layerType:
-        'aerial',
-
-      records:
-        city.aerials,
-    },
-  ]
-
-
-  collections.forEach(
-    ({
-      layerType,
-      records,
-    }) => {
-      Object.entries(
-        records || {}
-      ).forEach(
-        ([
-          year,
-          item,
-        ]) => {
-          if (
-            !item ||
-            !item.url
-          ) {
-            return
-          }
+  getHistoricalCollections(
+    city
+  )
+    .forEach(
+      ({
+        layerType,
+        records,
+      }) => {
+        Object.entries(
+          records ||
+          {}
+        )
+          .forEach(
+            ([
+              year,
+              item,
+            ]) => {
+              if (
+                !item ||
+                !item.url
+              ) {
+                return
+              }
 
 
-          const id =
-            `${city.key}-${layerType}-${year}`
+              const id =
+                `${city.key}-${layerType}-${year}`
 
 
-          if (
-            map.getSource(id)
-          ) {
-            return
-          }
+              if (
+                map.getSource(
+                  id
+                )
+              ) {
+                return
+              }
 
 
-          map.addSource(
-            id,
-            {
-              type:
-                'raster',
+              map.addSource(
+                id,
+                {
+                  type:
+                    'raster',
 
-              tiles: [
-                item.url,
-              ],
+                  tiles: [
+                    item.url,
+                  ],
 
-              tileSize:
-                256,
+                  tileSize:
+                    256,
+                }
+              )
+
+
+              map.addLayer({
+                id,
+
+                type:
+                  'raster',
+
+                source:
+                  id,
+
+                layout: {
+                  visibility:
+                    'none',
+                },
+
+                paint: {
+                  'raster-opacity':
+                    1,
+
+                  'raster-fade-duration':
+                    0,
+                },
+              })
             }
           )
-
-
-          map.addLayer({
-            id,
-
-            type:
-              'raster',
-
-            source:
-              id,
-
-            layout: {
-              visibility:
-                'none',
-            },
-
-            paint: {
-              'raster-opacity':
-                1,
-
-              'raster-fade-duration':
-                0,
-            },
-          })
-        }
-      )
-    }
-  )
+      }
+    )
 }
 
 
 export function hideHistoricalLayers({
   map,
   city,
+  exceptLayerId =
+    null,
 }) {
   if (
     !map ||
@@ -117,51 +160,33 @@ export function hideHistoricalLayers({
   }
 
 
-  const collections = [
-    {
-      layerType:
-        'map',
-
-      records:
-        city.maps,
-    },
-
-    {
-      layerType:
-        'aerial',
-
-      records:
-        city.aerials,
-    },
-  ]
-
-
-  collections.forEach(
-    ({
-      layerType,
-      records,
-    }) => {
-      Object.keys(
-        records || {}
-      ).forEach(
-        (year) => {
-          const id =
-            `${city.key}-${layerType}-${year}`
-
-
-          if (
-            map.getLayer(id)
-          ) {
-            map.setLayoutProperty(
-              id,
-              'visibility',
-              'none'
-            )
-          }
+  forEachHistoricalLayerId({
+    city,
+    callback:
+      (
+        id
+      ) => {
+        if (
+          id ===
+            exceptLayerId
+        ) {
+          return
         }
-      )
-    }
-  )
+
+
+        if (
+          map.getLayer(
+            id
+          )
+        ) {
+          map.setLayoutProperty(
+            id,
+            'visibility',
+            'none'
+          )
+        }
+      },
+  })
 }
 
 
@@ -178,14 +203,8 @@ export function showHistoricalLayer({
     !layerType ||
     !year
   ) {
-    return
+    return undefined
   }
-
-
-  hideHistoricalLayers({
-    map,
-    city,
-  })
 
 
   const id =
@@ -193,17 +212,21 @@ export function showHistoricalLayer({
 
 
   if (
-    !map.getLayer(id)
+    !map.getLayer(
+      id
+    )
   ) {
     console.warn(
       'HISTORICAL LAYER NOT FOUND:',
       id
     )
 
-    return
+    return undefined
   }
 
 
+  // Turn the requested historical layer on FIRST. Do not blank the previous
+  // layer while the selected raster is still waiting on network tiles.
   map.setLayoutProperty(
     id,
     'visibility',
@@ -216,4 +239,84 @@ export function showHistoricalLayer({
     'raster-opacity',
     opacity
   )
+
+
+  const finishTransition =
+    () => {
+      hideHistoricalLayers({
+        map,
+        city,
+        exceptLayerId:
+          id,
+      })
+
+      map.triggerRepaint?.()
+    }
+
+
+  const sourceLoaded =
+    map.isSourceLoaded?.(
+      id
+    )
+
+
+  if (
+    sourceLoaded
+  ) {
+    finishTransition()
+
+    return undefined
+  }
+
+
+  let finished =
+    false
+
+
+  const handleSourceData =
+    (
+      event
+    ) => {
+      if (
+        finished ||
+        event?.sourceId !==
+          id
+      ) {
+        return
+      }
+
+
+      if (
+        event?.isSourceLoaded ||
+        map.isSourceLoaded?.(
+          id
+        )
+      ) {
+        finished =
+          true
+        map.off(
+          'sourcedata',
+          handleSourceData
+        )
+        finishTransition()
+      }
+    }
+
+
+  map.on(
+    'sourcedata',
+    handleSourceData
+  )
+
+
+  // Do not leave listeners behind if the user scrubs quickly through years.
+  return () => {
+    finished =
+      true
+
+    map.off(
+      'sourcedata',
+      handleSourceData
+    )
+  }
 }

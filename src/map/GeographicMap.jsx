@@ -1051,23 +1051,30 @@ const GeographicMap =
       useEffect(() => {
         const map =
           mapRef.current
+
+
         if (
           !map ||
           !city ||
           !layersReady ||
           !selectedLayer
         ) {
-          return
+          return undefined
         }
-        showHistoricalLayer({
-          map,
-          city,
-          layerType:
-            selectedLayer.layerType,
-          year:
-            selectedLayer.year,
-          opacity,
-        })
+
+
+        const cleanupHistoricalTransition =
+          showHistoricalLayer({
+            map,
+            city,
+            layerType:
+              selectedLayer.layerType,
+            year:
+              selectedLayer.year,
+            opacity,
+          })
+
+
         setStreetLabelsVisible({
           map,
           visible:
@@ -1075,6 +1082,11 @@ const GeographicMap =
             selectedLayer.layerType ===
               'aerial',
         })
+
+
+        return () => {
+          cleanupHistoricalTransition?.()
+        }
       }, [
         city,
         layersReady,
@@ -2566,20 +2578,27 @@ const GeographicMap =
           ) => {
             const map =
               mapRef.current
+
+
             if (
               !map ||
               !pin
             ) {
               return
             }
+
+
             const longitude =
               Number(
                 pin.longitude
               )
+
             const latitude =
               Number(
                 pin.latitude
               )
+
+
             if (
               !Number.isFinite(
                 longitude
@@ -2590,30 +2609,21 @@ const GeographicMap =
             ) {
               return
             }
+
+
             const targetLayer =
               getHistoricSeeItThenLayer({
                 city,
                 pin,
               })
-            if (
-              pin.id
-            ) {
-              setSelectedPinId(
-                pin.id
-              )
-            }
-            if (
-              targetLayer
-            ) {
-              onSelectHistoricalLayer?.(
-                targetLayer
-              )
-            }
+
+
             const requestedZoom =
               Number(
                 pin.seeItThenZoom ||
                 16
               )
+
             const zoom =
               Number.isFinite(
                 requestedZoom
@@ -2626,15 +2636,44 @@ const GeographicMap =
                     )
                   )
                 : 16
-            map.flyTo({
+
+
+            // One camera owner at a time. Popup snap corrections and an older
+            // historic flight must never queue behind a new SEE IT THEN click.
+            map.stop?.()
+
+
+            if (
+              targetLayer
+            ) {
+              onSelectHistoricalLayer?.(
+                targetLayer
+              )
+            }
+
+
+            // Always issue a fresh close-up camera snap, even when targetLayer
+            // is already the currently selected Time Machine layer.
+            map.easeTo({
               center: [
                 longitude,
                 latitude,
               ],
               zoom,
               duration:
-                900,
+                460,
+              essential:
+                true,
             })
+
+
+            if (
+              pin.id
+            ) {
+              setSelectedPinId(
+                pin.id
+              )
+            }
           },
           [
             city,

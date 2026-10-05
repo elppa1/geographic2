@@ -10658,11 +10658,19 @@ function createMarker({
       )
 
 
+  let popupLayoutCleanup =
+    null
+
+
   popup.on(
     'open',
     () => {
+      popupLayoutCleanup?.()
+      popupLayoutCleanup =
+        null
+
+
       // Tell LIVE BUSES only after this map pin has actually opened.
-      // This preserves MapLibre's normal marker click handling.
       map
         ?.getContainer?.()
         ?.dispatchEvent(
@@ -10672,17 +10680,32 @@ function createMarker({
         )
 
 
+      let closed =
+        false
+      const timeoutIds =
+        []
+      const frameIds =
+        []
+
+
       const resetPopupScroll =
         () => {
-          // Popup content and MapLibre's shell can both retain an old scroll
-          // position. Reset both after layout/image changes as well as now.
+          if (
+            closed
+          ) {
+            return
+          }
+
+
           popupContent.scrollTop =
             0
+
 
           const popupShell =
             popupContent.closest(
               '.maplibregl-popup-content'
             )
+
 
           if (
             popupShell
@@ -10701,169 +10724,194 @@ function createMarker({
         }
 
 
-      const fitPopupIntoViewport = () => {
-        const mapContainer =
-          map?.getContainer?.()
+      const fitPopupIntoViewport =
+        () => {
+          if (
+            closed ||
+            !popup.isOpen?.()
+          ) {
+            return
+          }
 
-        const popupElement =
-          popup?.getElement?.() ||
-          popupContent.closest(
-            '.maplibregl-popup'
-          )
 
-        if (
-          !mapContainer ||
-          !popupElement
-        ) {
-          return false
-        }
+          const mapContainer =
+            map?.getContainer?.()
 
-        // Cards always sit above every map marker/TTC overlay. App chrome is
-        // outside the .map stacking context and therefore still wins.
-        popupElement.style.zIndex =
-          '1400'
-
-        const mapRect =
-          mapContainer.getBoundingClientRect()
-
-        const edgePadding =
-          compactMobilePopup
-            ? 8
-            : 14
-
-        let safeTop =
-          mapRect.top +
-          edgePadding
-
-        let safeBottom =
-          mapRect.bottom -
-          edgePadding
-
-        const brandRect =
-          document
-            .querySelector(
-              '.brand'
+          const popupElement =
+            popup?.getElement?.() ||
+            popupContent.closest(
+              '.maplibregl-popup'
             )
-            ?.getBoundingClientRect()
 
-        if (
-          brandRect?.height &&
-          brandRect.bottom >
-            mapRect.top &&
-          brandRect.top <
-            mapRect.bottom
-        ) {
-          safeTop =
-            Math.max(
-              safeTop,
-              brandRect.bottom +
-                edgePadding
-            )
-        }
 
-        const timelineRect =
-          document
-            .querySelector(
-              '.timeline-shell'
-            )
-            ?.getBoundingClientRect()
+          if (
+            !mapContainer ||
+            !popupElement
+          ) {
+            return
+          }
 
-        if (
-          timelineRect?.height &&
-          timelineRect.bottom >
-            mapRect.top &&
-          timelineRect.top <
-            mapRect.bottom
-        ) {
-          safeBottom =
-            Math.min(
-              safeBottom,
-              timelineRect.top -
-                edgePadding
-            )
-        }
 
-        // The old mobile "max-height: none" path could create a card taller
-        // than the usable map viewport, making a correct snap impossible.
-        // Constrain BOTH desktop and mobile cards to the current safe region.
-        const availableHeight =
-          Math.max(
-            92,
-            safeBottom -
-              safeTop -
-              24
-          )
+          // Cards are the top map UI. Keep them above all map markers and
+          // canvas layers while still below app chrome outside .map.
+          popupElement.style.zIndex =
+            '1400'
 
-        const preferredHeight =
-          parseFloat(
-            preferredPopupMaxHeight ||
-            ''
-          )
 
-        const maxContentHeight =
-          Number.isFinite(
-            preferredHeight
-          )
-            ? Math.min(
-                availableHeight,
-                preferredHeight
+          const mapRect =
+            mapContainer.getBoundingClientRect()
+
+          const edgePadding =
+            compactMobilePopup
+              ? 8
+              : 14
+
+          let safeTop =
+            mapRect.top +
+            edgePadding
+
+          let safeBottom =
+            mapRect.bottom -
+            edgePadding
+
+
+          const brandRect =
+            document
+              .querySelector(
+                '.brand'
               )
-            : availableHeight
+              ?.getBoundingClientRect()
 
-        popupContent.style.maxHeight =
-          `${Math.floor(
-            maxContentHeight
-          )}px`
 
-        popupContent.style.overflowY =
-          'auto'
+          if (
+            brandRect?.height &&
+            brandRect.bottom >
+              mapRect.top &&
+            brandRect.top <
+              mapRect.bottom
+          ) {
+            safeTop =
+              Math.max(
+                safeTop,
+                brandRect.bottom +
+                  edgePadding
+              )
+          }
 
-        popupContent.style.overscrollBehavior =
-          'contain'
 
-        const popupRect =
-          popupElement.getBoundingClientRect()
+          const timelineRect =
+            document
+              .querySelector(
+                '.timeline-shell'
+              )
+              ?.getBoundingClientRect()
 
-        const safeLeft =
-          mapRect.left +
-          edgePadding
 
-        const safeRight =
-          mapRect.right -
-          edgePadding
+          if (
+            timelineRect?.height &&
+            timelineRect.bottom >
+              mapRect.top &&
+            timelineRect.top <
+              mapRect.bottom
+          ) {
+            safeBottom =
+              Math.min(
+                safeBottom,
+                timelineRect.top -
+                  edgePadding
+              )
+          }
 
-        const panX =
-          popupRect.left <
-          safeLeft
-            ? popupRect.left -
+
+          const availableHeight =
+            Math.max(
+              92,
+              safeBottom -
+                safeTop -
+                16
+            )
+
+          const preferredHeight =
+            parseFloat(
+              preferredPopupMaxHeight ||
+              ''
+            )
+
+          const maxContentHeight =
+            Number.isFinite(
+              preferredHeight
+            )
+              ? Math.min(
+                  availableHeight,
+                  preferredHeight
+                )
+              : availableHeight
+
+
+          popupContent.style.maxHeight =
+            `${Math.floor(
+              maxContentHeight
+            )}px`
+
+          popupContent.style.overflowY =
+            'auto'
+
+          popupContent.style.overscrollBehavior =
+            'contain'
+
+
+          const popupRect =
+            popupElement.getBoundingClientRect()
+
+          const safeLeft =
+            mapRect.left +
+            edgePadding
+
+          const safeRight =
+            mapRect.right -
+            edgePadding
+
+
+          const panX =
+            popupRect.left <
               safeLeft
-            : popupRect.right >
-                safeRight
-              ? popupRect.right -
-                safeRight
-              : 0
+              ? popupRect.left -
+                safeLeft
+              : popupRect.right >
+                  safeRight
+                ? popupRect.right -
+                  safeRight
+                : 0
 
-        const panY =
-          popupRect.top <
-          safeTop
-            ? popupRect.top -
+          const panY =
+            popupRect.top <
               safeTop
-            : popupRect.bottom >
-                safeBottom
-              ? popupRect.bottom -
-                safeBottom
-              : 0
+              ? popupRect.top -
+                safeTop
+              : popupRect.bottom >
+                  safeBottom
+                ? popupRect.bottom -
+                  safeBottom
+                : 0
 
-        if (
-          Math.abs(
-            panX
-          ) >
-            1 ||
-          Math.abs(
-            panY
-          ) >
-            1
-        ) {
+
+          if (
+            Math.abs(
+              panX
+            ) <=
+              1 &&
+            Math.abs(
+              panY
+            ) <=
+              1
+          ) {
+            return
+          }
+
+
+          // Snap the card into the usable screen immediately. Do not attach
+          // recursive moveend corrections: they accumulated across popups and
+          // eventually fought normal drag/zoom/See-It-Then camera movement.
           map.panBy(
             [
               panX,
@@ -10871,63 +10919,62 @@ function createMarker({
             ],
             {
               duration:
-                140,
+                0,
 
               essential:
                 true,
             }
           )
-
-          return true
         }
 
-        return false
-      }
-
-      let snapCorrections =
-        0
 
       const refreshPopupLayout =
         () => {
-          resetPopupScroll()
-
-          const panned =
-            fitPopupIntoViewport()
-
           if (
-            panned &&
-            snapCorrections <
-              2
+            closed
           ) {
-            snapCorrections +=
-              1
-
-            map.once(
-              'moveend',
-              refreshPopupLayout
-            )
+            return
           }
+
+          resetPopupScroll()
+          fitPopupIntoViewport()
         }
 
 
       refreshPopupLayout()
 
-      window.requestAnimationFrame(
-        () => {
-          window.requestAnimationFrame(
-            refreshPopupLayout
-          )
-        }
+
+      const firstFrame =
+        window.requestAnimationFrame(
+          () => {
+            const secondFrame =
+              window.requestAnimationFrame(
+                refreshPopupLayout
+              )
+
+            frameIds.push(
+              secondFrame
+            )
+          }
+        )
+
+      frameIds.push(
+        firstFrame
       )
 
-      window.setTimeout(
-        refreshPopupLayout,
-        120
+
+      timeoutIds.push(
+        window.setTimeout(
+          refreshPopupLayout,
+          90
+        )
       )
 
-      window.setTimeout(
-        refreshPopupLayout,
-        320
+      timeoutIds.push(
+        window.setTimeout(
+          refreshPopupLayout,
+          220
+        )
       )
 
 
@@ -10937,19 +10984,77 @@ function createMarker({
         )
 
 
+      const handlePopupImageLoad =
+        () => {
+          refreshPopupLayout()
+        }
+
+
       if (
         popupImage &&
         !popupImage.complete
       ) {
         popupImage.addEventListener(
           'load',
-          refreshPopupLayout,
+          handlePopupImageLoad,
           {
             once:
               true,
           }
         )
       }
+
+
+      popupLayoutCleanup =
+        () => {
+          if (
+            closed
+          ) {
+            return
+          }
+
+
+          closed =
+            true
+
+
+          timeoutIds.forEach(
+            (
+              timeoutId
+            ) => {
+              window.clearTimeout(
+                timeoutId
+              )
+            }
+          )
+
+
+          frameIds.forEach(
+            (
+              frameId
+            ) => {
+              window.cancelAnimationFrame(
+                frameId
+              )
+            }
+          )
+
+
+          popupImage?.removeEventListener?.(
+            'load',
+            handlePopupImageLoad
+          )
+        }
+    }
+  )
+
+
+  popup.on(
+    'close',
+    () => {
+      popupLayoutCleanup?.()
+      popupLayoutCleanup =
+        null
     }
   )
 
@@ -13606,8 +13711,23 @@ function MapPins({
     }
 
 
+    let cancelled =
+      false
+    let frameId =
+      null
+    let reopenTimer =
+      null
+
+
     const openSelectedPopup =
       () => {
+        if (
+          cancelled
+        ) {
+          return
+        }
+
+
         const marker =
           markerByIdRef.current.get(
             selectedPinId
@@ -13634,53 +13754,67 @@ function MapPins({
       }
 
 
-    openSelectedPopup()
+    const openAfterCurrentCameraMove =
+      () => {
+        if (
+          cancelled
+        ) {
+          return
+        }
+
+
+        frameId =
+          window.requestAnimationFrame(
+            openSelectedPopup
+          )
+      }
 
 
     if (
-      activePinFilter !==
-        'historic' &&
-      activePinFilter !==
-        'news'
+      map.isMoving?.()
     ) {
-      return
+      map.once(
+        'moveend',
+        openAfterCurrentCameraMove
+      )
     }
-
-
-    // Historic layer changes and NEWS focus moves can both rebuild markers
-    // while the camera is moving. Re-open the same selected card after the
-    // transition so it stays visible while the map settles underneath it.
-    const reopenAfterMove =
-      () => {
+    else {
+      reopenTimer =
         window.setTimeout(
           openSelectedPopup,
           0
         )
-      }
-
-
-    const reopenTimer =
-      window.setTimeout(
-        openSelectedPopup,
-        0
-      )
-
-
-    map.once(
-      'moveend',
-      reopenAfterMove
-    )
+    }
 
 
     return () => {
-      window.clearTimeout(
-        reopenTimer
-      )
+      cancelled =
+        true
+
+
+      if (
+        reopenTimer !==
+          null
+      ) {
+        window.clearTimeout(
+          reopenTimer
+        )
+      }
+
+
+      if (
+        frameId !==
+          null
+      ) {
+        window.cancelAnimationFrame(
+          frameId
+        )
+      }
 
 
       map.off(
         'moveend',
-        reopenAfterMove
+        openAfterCurrentCameraMove
       )
     }
   }, [
