@@ -49,9 +49,9 @@ const VEHICLE_DIRECTION_LAYER_ID =
   'ttc-live-vehicle-direction'
 
 const BUS_MARKER_IMAGE_ID =
-  'ttc-live-bus-marker'
+  'ttc-live-bus-marker-v2'
 const STREETCAR_MARKER_IMAGE_ID =
-  'ttc-live-streetcar-marker'
+  'ttc-live-streetcar-marker-v2'
 const STOP_MARKER_IMAGE_ID =
   'ttc-live-stop-marker'
 const VEHICLE_DOT_MIN_ZOOM =
@@ -2220,7 +2220,7 @@ function createVehicleMarkerImage(
   // Strong white casing keeps a black vehicle visible on top of black TTC
   // route lines and dark aerial imagery.
   context.lineWidth =
-    4
+    5
 
   context.beginPath()
   context.moveTo(
@@ -3236,14 +3236,6 @@ function LiveTtcLayer({
       function ensureLiveTtcImage(
         imageId
       ) {
-        if (
-          map.hasImage(
-            imageId
-          )
-        ) {
-          return
-        }
-
         let image =
           null
 
@@ -3278,29 +3270,38 @@ function LiveTtcLayer({
         }
 
         if (
-          !image ||
-          map.hasImage(
-            imageId
-          )
+          !image
         ) {
           return
         }
 
         try {
-          map.addImage(
-            imageId,
-            image,
-            {
-              pixelRatio:
-                2,
-            }
-          )
+          if (
+            map.hasImage(
+              imageId
+            )
+          ) {
+            map.updateImage(
+              imageId,
+              image
+            )
+          }
+          else {
+            map.addImage(
+              imageId,
+              image,
+              {
+                pixelRatio:
+                  2,
+                sdf:
+                  false,
+              }
+            )
+          }
         }
         catch (
           error
         ) {
-          // A style swap can race image registration by a frame.
-          // styleimagemissing/styledata will immediately try again.
           console.warn(
             'LIVE TTC IMAGE:',
             imageId,
