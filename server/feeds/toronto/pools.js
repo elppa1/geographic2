@@ -4,6 +4,10 @@ import {
 } from '../../db/geographicPins.js'
 
 
+import {
+  queueCommunitySync,
+} from './communitySyncQueue.js'
+
 const STATUS_PATH =
   '/api/geographic/toronto/new/community/pools/status'
 
@@ -3542,7 +3546,10 @@ export function poolsFeed() {
     ) {
       const runScheduledSync =
         () => {
-          syncPools()
+          queueCommunitySync(
+            'POOLS',
+            syncPools
+          )
             .catch(
               () => {}
             )

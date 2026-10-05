@@ -9,6 +9,10 @@ import {
 } from '../../db/postgresMirror.js'
 
 
+import {
+  queueCommunitySync,
+} from './communitySyncQueue.js'
+
 const INCOMING_PATH =
   '/api/geographic/toronto/new/community/farmers-markets/incoming'
 
@@ -2019,7 +2023,10 @@ export function farmersMarketsFeed() {
     ) {
       const runScheduledSync =
         () => {
-          syncMarkets()
+          queueCommunitySync(
+            'FARMERS MARKETS',
+            syncMarkets
+          )
             .catch(
               () => {}
             )

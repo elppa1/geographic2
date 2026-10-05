@@ -4,6 +4,10 @@ import {
 } from '../../db/geographicPins.js'
 
 
+import {
+  queueCommunitySync,
+} from './communitySyncQueue.js'
+
 const STATUS_PATH =
   '/api/geographic/toronto/new/community/learn4life/status'
 
@@ -1989,7 +1993,10 @@ export function learn4LifeFeed() {
     ) {
       const runScheduledSync =
         () => {
-          syncLearn4Life()
+          queueCommunitySync(
+            'LEARN4LIFE',
+            syncLearn4Life
+          )
             .catch(
               () => {}
             )

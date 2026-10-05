@@ -4,6 +4,10 @@ import {
 } from '../../db/geographicPins.js'
 
 
+import {
+  queueCommunitySync,
+} from './communitySyncQueue.js'
+
 const STATUS_PATH =
   '/api/geographic/toronto/new/community/outdoor-recreation/status'
 
@@ -2711,7 +2715,10 @@ export function outdoorRecreationFeed() {
     ) {
       const runScheduledSync =
         () => {
-          syncOutdoorRecreation()
+          queueCommunitySync(
+            'OUTDOOR RECREATION',
+            syncOutdoorRecreation
+          )
             .catch(
               () => {}
             )
