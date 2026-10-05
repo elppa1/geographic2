@@ -44,6 +44,10 @@ const STATIC_CACHE_MS =
 
 const REALTIME_CACHE_MS =
   4 * 1000
+const REALTIME_FOCUSED_CACHE_MS =
+  2 * 1000
+const REALTIME_STALE_IMMEDIATE_MS =
+  45 * 1000
 
 const TORONTO_ATTRIBUTION =
   'Contains information licensed under the Open Government Licence - Toronto'
@@ -2378,12 +2382,20 @@ async function fetchVehicleRealtimeFeed() {
 }
 
 
-async function getRawVehicleFeed() {
+async function getRawVehicleFeed(
+  maxAgeMs =
+    REALTIME_CACHE_MS
+) {
+  const cacheAge =
+    vehicleCache
+      ? Date.now() -
+        vehicleCache.cachedAt
+      : Infinity
+
   if (
     vehicleCache &&
-    Date.now() -
-      vehicleCache.cachedAt <
-      REALTIME_CACHE_MS
+    cacheAge <
+      maxAgeMs
   ) {
     return vehicleCache.feed
   }
@@ -2391,6 +2403,14 @@ async function getRawVehicleFeed() {
   if (
     vehiclePromise
   ) {
+    if (
+      vehicleCache &&
+      cacheAge <
+        REALTIME_STALE_IMMEDIATE_MS
+    ) {
+      return vehicleCache.feed
+    }
+
     return vehiclePromise
   }
 
@@ -2435,6 +2455,17 @@ async function getRawVehicleFeed() {
             null
         }
       )
+
+  if (
+    vehicleCache &&
+    cacheAge <
+      REALTIME_STALE_IMMEDIATE_MS
+  ) {
+    // Serve a recent snapshot immediately while a fresh TTC fetch runs in the
+    // background. This removes most open/toggle delay while preserving the
+    // actual TTC timestamp on every vehicle.
+    return vehicleCache.feed
+  }
 
   return vehiclePromise
 }
@@ -2522,9 +2553,23 @@ async function getVehiclesPayload(
 ) {
   // Live GPS should never wait for the much larger static SurfaceGTFS ZIP.
   // Return realtime vehicles immediately and enrich route/stop metadata from
-  // the static cache once it has warmed in the background.
+  // the static cache once it has warmed in the background. Deep zooms use a
+  // shorter shared cache window so the area being inspected gets first crack
+  // at each newly published TTC sample.
+  const zoom =
+    numberOrNull(
+      url.searchParams.get(
+        'zoom'
+      )
+    ) ??
+    11
   const feed =
-    await getRawVehicleFeed()
+    await getRawVehicleFeed(
+      zoom >=
+        13.5
+        ? REALTIME_FOCUSED_CACHE_MS
+        : REALTIME_CACHE_MS
+    )
 
   const surface =
     surfaceCache
@@ -3198,6 +3243,257 @@ function distanceMeters(
 }
 
 
+async function getGpsVehicleArrivalsForStop(
+  stop,
+  surface
+) {
+  if (
+    !stop?.id
+  ) {
+    return []
+  }
+
+  let feed =
+    null
+
+  try {
+    feed =
+      await getRawVehicleFeed(
+        REALTIME_FOCUSED_CACHE_MS
+      )
+  }
+  catch (
+    error
+  ) {
+    console.warn(
+      'LIVE TTC ARRIVALS · GPS correction unavailable:',
+      error?.message ||
+        error
+    )
+    return []
+  }
+
+  const nowSeconds =
+    Math.floor(
+      Date.now() /
+      1000
+    )
+  const arrivals =
+    []
+
+  ;(
+    Array.isArray(
+      feed?.entity
+    )
+      ? feed.entity
+      : []
+  ).forEach(
+    (
+      entity
+    ) => {
+      const vehicle =
+        entity?.vehicle
+      const position =
+        vehicle?.position
+      const stopId =
+        cleanText(
+          vehicle?.stopId
+        )
+
+      if (
+        !vehicle ||
+        stopId !==
+          stop.id
+      ) {
+        return
+      }
+
+      const latitude =
+        numberOrNull(
+          position?.latitude
+        )
+      const longitude =
+        numberOrNull(
+          position?.longitude
+        )
+
+      if (
+        latitude ===
+          null ||
+        longitude ===
+          null
+      ) {
+        return
+      }
+
+      const tripId =
+        cleanText(
+          vehicle?.trip?.tripId
+        )
+      const staticTrip =
+        surface?.trips?.get?.(
+          tripId
+        )
+      const routeId =
+        cleanText(
+          vehicle?.trip?.routeId
+        ) ||
+        staticTrip?.routeId ||
+        ''
+      const route =
+        surface?.routes?.get?.(
+          routeId
+        )
+      const timestamp =
+        numberOrNull(
+          vehicle?.timestamp
+        ) ??
+        nowSeconds
+      const ageSeconds =
+        Math.max(
+          0,
+          nowSeconds -
+            timestamp
+        )
+      const distance =
+        distanceMeters(
+          latitude,
+          longitude,
+          stop.latitude,
+          stop.longitude
+        )
+      const reportedSpeed =
+        numberOrNull(
+          position?.speed
+        )
+      const movingSpeed =
+        reportedSpeed !==
+          null &&
+        reportedSpeed >
+          0.8
+          ? reportedSpeed
+          : 4.5
+      const status =
+        cleanText(
+          vehicle?.currentStatus
+        ).toUpperCase()
+      let etaSeconds =
+        status.includes(
+          'STOPPED'
+        )
+          ? 0
+          : Math.max(
+              0,
+              distance /
+                Math.max(
+                  1,
+                  movingSpeed
+                ) -
+                Math.min(
+                  ageSeconds,
+                  45
+                )
+            )
+
+      if (
+        distance <=
+          90
+      ) {
+        etaSeconds =
+          Math.min(
+            etaSeconds,
+            35
+          )
+      }
+
+      etaSeconds =
+        Math.min(
+          etaSeconds,
+          5 *
+            60
+        )
+
+      const vehicleDescriptor =
+        vehicle?.vehicle ||
+        {}
+
+      arrivals.push({
+        tripId,
+        routeId,
+        routeShortName:
+          route?.shortName ||
+          routeId,
+        routeLongName:
+          route?.longName ||
+          '',
+        routeType:
+          route?.type ??
+          3,
+        mode:
+          routeMode(
+            route?.type ??
+            3
+          ),
+        headsign:
+          staticTrip?.headsign ||
+          '',
+        directionId:
+          numberOrNull(
+            vehicle?.trip?.directionId
+          ) ??
+          staticTrip?.directionId ??
+          null,
+        vehicleId:
+          cleanText(
+            vehicleDescriptor?.id
+          ) ||
+          cleanText(
+            vehicleDescriptor?.label
+          ),
+        stopId:
+          stop.id,
+        stopCode:
+          stop.code ||
+          '',
+        arrivalTime:
+          nowSeconds +
+          Math.round(
+            etaSeconds
+          ),
+        minutes:
+          etaSeconds <=
+            45
+            ? 0
+            : Math.max(
+                1,
+                Math.ceil(
+                  etaSeconds /
+                  60
+                )
+              ),
+        seconds:
+          Math.max(
+            0,
+            Math.round(
+              etaSeconds
+            )
+          ),
+        source:
+          'TTC GTFS-Realtime vehicle position',
+        positionAgeSeconds:
+          ageSeconds,
+        distanceMeters:
+          Math.round(
+            distance
+          ),
+      })
+    }
+  )
+
+  return arrivals
+}
+
+
 function realtimeStopTime(
   stopTimeUpdate
 ) {
@@ -3495,11 +3791,25 @@ async function getArrivalsPayload({
     normalizedStopCode
   ) {
     try {
-      const arrivals =
-        await getUmoArrivalsForStopCode(
-          normalizedStopCode,
-          surface
-        )
+      const [
+        arrivals,
+        gpsArrivals,
+      ] =
+        await Promise.all([
+          getUmoArrivalsForStopCode(
+            normalizedStopCode,
+            surface
+          ),
+          getGpsVehicleArrivalsForStop(
+            staticStop,
+            surface
+          ),
+        ])
+      const mergedArrivals =
+        dedupeArrivalsByVehicleOrTrip([
+          ...gpsArrivals,
+          ...arrivals,
+        ])
 
       return {
         ok:
@@ -3540,11 +3850,11 @@ async function getArrivalsPayload({
             },
         count:
           Math.min(
-            arrivals.length,
+            mergedArrivals.length,
             18
           ),
         arrivals:
-          arrivals.slice(
+          mergedArrivals.slice(
             0,
             18
           ),
@@ -3561,9 +3871,31 @@ async function getArrivalsPayload({
     }
   }
 
-  return getGtfsArrivalsPayload(
-    normalizedStopId
-  )
+  const fallbackPayload =
+    await getGtfsArrivalsPayload(
+      normalizedStopId
+    )
+  const gpsArrivals =
+    await getGpsVehicleArrivalsForStop(
+      staticStop,
+      surface
+    )
+  const mergedArrivals =
+    dedupeArrivalsByVehicleOrTrip([
+      ...gpsArrivals,
+      ...(fallbackPayload.arrivals || []),
+    ]).slice(
+      0,
+      18
+    )
+
+  return {
+    ...fallbackPayload,
+    count:
+      mergedArrivals.length,
+    arrivals:
+      mergedArrivals,
+  }
 }
 
 

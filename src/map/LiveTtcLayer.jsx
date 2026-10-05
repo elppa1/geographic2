@@ -72,6 +72,14 @@ const ARRIVALS_ENDPOINT =
 
 const VEHICLE_POLL_MS =
   5000
+const VEHICLE_FOCUSED_POLL_MS =
+  2500
+const VEHICLE_DEEP_FOCUS_POLL_MS =
+  1800
+const VEHICLE_FOCUSED_ZOOM =
+  13.5
+const VEHICLE_DEEP_FOCUS_ZOOM =
+  15
 const VEHICLE_VISUAL_MAX_SPEED_MPS =
   8.5
 const VEHICLE_DEFAULT_MOVING_SPEED_MPS =
@@ -81,9 +89,9 @@ const VEHICLE_MIN_CONTINUOUS_SPEED_MPS =
 const VEHICLE_ROUTE_LOCK_MAX_METERS =
   160
 const VEHICLE_STALE_SLOWDOWN_MS =
-  15 * 1000
+  40 * 1000
 const VEHICLE_STALE_STOP_MS =
-  75 * 1000
+  85 * 1000
 const VEHICLE_GRACE_MS =
   90 * 1000
 const VEHICLE_TIMESTAMP_COMPENSATION_MIN_AGE_SECONDS =
@@ -2519,12 +2527,20 @@ function LiveTtcLayer({
         false
       let vehicleTimer =
         null
+      let popupRefreshTimer =
+        null
       let networkTimer =
         null
       let controlsRoot =
         null
       let routeSelect =
         null
+      let accuracyHint =
+        null
+      let vehicleRefreshInFlight =
+        false
+      let vehicleRefreshQueued =
+        false
       let routeCatalogById =
         new Map()
       let gpsPrompt =
@@ -2539,6 +2555,16 @@ function LiveTtcLayer({
         null
 
       function removePopup() {
+        if (
+          popupRefreshTimer
+        ) {
+          window.clearInterval(
+            popupRefreshTimer
+          )
+          popupRefreshTimer =
+            null
+        }
+
         popupRef.current
           ?.remove?.()
         popupRef.current =
@@ -2605,6 +2631,53 @@ function LiveTtcLayer({
           essential:
             true,
         })
+      }
+
+      function vehiclePollDelay() {
+        const zoom =
+          Number(
+            map.getZoom()
+          )
+
+        if (
+          zoom >=
+            VEHICLE_DEEP_FOCUS_ZOOM
+        ) {
+          return VEHICLE_DEEP_FOCUS_POLL_MS
+        }
+
+        if (
+          zoom >=
+            VEHICLE_FOCUSED_ZOOM
+        ) {
+          return VEHICLE_FOCUSED_POLL_MS
+        }
+
+        return VEHICLE_POLL_MS
+      }
+
+      function updateAccuracyHint() {
+        if (
+          !accuracyHint
+        ) {
+          return
+        }
+
+        const focused =
+          Number(
+            map.getZoom()
+          ) >=
+          VEHICLE_FOCUSED_ZOOM
+
+        accuracyHint.textContent =
+          focused
+            ? 'FOCUSED LIVE UPDATES'
+            : 'ZOOM IN FOR MORE ACCURATE LIVE POSITIONS'
+
+        accuracyHint.style.opacity =
+          focused
+            ? '0.72'
+            : '0.9'
       }
 
       function requestGpsCenter() {
@@ -2975,6 +3048,56 @@ function LiveTtcLayer({
         container.appendChild(
           controlsRoot
         )
+
+        accuracyHint =
+          document.createElement(
+            'div'
+          )
+        accuracyHint.dataset.ttcAccuracyHint =
+          '1'
+        Object.assign(
+          accuracyHint.style,
+          {
+            position:
+              'absolute',
+            top:
+              '112px',
+            left:
+              '50%',
+            transform:
+              'translateX(-50%)',
+            zIndex:
+              '18',
+            maxWidth:
+              'calc(100% - 30px)',
+            background:
+              'rgba(255,255,255,0.94)',
+            color:
+              '#111',
+            border:
+              '1px solid rgba(0,0,0,0.16)',
+            borderRadius:
+              '999px',
+            padding:
+              '5px 9px',
+            fontSize:
+              '8px',
+            fontWeight:
+              '900',
+            letterSpacing:
+              '0.08em',
+            whiteSpace:
+              'nowrap',
+            boxShadow:
+              '0 2px 8px rgba(0,0,0,0.10)',
+            pointerEvents:
+              'none',
+          }
+        )
+        container.appendChild(
+          accuracyHint
+        )
+        updateAccuracyHint()
 
         let alreadyPrompted =
           false
@@ -5042,15 +5165,30 @@ function LiveTtcLayer({
           )
       }
 
-      async function refreshVehicles() {
+      async function refreshVehicles({
+        priority =
+          false,
+      } = {}) {
         if (
           disposed
         ) {
           return
         }
 
-        vehicleAbortRef.current
-          ?.abort?.()
+        if (
+          vehicleRefreshInFlight
+        ) {
+          if (
+            priority
+          ) {
+            vehicleRefreshQueued =
+              true
+          }
+          return
+        }
+
+        vehicleRefreshInFlight =
+          true
 
         const controller =
           new AbortController()
@@ -5625,16 +5763,32 @@ function LiveTtcLayer({
           error
         ) {
           if (
-            error?.name ===
+            error?.name !==
             'AbortError'
           ) {
-            return
+            console.warn(
+              'LIVE TTC VEHICLES:',
+              error
+            )
           }
+        }
+        finally {
+          vehicleRefreshInFlight =
+            false
 
-          console.warn(
-            'LIVE TTC VEHICLES:',
-            error
-          )
+          if (
+            !disposed &&
+            vehicleRefreshQueued
+          ) {
+            vehicleRefreshQueued =
+              false
+            window.setTimeout(
+              () => {
+                refreshVehicles()
+              },
+              0
+            )
+          }
         }
       }
 
@@ -5760,67 +5914,97 @@ function LiveTtcLayer({
         popupRef.current =
           popup
 
-        try {
-          const response =
-            await fetch(
-              `${ARRIVALS_ENDPOINT}?stopId=${encodeURIComponent(stopId)}&stopCode=${encodeURIComponent(stopCode)}`,
-              {
-                cache:
-                  'no-store',
+        const refreshStopArrivals =
+          async () => {
+            try {
+              const response =
+                await fetch(
+                  `${ARRIVALS_ENDPOINT}?stopId=${encodeURIComponent(stopId)}&stopCode=${encodeURIComponent(stopCode)}`,
+                  {
+                    cache:
+                      'no-store',
+                  }
+                )
+
+              if (
+                !response.ok
+              ) {
+                throw new Error(
+                  `TTC arrivals request failed: ${response.status}`
+                )
               }
-            )
 
-          if (
-            !response.ok
-          ) {
-            throw new Error(
-              `TTC arrivals request failed: ${response.status}`
-            )
+              const payload =
+                await response.json()
+
+              if (
+                popupRef.current ===
+                  popup
+              ) {
+                fillStopArrivals({
+                  shell,
+                  payload,
+                })
+              }
+            }
+            catch (
+              error
+            ) {
+              console.warn(
+                'LIVE TTC ARRIVALS:',
+                error
+              )
+
+              if (
+                popupRef.current ===
+                  popup &&
+                !shell.querySelector(
+                  '.ttc-live-stop-arrivals'
+                )
+              ) {
+                shell
+                  .querySelectorAll(
+                    '.ttc-live-stop-loading'
+                  )
+                  .forEach(
+                    (
+                      child
+                    ) =>
+                      child.remove()
+                  )
+
+                addTextLine({
+                  parent:
+                    shell,
+                  text:
+                    'Live arrivals are temporarily unavailable.',
+                  style: {
+                    fontSize:
+                      '10px',
+                    marginTop:
+                      '7px',
+                    opacity:
+                      '0.65',
+                  },
+                })
+              }
+            }
           }
 
-          const payload =
-            await response.json()
+        await refreshStopArrivals()
 
-          if (
-            popupRef.current ===
-              popup
-          ) {
-            fillStopArrivals({
-              shell,
-              payload,
-            })
-            snapPopupToScreen(
-              event.lngLat
-            )
-          }
-        }
-        catch (
-          error
+        if (
+          popupRef.current ===
+            popup
         ) {
-          console.warn(
-            'LIVE TTC ARRIVALS:',
-            error
-          )
-
-          if (
-            popupRef.current ===
-              popup
-          ) {
-            addTextLine({
-              parent:
-                shell,
-              text:
-                'Live arrivals are temporarily unavailable.',
-              style: {
-                fontSize:
-                  '10px',
-                marginTop:
-                  '7px',
-                opacity:
-                  '0.65',
-              },
-            })
-          }
+          popupRefreshTimer =
+            window.setInterval(
+              refreshStopArrivals,
+              Math.max(
+                2500,
+                vehiclePollDelay()
+              )
+            )
         }
       }
 
@@ -6071,9 +6255,18 @@ function LiveTtcLayer({
         ''
       )
 
+      function handleViewportSettled() {
+        scheduleNetworkRefresh()
+        updateAccuracyHint()
+        refreshVehicles({
+          priority:
+            true,
+        })
+      }
+
       map.on(
         'moveend',
-        scheduleNetworkRefresh
+        handleViewportSettled
       )
 
       map.on(
@@ -6152,11 +6345,28 @@ function LiveTtcLayer({
         }
       )
 
-      vehicleTimer =
-        window.setInterval(
-          refreshVehicles,
-          VEHICLE_POLL_MS
-        )
+      const scheduleVehiclePoll =
+        () => {
+          window.clearTimeout(
+            vehicleTimer
+          )
+
+          vehicleTimer =
+            window.setTimeout(
+              async () => {
+                await refreshVehicles()
+
+                if (
+                  !disposed
+                ) {
+                  scheduleVehiclePoll()
+                }
+              },
+              vehiclePollDelay()
+            )
+        }
+
+      scheduleVehiclePoll()
 
       return () => {
         disposed =
@@ -6170,7 +6380,7 @@ function LiveTtcLayer({
         window.clearTimeout(
           networkTimer
         )
-        window.clearInterval(
+        window.clearTimeout(
           vehicleTimer
         )
         window.clearInterval(
@@ -6186,6 +6396,9 @@ function LiveTtcLayer({
         controlsRoot?.remove?.()
         controlsRoot =
           null
+        accuracyHint?.remove?.()
+        accuracyHint =
+          null
         routeSelect =
           null
         routeCatalogById =
@@ -6193,7 +6406,7 @@ function LiveTtcLayer({
 
         map.off(
           'moveend',
-          scheduleNetworkRefresh
+          handleViewportSettled
         )
 
         map.off(
