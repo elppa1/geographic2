@@ -12986,7 +12986,10 @@ function MapPins({
       const mergedNewsItems =
         cityKey ===
           'toronto'
-          ? serverNewsItems
+          ? mergeNewsRecords(
+              getNewsItems(),
+              serverNewsItems
+            )
           : getNewsItems()
 
 

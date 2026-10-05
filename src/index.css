@@ -79,6 +79,17 @@ body {
   z-index: 300;
 }
 
+/*
+ * MapLibre adds DOM markers as direct children of the canvas container.
+ * Keep those actual marker buttons in the clickable foreground without
+ * changing canvas, raster, TTC, popup, or map gesture event handlers.
+ */
+.map .maplibregl-canvas-container > .geographic-map-marker {
+  pointer-events: auto !important;
+  cursor: pointer;
+  z-index: 400;
+}
+
 .map .geographic-map-marker-news {
   z-index: 700 !important;
 }
