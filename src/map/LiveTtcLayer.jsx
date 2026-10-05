@@ -75,7 +75,11 @@ const ARRIVALS_ENDPOINT =
   '/api/geographic/toronto/ttc/live/arrivals'
 
 const VEHICLE_PRELOAD_MAX_AGE_MS =
-  30 * 1000
+  45 * 1000
+const VEHICLE_LOCAL_SNAPSHOT_KEY =
+  'toronto-geographic-ttc-vehicle-snapshot-v1'
+const BUS_ACCURACY_ZOOM_THRESHOLD =
+  14
 
 let initialVehiclePreloadPayload =
   null
@@ -83,6 +87,119 @@ let initialVehiclePreloadAt =
   0
 let initialVehiclePreloadPromise =
   null
+
+
+function readLocalVehicleSnapshot() {
+  if (
+    typeof window ===
+      'undefined'
+  ) {
+    return null
+  }
+
+  try {
+    const raw =
+      window.localStorage
+        ?.getItem?.(
+          VEHICLE_LOCAL_SNAPSHOT_KEY
+        )
+
+    if (
+      !raw
+    ) {
+      return null
+    }
+
+    const parsed =
+      JSON.parse(
+        raw
+      )
+    const savedAt =
+      Number(
+        parsed?.savedAt ||
+        0
+      )
+    const payload =
+      parsed?.payload
+
+    if (
+      !savedAt ||
+      Date.now() -
+        savedAt >
+        VEHICLE_PRELOAD_MAX_AGE_MS ||
+      !Array.isArray(
+        payload?.vehicles
+      ) ||
+      payload.vehicles.length ===
+        0
+    ) {
+      return null
+    }
+
+    return {
+      payload,
+      savedAt,
+    }
+  }
+  catch {
+    return null
+  }
+}
+
+
+function saveLocalVehicleSnapshot(
+  payload
+) {
+  if (
+    typeof window ===
+      'undefined' ||
+    !Array.isArray(
+      payload?.vehicles
+    ) ||
+    payload.vehicles.length ===
+      0
+  ) {
+    return
+  }
+
+  try {
+    window.localStorage
+      ?.setItem?.(
+        VEHICLE_LOCAL_SNAPSHOT_KEY,
+        JSON.stringify({
+          savedAt:
+            Date.now(),
+          payload,
+        })
+      )
+  }
+  catch {
+    // Storage is only a startup optimization.
+  }
+}
+
+
+function acceptInitialVehiclePayload(
+  payload
+) {
+  if (
+    Array.isArray(
+      payload?.vehicles
+    ) &&
+    payload.vehicles.length >
+      0
+  ) {
+    initialVehiclePreloadPayload =
+      payload
+    initialVehiclePreloadAt =
+      Date.now()
+    saveLocalVehicleSnapshot(
+      payload
+    )
+  }
+
+  return payload
+}
 
 
 function startInitialVehiclePreload() {
@@ -94,42 +211,56 @@ function startInitialVehiclePreload() {
     return
   }
 
+  if (
+    !initialVehiclePreloadPayload
+  ) {
+    const localSnapshot =
+      readLocalVehicleSnapshot()
+
+    if (
+      localSnapshot
+    ) {
+      initialVehiclePreloadPayload =
+        localSnapshot.payload
+      initialVehiclePreloadAt =
+        localSnapshot.savedAt
+    }
+  }
+
+  const earlyPromise =
+    window
+      .__TG_TTC_EARLY_VEHICLES__
+      ?.promise
+
   initialVehiclePreloadPromise =
-    fetch(
-      VEHICLES_ENDPOINT,
-      {
-        cache:
-          'no-store',
-      }
+    (
+      earlyPromise
+        ? Promise.resolve(
+            earlyPromise
+          )
+        : fetch(
+            VEHICLES_ENDPOINT,
+            {
+              cache:
+                'no-store',
+            }
+          )
+            .then(
+              async (
+                response
+              ) => {
+                if (
+                  !response.ok
+                ) {
+                  return null
+                }
+
+                return response.json()
+              }
+            )
     )
       .then(
-        async (
-          response
-        ) => {
-          if (
-            !response.ok
-          ) {
-            return null
-          }
-
-          const payload =
-            await response.json()
-
-          if (
-            Array.isArray(
-              payload?.vehicles
-            ) &&
-            payload.vehicles.length >
-              0
-          ) {
-            initialVehiclePreloadPayload =
-              payload
-            initialVehiclePreloadAt =
-              Date.now()
-          }
-
-          return payload
-        }
+        acceptInitialVehiclePayload
       )
       .catch(
         (
@@ -161,10 +292,8 @@ function getInitialVehiclePreloadSnapshot() {
     const payload =
       initialVehiclePreloadPayload
 
-    // Consume once. Normal bounded polling immediately takes over.
-    initialVehiclePreloadPayload =
-      null
-
+    // Keep a copy available for startup retries until the normal polling path
+    // has delivered a fresh response.
     return payload
   }
 
@@ -172,9 +301,10 @@ function getInitialVehiclePreloadSnapshot() {
 }
 
 
-// Start TTC loading during initial JavaScript evaluation.
-// The HOW-TO popup is visual only and never blocks this work.
+// Begin loading before React mounts. index.html starts the request even earlier;
+// this adopts that promise instead of issuing another cold request.
 startInitialVehiclePreload()
+
 
 const VEHICLE_POLL_MS =
   3500
@@ -2877,6 +3007,8 @@ function LiveTtcLayer({
         null
       let routeSelect =
         null
+      let accuracyHint =
+        null
       let routeCatalogById =
         new Map()
       let gpsPrompt =
@@ -3127,6 +3259,28 @@ function LiveTtcLayer({
           ''
       }
 
+      function updateAccuracyHint() {
+        if (
+          !accuracyHint
+        ) {
+          return
+        }
+
+        const showHint =
+          Number(
+            map.getZoom()
+          ) <
+          BUS_ACCURACY_ZOOM_THRESHOLD
+
+        accuracyHint.textContent =
+          'ZOOM IN FOR MORE BUS ACCURACY'
+        accuracyHint.style.display =
+          showHint
+            ? 'block'
+            : 'none'
+      }
+
+
       function createLiveTtcControls() {
         const container =
           map.getContainer()
@@ -3324,9 +3478,60 @@ function LiveTtcLayer({
         controlsRoot.appendChild(
           gpsButton
         )
+
+        accuracyHint =
+          document.createElement(
+            'div'
+          )
+        accuracyHint.setAttribute(
+          'aria-live',
+          'polite'
+        )
+        Object.assign(
+          accuracyHint.style,
+          {
+            position:
+              'absolute',
+            top:
+              '40px',
+            left:
+              '50%',
+            transform:
+              'translateX(-50%)',
+            display:
+              'none',
+            whiteSpace:
+              'nowrap',
+            background:
+              'rgba(255,255,255,0.94)',
+            color:
+              '#000',
+            border:
+              '1px solid rgba(0,0,0,0.2)',
+            borderRadius:
+              '999px',
+            padding:
+              '4px 7px',
+            fontSize:
+              '8px',
+            fontWeight:
+              '900',
+            letterSpacing:
+              '0.07em',
+            boxShadow:
+              '0 1px 5px rgba(0,0,0,0.12)',
+            pointerEvents:
+              'none',
+          }
+        )
+        controlsRoot.appendChild(
+          accuracyHint
+        )
+
         container.appendChild(
           controlsRoot
         )
+        updateAccuracyHint()
 
         let alreadyPrompted =
           false
@@ -5172,6 +5377,14 @@ function LiveTtcLayer({
           )
       }
 
+
+      function handleMapMoveEnd() {
+        scheduleNetworkRefresh()
+        updateAccuracyHint()
+        refreshVehicles()
+      }
+
+
       function renderAnimatedVehicles() {
         if (
           disposed
@@ -5578,6 +5791,19 @@ function LiveTtcLayer({
             )
               ? payload.vehicles
               : []
+
+          if (
+            nextVehicles.length >
+              0
+          ) {
+            initialVehiclePreloadPayload =
+              payload
+            initialVehiclePreloadAt =
+              Date.now()
+            saveLocalVehicleSnapshot(
+              payload
+            )
+          }
 
           if (
             nextVehicles.length ===
@@ -6650,7 +6876,12 @@ function LiveTtcLayer({
 
       map.on(
         'moveend',
-        scheduleNetworkRefresh
+        handleMapMoveEnd
+      )
+
+      map.on(
+        'zoom',
+        updateAccuracyHint
       )
 
       map.on(
@@ -6775,12 +7006,19 @@ function LiveTtcLayer({
           null
         routeSelect =
           null
+        accuracyHint =
+          null
         routeCatalogById =
           new Map()
 
         map.off(
           'moveend',
-          scheduleNetworkRefresh
+          handleMapMoveEnd
+        )
+
+        map.off(
+          'zoom',
+          updateAccuracyHint
         )
 
         map.off(

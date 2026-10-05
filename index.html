@@ -5,6 +5,44 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>elppa-geographic</title>
+    <script>
+      (() => {
+        const endpoint =
+          '/api/geographic/toronto/ttc/live/vehicles'
+
+        window.__TG_TTC_EARLY_VEHICLES__ = {
+          startedAt:
+            Date.now(),
+          promise:
+            fetch(
+              endpoint,
+              {
+                cache:
+                  'no-store',
+                credentials:
+                  'same-origin',
+              }
+            )
+              .then(
+                async (
+                  response
+                ) => {
+                  if (
+                    !response.ok
+                  ) {
+                    return null
+                  }
+
+                  return response.json()
+                }
+              )
+              .catch(
+                () =>
+                  null
+              ),
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

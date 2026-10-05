@@ -45,9 +45,6 @@ const STATIC_CACHE_MS =
 const REALTIME_CACHE_MS =
   2500
 
-const VEHICLE_IMMEDIATE_CACHE_MS =
-  30 * 1000
-
 const TORONTO_ATTRIBUTION =
   'Contains information licensed under the Open Government Licence - Toronto'
 
@@ -2399,58 +2396,113 @@ function vehicleFeedHasPositions(
 }
 
 
+async function fetchUsableVehicleFeed(
+  url,
+  label
+) {
+  const feed =
+    await fetchRealtimeFeed(
+      url
+    )
+
+  if (
+    !vehicleFeedHasPositions(
+      feed
+    )
+  ) {
+    throw new Error(
+      `${label} vehicle feed returned no usable positions`
+    )
+  }
+
+  return feed
+}
+
+
 async function fetchVehicleRealtimeFeed() {
-  let primaryError =
-    null
+  let settled =
+    false
+
+  const primaryPromise =
+    fetchUsableVehicleFeed(
+      TTC_VEHICLES_URL,
+      'TTC primary'
+    )
+
+  const fallbackPromise =
+    new Promise(
+      (
+        resolve,
+        reject
+      ) => {
+        setTimeout(
+          () => {
+            if (
+              settled
+            ) {
+              reject(
+                new Error(
+                  'TTC fallback hedge cancelled'
+                )
+              )
+              return
+            }
+
+            fetchUsableVehicleFeed(
+              TTC_VEHICLES_FALLBACK_URL,
+              'TTC fallback'
+            )
+              .then(
+                resolve,
+                reject
+              )
+          },
+          700
+        )
+      }
+    )
 
   try {
     const feed =
-      await fetchRealtimeFeed(
-        TTC_VEHICLES_URL
-      )
+      await Promise.any([
+        primaryPromise,
+        fallbackPromise,
+      ])
 
-    if (
-      !vehicleFeedHasPositions(
-        feed
-      )
-    ) {
-      throw new Error(
-        'TTC primary vehicle feed returned no usable positions'
-      )
-    }
-
+    settled =
+      true
     return feed
   }
   catch (
     error
   ) {
-    primaryError =
-      error
-  }
+    settled =
+      true
 
-  try {
-    const feed =
-      await fetchRealtimeFeed(
-        TTC_VEHICLES_FALLBACK_URL
+    const details =
+      Array.isArray(
+        error?.errors
       )
+        ? error.errors
+            .map(
+              (
+                item
+              ) =>
+                item?.message ||
+                String(
+                  item
+                )
+            )
+            .join(
+              ' · '
+            )
+        : error?.message ||
+          String(
+            error
+          )
 
-    if (
-      !vehicleFeedHasPositions(
-        feed
-      )
-    ) {
-      throw new Error(
-        'TTC fallback vehicle feed returned no usable positions'
-      )
-    }
-
-    return feed
-  }
-  catch (
-    fallbackError
-  ) {
     throw new Error(
-      `TTC vehicle feeds unavailable · primary: ${primaryError?.message || primaryError} · fallback: ${fallbackError?.message || fallbackError}`
+      `TTC vehicle feeds unavailable · ${details}`
     )
   }
 }
@@ -2527,10 +2579,10 @@ async function getRawVehicleFeed() {
   if (
     vehicleCache &&
     cacheAge <
-      VEHICLE_IMMEDIATE_CACHE_MS
+      REALTIME_STALE_FALLBACK_MS
   ) {
-    // Stale-while-revalidate: first paint never waits on TTC when we already
-    // have a recent fleet snapshot.
+    // Never hold first paint for a new upstream request when a usable recent
+    // fleet exists. Return it now and replace it in the background.
     refreshVehicleFeedInBackground()
       .catch(
         (
