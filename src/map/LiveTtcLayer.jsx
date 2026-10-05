@@ -1,4 +1,4 @@
-// LIVE TTC ROUTE ENGINE V16 · priority route indexing + immediate motion promotion
+// LIVE TTC ROUTE ENGINE V17 · timestamp-age compensation + priority route indexing
 // Vehicles advance by distance along their TTC route shape; realtime GPS only corrects the route progress.
 // LIVE TTC FAST START V8
 // LIVE TTC STABILITY V6 · 2026-09-30 · stable vehicle retention + continuous interpolation + direction arrows + deduped arrivals
@@ -86,6 +86,14 @@ const VEHICLE_STALE_STOP_MS =
   75 * 1000
 const VEHICLE_GRACE_MS =
   90 * 1000
+const VEHICLE_TIMESTAMP_COMPENSATION_MIN_AGE_SECONDS =
+  2
+const VEHICLE_TIMESTAMP_COMPENSATION_MAX_SECONDS =
+  45
+const VEHICLE_TIMESTAMP_COMPENSATION_MAX_METERS =
+  220
+const VEHICLE_TIMESTAMP_COMPENSATION_MIN_SPEED_MPS =
+  0.7
 const ANIMATION_FRAME_MS =
   50
 const ROUTE_INDEX_ROUTE_BATCH_SIZE =
@@ -1780,13 +1788,16 @@ function routeEngineTargetSpeed({
       Number(
         previous.sampleTimestamp
       )
+    const previousSampleProgress =
+      Number(
+        previous.sampleProgress ??
+        previous.realProgress
+      )
     const progressDelta =
       Number(
         realProgress
       ) -
-      Number(
-        previous.realProgress
-      )
+      previousSampleProgress
 
     if (
       elapsedSeconds >
@@ -1942,7 +1953,221 @@ function routeEngineTargetSpeed({
       ),
     lastMovingAt,
     stopped,
+    observedSpeed,
+    movementEvidence,
   }
+}
+
+
+function timestampCompensatedRouteProgress({
+  path,
+  sampleProgress,
+  sampleTimestamp,
+  reportedAgeSeconds,
+  ttcSpeed,
+  speedState,
+  previous,
+  now,
+}) {
+  if (
+    !path ||
+    !Number.isFinite(
+      Number(
+        sampleProgress
+      )
+    ) ||
+    speedState?.stopped
+  ) {
+    return sampleProgress
+  }
+
+  const timestampSeconds =
+    Number(
+      sampleTimestamp ||
+      0
+    )
+  const clientAgeSeconds =
+    timestampSeconds >
+      0
+      ? Math.max(
+          0,
+          Date.now() /
+            1000 -
+            timestampSeconds
+        )
+      : 0
+  const serverAgeSeconds =
+    Number.isFinite(
+      Number(
+        reportedAgeSeconds
+      )
+    )
+      ? Math.max(
+          0,
+          Number(
+            reportedAgeSeconds
+          )
+        )
+      : 0
+  const ageSeconds =
+    clampNumber(
+      Math.max(
+        clientAgeSeconds,
+        serverAgeSeconds
+      ),
+      0,
+      VEHICLE_TIMESTAMP_COMPENSATION_MAX_SECONDS
+    )
+
+  if (
+    ageSeconds <
+      VEHICLE_TIMESTAMP_COMPENSATION_MIN_AGE_SECONDS
+  ) {
+    return sampleProgress
+  }
+
+  const observedSpeed =
+    Number.isFinite(
+      Number(
+        speedState?.observedSpeed
+      )
+    )
+      ? clampNumber(
+          Number(
+            speedState.observedSpeed
+          ),
+          0,
+          VEHICLE_VISUAL_MAX_SPEED_MPS
+        )
+      : null
+  const reportedSpeed =
+    Number.isFinite(
+      Number(
+        ttcSpeed
+      )
+    )
+      ? clampNumber(
+          Number(
+            ttcSpeed
+          ),
+          0,
+          VEHICLE_VISUAL_MAX_SPEED_MPS
+        )
+      : null
+  const filteredSpeed =
+    Number.isFinite(
+      Number(
+        speedState?.filteredSpeed
+      )
+    )
+      ? clampNumber(
+          Number(
+            speedState.filteredSpeed
+          ),
+          0,
+          VEHICLE_VISUAL_MAX_SPEED_MPS
+        )
+      : 0
+
+  let compensationSpeed =
+    null
+  let confidenceFactor =
+    1
+
+  if (
+    observedSpeed !==
+      null &&
+    observedSpeed >=
+      VEHICLE_TIMESTAMP_COMPENSATION_MIN_SPEED_MPS &&
+    reportedSpeed !==
+      null &&
+    reportedSpeed >=
+      VEHICLE_TIMESTAMP_COMPENSATION_MIN_SPEED_MPS
+  ) {
+    compensationSpeed =
+      observedSpeed *
+        0.72 +
+      reportedSpeed *
+        0.28
+  }
+  else if (
+    observedSpeed !==
+      null &&
+    observedSpeed >=
+      VEHICLE_TIMESTAMP_COMPENSATION_MIN_SPEED_MPS
+  ) {
+    compensationSpeed =
+      observedSpeed
+  }
+  else if (
+    reportedSpeed !==
+      null &&
+    reportedSpeed >=
+      VEHICLE_TIMESTAMP_COMPENSATION_MIN_SPEED_MPS
+  ) {
+    compensationSpeed =
+      reportedSpeed
+    confidenceFactor =
+      0.9
+  }
+  else if (
+    observedSpeed ===
+      null &&
+    reportedSpeed ===
+      null
+  ) {
+    const previousMovingRecently =
+      previous &&
+      Number(
+        speedState?.lastMovingAt ||
+        0
+      ) >
+        0 &&
+      Number(
+        now ||
+        0
+      ) -
+        Number(
+          speedState.lastMovingAt
+        ) <
+        15 *
+          1000
+
+    if (
+      previousMovingRecently &&
+      filteredSpeed >=
+        VEHICLE_TIMESTAMP_COMPENSATION_MIN_SPEED_MPS
+    ) {
+      compensationSpeed =
+        filteredSpeed
+      confidenceFactor =
+        0.8
+    }
+  }
+
+  if (
+    compensationSpeed ===
+      null
+  ) {
+    return sampleProgress
+  }
+
+  const compensationMeters =
+    Math.min(
+      VEHICLE_TIMESTAMP_COMPENSATION_MAX_METERS,
+      compensationSpeed *
+        ageSeconds *
+        confidenceFactor
+    )
+
+  return clampNumber(
+    Number(
+      sampleProgress
+    ) +
+      compensationMeters,
+    0,
+    path.totalMeters
+  )
 }
 
 
@@ -3966,19 +4191,36 @@ function LiveTtcLayer({
                 return
               }
 
-              const realProgress =
+              const sampleProgress =
                 selection.projection.progressMeters
               const speedState =
                 routeEngineTargetSpeed({
                   previous:
                     null,
-                  realProgress,
+                  realProgress:
+                    sampleProgress,
                   sampleTimestamp:
                     vehicleState.sampleTimestamp,
                   ttcSpeed:
                     vehicleState?.properties?.speed,
                   currentStatus:
                     vehicleState?.properties?.currentStatus,
+                  now,
+                })
+              const realProgress =
+                timestampCompensatedRouteProgress({
+                  path:
+                    selection.path,
+                  sampleProgress,
+                  sampleTimestamp:
+                    vehicleState.sampleTimestamp,
+                  reportedAgeSeconds:
+                    vehicleState?.properties?.ageSeconds,
+                  ttcSpeed:
+                    vehicleState?.properties?.speed,
+                  speedState,
+                  previous:
+                    null,
                   now,
                 })
               const routeBearing =
@@ -3989,6 +4231,8 @@ function LiveTtcLayer({
 
               vehicleState.path =
                 selection.path
+              vehicleState.sampleProgress =
+                sampleProgress
               vehicleState.realProgress =
                 realProgress
               vehicleState.displayProgress =
@@ -5096,33 +5340,36 @@ function LiveTtcLayer({
                     previous.path.shapeId &&
                   path.directionId ===
                     previous.path.directionId
-                let realProgress =
+                let sampleProgress =
                   projection?.progressMeters ??
                   null
+                const previousSampleProgress =
+                  previous?.sampleProgress ??
+                  previous?.realProgress
 
                 if (
                   pathMatchesPrevious &&
                   Number.isFinite(
                     Number(
-                      previous.realProgress
+                      previousSampleProgress
                     )
                   ) &&
                   Number.isFinite(
                     Number(
-                      realProgress
+                      sampleProgress
                     )
                   ) &&
-                  realProgress <
+                  sampleProgress <
                     Number(
-                      previous.realProgress
+                      previousSampleProgress
                     ) -
                     5
                 ) {
                   // GPS jitter must never make a bus reverse visually. A real
                   // direction/trip change selects a new shape above instead.
-                  realProgress =
+                  sampleProgress =
                     Number(
-                      previous.realProgress
+                      previousSampleProgress
                     )
                 }
 
@@ -5130,7 +5377,7 @@ function LiveTtcLayer({
                   path &&
                   Number.isFinite(
                     Number(
-                      realProgress
+                      sampleProgress
                     )
                   )
                     ? routeEngineTargetSpeed({
@@ -5138,7 +5385,8 @@ function LiveTtcLayer({
                           pathMatchesPrevious
                             ? previous
                             : null,
-                        realProgress,
+                        realProgress:
+                          sampleProgress,
                         sampleTimestamp:
                           timestamp,
                         ttcSpeed:
@@ -5169,6 +5417,31 @@ function LiveTtcLayer({
                               'STOPPED'
                             ),
                       }
+
+                const realProgress =
+                  path &&
+                  Number.isFinite(
+                    Number(
+                      sampleProgress
+                    )
+                  )
+                    ? timestampCompensatedRouteProgress({
+                        path,
+                        sampleProgress,
+                        sampleTimestamp:
+                          timestamp,
+                        reportedAgeSeconds:
+                          vehicle.ageSeconds,
+                        ttcSpeed:
+                          speed,
+                        speedState,
+                        previous:
+                          pathMatchesPrevious
+                            ? previous
+                            : null,
+                        now,
+                      })
+                    : sampleProgress
 
                 let displayProgress =
                   null
@@ -5223,6 +5496,7 @@ function LiveTtcLayer({
                   vehicleId,
                   {
                     path,
+                    sampleProgress,
                     realProgress,
                     displayProgress,
                     filteredSpeed:
@@ -5289,6 +5563,16 @@ function LiveTtcLayer({
                         '',
                       currentStatus,
                       timestamp,
+                      ageSeconds:
+                        Number.isFinite(
+                          Number(
+                            vehicle.ageSeconds
+                          )
+                        )
+                          ? Number(
+                              vehicle.ageSeconds
+                            )
+                          : 0,
                       bearing:
                         routeBearing,
                       speed,
