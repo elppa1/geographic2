@@ -43,7 +43,7 @@ const STATIC_CACHE_MS =
   6 * 60 * 60 * 1000
 
 const REALTIME_CACHE_MS =
-  2500
+  1400
 
 const TORONTO_ATTRIBUTION =
   'Contains information licensed under the Open Government Licence - Toronto'
@@ -2604,7 +2604,7 @@ async function getRawVehicleFeed() {
 
 
 const VEHICLE_WARM_INTERVAL_MS =
-  3000
+  1800
 
 let vehicleWarmTimer =
   null

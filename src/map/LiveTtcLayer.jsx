@@ -292,8 +292,13 @@ function getInitialVehiclePreloadSnapshot() {
     const payload =
       initialVehiclePreloadPayload
 
-    // Keep a copy available for startup retries until the normal polling path
-    // has delivered a fresh response.
+    // Startup optimization only: consume this snapshot ONCE.
+    // Every subsequent refresh must hit the live vehicle endpoint.
+    initialVehiclePreloadPayload =
+      null
+    initialVehiclePreloadAt =
+      0
+
     return payload
   }
 
@@ -307,7 +312,7 @@ startInitialVehiclePreload()
 
 
 const VEHICLE_POLL_MS =
-  3500
+  2000
 const VEHICLE_VISUAL_MAX_SPEED_MPS =
   8.5
 const VEHICLE_DEFAULT_MOVING_SPEED_MPS =
@@ -2344,8 +2349,8 @@ function routeEngineTargetSpeed({
   const smoothing =
     targetSpeed >
       previousSpeed
-      ? 0.34
-      : 0.18
+      ? 0.58
+      : 0.34
   let filteredSpeed =
     previous
       ? previousSpeed +
@@ -5523,11 +5528,14 @@ function LiveTtcLayer({
                   progressError >
                     3
                 ) {
+                  // A fresh TTC sample should visibly affect the vehicle now,
+                  // not several seconds later. Keep it smooth, but allow a
+                  // stronger catch-up while staying route constrained.
                   visualSpeed +=
                     Math.min(
-                      1.8,
+                      4.5,
                       progressError *
-                      0.055
+                      0.12
                     )
                 }
                 else if (
@@ -5796,10 +5804,9 @@ function LiveTtcLayer({
             nextVehicles.length >
               0
           ) {
-            initialVehiclePreloadPayload =
-              payload
-            initialVehiclePreloadAt =
-              Date.now()
+            // Persist only for a future page reload. Do NOT recycle a normal
+            // network response into the current session's one-shot preload,
+            // otherwise alternate polls can reuse old vehicle positions.
             saveLocalVehicleSnapshot(
               payload
             )

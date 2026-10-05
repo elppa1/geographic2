@@ -10942,6 +10942,34 @@ function createMarker({
         map
       )
 
+  // NEWS must always sit above canvas-based TTC routes, stops and vehicles.
+  // This is display priority only; it does not change pin filtering or logic.
+  const markerElement =
+    marker.getElement?.()
+
+  if (
+    markerElement
+  ) {
+    if (
+      pinType ===
+        'news'
+    ) {
+      markerElement.style.zIndex =
+        '120'
+    }
+    else if (
+      pinType ===
+        'historic'
+    ) {
+      markerElement.style.zIndex =
+        '80'
+    }
+    else {
+      markerElement.style.zIndex =
+        '90'
+    }
+  }
+
   return marker
 }
 
