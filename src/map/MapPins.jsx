@@ -8645,7 +8645,7 @@ function getHistoricMarkerScale(
     numericZoom >=
       12
   ) {
-    return 0.84
+    return 0.90
   }
 
 
@@ -8653,11 +8653,11 @@ function getHistoricMarkerScale(
     numericZoom >=
       10
   ) {
-    return 0.70
+    return 0.82
   }
 
 
-  return 0.58
+  return 0.74
 }
 
 

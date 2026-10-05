@@ -3367,7 +3367,7 @@ function LiveTtcLayer({
         ) {
           const busMarker =
             createVehicleMarkerImage(
-              '#C8102E'
+              '#111111'
             )
 
           if (
@@ -4033,8 +4033,19 @@ function LiveTtcLayer({
                 true,
             },
             paint: {
-              'text-color':
+              'text-color': [
+                'case',
+                [
+                  '==',
+                  [
+                    'get',
+                    'mode',
+                  ],
+                  'streetcar',
+                ],
                 '#C8102E',
+                '#111111',
+              ],
               'text-halo-color':
                 '#ffffff',
               'text-halo-width':
