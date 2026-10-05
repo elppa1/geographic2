@@ -12458,6 +12458,137 @@ function MapPins({
             )
         )
 
+
+      const getAdditionalHistoricLayerIds =
+        (pin) =>
+          Array.from(
+            new Set(
+              (
+                Array.isArray(
+                  pin?.additionalHistoricLayerIds
+                )
+                  ? pin.additionalHistoricLayerIds
+                  : []
+              )
+                .map(
+                  (layerId) =>
+                    String(
+                      layerId ||
+                      ''
+                    )
+                      .trim()
+                )
+                .filter(
+                  (layerId) =>
+                    Boolean(
+                      layerId
+                    ) &&
+                    layerId !==
+                      pin?.historicLayerId
+                )
+            )
+          )
+
+
+      const sharedHistoricLayerIsPublished =
+        (layerId) => {
+          const layer =
+            historicLayerById.get(
+              layerId
+            )
+
+
+          if (
+            !layer ||
+            layer.status !==
+              'published'
+          ) {
+            return false
+          }
+
+
+          if (
+            !layer.categoryId
+          ) {
+            return true
+          }
+
+
+          const category =
+            historicCategoryById.get(
+              layer.categoryId
+            )
+
+
+          return (
+            Boolean(
+              category
+            ) &&
+            category.status ===
+              'published'
+          )
+        }
+
+
+      const historicRecordMatchesLayer =
+        (pin, layerId) => {
+          if (
+            pin?.historicLayerId ===
+              layerId
+          ) {
+            return true
+          }
+
+
+          return getAdditionalHistoricLayerIds(
+            pin
+          )
+            .some(
+              (sharedLayerId) =>
+                sharedLayerId ===
+                  layerId &&
+                sharedHistoricLayerIsPublished(
+                  sharedLayerId
+                )
+            )
+        }
+
+
+      const historicRecordMatchesCategory =
+        (pin, categoryId) => {
+          if (
+            pin?.historicCategoryId ===
+              categoryId
+          ) {
+            return true
+          }
+
+
+          return getAdditionalHistoricLayerIds(
+            pin
+          )
+            .some(
+              (sharedLayerId) => {
+                if (
+                  !sharedHistoricLayerIsPublished(
+                    sharedLayerId
+                  )
+                ) {
+                  return false
+                }
+
+
+                return (
+                  historicLayerById.get(
+                    sharedLayerId
+                  )?.categoryId ===
+                    categoryId
+                )
+              }
+            )
+        }
+
+
       visiblePins =
         getHistoricItems()
           .filter(
@@ -12529,15 +12660,19 @@ function MapPins({
             (pin) =>
               historicCategoryFilter ===
                 'all' ||
-              pin.historicCategoryId ===
+              historicRecordMatchesCategory(
+                pin,
                 historicCategoryFilter
+              )
           )
           .filter(
             (pin) =>
               historicLayerFilter ===
                 'all' ||
-              pin.historicLayerId ===
+              historicRecordMatchesLayer(
+                pin,
                 historicLayerFilter
+              )
           )
           .filter(
             () =>

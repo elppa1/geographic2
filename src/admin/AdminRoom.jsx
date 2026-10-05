@@ -2556,6 +2556,9 @@ const EMPTY_HISTORIC = {
   historicLayerId:
     '',
 
+  additionalHistoricLayerIds:
+    [],
+
   issueIds:
     [],
 
@@ -5503,6 +5506,154 @@ function normalizePinRecord(
 
 
 // ============================================================
+// HISTORIC SHARED LAYERS
+// ============================================================
+
+function normalizeHistoricAdditionalLayerIds(
+  value,
+  primaryLayerId =
+    ''
+) {
+  const primary =
+    String(
+      primaryLayerId ||
+      ''
+    )
+      .trim()
+
+
+  return Array.from(
+    new Set(
+      (
+        Array.isArray(
+          value
+        )
+          ? value
+          : []
+      )
+        .map(
+          (layerId) =>
+            String(
+              layerId ||
+              ''
+            )
+              .trim()
+        )
+        .filter(
+          (layerId) =>
+            Boolean(
+              layerId
+            ) &&
+            layerId !==
+              primary
+        )
+    )
+  )
+}
+
+
+function historicRecordHasLayer(
+  record,
+  layerId
+) {
+  const target =
+    String(
+      layerId ||
+      ''
+    )
+      .trim()
+
+
+  if (
+    !target
+  ) {
+    return false
+  }
+
+
+  if (
+    record?.historicLayerId ===
+      target
+  ) {
+    return true
+  }
+
+
+  return normalizeHistoricAdditionalLayerIds(
+    record?.additionalHistoricLayerIds,
+    record?.historicLayerId
+  )
+    .includes(
+      target
+    )
+}
+
+
+function historicRecordHasCategory(
+  record,
+  categoryId,
+  layers =
+    []
+) {
+  const target =
+    String(
+      categoryId ||
+      ''
+    )
+      .trim()
+
+
+  if (
+    !target
+  ) {
+    return false
+  }
+
+
+  if (
+    record?.historicCategoryId ===
+      target
+  ) {
+    return true
+  }
+
+
+  const sharedLayerIds =
+    new Set(
+      normalizeHistoricAdditionalLayerIds(
+        record?.additionalHistoricLayerIds,
+        record?.historicLayerId
+      )
+    )
+
+
+  if (
+    sharedLayerIds.size ===
+      0
+  ) {
+    return false
+  }
+
+
+  return (
+    Array.isArray(
+      layers
+    )
+      ? layers
+      : []
+  )
+    .some(
+      (layer) =>
+        layer?.categoryId ===
+          target &&
+        sharedLayerIds.has(
+          layer?.id
+        )
+    )
+}
+
+
+// ============================================================
 // NORMALIZE HISTORIC
 // ============================================================
 
@@ -5562,6 +5713,12 @@ function normalizeHistoricRecord(
     layerOverrideYear:
       pinRecord.layerOverrideYear ||
       '',
+
+    additionalHistoricLayerIds:
+      normalizeHistoricAdditionalLayerIds(
+        pinRecord.additionalHistoricLayerIds,
+        pinRecord.historicLayerId
+      ),
 
     issueIds:
       Array.isArray(
@@ -6642,14 +6799,19 @@ function AdminRoom() {
           .filter(
             (record) =>
               !selectedHistoricCategoryKey ||
-              record.historicCategoryId ===
-                selectedHistoricCategoryKey
+              historicRecordHasCategory(
+                record,
+                selectedHistoricCategoryKey,
+                cityHistoricLayers
+              )
           )
           .filter(
             (record) =>
               !selectedHistoricLayerKey ||
-              record.historicLayerId ===
+              historicRecordHasLayer(
+                record,
                 selectedHistoricLayerKey
+              )
           )
           .filter(
             (record) => {
@@ -6695,6 +6857,8 @@ function AdminRoom() {
         historicLibrarySearch,
         selectedHistoricCategoryKey,
         selectedHistoricLayerKey,
+        historicLayers,
+        cityKey,
       ]
     )
 
@@ -6829,6 +6993,21 @@ function AdminRoom() {
         !draft.historicCategoryId ||
         layer.categoryId ===
           draft.historicCategoryId
+    )
+
+
+  const draftAdditionalHistoricLayerIds =
+    normalizeHistoricAdditionalLayerIds(
+      draft.additionalHistoricLayerIds,
+      draft.historicLayerId
+    )
+
+
+  const draftShareableHistoricLayers =
+    cityHistoricLayers.filter(
+      (layer) =>
+        layer.id !==
+          draft.historicLayerId
     )
 
 
@@ -7409,8 +7588,11 @@ function AdminRoom() {
               next =
                 next.filter(
                   (record) =>
-                    record.historicCategoryId ===
-                    selectedHistoricCategoryId
+                    historicRecordHasCategory(
+                      record,
+                      selectedHistoricCategoryId,
+                      cityHistoricLayers
+                    )
                 )
             }
 
@@ -7421,8 +7603,10 @@ function AdminRoom() {
               next =
                 next.filter(
                   (record) =>
-                    record.historicLayerId ===
-                    selectedHistoricLayerId
+                    historicRecordHasLayer(
+                      record,
+                      selectedHistoricLayerId
+                    )
                 )
             }
 
@@ -7672,6 +7856,8 @@ function AdminRoom() {
         historicLastBatchIds,
         selectedHistoricCategoryId,
         selectedHistoricLayerId,
+        historicLayers,
+        cityKey,
         newTypeFilter,
       ]
     )
@@ -11347,6 +11533,67 @@ function AdminRoom() {
   }
 
 
+  function toggleHistoricAdditionalLayer(
+    layerId
+  ) {
+    const target =
+      String(
+        layerId ||
+        ''
+      )
+        .trim()
+
+
+    if (
+      !target
+    ) {
+      return
+    }
+
+
+    setDraft(
+      (current) => {
+        if (
+          target ===
+            current.historicLayerId
+        ) {
+          return current
+        }
+
+
+        const currentIds =
+          normalizeHistoricAdditionalLayerIds(
+            current.additionalHistoricLayerIds,
+            current.historicLayerId
+          )
+
+
+        const nextIds =
+          currentIds.includes(
+            target
+          )
+            ? currentIds.filter(
+                (id) =>
+                  id !==
+                    target
+              )
+            : [
+                ...currentIds,
+                target,
+              ]
+
+
+        return {
+          ...current,
+
+          additionalHistoricLayerIds:
+            nextIds,
+        }
+      }
+    )
+  }
+
+
   function resetDraft() {
     setEditingId(
       null
@@ -13404,7 +13651,7 @@ function AdminRoom() {
       )
 
 
-    const affectedPins =
+    const primaryPins =
       allHistoricItems.filter(
         (record) =>
           record.historicCategoryId ===
@@ -13412,6 +13659,38 @@ function AdminRoom() {
           layerIdSet.has(
             record.historicLayerId
           )
+      )
+
+
+    const primaryPinIds =
+      new Set(
+        primaryPins
+          .map(
+            (record) =>
+              record.id
+          )
+          .filter(
+            Boolean
+          )
+      )
+
+
+    const sharedPins =
+      allHistoricItems.filter(
+        (record) =>
+          !primaryPinIds.has(
+            record.id
+          ) &&
+          normalizeHistoricAdditionalLayerIds(
+            record.additionalHistoricLayerIds,
+            record.historicLayerId
+          )
+            .some(
+              (layerId) =>
+                layerIdSet.has(
+                  layerId
+                )
+            )
       )
 
 
@@ -13426,12 +13705,26 @@ function AdminRoom() {
               ? ''
               : 's'
           ) +
-          ` and ${affectedPins.length} pin` +
+          ` and ${primaryPins.length} primary pin` +
           (
-            affectedPins.length ===
+            primaryPins.length ===
               1
               ? ''
               : 's'
+          ) +
+          (
+            sharedPins.length >
+              0
+              ? (
+                  `, and removes shared membership from ${sharedPins.length} other pin` +
+                  (
+                    sharedPins.length ===
+                      1
+                      ? ''
+                      : 's'
+                  )
+                )
+              : ''
           ) +
           '.'
         )
@@ -13462,14 +13755,32 @@ function AdminRoom() {
 
 
     const nextItems =
-      allHistoricItems.filter(
-        (record) =>
-          record.historicCategoryId !==
-            category.id &&
-          !layerIdSet.has(
-            record.historicLayerId
-          )
-      )
+      allHistoricItems
+        .filter(
+          (record) =>
+            record.historicCategoryId !==
+              category.id &&
+            !layerIdSet.has(
+              record.historicLayerId
+            )
+        )
+        .map(
+          (record) => ({
+            ...record,
+
+            additionalHistoricLayerIds:
+              normalizeHistoricAdditionalLayerIds(
+                record.additionalHistoricLayerIds,
+                record.historicLayerId
+              )
+                .filter(
+                  (layerId) =>
+                    !layerIdSet.has(
+                      layerId
+                    )
+                ),
+          })
+        )
 
 
     setHistoricCategories(
@@ -13529,7 +13840,6 @@ function AdminRoom() {
       resetDraft()
     }
   }
-
 
   function resetHistoricLayerDraft() {
     setHistoricLayerEditorOpen(
@@ -13801,7 +14111,7 @@ function AdminRoom() {
     }
 
 
-    const affectedPins =
+    const primaryPins =
       allHistoricItems.filter(
         (record) =>
           record.historicLayerId ===
@@ -13809,16 +14119,59 @@ function AdminRoom() {
       )
 
 
+    const primaryPinIds =
+      new Set(
+        primaryPins
+          .map(
+            (record) =>
+              record.id
+          )
+          .filter(
+            Boolean
+          )
+      )
+
+
+    const sharedPins =
+      allHistoricItems.filter(
+        (record) =>
+          !primaryPinIds.has(
+            record.id
+          ) &&
+          normalizeHistoricAdditionalLayerIds(
+            record.additionalHistoricLayerIds,
+            record.historicLayerId
+          )
+            .includes(
+              layer.id
+            )
+      )
+
+
     const confirmed =
       window.confirm(
         (
           `Delete layer "${layer.title}"? ` +
-          `This also deletes ${affectedPins.length} pin` +
+          `This also deletes ${primaryPins.length} primary pin` +
           (
-            affectedPins.length ===
+            primaryPins.length ===
               1
               ? ''
               : 's'
+          ) +
+          (
+            sharedPins.length >
+              0
+              ? (
+                  ` and removes shared membership from ${sharedPins.length} other pin` +
+                  (
+                    sharedPins.length ===
+                      1
+                      ? ''
+                      : 's'
+                  )
+                )
+              : ''
           ) +
           '.'
         )
@@ -13841,11 +14194,28 @@ function AdminRoom() {
 
 
     const nextItems =
-      allHistoricItems.filter(
-        (record) =>
-          record.historicLayerId !==
-          layer.id
-      )
+      allHistoricItems
+        .filter(
+          (record) =>
+            record.historicLayerId !==
+            layer.id
+        )
+        .map(
+          (record) => ({
+            ...record,
+
+            additionalHistoricLayerIds:
+              normalizeHistoricAdditionalLayerIds(
+                record.additionalHistoricLayerIds,
+                record.historicLayerId
+              )
+                .filter(
+                  (layerId) =>
+                    layerId !==
+                      layer.id
+                ),
+          })
+        )
 
 
     setHistoricLayers(
@@ -13894,7 +14264,6 @@ function AdminRoom() {
     }
   }
 
-
   function chooseHistoricCategoryForLibrary(
     categoryId
   ) {
@@ -13930,6 +14299,15 @@ function AdminRoom() {
   //   "layer": "FAMOUS HOMES",
   //   "publish": true,
   //   "pins": [...]
+  // }
+  //
+  // Existing pins can be shared into another layer without duplication:
+  // {
+  //   "category": "MUSIC",
+  //   "layer": "HISTORIC SHOWS",
+  //   "shareExisting": true,
+  //   "pins": [{ "id": "historic-..." }],
+  //   "removeDuplicateIds": ["historic-duplicate-..."]
   // }
   //
   // Missing coordinates are resolved through the same Admin location
@@ -14080,10 +14458,30 @@ function AdminRoom() {
     }
 
 
+    const requestedDuplicateRemovals =
+      Array.isArray(
+        payload.removeDuplicateIds
+      )
+        ? payload.removeDuplicateIds
+            .map(
+              (id) =>
+                String(
+                  id ||
+                  ''
+                )
+                  .trim()
+            )
+            .filter(
+              Boolean
+            )
+        : []
+
+
     const confirmed =
       window.confirm(
         (
-          `Import ${pins.length} Historic ` +
+          `${payload.shareExisting === true ? 'Share' : 'Import'} ` +
+          `${pins.length} Historic ` +
           (
             pins.length ===
               1
@@ -14091,7 +14489,16 @@ function AdminRoom() {
               : 'pins'
           ) +
           ` into ${categoryTitle.toUpperCase()} → ` +
-          `${layerTitle.toUpperCase()}?`
+          `${layerTitle.toUpperCase()}` +
+          (
+            payload.shareExisting ===
+              true &&
+            requestedDuplicateRemovals.length >
+              0
+              ? ` and remove ${requestedDuplicateRemovals.length} duplicate record${requestedDuplicateRemovals.length === 1 ? '' : 's'}`
+              : ''
+          ) +
+          '?'
         )
       )
 
@@ -14354,6 +14761,411 @@ function AdminRoom() {
           )
 
 
+      if (
+        payload.shareExisting ===
+          true
+      ) {
+        const sharedIds =
+          []
+
+
+        const skipped =
+          []
+
+
+        const unresolved =
+          []
+
+
+        let nextHistoric =
+          currentHistoric
+
+
+        for (
+          let index =
+            0;
+          index <
+            pins.length;
+          index +=
+            1
+        ) {
+          const input =
+            pins[
+              index
+            ]
+
+
+          if (
+            !input ||
+            typeof input !==
+              'object' ||
+            Array.isArray(
+              input
+            )
+          ) {
+            unresolved.push(
+              `#${index + 1}`
+            )
+
+            continue
+          }
+
+
+          const requestedId =
+            String(
+              input.id ||
+              ''
+            )
+              .trim()
+
+
+          const requestedTitle =
+            String(
+              input.title ||
+              ''
+            )
+              .trim()
+
+
+          let matches =
+            []
+
+
+          if (
+            requestedId
+          ) {
+            matches =
+              nextHistoric.filter(
+                (record) =>
+                  belongsToCity(
+                    record,
+                    cityKey
+                  ) &&
+                  record.id ===
+                    requestedId
+              )
+          }
+          else if (
+            requestedTitle
+          ) {
+            matches =
+              nextHistoric.filter(
+                (record) =>
+                  belongsToCity(
+                    record,
+                    cityKey
+                  ) &&
+                  normalizeTitle(
+                    record.title
+                  ) ===
+                    normalizeTitle(
+                      requestedTitle
+                    )
+              )
+          }
+
+
+          const label =
+            requestedTitle ||
+            requestedId ||
+            `#${index + 1}`
+
+
+          if (
+            matches.length !==
+              1
+          ) {
+            unresolved.push(
+              matches.length >
+                1
+                ? `${label} · ambiguous`
+                : `${label} · not found`
+            )
+
+            continue
+          }
+
+
+          const record =
+            matches[0]
+
+
+          if (
+            record.historicLayerId ===
+              layer.id ||
+            normalizeHistoricAdditionalLayerIds(
+              record.additionalHistoricLayerIds,
+              record.historicLayerId
+            )
+              .includes(
+                layer.id
+              )
+          ) {
+            skipped.push(
+              record.title ||
+              label
+            )
+
+            continue
+          }
+
+
+          const nextRecord =
+            normalizeHistoricRecord({
+              ...record,
+
+              additionalHistoricLayerIds:
+                [
+                  ...normalizeHistoricAdditionalLayerIds(
+                    record.additionalHistoricLayerIds,
+                    record.historicLayerId
+                  ),
+                  layer.id,
+                ],
+
+              updatedAt:
+                now,
+            })
+
+
+          nextHistoric =
+            nextHistoric.map(
+              (item) =>
+                item.id ===
+                  nextRecord.id
+                  ? nextRecord
+                  : item
+            )
+
+
+          sharedIds.push(
+            nextRecord.id
+          )
+        }
+
+
+        const sharedIdSet =
+          new Set(
+            sharedIds
+          )
+
+
+        const duplicateIdsToRemove =
+          new Set(
+            requestedDuplicateRemovals
+          )
+
+
+        const removedDuplicateIds =
+          []
+
+
+        if (
+          duplicateIdsToRemove.size >
+            0
+        ) {
+          nextHistoric =
+            nextHistoric.filter(
+              (record) => {
+                if (
+                  !belongsToCity(
+                    record,
+                    cityKey
+                  ) ||
+                  !duplicateIdsToRemove.has(
+                    record.id
+                  ) ||
+                  sharedIdSet.has(
+                    record.id
+                  )
+                ) {
+                  return true
+                }
+
+
+                removedDuplicateIds.push(
+                  record.id
+                )
+
+                return false
+              }
+            )
+        }
+
+
+        if (
+          sharedIds.length ===
+            0 &&
+          removedDuplicateIds.length ===
+            0
+        ) {
+          setHistoricBulkImportStatus(
+            (
+              'NOTHING SHARED' +
+              (
+                unresolved.length >
+                  0
+                  ? (
+                      ' · ' +
+                      unresolved
+                        .slice(
+                          0,
+                          5
+                        )
+                        .join(
+                          ' | '
+                        )
+                    )
+                  : ''
+              )
+            )
+          )
+
+          return
+        }
+
+
+        const categorySave =
+          await saveHistoricCategories(
+            nextCategories
+          )
+
+
+        if (
+          !categorySave
+        ) {
+          throw new Error(
+            'Historic categories were not saved to the server.'
+          )
+        }
+
+
+        const layerSave =
+          await saveHistoricLayers(
+            nextLayers
+          )
+
+
+        if (
+          !layerSave
+        ) {
+          throw new Error(
+            'Historic layers were not saved to the server.'
+          )
+        }
+
+
+        const persistedSnapshot =
+          await saveHistoricItems(
+            nextHistoric
+          )
+
+
+        if (
+          !persistedSnapshot ||
+          persistedSnapshot.items.length !==
+            nextHistoric.length
+        ) {
+          throw new Error(
+            'Shared Historic layer assignments were not saved to the server.'
+          )
+        }
+
+
+        setHistoricCategories(
+          persistedSnapshot.categories
+        )
+
+        setHistoricLayers(
+          persistedSnapshot.layers
+        )
+
+        setSelectedHistoricCategoryId(
+          category.id
+        )
+
+        setSelectedHistoricLayerId(
+          layer.id
+        )
+
+        setHistoricLibrarySearch(
+          ''
+        )
+
+        setAllHistoricItems(
+          persistedSnapshot.items
+            .map(
+              normalizeHistoricRecord
+            )
+        )
+
+
+        writeHistoricLastBatchIds(
+          cityKey,
+          sharedIds
+        )
+
+        setHistoricLastBatchIds(
+          sharedIds
+        )
+
+        setHistoricRecordFilter(
+          'last-batch'
+        )
+
+        setRecordsPanel(
+          'published'
+        )
+
+        setHistoricBulkImportText(
+          ''
+        )
+
+        setHistoricBulkImportStatus(
+          [
+            `SHARED ${sharedIds.length}`,
+            skipped.length >
+              0
+              ? `ALREADY SHARED ${skipped.length}`
+              : '',
+            unresolved.length >
+              0
+              ? `UNRESOLVED ${unresolved.length}`
+              : '',
+            removedDuplicateIds.length >
+              0
+              ? `REMOVED ${removedDuplicateIds.length} DUPLICATE${removedDuplicateIds.length === 1 ? '' : 'S'}`
+              : '',
+            `${category.title.toUpperCase()} → ${layer.title.toUpperCase()}`,
+          ]
+            .filter(
+              Boolean
+            )
+            .join(
+              ' · '
+            ) +
+          (
+            unresolved.length >
+              0
+              ? (
+                  ' · CHECK: ' +
+                  unresolved
+                    .slice(
+                      0,
+                      5
+                    )
+                    .join(
+                      ' | '
+                    )
+                )
+              : ''
+          )
+        )
+
+        return
+      }
+
+
       const existingTitles =
         new Set(
           currentHistoric
@@ -14363,8 +15175,10 @@ function AdminRoom() {
                   record,
                   cityKey
                 ) &&
-                record.historicLayerId ===
+                historicRecordHasLayer(
+                  record,
                   layer.id
+                )
             )
             .map(
               (record) =>
@@ -14810,6 +15624,20 @@ function AdminRoom() {
 
           historicLayerId:
             layer.id,
+
+          additionalHistoricLayerIds:
+            normalizeHistoricAdditionalLayerIds(
+              input.additionalHistoricLayerIds,
+              layer.id
+            )
+              .filter(
+                (layerId) =>
+                  nextLayers.some(
+                    (historicLayer) =>
+                      historicLayer.id ===
+                        layerId
+                  )
+              ),
 
           issueIds:
             Array.isArray(
@@ -15669,6 +16497,32 @@ function AdminRoom() {
       tab ===
       'historic'
     ) {
+      const validHistoricLayerIds =
+        new Set(
+          cityHistoricLayers
+            .map(
+              (layer) =>
+                layer.id
+            )
+            .filter(
+              Boolean
+            )
+        )
+
+
+      record.additionalHistoricLayerIds =
+        normalizeHistoricAdditionalLayerIds(
+          record.additionalHistoricLayerIds,
+          record.historicLayerId
+        )
+          .filter(
+            (layerId) =>
+              validHistoricLayerIds.has(
+                layerId
+              )
+          )
+
+
       const automaticLayers =
         getAutomaticHistoricLayers({
           city,
@@ -19233,7 +20087,7 @@ function AdminRoom() {
                               '8px',
                           }}
                         >
-                          JSON → CATEGORY → LAYER → PINS. IMPORTED COLLECTIONS APPEAR IN THIS LIBRARY IMMEDIATELY.
+                          JSON → CATEGORY → LAYER → PINS. IMPORTED COLLECTIONS APPEAR IN THIS LIBRARY IMMEDIATELY. SET shareExisting TO true TO ADD EXISTING PINS TO ANOTHER LAYER WITHOUT CREATING COPIES.
                         </div>
 
                         <textarea
@@ -19586,8 +20440,11 @@ function AdminRoom() {
                               const categoryPins =
                                 historicItems.filter(
                                   (record) =>
-                                    record.historicCategoryId ===
-                                      category.id
+                                    historicRecordHasCategory(
+                                      record,
+                                      category.id,
+                                      cityHistoricLayers
+                                    )
                                 )
                                   .length
 
@@ -19922,8 +20779,10 @@ function AdminRoom() {
                               const layerPins =
                                 historicItems.filter(
                                   (record) =>
-                                    record.historicLayerId ===
+                                    historicRecordHasLayer(
+                                      record,
                                       layer.id
+                                    )
                                 )
                                   .length
 
@@ -20069,6 +20928,24 @@ function AdminRoom() {
                               ) ||
                               null
 
+                            const sharedLayers =
+                              normalizeHistoricAdditionalLayerIds(
+                                record.additionalHistoricLayerIds,
+                                record.historicLayerId
+                              )
+                                .map(
+                                  (layerId) =>
+                                    historicLayers.find(
+                                      (item) =>
+                                        item.id ===
+                                          layerId
+                                    ) ||
+                                    null
+                                )
+                                .filter(
+                                  Boolean
+                                )
+
                             return (
                               <article
                                 className={
@@ -20130,6 +21007,35 @@ function AdminRoom() {
                                     )
                                     .toUpperCase()}
                                 </div>
+
+                                {sharedLayers.length >
+                                  0 && (
+                                  <div className="admin-record-meta">
+                                    ALSO IN · {
+                                      sharedLayers
+                                        .map(
+                                          (sharedLayer) => {
+                                            const sharedCategory =
+                                              historicCategories.find(
+                                                (item) =>
+                                                  item.id ===
+                                                    sharedLayer.categoryId
+                                              ) ||
+                                              null
+
+
+                                            return (
+                                              `${sharedCategory?.title || 'HISTORIC'} → ` +
+                                              `${sharedLayer.title}`
+                                            )
+                                          }
+                                        )
+                                        .join(
+                                          ' · '
+                                        )
+                                    }
+                                  </div>
+                                )}
 
                                 {(record.location ||
                                   record.intersection) && (
@@ -21559,6 +22465,172 @@ function AdminRoom() {
                     </option>
                   </select>
                 </label>
+
+
+                <div className="admin-field admin-field-wide">
+                  <span>
+                    ALSO SHOW IN
+                  </span>
+
+                  <div
+                    style={{
+                      border:
+                        '1px solid rgba(0,0,0,0.18)',
+
+                      padding:
+                        '12px',
+
+                      display:
+                        'grid',
+
+                      gap:
+                        '10px',
+
+                      maxHeight:
+                        '360px',
+
+                      overflowY:
+                        'auto',
+                    }}
+                  >
+                    <div className="admin-record-meta">
+                      PRIMARY · {
+                        historicCategories.find(
+                          (category) =>
+                            category.id ===
+                              draft.historicCategoryId
+                        )?.title ||
+                        'UNASSIGNED'
+                      } → {
+                        historicLayers.find(
+                          (layer) =>
+                            layer.id ===
+                              draft.historicLayerId
+                        )?.title ||
+                        'UNASSIGNED'
+                      }
+                    </div>
+
+                    <div className="admin-record-meta">
+                      ONE PIN CAN APPEAR IN MORE THAN ONE HISTORIC LAYER. THE PRIMARY CATEGORY + LAYER STAY UNCHANGED.
+                    </div>
+
+                    {cityHistoricCategories.map(
+                      (category) => {
+                        const shareLayers =
+                          draftShareableHistoricLayers.filter(
+                            (layer) =>
+                              layer.categoryId ===
+                                category.id
+                          )
+
+
+                        if (
+                          shareLayers.length ===
+                            0
+                        ) {
+                          return null
+                        }
+
+
+                        return (
+                          <div
+                            key={
+                              category.id
+                            }
+                            style={{
+                              display:
+                                'grid',
+
+                              gap:
+                                '6px',
+                            }}
+                          >
+                            <strong
+                              style={{
+                                fontSize:
+                                  '10px',
+
+                                letterSpacing:
+                                  '0.06em',
+                              }}
+                            >
+                              {
+                                getHistoricPinIcon(
+                                  category.pinIcon ||
+                                  'map-pin'
+                                ).emoji
+                              } {category.title}
+                            </strong>
+
+                            <div
+                              style={{
+                                display:
+                                  'grid',
+
+                                gridTemplateColumns:
+                                  'repeat(auto-fit, minmax(210px, 1fr))',
+
+                                gap:
+                                  '6px',
+                              }}
+                            >
+                              {shareLayers.map(
+                                (layer) => (
+                                  <label
+                                    key={
+                                      layer.id
+                                    }
+                                    style={{
+                                      display:
+                                        'flex',
+
+                                      gap:
+                                        '8px',
+
+                                      alignItems:
+                                        'center',
+
+                                      border:
+                                        '1px solid rgba(0,0,0,0.12)',
+
+                                      padding:
+                                        '8px',
+                                    }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={
+                                        draftAdditionalHistoricLayerIds.includes(
+                                          layer.id
+                                        )
+                                      }
+                                      onChange={() =>
+                                        toggleHistoricAdditionalLayer(
+                                          layer.id
+                                        )
+                                      }
+                                    />
+
+                                    <span>
+                                      {
+                                        getHistoricPinIcon(
+                                          layer.pinIcon ||
+                                          category.pinIcon ||
+                                          'map-pin'
+                                        ).emoji
+                                      } {layer.title}
+                                    </span>
+                                  </label>
+                                )
+                              )}
+                            </div>
+                          </div>
+                        )
+                      }
+                    )}
+                  </div>
+                </div>
 
 
                 <div className="admin-field admin-field-wide">
@@ -23989,8 +25061,10 @@ function AdminRoom() {
                           const count =
                             historicItems.filter(
                               (record) =>
-                                record.historicLayerId ===
+                                historicRecordHasLayer(
+                                  record,
                                   layer.id
+                                )
                             )
                               .length
 
