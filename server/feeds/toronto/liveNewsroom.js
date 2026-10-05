@@ -1189,6 +1189,47 @@ async function addEvent({
   }
 
 
+  // A resurfacing TTC alert has the same deterministic queue ID as its
+  // rejected card. Remove that old rejected queue copy before re-adding it.
+  // The rejection itself remains permanently recorded in the ledger.
+  if (
+    sourceKey ===
+      'ttc'
+  ) {
+    const rejectedTtcEventIndex =
+      store.events.findIndex(
+        (
+          existingEvent
+        ) =>
+          (
+            existingEvent.serverQueueId ||
+            existingEvent.id
+          ) ===
+            event.serverQueueId &&
+          existingEvent.status !==
+            'pending' &&
+          cleanText(
+            existingEvent.outcome
+          )
+            .toLowerCase()
+            .includes(
+              'rejected'
+            )
+      )
+
+
+    if (
+      rejectedTtcEventIndex >=
+        0
+    ) {
+      store.events.splice(
+        rejectedTtcEventIndex,
+        1
+      )
+    }
+  }
+
+
   store.events.unshift(
     event
   )
@@ -1578,6 +1619,39 @@ async function observeRecord({
     ) {
       action =
         'new'
+    }
+    else if (
+      sourceKey ===
+        'ttc' &&
+      cleanText(
+        existing.lastEditorialAction
+      )
+        .toLowerCase()
+        .includes(
+          'rejected'
+        )
+    ) {
+      // TTC rejection is never permanent. If the same official alert is
+      // still live, send it back to NEWSROOM on the next TTC sync. Once the
+      // replacement card is pending, later polls simply see that card.
+      const rejectedTtcAction =
+        existing.published ===
+          true
+          ? 'update'
+          : 'new'
+
+
+      action =
+        findPendingEvent({
+          sourceKey,
+          action:
+            rejectedTtcAction,
+          externalId,
+          version:
+            currentFingerprint,
+        })
+          ? 'seen'
+          : rejectedTtcAction
     }
     else if (
       sourceKey ===
