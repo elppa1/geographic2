@@ -3774,6 +3774,10 @@ function LiveTtcLayer({
             VEHICLE_ICON_LAYER_ID
           )
         ) {
+          // Render the moving vehicle body as a normal text glyph instead of
+          // a custom sprite. The route numbers and direction arrows already
+          // prove the symbol/glyph pipeline is working reliably; this avoids
+          // the disappearing custom-image problem entirely.
           map.addLayer({
             id:
               VEHICLE_ICON_LAYER_ID,
@@ -3784,21 +3788,9 @@ function LiveTtcLayer({
             minzoom:
               VEHICLE_ICON_MIN_ZOOM,
             layout: {
-
-              'icon-image': [
-                'case',
-                [
-                  '==',
-                  [
-                    'get',
-                    'mode',
-                  ],
-                  'streetcar',
-                ],
-                STREETCAR_MARKER_IMAGE_ID,
-                BUS_MARKER_IMAGE_ID,
-              ],
-              'icon-size': [
+              'text-field':
+                '▮',
+              'text-size': [
                 'case',
                 [
                   '==',
@@ -3817,37 +3809,37 @@ function LiveTtcLayer({
                     'zoom',
                   ],
                   5.5,
-                  0.58,
-                  9,
-                  0.68,
-                  13,
-                  0.82,
-                  17,
-                  0.94,
-                ],
-                [
-                  'interpolate',
-                  [
-                    'linear',
-                  ],
-                  [
-                    'zoom',
-                  ],
-                  5.5,
-                  0.58,
-                  9,
-                  0.68,
-                  13,
-                  0.82,
                   15,
-                  1.08,
+                  9,
                   17,
-                  1.20,
+                  13,
+                  20,
+                  17,
+                  23,
+                ],
+                [
+                  'interpolate',
+                  [
+                    'linear',
+                  ],
+                  [
+                    'zoom',
+                  ],
+                  5.5,
+                  15,
+                  9,
+                  17,
+                  13,
+                  20,
+                  15,
+                  25,
+                  17,
+                  29,
                   18,
-                  1.26,
+                  31,
                 ],
               ],
-              'icon-rotate': [
+              'text-rotate': [
                 'coalesce',
                 [
                   'get',
@@ -3855,18 +3847,27 @@ function LiveTtcLayer({
                 ],
                 0,
               ],
-              'icon-rotation-alignment':
+              'text-rotation-alignment':
                 'map',
-              'icon-allow-overlap':
+              'text-pitch-alignment':
+                'map',
+              'text-allow-overlap':
                 true,
-              'icon-ignore-placement':
+              'text-ignore-placement':
                 true,
-              'icon-padding':
+              'text-padding':
                 0,
-
             },
             paint: {
-              'icon-opacity':
+              'text-color':
+                '#000000',
+              'text-halo-color':
+                '#ffffff',
+              'text-halo-width':
+                2.4,
+              'text-halo-blur':
+                0.15,
+              'text-opacity':
                 1,
             },
           })
