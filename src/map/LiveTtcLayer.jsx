@@ -1,7 +1,7 @@
-// LIVE TTC ROUTE ENGINE V17 · timestamp-age compensation + priority route indexing
+// LIVE TTC ROUTE ENGINE V17 Â· timestamp-age compensation + priority route indexing
 // Vehicles advance by distance along their TTC route shape; realtime GPS only corrects the route progress.
 // LIVE TTC FAST START V8
-// LIVE TTC STABILITY V6 · 2026-09-30 · stable vehicle retention + continuous interpolation + direction arrows + deduped arrivals
+// LIVE TTC STABILITY V6 Â· 2026-09-30 Â· stable vehicle retention + continuous interpolation + direction arrows + deduped arrivals
 import {
   useEffect,
   useRef,
@@ -219,8 +219,9 @@ const VEHICLE_VISUAL_MAX_SPEED_MPS =
   8.5
 const VEHICLE_DEFAULT_MOVING_SPEED_MPS =
   3.2
+// TTC TRUTH MODE Â· do not force a vehicle to crawl without a new TTC sample.
 const VEHICLE_MIN_CONTINUOUS_SPEED_MPS =
-  0.85
+  0
 const VEHICLE_ROUTE_LOCK_MAX_METERS =
   160
 const VEHICLE_STALE_SLOWDOWN_MS =
@@ -413,7 +414,7 @@ function createVehiclePopup(
     parent:
       shell,
     text:
-      `${modeLabel} · LIVE`,
+      `${modeLabel} Â· LIVE`,
     style: {
       fontSize:
         '9px',
@@ -432,7 +433,7 @@ function createVehiclePopup(
     parent:
       shell,
     text:
-      `${properties.routeShortName || properties.routeId || 'TTC'}${properties.routeLongName ? ` · ${properties.routeLongName}` : ''}`,
+      `${properties.routeShortName || properties.routeId || 'TTC'}${properties.routeLongName ? ` Â· ${properties.routeLongName}` : ''}`,
     style: {
       fontSize:
         '16px',
@@ -450,7 +451,7 @@ function createVehiclePopup(
       parent:
         shell,
       text:
-        `→ ${properties.headsign}`,
+        `â†’ ${properties.headsign}`,
       style: {
         fontSize:
           '12px',
@@ -469,7 +470,7 @@ function createVehiclePopup(
       parent:
         shell,
       text:
-        `Next stop · ${properties.stopName}`,
+        `Next stop Â· ${properties.stopName}`,
       style: {
         fontSize:
           '11px',
@@ -616,8 +617,8 @@ function createStopPopupLoading(
       shell,
     text:
       properties.isStation
-        ? 'TTC STATION · LIVE'
-        : 'TTC STOP · LIVE',
+        ? 'TTC STATION Â· LIVE'
+        : 'TTC STOP Â· LIVE',
     style: {
       fontSize:
         '9px',
@@ -673,7 +674,7 @@ function createStopPopupLoading(
     className:
       'ttc-live-stop-loading',
     text:
-      'Loading approaching vehicles…',
+      'Loading approaching vehiclesâ€¦',
     style: {
       fontSize:
         '10px',
@@ -2372,244 +2373,12 @@ function routeEngineTargetSpeed({
 
 
 function timestampCompensatedRouteProgress({
-  path,
   sampleProgress,
-  sampleTimestamp,
-  reportedAgeSeconds,
-  ttcSpeed,
-  speedState,
-  previous,
-  now,
 }) {
-  if (
-    !path ||
-    !Number.isFinite(
-      Number(
-        sampleProgress
-      )
-    ) ||
-    speedState?.stopped
-  ) {
-    return sampleProgress
-  }
-
-  const timestampSeconds =
-    Number(
-      sampleTimestamp ||
-      0
-    )
-  const clientAgeSeconds =
-    timestampSeconds >
-      0
-      ? Math.max(
-          0,
-          Date.now() /
-            1000 -
-            timestampSeconds
-        )
-      : 0
-  const serverAgeSeconds =
-    Number.isFinite(
-      Number(
-        reportedAgeSeconds
-      )
-    )
-      ? Math.max(
-          0,
-          Number(
-            reportedAgeSeconds
-          )
-        )
-      : 0
-  const ageSeconds =
-    clampNumber(
-      Math.max(
-        clientAgeSeconds,
-        serverAgeSeconds
-      ),
-      0,
-      VEHICLE_TIMESTAMP_COMPENSATION_MAX_SECONDS
-    )
-
-  if (
-    ageSeconds <
-      VEHICLE_TIMESTAMP_COMPENSATION_MIN_AGE_SECONDS
-  ) {
-    return sampleProgress
-  }
-
-  const observedSpeed =
-    Number.isFinite(
-      Number(
-        speedState?.observedSpeed
-      )
-    )
-      ? clampNumber(
-          Number(
-            speedState.observedSpeed
-          ),
-          0,
-          VEHICLE_VISUAL_MAX_SPEED_MPS
-        )
-      : null
-  const reportedSpeed =
-    Number.isFinite(
-      Number(
-        ttcSpeed
-      )
-    )
-      ? clampNumber(
-          Number(
-            ttcSpeed
-          ),
-          0,
-          VEHICLE_VISUAL_MAX_SPEED_MPS
-        )
-      : null
-  const filteredSpeed =
-    Number.isFinite(
-      Number(
-        speedState?.filteredSpeed
-      )
-    )
-      ? clampNumber(
-          Number(
-            speedState.filteredSpeed
-          ),
-          0,
-          VEHICLE_VISUAL_MAX_SPEED_MPS
-        )
-      : 0
-
-  let compensationSpeed =
-    null
-  let confidenceFactor =
-    1
-
-  if (
-    observedSpeed !==
-      null &&
-    observedSpeed >=
-      VEHICLE_TIMESTAMP_COMPENSATION_MIN_SPEED_MPS &&
-    reportedSpeed !==
-      null &&
-    reportedSpeed >=
-      VEHICLE_TIMESTAMP_COMPENSATION_MIN_SPEED_MPS
-  ) {
-    compensationSpeed =
-      observedSpeed *
-        0.72 +
-      reportedSpeed *
-        0.28
-  }
-  else if (
-    observedSpeed !==
-      null &&
-    observedSpeed >=
-      VEHICLE_TIMESTAMP_COMPENSATION_MIN_SPEED_MPS
-  ) {
-    compensationSpeed =
-      observedSpeed
-  }
-  else if (
-    reportedSpeed !==
-      null &&
-    reportedSpeed >=
-      VEHICLE_TIMESTAMP_COMPENSATION_MIN_SPEED_MPS
-  ) {
-    compensationSpeed =
-      reportedSpeed
-    confidenceFactor =
-      0.9
-  }
-  else if (
-    observedSpeed ===
-      null &&
-    reportedSpeed ===
-      null
-  ) {
-    const previousMovingRecently =
-      previous &&
-      Number(
-        speedState?.lastMovingAt ||
-        0
-      ) >
-        0 &&
-      Number(
-        now ||
-        0
-      ) -
-        Number(
-          speedState.lastMovingAt
-        ) <
-        15 *
-          1000
-
-    if (
-      previousMovingRecently &&
-      filteredSpeed >=
-        VEHICLE_TIMESTAMP_COMPENSATION_MIN_SPEED_MPS
-    ) {
-      compensationSpeed =
-        filteredSpeed
-      confidenceFactor =
-        0.8
-    }
-  }
-
-  if (
-    compensationSpeed ===
-      null
-  ) {
-    return sampleProgress
-  }
-
-  // Trust extrapolation strongly only while TTC's genuine GPS sample is young.
-  // As it ages, progressively reduce forward prediction so a bus cannot visually
-  // run far ahead of the next true TTC position.
-  const ageConfidence =
-    ageSeconds <=
-      8
-      ? 1
-      : ageSeconds <=
-          16
-        ? 1 -
-          (
-            ageSeconds -
-            8
-          ) /
-          8 *
-          0.50
-        : Math.max(
-            0.20,
-            0.50 -
-              (
-                ageSeconds -
-                16
-              ) /
-              8 *
-              0.30
-          )
-
-  const compensationMeters =
-    Math.min(
-      VEHICLE_TIMESTAMP_COMPENSATION_MAX_METERS,
-      compensationSpeed *
-        ageSeconds *
-        confidenceFactor *
-        ageConfidence
-    )
-
-  return clampNumber(
-    Number(
-      sampleProgress
-    ) +
-      compensationMeters,
-    0,
-    path.totalMeters
-  )
+  // TTC TRUTH MODE Â· Never extrapolate a vehicle beyond TTC's latest GPS
+  // route projection. Smoothing happens only while catching up to this point.
+  return sampleProgress
 }
-
 
 function createVehicleMarkerImage(
   color,
@@ -3111,7 +2880,7 @@ function LiveTtcLayer({
           button
         ) {
           button.textContent =
-            'LOCATING…'
+            'LOCATINGâ€¦'
         }
 
         navigator.geolocation.getCurrentPosition(
@@ -3158,7 +2927,7 @@ function LiveTtcLayer({
               button
             ) {
               button.textContent =
-                'GPS ✓'
+                'GPS âœ“'
             }
 
             gpsPrompt?.remove?.()
@@ -3232,7 +3001,7 @@ function LiveTtcLayer({
             option.value =
               id
             option.textContent =
-              `${route.shortName || id}${route.longName ? ` · ${route.longName}` : ''}`
+              `${route.shortName || id}${route.longName ? ` Â· ${route.longName}` : ''}`
             fragment.appendChild(
               option
             )
@@ -4557,7 +4326,7 @@ function LiveTtcLayer({
             ],
             layout: {
               'text-field':
-                '▲',
+                'â–²',
               'text-size': [
                 'interpolate',
                 [
@@ -5629,20 +5398,32 @@ function LiveTtcLayer({
                     VEHICLE_VISUAL_MAX_SPEED_MPS
                   )
 
-                const nextProgress =
-                  Math.max(
+                const currentDisplayProgress =
+                  clampNumber(
                     Number(
                       vehicleState.displayProgress
                     ),
-                    Math.min(
-                      vehicleState.path.totalMeters,
-                      Number(
-                        vehicleState.displayProgress
-                      ) +
-                      visualSpeed *
-                      elapsedSeconds
-                    )
+                    0,
+                    vehicleState.path.totalMeters
                   )
+                const targetProgress =
+                  clampNumber(
+                    Number(
+                      vehicleState.realProgress
+                    ),
+                    0,
+                    vehicleState.path.totalMeters
+                  )
+                const nextProgress =
+                  currentDisplayProgress >
+                    targetProgress
+                    ? targetProgress
+                    : Math.min(
+                        targetProgress,
+                        currentDisplayProgress +
+                          visualSpeed *
+                          elapsedSeconds
+                      )
 
                 vehicleState.displayProgress =
                   nextProgress
@@ -6237,31 +6018,9 @@ function LiveTtcLayer({
                   previous?.sampleProgress ??
                   previous?.realProgress
 
-                if (
-                  pathMatchesPrevious &&
-                  Number.isFinite(
-                    Number(
-                      previousSampleProgress
-                    )
-                  ) &&
-                  Number.isFinite(
-                    Number(
-                      sampleProgress
-                    )
-                  ) &&
-                  sampleProgress <
-                    Number(
-                      previousSampleProgress
-                    ) -
-                    5
-                ) {
-                  // GPS jitter must never make a bus reverse visually. A real
-                  // direction/trip change selects a new shape above instead.
-                  sampleProgress =
-                    Number(
-                      previousSampleProgress
-                    )
-                }
+                // TTC TRUTH MODE Â· accept a fresh TTC route-projected GPS correction even
+                // when it moves backward. A brief correction is preferable to preserving
+                // a confidently wrong forward position.
 
                 const sampleHistory =
                   path &&

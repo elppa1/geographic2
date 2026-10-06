@@ -1,5 +1,5 @@
 // LIVE TTC FAST START V8
-// LIVE TTC STABILITY V6 · 2026-09-30 · reject empty realtime feeds + deduped arrivals + resilient vehicle retention
+// LIVE TTC STABILITY V6 Â· 2026-09-30 Â· reject empty realtime feeds + deduped arrivals + resilient vehicle retention
 import https from 'node:https'
 import { inflateRawSync } from 'node:zlib'
 
@@ -325,7 +325,7 @@ function fetchBuffer(
               response.resume()
               finishReject(
                 new Error(
-                  `TTC request failed (${statusCode}) · ${url}`
+                  `TTC request failed (${statusCode}) Â· ${url}`
                 )
               )
               return
@@ -368,7 +368,7 @@ function fetchBuffer(
           () => {
             request.destroy(
               new Error(
-                `TTC request timed out after ${timeoutMs}ms · ${url}`
+                `TTC request timed out after ${timeoutMs}ms Â· ${url}`
               )
             )
           },
@@ -2307,7 +2307,7 @@ async function fetchRealtimeFeed(
         !response.ok
       ) {
         throw new Error(
-          `TTC fetch failed (${response.status}) · ${url}`
+          `TTC fetch failed (${response.status}) Â· ${url}`
         )
       }
 
@@ -2347,7 +2347,7 @@ async function fetchRealtimeFeed(
     httpsError
   ) {
     throw new Error(
-      `TTC realtime fetch failed · fetch: ${fetchError?.message || fetchError} · https: ${httpsError?.message || httpsError}`
+      `TTC realtime fetch failed Â· fetch: ${fetchError?.message || fetchError} Â· https: ${httpsError?.message || httpsError}`
     )
   }
 }
@@ -2374,7 +2374,7 @@ async function fetchRealtimeFeedWithFallback(
       fallbackError
     ) {
       throw new Error(
-        `TTC realtime feeds unavailable · primary: ${primaryError?.message || primaryError} · fallback: ${fallbackError?.message || fallbackError}`
+        `TTC realtime feeds unavailable Â· primary: ${primaryError?.message || primaryError} Â· fallback: ${fallbackError?.message || fallbackError}`
       )
     }
   }
@@ -2509,7 +2509,7 @@ async function fetchVehicleRealtimeFeed() {
                 )
             )
             .join(
-              ' · '
+              ' Â· '
             )
         : error?.message ||
           String(
@@ -2517,7 +2517,7 @@ async function fetchVehicleRealtimeFeed() {
           )
 
     throw new Error(
-      `TTC vehicle feeds unavailable · ${details}`
+      `TTC vehicle feeds unavailable Â· ${details}`
     )
   }
 }
@@ -2555,7 +2555,7 @@ function refreshVehicleFeedInBackground() {
               REALTIME_STALE_FALLBACK_MS
           ) {
             console.warn(
-              'LIVE TTC VEHICLES · keeping cached feed after upstream failure:',
+              'LIVE TTC VEHICLES Â· keeping cached feed after upstream failure:',
               error?.message ||
                 error
             )
@@ -2640,7 +2640,7 @@ async function getRawVehicleFeed({
           error
         ) => {
           console.warn(
-            'LIVE TTC VEHICLES · background refresh failed:',
+            'LIVE TTC VEHICLES Â· background refresh failed:',
             error?.message ||
               error
           )
@@ -2761,7 +2761,7 @@ async function getRawTripUpdateFeed() {
               REALTIME_STALE_FALLBACK_MS
           ) {
             console.warn(
-              'LIVE TTC TRIPS · using recent cached feed after upstream failure:',
+              'LIVE TTC TRIPS Â· using recent cached feed after upstream failure:',
               error?.message ||
                 error
             )
@@ -3994,6 +3994,52 @@ async function getArrivalsPayload({
       staticStop?.code
     )
 
+  // TTC TRUTH MODE Â· Exact-stop ETA authority is GTFS-Realtime first.
+  // VehiclePosition + TripUpdate share GTFS trip/vehicle/stop identities.
+  // Never delete a UMO prediction using a GTFS stop sequence: UMO tripTag is
+  // a separate identifier system and cross-splicing the two can drop the
+  // actually-nearest vehicle.
+  let gtfsPayload =
+    null
+  let gtfsError =
+    null
+
+  if (
+    normalizedStopId
+  ) {
+    try {
+      gtfsPayload =
+        await getGtfsArrivalsPayload(
+          normalizedStopId
+        )
+
+      if (
+        Array.isArray(
+          gtfsPayload?.arrivals
+        ) &&
+        gtfsPayload.arrivals.length >
+          0
+      ) {
+        return {
+          ...gtfsPayload,
+          predictionAuthority:
+            'GTFS-RT',
+        }
+      }
+    }
+    catch (
+      error
+    ) {
+      gtfsError =
+        error
+      console.warn(
+        'LIVE TTC ARRIVALS Â· GTFS-RT primary unavailable:',
+        error?.message ||
+        error
+      )
+    }
+  }
+
   if (
     normalizedStopCode
   ) {
@@ -4003,19 +4049,33 @@ async function getArrivalsPayload({
           normalizedStopCode,
           surface
         )
-      const reconciledArrivals =
-        await removeArrivalsForVehiclesPastStop(
-          arrivals,
-          normalizedStopId
+      const sortedArrivals =
+        [
+          ...arrivals,
+        ].sort(
+          (
+            a,
+            b
+          ) =>
+            Number(
+              a?.arrivalTime ||
+              0
+            ) -
+            Number(
+              b?.arrivalTime ||
+              0
+            )
         )
 
       return {
         ok:
           true,
         source:
-          'TTC Next Vehicle Arrival System · UMO NextBus',
+          'TTC Next Vehicle Arrival System Â· UMO NextBus Â· fallback',
         upstream:
           TTC_PREDICTIONS_URL,
+        predictionAuthority:
+          'UMO_FALLBACK',
         attribution:
           TORONTO_ATTRIBUTION,
         updatedAt:
@@ -4048,11 +4108,11 @@ async function getArrivalsPayload({
             },
         count:
           Math.min(
-            reconciledArrivals.length,
+            sortedArrivals.length,
             18
           ),
         arrivals:
-          reconciledArrivals.slice(
+          sortedArrivals.slice(
             0,
             18
           ),
@@ -4062,18 +4122,33 @@ async function getArrivalsPayload({
       error
     ) {
       console.warn(
-        'LIVE TTC ARRIVALS · UMO prediction fallback to GTFS-RT:',
+        'LIVE TTC ARRIVALS Â· UMO fallback unavailable:',
         error?.message ||
         error
       )
     }
   }
 
+  if (
+    gtfsPayload
+  ) {
+    return {
+      ...gtfsPayload,
+      predictionAuthority:
+        'GTFS-RT_EMPTY',
+    }
+  }
+
+  if (
+    gtfsError
+  ) {
+    throw gtfsError
+  }
+
   return getGtfsArrivalsPayload(
     normalizedStopId
   )
 }
-
 
 async function getNearbyArrivalsPayload(
   latitude,
@@ -4233,7 +4308,7 @@ async function getNearbyArrivalsPayload(
     ok:
       true,
     source:
-      'TTC Next Vehicle Arrival System · nearby surface stops',
+      'TTC Next Vehicle Arrival System Â· nearby surface stops',
     upstream:
       TTC_PREDICTIONS_URL,
     attribution:
