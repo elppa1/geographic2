@@ -1,3 +1,4 @@
+// TTC STOP SYNC V9 - 2026-10-06 - BusTime TripUpdates paired with BusTime VehiclePositions
 // LIVE TTC FAST START V8
 // LIVE TTC STABILITY V6 Â· 2026-09-30 Â· reject empty realtime feeds + deduped arrivals + resilient vehicle retention
 import https from 'node:https'
@@ -19,10 +20,10 @@ const TTC_VEHICLES_FALLBACK_URL =
   'https://gtfsrt.ttc.ca/vehicles/position?format=binary'
 
 const TTC_TRIPS_URL =
-  'https://gtfsrt.ttc.ca/trips/update?format=binary'
+  'https://bustime.ttc.ca/gtfsrt/trips'
 
 const TTC_TRIPS_FALLBACK_URL =
-  'https://bustime.ttc.ca/gtfsrt/trips'
+  'https://gtfsrt.ttc.ca/trips/update?format=binary'
 
 const TTC_PREDICTIONS_URL =
   'https://retro.umoiq.com/service/publicJSONFeed'
