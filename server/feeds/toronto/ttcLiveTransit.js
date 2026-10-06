@@ -1,3 +1,4 @@
+// TTC STOP FAST V10 - hot TripUpdate cache for instant stop popups
 // TTC STOP SYNC V9 - 2026-10-06 - BusTime TripUpdates paired with BusTime VehiclePositions
 // LIVE TTC FAST START V8
 // LIVE TTC STABILITY V6 Â· 2026-09-30 Â· reject empty realtime feeds + deduped arrivals + resilient vehicle retention
@@ -45,6 +46,14 @@ const STATIC_CACHE_MS =
 
 const REALTIME_CACHE_MS =
   1400
+
+// TTC STOP FAST V10 - serve the last good TripUpdate feed immediately while
+// refreshing it in the background. Stop clicks should never wait on TTC I/O.
+const TRIP_UPDATE_SERVE_CACHE_MS =
+  10 * 1000
+
+const TRIP_UPDATE_WARM_INTERVAL_MS =
+  1800
 
 const UMO_PREDICTION_CACHE_MS =
   10 * 1000
@@ -2718,16 +2727,7 @@ function startVehicleWarmLoop(
 }
 
 
-async function getRawTripUpdateFeed() {
-  if (
-    tripUpdateCache &&
-    Date.now() -
-      tripUpdateCache.cachedAt <
-      REALTIME_CACHE_MS
-  ) {
-    return tripUpdateCache.feed
-  }
-
+function refreshTripUpdateFeedInBackground() {
   if (
     tripUpdatePromise
   ) {
@@ -2762,7 +2762,7 @@ async function getRawTripUpdateFeed() {
               REALTIME_STALE_FALLBACK_MS
           ) {
             console.warn(
-              'LIVE TTC TRIPS Â· using recent cached feed after upstream failure:',
+              'LIVE TTC TRIPS Â· keeping cached feed after upstream failure:',
               error?.message ||
                 error
             )
@@ -2780,6 +2780,107 @@ async function getRawTripUpdateFeed() {
       )
 
   return tripUpdatePromise
+}
+
+
+async function getRawTripUpdateFeed() {
+  const cacheAge =
+    tripUpdateCache
+      ? Date.now() -
+        tripUpdateCache.cachedAt
+      : Infinity
+
+  // Stop clicks should be instant. If a recent-good TripUpdate feed exists,
+  // serve it immediately and refresh asynchronously when it is older than
+  // the realtime freshness target.
+  if (
+    tripUpdateCache &&
+    cacheAge <
+      TRIP_UPDATE_SERVE_CACHE_MS
+  ) {
+    if (
+      cacheAge >=
+        REALTIME_CACHE_MS
+    ) {
+      refreshTripUpdateFeedInBackground()
+        .catch(
+          (
+            error
+          ) => {
+            console.warn(
+              'LIVE TTC TRIP WARMUP:',
+              error?.message ||
+                error
+            )
+          }
+        )
+    }
+
+    return tripUpdateCache.feed
+  }
+
+  // Only the very first server warmup should ever have to await TTC.
+  return refreshTripUpdateFeedInBackground()
+}
+
+
+let tripUpdateWarmTimer =
+  null
+
+
+function warmTripUpdateFeed() {
+  refreshTripUpdateFeedInBackground()
+    .catch(
+      (
+        error
+      ) => {
+        console.warn(
+          'LIVE TTC TRIP WARMUP:',
+          error?.message ||
+            error
+        )
+      }
+    )
+}
+
+
+function startTripUpdateWarmLoop(
+  httpServer
+) {
+  if (
+    tripUpdateWarmTimer
+  ) {
+    return
+  }
+
+  // Prime TripUpdates at server boot so the first stop click normally has
+  // a decoded feed waiting in memory already.
+  warmTripUpdateFeed()
+
+  tripUpdateWarmTimer =
+    setInterval(
+      warmTripUpdateFeed,
+      TRIP_UPDATE_WARM_INTERVAL_MS
+    )
+
+  tripUpdateWarmTimer
+    ?.unref?.()
+
+  httpServer
+    ?.once?.(
+      'close',
+      () => {
+        if (
+          tripUpdateWarmTimer
+        ) {
+          clearInterval(
+            tripUpdateWarmTimer
+          )
+          tripUpdateWarmTimer =
+            null
+        }
+      }
+    )
 }
 
 
@@ -4369,6 +4470,10 @@ export function ttcLiveTransitFeed() {
       server
     ) {
       startVehicleWarmLoop(
+        server?.httpServer
+      )
+
+      startTripUpdateWarmLoop(
         server?.httpServer
       )
 
