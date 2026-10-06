@@ -1,7 +1,5 @@
-// TTC FLEET RESTORE V7.1 · preserve realtime fleet across static schedule mismatches
-// TTC LIVE BALANCED V7 · fast city view + strict selected-route trip accuracy
 // LIVE TTC FAST START V8
-// LIVE TTC STABILITY V6 · 2026-09-30 · reject empty realtime feeds + deduped arrivals + resilient vehicle retention
+// LIVE TTC STABILITY V6 Â· 2026-09-30 Â· reject empty realtime feeds + deduped arrivals + resilient vehicle retention
 import https from 'node:https'
 import { inflateRawSync } from 'node:zlib'
 
@@ -20,14 +18,11 @@ const TTC_VEHICLES_URL =
 const TTC_VEHICLES_FALLBACK_URL =
   'https://gtfsrt.ttc.ca/vehicles/position?format=binary'
 
-// TTC LIVE BALANCED V7 · SurfaceGTFS and BusTime GTFS-RT are one feed family.
-// Keep TripUpdates on the same primary system as VehiclePositions so stop IDs,
-// trip IDs and route IDs cannot be cross-wired between generations of TTC data.
 const TTC_TRIPS_URL =
-  'https://bustime.ttc.ca/gtfsrt/trips'
+  'https://gtfsrt.ttc.ca/trips/update?format=binary'
 
 const TTC_TRIPS_FALLBACK_URL =
-  'https://gtfsrt.ttc.ca/trips/update?format=binary'
+  'https://bustime.ttc.ca/gtfsrt/trips'
 
 const TTC_PREDICTIONS_URL =
   'https://retro.umoiq.com/service/publicJSONFeed'
@@ -330,7 +325,7 @@ function fetchBuffer(
               response.resume()
               finishReject(
                 new Error(
-                  `TTC request failed (${statusCode}) · ${url}`
+                  `TTC request failed (${statusCode}) Â· ${url}`
                 )
               )
               return
@@ -373,7 +368,7 @@ function fetchBuffer(
           () => {
             request.destroy(
               new Error(
-                `TTC request timed out after ${timeoutMs}ms · ${url}`
+                `TTC request timed out after ${timeoutMs}ms Â· ${url}`
               )
             )
           },
@@ -2312,7 +2307,7 @@ async function fetchRealtimeFeed(
         !response.ok
       ) {
         throw new Error(
-          `TTC fetch failed (${response.status}) · ${url}`
+          `TTC fetch failed (${response.status}) Â· ${url}`
         )
       }
 
@@ -2352,7 +2347,7 @@ async function fetchRealtimeFeed(
     httpsError
   ) {
     throw new Error(
-      `TTC realtime fetch failed · fetch: ${fetchError?.message || fetchError} · https: ${httpsError?.message || httpsError}`
+      `TTC realtime fetch failed Â· fetch: ${fetchError?.message || fetchError} Â· https: ${httpsError?.message || httpsError}`
     )
   }
 }
@@ -2379,7 +2374,7 @@ async function fetchRealtimeFeedWithFallback(
       fallbackError
     ) {
       throw new Error(
-        `TTC realtime feeds unavailable · primary: ${primaryError?.message || primaryError} · fallback: ${fallbackError?.message || fallbackError}`
+        `TTC realtime feeds unavailable Â· primary: ${primaryError?.message || primaryError} Â· fallback: ${fallbackError?.message || fallbackError}`
       )
     }
   }
@@ -2440,13 +2435,91 @@ async function fetchUsableVehicleFeed(
 
 
 async function fetchVehicleRealtimeFeed() {
-  // Accuracy first: SurfaceGTFS is explicitly paired with the BusTime GTFS-RT
-  // feed. Do not hedge to the retired/legacy realtime generation, because its
-  // identifiers can describe different trips/stops.
-  return fetchUsableVehicleFeed(
-    TTC_VEHICLES_URL,
-    'TTC BusTime'
-  )
+  let settled =
+    false
+
+  const primaryPromise =
+    fetchUsableVehicleFeed(
+      TTC_VEHICLES_URL,
+      'TTC primary'
+    )
+
+  const fallbackPromise =
+    new Promise(
+      (
+        resolve,
+        reject
+      ) => {
+        setTimeout(
+          () => {
+            if (
+              settled
+            ) {
+              reject(
+                new Error(
+                  'TTC fallback hedge cancelled'
+                )
+              )
+              return
+            }
+
+            fetchUsableVehicleFeed(
+              TTC_VEHICLES_FALLBACK_URL,
+              'TTC fallback'
+            )
+              .then(
+                resolve,
+                reject
+              )
+          },
+          700
+        )
+      }
+    )
+
+  try {
+    const feed =
+      await Promise.any([
+        primaryPromise,
+        fallbackPromise,
+      ])
+
+    settled =
+      true
+    return feed
+  }
+  catch (
+    error
+  ) {
+    settled =
+      true
+
+    const details =
+      Array.isArray(
+        error?.errors
+      )
+        ? error.errors
+            .map(
+              (
+                item
+              ) =>
+                item?.message ||
+                String(
+                  item
+                )
+            )
+            .join(
+              ' Â· '
+            )
+        : error?.message ||
+          String(
+            error
+          )
+
+    throw new Error(
+      `TTC vehicle feeds unavailable Â· ${details}`
+    )
+  }
 }
 
 
@@ -2482,7 +2555,7 @@ function refreshVehicleFeedInBackground() {
               REALTIME_STALE_FALLBACK_MS
           ) {
             console.warn(
-              'LIVE TTC VEHICLES · keeping cached feed after upstream failure:',
+              'LIVE TTC VEHICLES Â· keeping cached feed after upstream failure:',
               error?.message ||
                 error
             )
@@ -2567,7 +2640,7 @@ async function getRawVehicleFeed({
           error
         ) => {
           console.warn(
-            'LIVE TTC VEHICLES · background refresh failed:',
+            'LIVE TTC VEHICLES Â· background refresh failed:',
             error?.message ||
               error
           )
@@ -2661,8 +2734,9 @@ async function getRawTripUpdateFeed() {
   }
 
   tripUpdatePromise =
-    fetchRealtimeFeed(
-      TTC_TRIPS_URL
+    fetchRealtimeFeedWithFallback(
+      TTC_TRIPS_URL,
+      TTC_TRIPS_FALLBACK_URL
     )
       .then(
         (
@@ -2687,7 +2761,7 @@ async function getRawTripUpdateFeed() {
               REALTIME_STALE_FALLBACK_MS
           ) {
             console.warn(
-              'LIVE TTC TRIPS · using recent cached feed after upstream failure:',
+              'LIVE TTC TRIPS Â· using recent cached feed after upstream failure:',
               error?.message ||
                 error
             )
@@ -2814,40 +2888,12 @@ async function getVehiclesPayload(
               tripId
             )
 
-          const realtimeRouteId =
+          const routeId =
             cleanText(
               vehicle?.trip?.routeId
-            )
-          const staticRouteId =
-            cleanText(
-              staticTrip?.routeId
-            )
-
-          // TTC FLEET RESTORE V7.1 · city view must never erase a healthy
-          // realtime vehicle just because the static schedule cache is on a
-          // different trip/route version. Realtime owns city-view identity;
-          // static trip metadata is enrichment only when the IDs agree.
-          const routeIdsAgree =
-            !staticTrip ||
-            !realtimeRouteId ||
-            !staticRouteId ||
-            realtimeRouteId ===
-              staticRouteId
-
-          const routeId =
-            realtimeRouteId ||
-            staticRouteId
-
-          const trustedStaticTrip =
-            routeIdsAgree
-              ? staticTrip
-              : null
-
-          if (
-            !routeId
-          ) {
-            return null
-          }
+            ) ||
+            staticTrip?.routeId ||
+            ''
 
           const route =
             surface?.routes?.get(
@@ -2926,23 +2972,19 @@ async function getVehiclesPayload(
             routeLongName:
               route?.longName ||
               '',
-            shapeId:
-              cleanText(
-                trustedStaticTrip?.shapeId
-              ),
             routeType,
             mode:
               routeMode(
                 routeType
               ),
             headsign:
-              trustedStaticTrip?.headsign ||
+              staticTrip?.headsign ||
               '',
             directionId:
               numberOrNull(
                 vehicle?.trip?.directionId
               ) ??
-              trustedStaticTrip?.directionId ??
+              staticTrip?.directionId ??
               null,
             latitude,
             longitude,
@@ -2969,14 +3011,6 @@ async function getVehiclesPayload(
             stopName:
               stop?.name ||
               '',
-            nextStopLatitude:
-              numberOrNull(
-                stop?.latitude
-              ),
-            nextStopLongitude:
-              numberOrNull(
-                stop?.longitude
-              ),
             currentStatus:
               cleanText(
                 vehicle?.currentStatus
@@ -3740,28 +3774,12 @@ async function getGtfsArrivalsPayload(
             tripId
           )
 
-        const realtimeRouteId =
+        const routeId =
           cleanText(
             tripUpdate?.trip?.routeId
-          )
-        const staticRouteId =
-          cleanText(
-            staticTrip?.routeId
-          )
-
-        if (
-          staticTrip &&
-          realtimeRouteId &&
-          staticRouteId &&
-          realtimeRouteId !==
-            staticRouteId
-        ) {
-          return
-        }
-
-        const routeId =
-          staticRouteId ||
-          realtimeRouteId
+          ) ||
+          staticTrip?.routeId ||
+          ''
 
         const route =
           surface.routes.get(
@@ -3958,40 +3976,180 @@ async function getArrivalsPayload({
   stopId,
   stopCode,
 }) {
+  const surface =
+    await getSurfaceNetwork()
   const normalizedStopId =
     cleanText(
       stopId
     )
-
-  if (
-    !normalizedStopId
-  ) {
-    throw new Error(
-      'stopId is required for TTC live arrivals'
-    )
-  }
-
-  // TTC LIVE BALANCED V7 · Use only BusTime GTFS-Realtime for live stop
-  // predictions. The legacy UMO/NextBus feed was decommissioned and uses a
-  // different identity model; mixing it with GTFS is what allowed unrelated
-  // routes to appear at a clicked stop.
-  const payload =
-    await getGtfsArrivalsPayload(
+  const staticStop =
+    surface.stopsById.get(
       normalizedStopId
     )
+  const normalizedStopCode =
+    cleanText(
+      stopCode
+    ) ||
+    cleanText(
+      staticStop?.code
+    )
 
-  return {
-    ...payload,
-    predictionAuthority:
-      Array.isArray(
-        payload?.arrivals
-      ) &&
-      payload.arrivals.length >
-        0
-        ? 'GTFS-RT'
-        : 'GTFS-RT_EMPTY',
+  // TTC TRUTH MODE Â· Exact-stop ETA authority is GTFS-Realtime first.
+  // VehiclePosition + TripUpdate share GTFS trip/vehicle/stop identities.
+  // Never delete a UMO prediction using a GTFS stop sequence: UMO tripTag is
+  // a separate identifier system and cross-splicing the two can drop the
+  // actually-nearest vehicle.
+  let gtfsPayload =
+    null
+  let gtfsError =
+    null
+
+  if (
+    normalizedStopId
+  ) {
+    try {
+      gtfsPayload =
+        await getGtfsArrivalsPayload(
+          normalizedStopId
+        )
+
+      if (
+        Array.isArray(
+          gtfsPayload?.arrivals
+        ) &&
+        gtfsPayload.arrivals.length >
+          0
+      ) {
+        return {
+          ...gtfsPayload,
+          predictionAuthority:
+            'GTFS-RT',
+        }
+      }
+    }
+    catch (
+      error
+    ) {
+      gtfsError =
+        error
+      console.warn(
+        'LIVE TTC ARRIVALS Â· GTFS-RT primary unavailable:',
+        error?.message ||
+        error
+      )
+    }
   }
+
+  if (
+    normalizedStopCode
+  ) {
+    try {
+      const arrivals =
+        await getUmoArrivalsForStopCode(
+          normalizedStopCode,
+          surface
+        )
+      const sortedArrivals =
+        [
+          ...arrivals,
+        ].sort(
+          (
+            a,
+            b
+          ) =>
+            Number(
+              a?.arrivalTime ||
+              0
+            ) -
+            Number(
+              b?.arrivalTime ||
+              0
+            )
+        )
+
+      return {
+        ok:
+          true,
+        source:
+          'TTC Next Vehicle Arrival System Â· UMO NextBus Â· fallback',
+        upstream:
+          TTC_PREDICTIONS_URL,
+        predictionAuthority:
+          'UMO_FALLBACK',
+        attribution:
+          TORONTO_ATTRIBUTION,
+        updatedAt:
+          new Date()
+            .toISOString(),
+        stop: staticStop
+          ? {
+              id:
+                staticStop.id,
+              code:
+                staticStop.code,
+              name:
+                staticStop.name,
+              latitude:
+                staticStop.latitude,
+              longitude:
+                staticStop.longitude,
+            }
+          : {
+              id:
+                normalizedStopId,
+              code:
+                normalizedStopCode,
+              name:
+                '',
+              latitude:
+                null,
+              longitude:
+                null,
+            },
+        count:
+          Math.min(
+            sortedArrivals.length,
+            18
+          ),
+        arrivals:
+          sortedArrivals.slice(
+            0,
+            18
+          ),
+      }
+    }
+    catch (
+      error
+    ) {
+      console.warn(
+        'LIVE TTC ARRIVALS Â· UMO fallback unavailable:',
+        error?.message ||
+        error
+      )
+    }
+  }
+
+  if (
+    gtfsPayload
+  ) {
+    return {
+      ...gtfsPayload,
+      predictionAuthority:
+        'GTFS-RT_EMPTY',
+    }
+  }
+
+  if (
+    gtfsError
+  ) {
+    throw gtfsError
+  }
+
+  return getGtfsArrivalsPayload(
+    normalizedStopId
+  )
 }
+
 async function getNearbyArrivalsPayload(
   latitude,
   longitude,
@@ -4100,20 +4258,9 @@ async function getNearbyArrivalsPayload(
         (
           item
         ) =>
-          getArrivalsPayload({
-            stopId:
-              item.stop.id,
-            stopCode:
-              item.code,
-          }).then(
-            (
-              payload
-            ) =>
-              Array.isArray(
-                payload?.arrivals
-              )
-                ? payload.arrivals
-                : []
+          getUmoArrivalsForStopCode(
+            item.code,
+            surface
           )
       )
     )
@@ -4161,9 +4308,9 @@ async function getNearbyArrivalsPayload(
     ok:
       true,
     source:
-      'TTC BusTime GTFS-Realtime · nearby surface stops',
+      'TTC Next Vehicle Arrival System Â· nearby surface stops',
     upstream:
-      TTC_TRIPS_URL,
+      TTC_PREDICTIONS_URL,
     attribution:
       TORONTO_ATTRIBUTION,
     updatedAt:
