@@ -1,3 +1,4 @@
+// TTC BUS NUMBERS RESTORE V11.1 - restore proven vehicle route label expression
 // TTC STOP POLISH V11 - early arrival prewarm + readable 3-digit route labels
 // TTC MOTION V8 · fast city view + sample-clock smoothing + strict selected-route accuracy
 // LIVE TTC ROUTE ENGINE V17 · timestamp-age compensation + priority route indexing
@@ -4398,59 +4399,21 @@ function LiveTtcLayer({
                 'routeShortName',
               ],
               'text-size': [
-                'case',
+                'interpolate',
                 [
-                  '>=',
-                  [
-                    'length',
-                    [
-                      'to-string',
-                      [
-                        'coalesce',
-                        [
-                          'get',
-                          'routeShortName',
-                        ],
-                        '',
-                      ],
-                    ],
-                  ],
-                  3,
+                  'linear',
                 ],
                 [
-                  'interpolate',
-                  [
-                    'linear',
-                  ],
-                  [
-                    'zoom',
-                  ],
-                  13.5,
-                  9.5,
-                  15,
-                  10.5,
-                  17,
-                  11.5,
-                  18,
-                  12.5,
+                  'zoom',
                 ],
-                [
-                  'interpolate',
-                  [
-                    'linear',
-                  ],
-                  [
-                    'zoom',
-                  ],
-                  13.5,
-                  8,
-                  15,
-                  9,
-                  17,
-                  10,
-                  18,
-                  11,
-                ],
+                13.5,
+                8,
+                15,
+                9,
+                17,
+                10,
+                18,
+                11,
               ],
               'text-anchor':
                 'bottom',
