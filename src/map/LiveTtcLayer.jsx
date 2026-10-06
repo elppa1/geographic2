@@ -1,4 +1,4 @@
-// TTC LIVE BALANCED V7 · fast city motion + strict selected-route accuracy
+// TTC MOTION V8 · fast city view + sample-clock smoothing + strict selected-route accuracy
 // LIVE TTC ROUTE ENGINE V17 · timestamp-age compensation + priority route indexing
 // Vehicles advance by distance along their TTC route shape; realtime GPS only corrects the route progress.
 // LIVE TTC FAST START V8
@@ -231,35 +231,35 @@ const VEHICLE_STALE_STOP_MS =
   75 * 1000
 const VEHICLE_GRACE_MS =
   90 * 1000
-const VEHICLE_TIMESTAMP_COMPENSATION_MIN_AGE_SECONDS =
-  2
-const VEHICLE_TIMESTAMP_COMPENSATION_MAX_SECONDS =
-  24
-const VEHICLE_TIMESTAMP_COMPENSATION_MAX_METERS =
-  120
-const VEHICLE_TIMESTAMP_COMPENSATION_MIN_SPEED_MPS =
-  0.7
-// City view stays alive between TTC GPS samples, but can only dead-reckon a
-// short distance. Selecting a route tightens the lead and enables the actual
-// GTFS next-scheduled-stop boundary for that trip.
-const CITY_VIEW_LEAD_SECONDS =
-  4.5
+// City view moves from the moment a TTC sample is accepted by the browser,
+// not from the upstream feed timestamp. This prevents an already-aged TTC
+// sample from instantly using its entire prediction allowance and then
+// appearing to freeze. Motion stays full-speed briefly, then eases to zero if
+// TTC has not supplied a newer sample. Selected-route mode remains tighter.
+const CITY_VIEW_FULL_SPEED_SECONDS =
+  6
+const CITY_VIEW_STOP_SECONDS =
+  12
 const CITY_VIEW_MAX_LEAD_METERS =
-  30
-const SELECTED_ROUTE_LEAD_SECONDS =
+  45
+const SELECTED_ROUTE_FULL_SPEED_SECONDS =
   2.5
+const SELECTED_ROUTE_STOP_SECONDS =
+  5.5
 const SELECTED_ROUTE_MAX_LEAD_METERS =
-  14
-const CITY_VIEW_RAW_LEAD_SECONDS =
+  18
+const CITY_VIEW_RAW_FULL_SPEED_SECONDS =
   4
+const CITY_VIEW_RAW_STOP_SECONDS =
+  9
 const CITY_VIEW_RAW_MAX_LEAD_METERS =
-  24
+  32
 const NEXT_STOP_ROUTE_LOCK_MAX_METERS =
   90
 const ANIMATION_FRAME_MS =
   50
 const ROUTE_INDEX_ROUTE_BATCH_SIZE =
-  4
+  2
 const SELECTED_ROUTE_PULSE_MS =
   50
 
@@ -2412,6 +2412,68 @@ function routeEngineTargetSpeed({
     observedSpeed,
     movementEvidence,
   }
+}
+
+
+function predictionLeadSeconds({
+  sampleAgeSeconds,
+  fullSpeedSeconds,
+  stopSeconds,
+}) {
+  const full =
+    Math.max(
+      0,
+      Number(
+        fullSpeedSeconds
+      ) ||
+      0
+    )
+  const stop =
+    Math.max(
+      full,
+      Number(
+        stopSeconds
+      ) ||
+      full
+    )
+  const age =
+    clampNumber(
+      Number(
+        sampleAgeSeconds
+      ) ||
+      0,
+      0,
+      stop
+    )
+
+  if (
+    age <=
+      full ||
+    stop <=
+      full
+  ) {
+    return age
+  }
+
+  const span =
+    stop -
+    full
+  const tailAge =
+    age -
+    full
+
+  return (
+    full +
+    tailAge -
+    (
+      tailAge *
+      tailAge
+    ) /
+    (
+      2 *
+      span
+    )
+  )
 }
 
 
@@ -5015,7 +5077,7 @@ function LiveTtcLayer({
               routeIndexBuildTimer =
                 window.setTimeout(
                   processBatch,
-                  0
+                  16
                 )
               return
             }
@@ -5493,26 +5555,36 @@ function LiveTtcLayer({
                       vehicleState.properties?.routeId ||
                       ''
                     )
-                const maxLeadSeconds =
+                const fullSpeedSeconds =
                   strictRouteMode
-                    ? SELECTED_ROUTE_LEAD_SECONDS
-                    : CITY_VIEW_LEAD_SECONDS
+                    ? SELECTED_ROUTE_FULL_SPEED_SECONDS
+                    : CITY_VIEW_FULL_SPEED_SECONDS
+                const stopSeconds =
+                  strictRouteMode
+                    ? SELECTED_ROUTE_STOP_SECONDS
+                    : CITY_VIEW_STOP_SECONDS
                 const maxLeadMeters =
                   strictRouteMode
                     ? SELECTED_ROUTE_MAX_LEAD_METERS
                     : CITY_VIEW_MAX_LEAD_METERS
                 const sampleAgeSeconds =
-                  clampNumber(
-                    Date.now() /
-                      1000 -
-                      Number(
-                        vehicleState.sampleTimestamp ||
-                        Date.now() /
-                          1000
-                      ),
+                  Math.max(
                     0,
-                    maxLeadSeconds
+                    (
+                      now -
+                      Number(
+                        vehicleState.sampleAcceptedAt ||
+                        now
+                      )
+                    ) /
+                    1000
                   )
+                const allowedLeadSeconds =
+                  predictionLeadSeconds({
+                    sampleAgeSeconds,
+                    fullSpeedSeconds,
+                    stopSeconds,
+                  })
                 const trustedProgress =
                   Number.isFinite(
                     Number(
@@ -5534,7 +5606,7 @@ function LiveTtcLayer({
                           0,
                           visualSpeed
                         ) *
-                          sampleAgeSeconds
+                          allowedLeadSeconds
                       )
                 let targetProgress =
                   clampNumber(
@@ -5639,17 +5711,26 @@ function LiveTtcLayer({
                     VEHICLE_VISUAL_MAX_SPEED_MPS
                   )
                 const rawSampleAgeSeconds =
-                  clampNumber(
-                    Date.now() /
-                      1000 -
-                      Number(
-                        vehicleState.sampleTimestamp ||
-                        Date.now() /
-                          1000
-                      ),
+                  Math.max(
                     0,
-                    CITY_VIEW_RAW_LEAD_SECONDS
+                    (
+                      now -
+                      Number(
+                        vehicleState.sampleAcceptedAt ||
+                        now
+                      )
+                    ) /
+                    1000
                   )
+                const rawAllowedLeadSeconds =
+                  predictionLeadSeconds({
+                    sampleAgeSeconds:
+                      rawSampleAgeSeconds,
+                    fullSpeedSeconds:
+                      CITY_VIEW_RAW_FULL_SPEED_SECONDS,
+                    stopSeconds:
+                      CITY_VIEW_RAW_STOP_SECONDS,
+                  })
                 const rawDistanceMeters =
                   strictRouteMode ||
                   vehicleState.stopped
@@ -5657,7 +5738,7 @@ function LiveTtcLayer({
                     : Math.min(
                         CITY_VIEW_RAW_MAX_LEAD_METERS,
                         rawSpeed *
-                          rawSampleAgeSeconds
+                          rawAllowedLeadSeconds
                       )
 
                 if (
@@ -6130,16 +6211,15 @@ function LiveTtcLayer({
                   longitude,
                   latitude,
                 ]
-
+                const sampleIdentity =
+                  timestamp >
+                    0
+                    ? `t:${timestamp}`
+                    : `p:${longitude.toFixed(6)},${latitude.toFixed(6)}`
                 const sameRealtimeSample =
                   previous &&
-                  timestamp >
-                    0 &&
-                  Number(
-                    previous.sampleTimestamp ||
-                    0
-                  ) ===
-                    timestamp
+                  previous.sampleIdentity ===
+                    sampleIdentity
 
                 if (
                   sameRealtimeSample &&
@@ -6497,9 +6577,18 @@ function LiveTtcLayer({
                       speedState.stopped,
                     sampleTimestamp:
                       timestamp,
+                    sampleIdentity,
+                    sampleAcceptedAt:
+                      sameRealtimeSample
+                        ? previous?.sampleAcceptedAt ??
+                          now
+                        : now,
                     sampleHistory,
                     lastSeenAt:
-                      now,
+                      sameRealtimeSample
+                        ? previous?.lastSeenAt ??
+                          now
+                        : now,
                     lastMovingAt:
                       speedState.lastMovingAt,
                     lastFrameAt:
@@ -7322,7 +7411,7 @@ function LiveTtcLayer({
       networkTimer =
         window.setTimeout(
           refreshNetwork,
-          900
+          1200
         )
 
       vehicleTimer =
