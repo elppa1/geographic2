@@ -1,3 +1,4 @@
+// TTC FLEET RESTORE V7.1 · preserve realtime fleet across static schedule mismatches
 // TTC LIVE BALANCED V7 · fast city view + strict selected-route trip accuracy
 // LIVE TTC FAST START V8
 // LIVE TTC STABILITY V6 · 2026-09-30 · reject empty realtime feeds + deduped arrivals + resilient vehicle retention
@@ -2822,23 +2823,25 @@ async function getVehiclesPayload(
               staticTrip?.routeId
             )
 
-          // Once SurfaceGTFS is warm, the static trip is the canonical route
-          // assignment. If realtime and static disagree, suppress the marker
-          // rather than put a bus on the wrong route. Before warmup, realtime
-          // route_id is enough to paint the fleet immediately.
-          if (
-            staticTrip &&
-            realtimeRouteId &&
-            staticRouteId &&
-            realtimeRouteId !==
+          // TTC FLEET RESTORE V7.1 · city view must never erase a healthy
+          // realtime vehicle just because the static schedule cache is on a
+          // different trip/route version. Realtime owns city-view identity;
+          // static trip metadata is enrichment only when the IDs agree.
+          const routeIdsAgree =
+            !staticTrip ||
+            !realtimeRouteId ||
+            !staticRouteId ||
+            realtimeRouteId ===
               staticRouteId
-          ) {
-            return null
-          }
 
           const routeId =
-            staticRouteId ||
-            realtimeRouteId
+            realtimeRouteId ||
+            staticRouteId
+
+          const trustedStaticTrip =
+            routeIdsAgree
+              ? staticTrip
+              : null
 
           if (
             !routeId
@@ -2925,7 +2928,7 @@ async function getVehiclesPayload(
               '',
             shapeId:
               cleanText(
-                staticTrip?.shapeId
+                trustedStaticTrip?.shapeId
               ),
             routeType,
             mode:
@@ -2933,13 +2936,13 @@ async function getVehiclesPayload(
                 routeType
               ),
             headsign:
-              staticTrip?.headsign ||
+              trustedStaticTrip?.headsign ||
               '',
             directionId:
               numberOrNull(
                 vehicle?.trip?.directionId
               ) ??
-              staticTrip?.directionId ??
+              trustedStaticTrip?.directionId ??
               null,
             latitude,
             longitude,
