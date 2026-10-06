@@ -1,3 +1,4 @@
+// TTC STOP INSTANT V12 - realtime arrivals never wait for static SurfaceGTFS
 // TTC STOP POLISH V11 - indexed stop arrivals + explicit live-layer prewarm
 // TTC STOP FAST V10 - hot TripUpdate cache for instant stop popups
 // TTC STOP SYNC V9 - 2026-10-06 - BusTime TripUpdates paired with BusTime VehiclePositions
@@ -3913,17 +3914,34 @@ async function getGtfsArrivalsPayload(
     )
   }
 
-  const [
-    feed,
-    surface,
-  ] =
-    await Promise.all([
-      getRawTripUpdateFeed(),
-      getSurfaceNetwork(),
-    ])
+  const feed =
+    await getRawTripUpdateFeed()
+
+  // Stop clicks must never wait on the large static SurfaceGTFS archive.
+  // Use static metadata only when it is already warm; otherwise return the
+  // realtime TripUpdate result immediately and warm static data in background.
+  const surface =
+    surfaceCache
+
+  if (
+    !surface
+  ) {
+    getSurfaceNetwork()
+      .catch(
+        (
+          error
+        ) => {
+          console.warn(
+            'LIVE TTC ARRIVALS STATIC WARMUP:',
+            error?.message ||
+              error
+          )
+        }
+      )
+  }
 
   const stop =
-    surface.stopsById.get(
+    surface?.stopsById?.get(
       normalizedStopId
     )
 
@@ -3973,7 +3991,7 @@ async function getGtfsArrivalsPayload(
           )
 
         const staticTrip =
-          surface.trips.get(
+          surface?.trips?.get(
             tripId
           )
 
@@ -3985,12 +4003,12 @@ async function getGtfsArrivalsPayload(
           ''
 
         const route =
-          surface.routes.get(
+          surface?.routes?.get(
             routeId
           )
 
         if (
-          !route
+          !routeId
         ) {
           return
         }
@@ -4179,17 +4197,39 @@ async function getArrivalsPayload({
   stopId,
   stopCode,
 }) {
-  const surface =
-    await getSurfaceNetwork()
   const normalizedStopId =
     cleanText(
       stopId
     )
+
+  // Do not block an exact-stop GTFS-RT request on static GTFS.
+  // Surface metadata is optional for the fast path and warms independently.
+  let surface =
+    surfaceCache
+
+  if (
+    !surface
+  ) {
+    getSurfaceNetwork()
+      .catch(
+        (
+          error
+        ) => {
+          console.warn(
+            'LIVE TTC ARRIVALS STATIC WARMUP:',
+            error?.message ||
+              error
+          )
+        }
+      )
+  }
+
   const staticStop =
-    surface.stopsById.get(
+    surface?.stopsById?.get(
       normalizedStopId
     )
-  const normalizedStopCode =
+
+  let normalizedStopCode =
     cleanText(
       stopCode
     ) ||
@@ -4244,13 +4284,43 @@ async function getArrivalsPayload({
   }
 
   if (
+    !normalizedStopCode &&
+    normalizedStopId
+  ) {
+    try {
+      surface =
+        surface ||
+        await getSurfaceNetwork()
+      normalizedStopCode =
+        cleanText(
+          surface?.stopsById?.get(
+            normalizedStopId
+          )?.code
+        )
+    }
+    catch (
+      error
+    ) {
+      console.warn(
+        'LIVE TTC ARRIVALS FALLBACK STATIC LOOKUP:',
+        error?.message ||
+          error
+      )
+    }
+  }
+
+  if (
     normalizedStopCode
   ) {
     try {
+      const fallbackSurface =
+        surface ||
+        await getSurfaceNetwork()
+
       const arrivals =
         await getUmoArrivalsForStopCode(
           normalizedStopCode,
-          surface
+          fallbackSurface
         )
       const sortedArrivals =
         [
@@ -4577,6 +4647,21 @@ export function ttcLiveTransitFeed() {
       startTripUpdateWarmLoop(
         server?.httpServer
       )
+
+      // Warm static metadata in parallel at server start, but never make live
+      // vehicle or stop-arrival responses wait for it.
+      getSurfaceNetwork()
+        .catch(
+          (
+            error
+          ) => {
+            console.warn(
+              'LIVE TTC STATIC BOOT WARMUP:',
+              error?.message ||
+                error
+            )
+          }
+        )
 
       server.middlewares.use(
         LIVE_TTC_ENDPOINT,
