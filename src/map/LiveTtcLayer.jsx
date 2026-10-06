@@ -1,7 +1,8 @@
-// LIVE TTC ROUTE ENGINE V17 Â· timestamp-age compensation + priority route indexing
+// TTC SYNC V4 · bounded smooth motion + exact trip-shape locking
+// LIVE TTC ROUTE ENGINE V17 · timestamp-age compensation + priority route indexing
 // Vehicles advance by distance along their TTC route shape; realtime GPS only corrects the route progress.
 // LIVE TTC FAST START V8
-// LIVE TTC STABILITY V6 Â· 2026-09-30 Â· stable vehicle retention + continuous interpolation + direction arrows + deduped arrivals
+// LIVE TTC STABILITY V6 · 2026-09-30 · stable vehicle retention + continuous interpolation + direction arrows + deduped arrivals
 import {
   useEffect,
   useRef,
@@ -219,11 +220,11 @@ const VEHICLE_VISUAL_MAX_SPEED_MPS =
   8.5
 const VEHICLE_DEFAULT_MOVING_SPEED_MPS =
   3.2
-// TTC TRUTH MODE Â· do not force a vehicle to crawl without a new TTC sample.
+// TTC TRUTH MODE · do not force a vehicle to crawl without a new TTC sample.
 const VEHICLE_MIN_CONTINUOUS_SPEED_MPS =
   0
 const VEHICLE_ROUTE_LOCK_MAX_METERS =
-  160
+  90
 const VEHICLE_STALE_SLOWDOWN_MS =
   15 * 1000
 const VEHICLE_STALE_STOP_MS =
@@ -238,6 +239,14 @@ const VEHICLE_TIMESTAMP_COMPENSATION_MAX_METERS =
   120
 const VEHICLE_TIMESTAMP_COMPENSATION_MIN_SPEED_MPS =
   0.7
+// Accuracy-first smoothing: project only a short distance beyond the most
+// recent TTC GPS sample, and never through TTC's reported next stop.
+const VEHICLE_MAX_FORWARD_LEAD_METERS =
+  32
+const VEHICLE_MAX_FORWARD_LEAD_SECONDS =
+  8
+const VEHICLE_IN_TRANSIT_STOP_BUFFER_METERS =
+  10
 const ANIMATION_FRAME_MS =
   50
 const ROUTE_INDEX_ROUTE_BATCH_SIZE =
@@ -414,7 +423,7 @@ function createVehiclePopup(
     parent:
       shell,
     text:
-      `${modeLabel} Â· LIVE`,
+      `${modeLabel} · LIVE`,
     style: {
       fontSize:
         '9px',
@@ -433,7 +442,7 @@ function createVehiclePopup(
     parent:
       shell,
     text:
-      `${properties.routeShortName || properties.routeId || 'TTC'}${properties.routeLongName ? ` Â· ${properties.routeLongName}` : ''}`,
+      `${properties.routeShortName || properties.routeId || 'TTC'}${properties.routeLongName ? ` · ${properties.routeLongName}` : ''}`,
     style: {
       fontSize:
         '16px',
@@ -451,7 +460,7 @@ function createVehiclePopup(
       parent:
         shell,
       text:
-        `â†’ ${properties.headsign}`,
+        `→ ${properties.headsign}`,
       style: {
         fontSize:
           '12px',
@@ -470,7 +479,7 @@ function createVehiclePopup(
       parent:
         shell,
       text:
-        `Next stop Â· ${properties.stopName}`,
+        `Next stop · ${properties.stopName}`,
       style: {
         fontSize:
           '11px',
@@ -617,8 +626,8 @@ function createStopPopupLoading(
       shell,
     text:
       properties.isStation
-        ? 'TTC STATION Â· LIVE'
-        : 'TTC STOP Â· LIVE',
+        ? 'TTC STATION · LIVE'
+        : 'TTC STOP · LIVE',
     style: {
       fontSize:
         '9px',
@@ -674,7 +683,7 @@ function createStopPopupLoading(
     className:
       'ttc-live-stop-loading',
     text:
-      'Loading approaching vehiclesâ€¦',
+      'Loading approaching vehicles…',
     style: {
       fontSize:
         '10px',
@@ -862,13 +871,65 @@ function fillStopArrivals({
             arrival
           )
 
+        const vehicleStatus =
+          String(
+            arrival?.vehicleCurrentStatus ||
+            ''
+          )
+            .toUpperCase()
+        const rawVehicleSequence =
+          arrival?.vehicleCurrentStopSequence
+        const rawArrivalSequence =
+          arrival?.stopSequence
+        const vehicleSequence =
+          rawVehicleSequence ===
+            null ||
+          rawVehicleSequence ===
+            undefined ||
+          rawVehicleSequence ===
+            ''
+            ? null
+            : Number(
+                rawVehicleSequence
+              )
+        const arrivalSequence =
+          rawArrivalSequence ===
+            null ||
+          rawArrivalSequence ===
+            undefined ||
+          rawArrivalSequence ===
+            ''
+            ? null
+            : Number(
+                rawArrivalSequence
+              )
+        const vehicleIsAtArrivalStop =
+          Number.isFinite(
+            vehicleSequence
+          ) &&
+          Number.isFinite(
+            arrivalSequence
+          ) &&
+          vehicleSequence ===
+            arrivalSequence &&
+          (
+            vehicleStatus.includes(
+              'INCOMING'
+            ) ||
+            vehicleStatus.includes(
+              'STOPPED'
+            )
+          )
+
         addTextLine({
           parent:
             row,
           text:
             minutes <=
               0
-              ? 'DUE'
+              ? vehicleIsAtArrivalStop
+                ? 'DUE'
+                : '<1 min'
               : `${minutes} min`,
           style: {
             fontSize:
@@ -1819,6 +1880,7 @@ function bearingDifferenceDegrees(
 function selectRouteProgressPath({
   coordinate,
   routeId,
+  shapeId,
   directionId,
   bearing,
   routePathsByRoute,
@@ -1826,6 +1888,11 @@ function selectRouteProgressPath({
   const normalizedRouteId =
     String(
       routeId ||
+      ''
+    )
+  const normalizedShapeId =
+    String(
+      shapeId ||
       ''
     )
   const normalizedDirectionId =
@@ -1846,7 +1913,29 @@ function selectRouteProgressPath({
     return null
   }
 
+  const shapeCandidates =
+    normalizedShapeId
+      ? candidates.filter(
+          (
+            path
+          ) =>
+            path.shapeId ===
+            normalizedShapeId
+        )
+      : []
+
+  // If static GTFS gave this vehicle an exact trip shape, never snap it onto
+  // a different shape merely because that geometry is geographically close.
+  if (
+    normalizedShapeId &&
+    shapeCandidates.length ===
+      0
+  ) {
+    return null
+  }
+
   const directionalCandidates =
+    !normalizedShapeId &&
     normalizedDirectionId
       ? candidates.filter(
           (
@@ -1857,10 +1946,13 @@ function selectRouteProgressPath({
         )
       : []
   const pool =
-    directionalCandidates.length >
+    shapeCandidates.length >
       0
-      ? directionalCandidates
-      : candidates
+      ? shapeCandidates
+      : directionalCandidates.length >
+          0
+        ? directionalCandidates
+        : candidates
 
   let best =
     null
@@ -2375,7 +2467,7 @@ function routeEngineTargetSpeed({
 function timestampCompensatedRouteProgress({
   sampleProgress,
 }) {
-  // TTC TRUTH MODE Â· Never extrapolate a vehicle beyond TTC's latest GPS
+  // TTC TRUTH MODE · Never extrapolate a vehicle beyond TTC's latest GPS
   // route projection. Smoothing happens only while catching up to this point.
   return sampleProgress
 }
@@ -2880,7 +2972,7 @@ function LiveTtcLayer({
           button
         ) {
           button.textContent =
-            'LOCATINGâ€¦'
+            'LOCATING…'
         }
 
         navigator.geolocation.getCurrentPosition(
@@ -2927,7 +3019,7 @@ function LiveTtcLayer({
               button
             ) {
               button.textContent =
-                'GPS âœ“'
+                'GPS ✓'
             }
 
             gpsPrompt?.remove?.()
@@ -3001,7 +3093,7 @@ function LiveTtcLayer({
             option.value =
               id
             option.textContent =
-              `${route.shortName || id}${route.longName ? ` Â· ${route.longName}` : ''}`
+              `${route.shortName || id}${route.longName ? ` · ${route.longName}` : ''}`
             fragment.appendChild(
               option
             )
@@ -4326,7 +4418,7 @@ function LiveTtcLayer({
             ],
             layout: {
               'text-field':
-                'â–²',
+                '▲',
               'text-size': [
                 'interpolate',
                 [
@@ -4632,6 +4724,9 @@ function LiveTtcLayer({
                   coordinate:
                     vehicleState.realCoordinate,
                   routeId,
+                  shapeId:
+                    vehicleState?.properties?.shapeId ||
+                    '',
                   directionId,
                   bearing,
                   routePathsByRoute:
@@ -5406,14 +5501,91 @@ function LiveTtcLayer({
                     0,
                     vehicleState.path.totalMeters
                   )
-                const targetProgress =
-                  clampNumber(
+                const sampleProgress =
+                  Number.isFinite(
                     Number(
-                      vehicleState.realProgress
-                    ),
+                      vehicleState.sampleProgress
+                    )
+                  )
+                    ? Number(
+                        vehicleState.sampleProgress
+                      )
+                    : Number(
+                        vehicleState.realProgress
+                      )
+                const sampleTimestamp =
+                  Number(
+                    vehicleState.sampleTimestamp ||
+                    0
+                  )
+                const sampleAgeSeconds =
+                  sampleTimestamp >
+                    0
+                    ? clampNumber(
+                        Date.now() /
+                          1000 -
+                          sampleTimestamp,
+                        0,
+                        VEHICLE_MAX_FORWARD_LEAD_SECONDS
+                      )
+                    : 0
+                const projectedLeadMeters =
+                  Math.min(
+                    VEHICLE_MAX_FORWARD_LEAD_METERS,
+                    Math.max(
+                      0,
+                      visualSpeed *
+                        sampleAgeSeconds
+                    )
+                  )
+                let targetProgress =
+                  clampNumber(
+                    sampleProgress +
+                      projectedLeadMeters,
                     0,
                     vehicleState.path.totalMeters
                   )
+
+                const nextStopProgress =
+                  Number(
+                    vehicleState.nextStopProgress
+                  )
+                const normalizedStatus =
+                  String(
+                    vehicleState?.properties?.currentStatus ||
+                    ''
+                  )
+                    .toUpperCase()
+
+                if (
+                  Number.isFinite(
+                    nextStopProgress
+                  ) &&
+                  nextStopProgress >=
+                    sampleProgress -
+                      25
+                ) {
+                  const stopBarrier =
+                    (
+                      !normalizedStatus ||
+                      normalizedStatus.includes(
+                        'IN_TRANSIT'
+                      )
+                    )
+                      ? Math.max(
+                          sampleProgress,
+                          nextStopProgress -
+                            VEHICLE_IN_TRANSIT_STOP_BUFFER_METERS
+                        )
+                      : nextStopProgress
+
+                  targetProgress =
+                    Math.min(
+                      targetProgress,
+                      stopBarrier
+                    )
+                }
+
                 const nextProgress =
                   currentDisplayProgress >
                     targetProgress
@@ -5846,6 +6018,53 @@ function LiveTtcLayer({
                     vehicle.tripId ||
                     ''
                   )
+                const shapeId =
+                  String(
+                    vehicle.shapeId ||
+                    ''
+                  )
+                const rawStopLongitude =
+                  vehicle.stopLongitude
+                const rawStopLatitude =
+                  vehicle.stopLatitude
+                const stopLongitude =
+                  rawStopLongitude ===
+                    null ||
+                  rawStopLongitude ===
+                    undefined ||
+                  rawStopLongitude ===
+                    ''
+                    ? null
+                    : Number(
+                        rawStopLongitude
+                      )
+                const stopLatitude =
+                  rawStopLatitude ===
+                    null ||
+                  rawStopLatitude ===
+                    undefined ||
+                  rawStopLatitude ===
+                    ''
+                    ? null
+                    : Number(
+                        rawStopLatitude
+                      )
+                const stopCoordinate =
+                  Number.isFinite(
+                    Number(
+                      stopLongitude
+                    )
+                  ) &&
+                  Number.isFinite(
+                    Number(
+                      stopLatitude
+                    )
+                  )
+                    ? [
+                        stopLongitude,
+                        stopLatitude,
+                      ]
+                    : null
                 const directionId =
                   normalizeDirectionId(
                     vehicle.directionId
@@ -5897,7 +6116,12 @@ function LiveTtcLayer({
 
                 if (
                   sameRealtimeSample &&
-                  previous?.path
+                  previous?.path &&
+                  (
+                    !shapeId ||
+                    previous.path.shapeId ===
+                      shapeId
+                  )
                 ) {
                   nextAnimations.set(
                     vehicleId,
@@ -5916,6 +6140,20 @@ function LiveTtcLayer({
                           vehicle.routeLongName ||
                           previous.properties?.routeLongName ||
                           '',
+                        shapeId:
+                          shapeId ||
+                          previous.properties?.shapeId ||
+                          '',
+                        stopLongitude:
+                          Number.isFinite(stopLongitude)
+                            ? stopLongitude
+                            : previous.properties?.stopLongitude ??
+                              null,
+                        stopLatitude:
+                          Number.isFinite(stopLatitude)
+                            ? stopLatitude
+                            : previous.properties?.stopLatitude ??
+                              null,
                         headsign:
                           vehicle.headsign ||
                           previous.properties?.headsign ||
@@ -5946,6 +6184,11 @@ function LiveTtcLayer({
                   previous?.path &&
                   previous.path.routeId ===
                     routeId &&
+                  (
+                    !shapeId ||
+                    previous.path.shapeId ===
+                      shapeId
+                  ) &&
                   (
                     !directionId ||
                     !previous.path.directionId ||
@@ -5988,6 +6231,7 @@ function LiveTtcLayer({
                       coordinate:
                         realCoordinate,
                       routeId,
+                      shapeId,
                       directionId,
                       bearing,
                       routePathsByRoute:
@@ -6017,8 +6261,48 @@ function LiveTtcLayer({
                 const previousSampleProgress =
                   previous?.sampleProgress ??
                   previous?.realProgress
+                const stopProjection =
+                  path &&
+                  stopCoordinate
+                    ? projectCoordinateOntoRoutePath(
+                        stopCoordinate,
+                        path
+                      )
+                    : null
+                const nextStopProgress =
+                  stopProjection &&
+                  Number.isFinite(
+                    Number(
+                      stopProjection.progressMeters
+                    )
+                  ) &&
+                  Number.isFinite(
+                    Number(
+                      sampleProgress
+                    )
+                  ) &&
+                  stopProjection.distanceMeters <=
+                    80 &&
+                  Number(
+                    stopProjection.progressMeters
+                  ) >=
+                    Number(
+                      sampleProgress
+                    ) -
+                      25 &&
+                  Number(
+                    stopProjection.progressMeters
+                  ) <=
+                    Number(
+                      sampleProgress
+                    ) +
+                      2000
+                    ? Number(
+                        stopProjection.progressMeters
+                      )
+                    : null
 
-                // TTC TRUTH MODE Â· accept a fresh TTC route-projected GPS correction even
+                // TTC TRUTH MODE · accept a fresh TTC route-projected GPS correction even
                 // when it moves backward. A brief correction is preferable to preserving
                 // a confidently wrong forward position.
 
@@ -6174,6 +6458,7 @@ function LiveTtcLayer({
                     sampleProgress,
                     realProgress,
                     displayProgress,
+                    nextStopProgress,
                     filteredSpeed:
                       speedState.filteredSpeed,
                     stopped:
@@ -6213,6 +6498,7 @@ function LiveTtcLayer({
                         vehicleId,
                       tripId,
                       routeId,
+                      shapeId,
                       routeShortName:
                         vehicle.routeShortName ||
                         routeId,
@@ -6247,6 +6533,14 @@ function LiveTtcLayer({
                       stopName:
                         vehicle.stopName ||
                         '',
+                      stopLongitude:
+                        Number.isFinite(stopLongitude)
+                          ? stopLongitude
+                          : null,
+                      stopLatitude:
+                        Number.isFinite(stopLatitude)
+                          ? stopLatitude
+                          : null,
                       currentStatus,
                       timestamp,
                       ageSeconds:
