@@ -1,3 +1,4 @@
+// TTC STOP POLISH V11 - indexed stop arrivals + explicit live-layer prewarm
 // TTC STOP FAST V10 - hot TripUpdate cache for instant stop popups
 // TTC STOP SYNC V9 - 2026-10-06 - BusTime TripUpdates paired with BusTime VehiclePositions
 // LIVE TTC FAST START V8
@@ -83,6 +84,7 @@ let vehicleCache = null
 let vehiclePromise = null
 let tripUpdateCache = null
 let tripUpdatePromise = null
+let tripUpdateStopIndex = null
 
 const umoPredictionCache =
   new Map()
@@ -2727,6 +2729,90 @@ function startVehicleWarmLoop(
 }
 
 
+
+function buildTripUpdateStopIndex(
+  feed
+) {
+  const stopEntitySets =
+    new Map()
+
+  ;(
+    Array.isArray(
+      feed?.entity
+    )
+      ? feed.entity
+      : []
+  ).forEach(
+    (
+      entity
+    ) => {
+      const updates =
+        Array.isArray(
+          entity?.tripUpdate?.stopTimeUpdate
+        )
+          ? entity.tripUpdate.stopTimeUpdate
+          : []
+
+      updates.forEach(
+        (
+          update
+        ) => {
+          const stopId =
+            cleanText(
+              update?.stopId
+            )
+
+          if (
+            !stopId
+          ) {
+            return
+          }
+
+          let bucket =
+            stopEntitySets.get(
+              stopId
+            )
+
+          if (
+            !bucket
+          ) {
+            bucket =
+              new Set()
+            stopEntitySets.set(
+              stopId,
+              bucket
+            )
+          }
+
+          bucket.add(
+            entity
+          )
+        }
+      )
+    }
+  )
+
+  const index =
+    new Map()
+
+  stopEntitySets.forEach(
+    (
+      entities,
+      stopId
+    ) => {
+      index.set(
+        stopId,
+        [
+          ...entities,
+        ]
+      )
+    }
+  )
+
+  return index
+}
+
+
 function refreshTripUpdateFeedInBackground() {
   if (
     tripUpdatePromise
@@ -2748,6 +2834,10 @@ function refreshTripUpdateFeedInBackground() {
               Date.now(),
             feed,
           }
+          tripUpdateStopIndex =
+            buildTripUpdateStopIndex(
+              feed
+            )
           return feed
         }
       )
@@ -3846,13 +3936,24 @@ async function getGtfsArrivalsPayload(
   const arrivals =
     []
 
-  ;(
-    Array.isArray(
-      feed?.entity
+  const candidateEntities =
+    tripUpdateCache?.feed ===
+      feed &&
+    tripUpdateStopIndex?.has(
+      normalizedStopId
     )
-      ? feed.entity
-      : []
-  )
+      ? tripUpdateStopIndex.get(
+          normalizedStopId
+        )
+      : (
+          Array.isArray(
+            feed?.entity
+          )
+            ? feed.entity
+            : []
+        )
+
+  candidateEntities
     .forEach(
       (
         entity
@@ -4570,6 +4671,56 @@ export function ttcLiveTransitFeed() {
               pathname ===
                 '/arrivals/'
             ) {
+              if (
+                url.searchParams.get(
+                  'warm'
+                ) ===
+                  '1'
+              ) {
+                warmTripUpdateFeed()
+                  .catch(
+                    () => {}
+                  )
+                warmVehicleFeed()
+
+                if (
+                  !surfaceCache
+                ) {
+                  getSurfaceNetwork()
+                    .catch(
+                      (
+                        error
+                      ) => {
+                        console.warn(
+                          'LIVE TTC ARRIVALS PREWARM:',
+                          error?.message ||
+                            error
+                        )
+                      }
+                    )
+                }
+
+                sendJson(
+                  res,
+                  200,
+                  {
+                    ok:
+                      true,
+                    warming:
+                      true,
+                    tripUpdatesReady:
+                      Boolean(
+                        tripUpdateCache
+                      ),
+                    surfaceReady:
+                      Boolean(
+                        surfaceCache
+                      ),
+                  }
+                )
+                return
+              }
+
               const stopId =
                 url.searchParams.get(
                   'stopId'

@@ -1,3 +1,4 @@
+// TTC STOP POLISH V11 - early arrival prewarm + readable 3-digit route labels
 // TTC MOTION V8 · fast city view + sample-clock smoothing + strict selected-route accuracy
 // LIVE TTC ROUTE ENGINE V17 · timestamp-age compensation + priority route indexing
 // Vehicles advance by distance along their TTC route shape; realtime GPS only corrects the route progress.
@@ -183,6 +184,35 @@ function startInitialVehiclePreload() {
             null
         }
       )
+}
+
+
+
+function prewarmStopArrivals() {
+  if (
+    typeof window ===
+      'undefined'
+  ) {
+    return
+  }
+
+  fetch(
+    `${ARRIVALS_ENDPOINT}?warm=1`,
+    {
+      cache:
+        'no-store',
+    }
+  )
+    .catch(
+      (
+        error
+      ) => {
+        console.warn(
+          'LIVE TTC ARRIVAL PREWARM:',
+          error
+        )
+      }
+    )
 }
 
 
@@ -4368,21 +4398,59 @@ function LiveTtcLayer({
                 'routeShortName',
               ],
               'text-size': [
-                'interpolate',
+                'case',
                 [
-                  'linear',
+                  '>=',
+                  [
+                    'length',
+                    [
+                      'to-string',
+                      [
+                        'coalesce',
+                        [
+                          'get',
+                          'routeShortName',
+                        ],
+                        '',
+                      ],
+                    ],
+                  ],
+                  3,
                 ],
                 [
-                  'zoom',
+                  'interpolate',
+                  [
+                    'linear',
+                  ],
+                  [
+                    'zoom',
+                  ],
+                  13.5,
+                  9.5,
+                  15,
+                  10.5,
+                  17,
+                  11.5,
+                  18,
+                  12.5,
                 ],
-                13.5,
-                8,
-                15,
-                9,
-                17,
-                10,
-                18,
-                11,
+                [
+                  'interpolate',
+                  [
+                    'linear',
+                  ],
+                  [
+                    'zoom',
+                  ],
+                  13.5,
+                  8,
+                  15,
+                  9,
+                  17,
+                  10,
+                  18,
+                  11,
+                ],
               ],
               'text-anchor':
                 'bottom',
@@ -7402,6 +7470,7 @@ function LiveTtcLayer({
       // Live vehicles are the first-paint priority. Reuse any recent frame
       // immediately, start animation, fetch fresh positions, then warm the
       // heavier route network/index in the background.
+      prewarmStopArrivals()
       renderAnimatedVehicles()
       startAnimationLoop()
 
