@@ -2931,6 +2931,10 @@ function LiveTtcLayer({
         null
       let firstVehicleRefresh =
         true
+      let vehicleRefreshInFlight =
+        false
+      let didPrioritizeRouteIndexForVehicles =
+        false
 
       function removePopup() {
         popupRef.current
@@ -5678,18 +5682,29 @@ function LiveTtcLayer({
 
       async function refreshVehicles() {
         if (
-          disposed
+          disposed ||
+          vehicleRefreshInFlight
         ) {
           return
         }
 
-        vehicleAbortRef.current
-          ?.abort?.()
+        vehicleRefreshInFlight =
+          true
 
         const controller =
           new AbortController()
         vehicleAbortRef.current =
           controller
+
+        // Do not abort a healthy request every time the 2-second poll ticks.
+        // If Railway/TTC takes >2 s, overlapping ticks simply skip.
+        const requestTimeout =
+          window.setTimeout(
+            () => {
+              controller.abort()
+            },
+            12000
+          )
 
         try {
           const bounds =
@@ -6461,6 +6476,23 @@ function LiveTtcLayer({
           vehicleAnimationsRef.current =
             nextAnimations
 
+          if (
+            !didPrioritizeRouteIndexForVehicles &&
+            routeFeaturesRef.current.length >
+              0 &&
+            nextAnimations.size >
+              0
+          ) {
+            didPrioritizeRouteIndexForVehicles =
+              true
+
+            // If route geometry arrived before vehicles, rebuild once with
+            // actually visible routes at the front of the index queue.
+            scheduleRouteIndexBuild(
+              routeFeaturesRef.current
+            )
+          }
+
           renderAnimatedVehicles()
         }
         catch (
@@ -6477,6 +6509,22 @@ function LiveTtcLayer({
             'LIVE TTC VEHICLES:',
             error
           )
+        }
+        finally {
+          window.clearTimeout(
+            requestTimeout
+          )
+
+          if (
+            vehicleAbortRef.current ===
+              controller
+          ) {
+            vehicleAbortRef.current =
+              null
+          }
+
+          vehicleRefreshInFlight =
+            false
         }
       }
 
@@ -7002,17 +7050,11 @@ function LiveTtcLayer({
       // heavier route network/index in the background.
       renderAnimatedVehicles()
       startAnimationLoop()
-      refreshVehicles()
 
-      window.requestAnimationFrame(
-        () => {
-          if (
-            !disposed
-          ) {
-            refreshNetwork()
-          }
-        }
-      )
+      // Start realtime vehicles and route geometry together so the first
+      // vehicle frame can lock to route geometry as soon as either arrives.
+      refreshVehicles()
+      refreshNetwork()
 
       vehicleTimer =
         window.setInterval(
