@@ -74,6 +74,9 @@ const VEHICLES_ENDPOINT =
 const ARRIVALS_ENDPOINT =
   '/api/geographic/toronto/ttc/live/arrivals'
 
+const STOP_ARRIVAL_REFRESH_MS =
+  2500
+
 const VEHICLE_PRELOAD_MAX_AGE_MS =
   20 * 1000
 const BUS_ACCURACY_ZOOM_THRESHOLD =
@@ -683,13 +686,59 @@ function createStopPopupLoading(
 }
 
 
+function liveArrivalMinutes(
+  arrival
+) {
+  const arrivalTime =
+    Number(
+      arrival?.arrivalTime
+    )
+
+  if (
+    Number.isFinite(
+      arrivalTime
+    ) &&
+    arrivalTime >
+      0
+  ) {
+    return Math.max(
+      0,
+      Math.floor(
+        (
+          arrivalTime *
+            1000 -
+          Date.now()
+        ) /
+        60000
+      )
+    )
+  }
+
+  const minutes =
+    Number(
+      arrival?.minutes
+    )
+
+  return Number.isFinite(
+    minutes
+  )
+    ? Math.max(
+        0,
+        Math.floor(
+          minutes
+        )
+      )
+    : 0
+}
+
+
 function fillStopArrivals({
   shell,
   payload,
 }) {
   shell
     .querySelectorAll(
-      '.ttc-live-stop-loading, .ttc-live-stop-arrivals'
+      '.ttc-live-stop-loading, .ttc-live-stop-arrivals, .ttc-live-stop-empty, .ttc-live-stop-error'
     )
     .forEach(
       (
@@ -712,6 +761,8 @@ function fillStopArrivals({
     addTextLine({
       parent:
         shell,
+      className:
+        'ttc-live-stop-empty',
       text:
         'No approaching surface vehicles are currently reported.',
       style: {
@@ -805,14 +856,19 @@ function fillStopArrivals({
           },
         })
 
+        const minutes =
+          liveArrivalMinutes(
+            arrival
+          )
+
         addTextLine({
           parent:
             row,
           text:
-            arrival.minutes <=
+            minutes <=
               0
               ? 'DUE'
-              : `${arrival.minutes} min`,
+              : `${minutes} min`,
           style: {
             fontSize:
               '11px',
@@ -2907,6 +2963,10 @@ function LiveTtcLayer({
         null
       let networkTimer =
         null
+      let stopArrivalRefreshTimer =
+        null
+      let stopArrivalAbortController =
+        null
       let controlsRoot =
         null
       let routeSelect =
@@ -2936,7 +2996,23 @@ function LiveTtcLayer({
       let didPrioritizeRouteIndexForVehicles =
         false
 
+      function stopArrivalRefresh() {
+        window.clearTimeout(
+          stopArrivalRefreshTimer
+        )
+        stopArrivalRefreshTimer =
+          null
+
+        stopArrivalAbortController
+          ?.abort?.()
+        stopArrivalAbortController =
+          null
+      }
+
+
       function removePopup() {
+        stopArrivalRefresh()
+
         popupRef.current
           ?.remove?.()
         popupRef.current =
@@ -6650,68 +6726,158 @@ function LiveTtcLayer({
         popupRef.current =
           popup
 
-        try {
-          const response =
-            await fetch(
-              `${ARRIVALS_ENDPOINT}?stopId=${encodeURIComponent(stopId)}&stopCode=${encodeURIComponent(stopCode)}`,
-              {
-                cache:
-                  'no-store',
-              }
-            )
-
-          if (
-            !response.ok
-          ) {
-            throw new Error(
-              `TTC arrivals request failed: ${response.status}`
-            )
+        popup.on(
+          'close',
+          () => {
+            if (
+              popupRef.current ===
+                popup
+            ) {
+              stopArrivalRefresh()
+              popupRef.current =
+                null
+            }
           }
+        )
 
-          const payload =
-            await response.json()
+        let hasLoadedArrivals =
+          false
 
+        async function refreshStopArrivals() {
           if (
-            popupRef.current ===
+            disposed ||
+            popupRef.current !==
               popup
           ) {
+            return
+          }
+
+          const controller =
+            new AbortController()
+          stopArrivalAbortController =
+            controller
+
+          try {
+            const response =
+              await fetch(
+                `${ARRIVALS_ENDPOINT}?stopId=${encodeURIComponent(stopId)}&stopCode=${encodeURIComponent(stopCode)}`,
+                {
+                  cache:
+                    'no-store',
+                  signal:
+                    controller.signal,
+                }
+              )
+
+            if (
+              !response.ok
+            ) {
+              throw new Error(
+                `TTC arrivals request failed: ${response.status}`
+              )
+            }
+
+            const payload =
+              await response.json()
+
+            if (
+              popupRef.current !==
+                popup
+            ) {
+              return
+            }
+
             fillStopArrivals({
               shell,
               payload,
             })
-            snapPopupToScreen(
-              event.lngLat
-            )
-          }
-        }
-        catch (
-          error
-        ) {
-          console.warn(
-            'LIVE TTC ARRIVALS:',
-            error
-          )
 
-          if (
-            popupRef.current ===
-              popup
+            if (
+              !hasLoadedArrivals
+            ) {
+              hasLoadedArrivals =
+                true
+              snapPopupToScreen(
+                event.lngLat
+              )
+            }
+          }
+          catch (
+            error
           ) {
-            addTextLine({
-              parent:
-                shell,
-              text:
-                'Live arrivals are temporarily unavailable.',
-              style: {
-                fontSize:
-                  '10px',
-                marginTop:
-                  '7px',
-                opacity:
-                  '0.65',
-              },
-            })
+            if (
+              error?.name ===
+                'AbortError'
+            ) {
+              return
+            }
+
+            console.warn(
+              'LIVE TTC ARRIVALS:',
+              error
+            )
+
+            if (
+              !hasLoadedArrivals &&
+              popupRef.current ===
+                popup
+            ) {
+              shell
+                .querySelectorAll(
+                  '.ttc-live-stop-loading, .ttc-live-stop-error'
+                )
+                .forEach(
+                  (
+                    child
+                  ) =>
+                    child.remove()
+                )
+
+              addTextLine({
+                parent:
+                  shell,
+                className:
+                  'ttc-live-stop-error',
+                text:
+                  'Live arrivals are temporarily unavailable.',
+                style: {
+                  fontSize:
+                    '10px',
+                  marginTop:
+                    '7px',
+                  opacity:
+                    '0.65',
+                },
+              })
+            }
+          }
+          finally {
+            if (
+              stopArrivalAbortController ===
+                controller
+            ) {
+              stopArrivalAbortController =
+                null
+            }
+
+            if (
+              !disposed &&
+              popupRef.current ===
+                popup
+            ) {
+              window.clearTimeout(
+                stopArrivalRefreshTimer
+              )
+              stopArrivalRefreshTimer =
+                window.setTimeout(
+                  refreshStopArrivals,
+                  STOP_ARRIVAL_REFRESH_MS
+                )
+            }
           }
         }
+
+        refreshStopArrivals()
       }
 
       async function handleStationClick(

@@ -45,6 +45,15 @@ const STATIC_CACHE_MS =
 const REALTIME_CACHE_MS =
   1400
 
+const UMO_PREDICTION_CACHE_MS =
+  10 * 1000
+
+const ARRIVAL_PASSAGE_MAX_VEHICLE_AGE_SECONDS =
+  90
+
+const ARRIVAL_PASSAGE_SEQUENCE_CACHE_MS =
+  30 * 60 * 1000
+
 const TORONTO_ATTRIBUTION =
   'Contains information licensed under the Open Government Licence - Toronto'
 
@@ -64,6 +73,12 @@ let vehicleCache = null
 let vehiclePromise = null
 let tripUpdateCache = null
 let tripUpdatePromise = null
+
+const umoPredictionCache =
+  new Map()
+
+const arrivalPassageSequenceCache =
+  new Map()
 
 
 // ============================================================
@@ -3237,6 +3252,20 @@ async function getUmoArrivalsForStopCode(
     return []
   }
 
+  const cachedPrediction =
+    umoPredictionCache.get(
+      normalizedStopCode
+    )
+
+  if (
+    cachedPrediction &&
+    Date.now() -
+      cachedPrediction.cachedAt <
+      UMO_PREDICTION_CACHE_MS
+  ) {
+    return cachedPrediction.arrivals
+  }
+
   const url =
     new URL(
       TTC_PREDICTIONS_URL
@@ -3441,9 +3470,161 @@ async function getUmoArrivalsForStopCode(
       }
     )
 
-  return dedupeArrivalsByVehicleOrTrip(
-    arrivals
+  const deduped =
+    dedupeArrivalsByVehicleOrTrip(
+      arrivals
+    )
+
+  umoPredictionCache.set(
+    normalizedStopCode,
+    {
+      cachedAt:
+        Date.now(),
+      arrivals:
+        deduped,
+    }
   )
+
+  return deduped
+}
+
+
+async function removeArrivalsForVehiclesPastStop(
+  arrivals,
+  stopId,
+  { tripFeed = null } = {}
+) {
+  const normalizedStopId = cleanText(stopId)
+  const candidateArrivals = Array.isArray(arrivals) ? arrivals : []
+
+  if (
+    !normalizedStopId ||
+    !candidateArrivals.some((arrival) => cleanText(arrival?.vehicleId))
+  ) {
+    return candidateArrivals
+  }
+
+  try {
+    const [vehicleFeed, resolvedTripFeed] = await Promise.all([
+      getRawVehicleFeed({ preferFresh: false }),
+      tripFeed ? Promise.resolve(tripFeed) : getRawTripUpdateFeed(),
+    ])
+    const nowSeconds = Math.floor(Date.now() / 1000)
+    const vehiclesById = new Map()
+
+    for (const entity of Array.isArray(vehicleFeed?.entity) ? vehicleFeed.entity : []) {
+      const vehicle = entity?.vehicle
+      const descriptor = vehicle?.vehicle || {}
+      const vehicleId = cleanText(descriptor.id) || cleanText(descriptor.label)
+      if (!vehicle || !vehicleId) continue
+
+      const timestamp =
+        numberOrNull(vehicle?.timestamp) ??
+        numberOrNull(vehicleFeed?.header?.timestamp) ??
+        nowSeconds
+
+      vehiclesById.set(vehicleId, {
+        tripId: cleanText(vehicle?.trip?.tripId),
+        currentStopSequence: numberOrNull(vehicle?.currentStopSequence),
+        ageSeconds: Math.max(0, nowSeconds - timestamp),
+      })
+    }
+
+    const tripUpdatesByVehicleId = new Map()
+    const tripUpdatesByTripId = new Map()
+
+    for (const entity of Array.isArray(resolvedTripFeed?.entity) ? resolvedTripFeed.entity : []) {
+      const tripUpdate = entity?.tripUpdate
+      if (!tripUpdate) continue
+
+      const vehicleId =
+        cleanText(tripUpdate?.vehicle?.id) ||
+        cleanText(tripUpdate?.vehicle?.label)
+      const tripId = cleanText(tripUpdate?.trip?.tripId)
+
+      if (vehicleId) tripUpdatesByVehicleId.set(vehicleId, tripUpdate)
+      if (tripId) tripUpdatesByTripId.set(tripId, tripUpdate)
+    }
+
+    return candidateArrivals.filter((arrival) => {
+      const vehicleId = cleanText(arrival?.vehicleId)
+      const vehicle = vehiclesById.get(vehicleId)
+
+      // Never infer passage from an old/missing vehicle sample.
+      if (
+        !vehicle ||
+        vehicle.ageSeconds > ARRIVAL_PASSAGE_MAX_VEHICLE_AGE_SECONDS ||
+        vehicle.currentStopSequence === null
+      ) {
+        return true
+      }
+
+      const tripUpdate =
+        tripUpdatesByVehicleId.get(vehicleId) ||
+        tripUpdatesByTripId.get(vehicle.tripId)
+      const tripUpdateTripId = cleanText(tripUpdate?.trip?.tripId)
+
+      if (
+        !tripUpdate ||
+        (tripUpdateTripId && vehicle.tripId && tripUpdateTripId !== vehicle.tripId)
+      ) {
+        return true
+      }
+
+      const passageCacheKey = [vehicleId, vehicle.tripId, normalizedStopId].join('|')
+      const matchingStopSequences = (
+        Array.isArray(tripUpdate?.stopTimeUpdate) ? tripUpdate.stopTimeUpdate : []
+      )
+        .filter((update) => cleanText(update?.stopId) === normalizedStopId)
+        .map((update) => numberOrNull(update?.stopSequence))
+        .filter((sequence) => sequence !== null)
+
+      let targetStopSequence = numberOrNull(arrival?.stopSequence)
+
+      if (targetStopSequence === null && matchingStopSequences.length === 1) {
+        targetStopSequence = matchingStopSequences[0]
+      }
+
+      if (targetStopSequence !== null) {
+        arrivalPassageSequenceCache.set(passageCacheKey, {
+          cachedAt: Date.now(),
+          stopSequence: targetStopSequence,
+        })
+      }
+      else if (matchingStopSequences.length > 1) {
+        // Loop routes can visit the same stop_id more than once. If the
+        // occurrence is ambiguous, only retire it when ALL occurrences are
+        // behind the vehicle. Otherwise leave the upstream prediction alone.
+        return !matchingStopSequences.every(
+          (sequence) => vehicle.currentStopSequence > sequence
+        )
+      }
+      else {
+        // A producer may drop a stop update after passage. Reuse a sequence we
+        // proved for this exact vehicle + trip + stop during an earlier poll.
+        const cachedSequence = arrivalPassageSequenceCache.get(passageCacheKey)
+        if (
+          cachedSequence &&
+          Date.now() - cachedSequence.cachedAt < ARRIVAL_PASSAGE_SEQUENCE_CACHE_MS
+        ) {
+          targetStopSequence = cachedSequence.stopSequence
+        }
+        else {
+          arrivalPassageSequenceCache.delete(passageCacheKey)
+          return true
+        }
+      }
+
+      return !(vehicle.currentStopSequence > targetStopSequence)
+    })
+  }
+  catch (error) {
+    console.warn(
+      'LIVE TTC ARRIVAL PASSAGE GUARD:',
+      error?.message || error
+    )
+    return candidateArrivals
+  }
 }
 
 
@@ -3713,7 +3894,17 @@ async function getGtfsArrivalsPayload(
       }
     )
 
-  arrivals.sort(
+  const reconciledArrivals =
+    await removeArrivalsForVehiclesPastStop(
+      arrivals,
+      normalizedStopId,
+      {
+        tripFeed:
+          feed,
+      }
+    )
+
+  reconciledArrivals.sort(
     (
       a,
       b
@@ -3766,13 +3957,13 @@ async function getGtfsArrivalsPayload(
     count:
       Math.min(
         dedupeArrivalsByVehicleOrTrip(
-          arrivals
+          reconciledArrivals
         ).length,
         16
       ),
     arrivals:
       dedupeArrivalsByVehicleOrTrip(
-        arrivals
+        reconciledArrivals
       ).slice(
         0,
         16
@@ -3811,6 +4002,11 @@ async function getArrivalsPayload({
         await getUmoArrivalsForStopCode(
           normalizedStopCode,
           surface
+        )
+      const reconciledArrivals =
+        await removeArrivalsForVehiclesPastStop(
+          arrivals,
+          normalizedStopId
         )
 
       return {
@@ -3852,11 +4048,11 @@ async function getArrivalsPayload({
             },
         count:
           Math.min(
-            arrivals.length,
+            reconciledArrivals.length,
             18
           ),
         arrivals:
-          arrivals.slice(
+          reconciledArrivals.slice(
             0,
             18
           ),
