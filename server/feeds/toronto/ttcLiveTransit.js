@@ -63,9 +63,6 @@ const UMO_PREDICTION_CACHE_MS =
 const ARRIVAL_PASSAGE_MAX_VEHICLE_AGE_SECONDS =
   90
 
-const ARRIVAL_PASSAGE_SEQUENCE_CACHE_MS =
-  30 * 60 * 1000
-
 const TORONTO_ATTRIBUTION =
   'Contains information licensed under the Open Government Licence - Toronto'
 
@@ -88,9 +85,6 @@ let tripUpdatePromise = null
 let tripUpdateStopIndex = null
 
 const umoPredictionCache =
-  new Map()
-
-const arrivalPassageSequenceCache =
   new Map()
 
 
@@ -2366,28 +2360,35 @@ async function fetchRealtimeFeed(
 }
 
 
+// TripUpdate provenance is carried with the decoded data, so a response never
+// attributes predictions from the legacy fallback URL to BusTime by mistake.
 async function fetchRealtimeFeedWithFallback(
   primaryUrl,
   fallbackUrl
 ) {
   try {
-    return await fetchRealtimeFeed(
-      primaryUrl
-    )
-  }
-  catch (
-    primaryError
-  ) {
-    try {
-      return await fetchRealtimeFeed(
-        fallbackUrl
-      )
+    return {
+      feed: await fetchRealtimeFeed(primaryUrl),
+      upstream: primaryUrl,
+      usedLegacyFallback: false,
     }
-    catch (
-      fallbackError
-    ) {
+  }
+  catch (primaryError) {
+    try {
+      const feed = await fetchRealtimeFeed(fallbackUrl)
+      console.warn(
+        'LIVE TTC TRIPS: primary unavailable; using legacy fallback:',
+        primaryError?.message || primaryError
+      )
+      return {
+        feed,
+        upstream: fallbackUrl,
+        usedLegacyFallback: true,
+      }
+    }
+    catch (fallbackError) {
       throw new Error(
-        `TTC realtime feeds unavailable Â· primary: ${primaryError?.message || primaryError} Â· fallback: ${fallbackError?.message || fallbackError}`
+        `TTC realtime feeds unavailable: primary: ${primaryError?.message || primaryError}; fallback: ${fallbackError?.message || fallbackError}`
       )
     }
   }
@@ -2828,12 +2829,15 @@ function refreshTripUpdateFeedInBackground() {
     )
       .then(
         (
-          feed
+          result
         ) => {
+          const feed = result.feed
           tripUpdateCache = {
             cachedAt:
               Date.now(),
             feed,
+            upstream: result.upstream,
+            usedLegacyFallback: result.usedLegacyFallback,
           }
           tripUpdateStopIndex =
             buildTripUpdateStopIndex(
@@ -3682,141 +3686,75 @@ async function getUmoArrivalsForStopCode(
 }
 
 
+// Retire a TripUpdate arrival only on positive evidence from a fresh
+// VehiclePosition for the SAME vehicle + SAME GTFS trip. Never join by vehicle
+// ID alone: the TripUpdate feed can contain multiple trips for a vehicle.
 async function removeArrivalsForVehiclesPastStop(
   arrivals,
-  stopId,
-  { tripFeed = null } = {}
+  stopId
 ) {
-  const normalizedStopId = cleanText(stopId)
-  const candidateArrivals = Array.isArray(arrivals) ? arrivals : []
-
+  const candidates = Array.isArray(arrivals) ? arrivals : []
   if (
-    !normalizedStopId ||
-    !candidateArrivals.some((arrival) => cleanText(arrival?.vehicleId))
+    !cleanText(stopId) ||
+    !candidates.some((arrival) =>
+      cleanText(arrival?.vehicleId) &&
+      cleanText(arrival?.tripId) &&
+      numberOrNull(arrival?.stopSequence) !== null
+    )
   ) {
-    return candidateArrivals
+    return candidates
   }
 
   try {
-    const [vehicleFeed, resolvedTripFeed] = await Promise.all([
-      getRawVehicleFeed({ preferFresh: false }),
-      tripFeed ? Promise.resolve(tripFeed) : getRawTripUpdateFeed(),
-    ])
+    const vehicleFeed = await getRawVehicleFeed({ preferFresh: false })
     const nowSeconds = Math.floor(Date.now() / 1000)
-    const vehiclesById = new Map()
+    const vehiclesByExactTrip = new Map()
 
     for (const entity of Array.isArray(vehicleFeed?.entity) ? vehicleFeed.entity : []) {
       const vehicle = entity?.vehicle
-      const descriptor = vehicle?.vehicle || {}
-      const vehicleId = cleanText(descriptor.id) || cleanText(descriptor.label)
-      if (!vehicle || !vehicleId) continue
+      const vehicleId = cleanText(vehicle?.vehicle?.id) || cleanText(vehicle?.vehicle?.label)
+      const tripId = cleanText(vehicle?.trip?.tripId)
+      const timestamp = numberOrNull(vehicle?.timestamp) ??
+        numberOrNull(vehicleFeed?.header?.timestamp)
+      const sequence = numberOrNull(vehicle?.currentStopSequence)
 
-      const timestamp =
-        numberOrNull(vehicle?.timestamp) ??
-        numberOrNull(vehicleFeed?.header?.timestamp) ??
-        nowSeconds
+      // Unknown/old GPS and unassigned trips must never erase an arrival.
+      if (!vehicleId || !tripId || timestamp === null || sequence === null) continue
+      const ageSeconds = Math.max(0, nowSeconds - timestamp)
+      if (ageSeconds > ARRIVAL_PASSAGE_MAX_VEHICLE_AGE_SECONDS) continue
 
-      vehiclesById.set(vehicleId, {
-        tripId: cleanText(vehicle?.trip?.tripId),
-        currentStopSequence: numberOrNull(vehicle?.currentStopSequence),
-        ageSeconds: Math.max(0, nowSeconds - timestamp),
-      })
-    }
-
-    const tripUpdatesByVehicleId = new Map()
-    const tripUpdatesByTripId = new Map()
-
-    for (const entity of Array.isArray(resolvedTripFeed?.entity) ? resolvedTripFeed.entity : []) {
-      const tripUpdate = entity?.tripUpdate
-      if (!tripUpdate) continue
-
-      const vehicleId =
-        cleanText(tripUpdate?.vehicle?.id) ||
-        cleanText(tripUpdate?.vehicle?.label)
-      const tripId = cleanText(tripUpdate?.trip?.tripId)
-
-      if (vehicleId) tripUpdatesByVehicleId.set(vehicleId, tripUpdate)
-      if (tripId) tripUpdatesByTripId.set(tripId, tripUpdate)
-    }
-
-    return candidateArrivals.filter((arrival) => {
-      const vehicleId = cleanText(arrival?.vehicleId)
-      const vehicle = vehiclesById.get(vehicleId)
-
-      // Never infer passage from an old/missing vehicle sample.
-      if (
-        !vehicle ||
-        vehicle.ageSeconds > ARRIVAL_PASSAGE_MAX_VEHICLE_AGE_SECONDS ||
-        vehicle.currentStopSequence === null
-      ) {
-        return true
-      }
-
-      const tripUpdate =
-        tripUpdatesByVehicleId.get(vehicleId) ||
-        tripUpdatesByTripId.get(vehicle.tripId)
-      const tripUpdateTripId = cleanText(tripUpdate?.trip?.tripId)
-
-      if (
-        !tripUpdate ||
-        (tripUpdateTripId && vehicle.tripId && tripUpdateTripId !== vehicle.tripId)
-      ) {
-        return true
-      }
-
-      const passageCacheKey = [vehicleId, vehicle.tripId, normalizedStopId].join('|')
-      const matchingStopSequences = (
-        Array.isArray(tripUpdate?.stopTimeUpdate) ? tripUpdate.stopTimeUpdate : []
-      )
-        .filter((update) => cleanText(update?.stopId) === normalizedStopId)
-        .map((update) => numberOrNull(update?.stopSequence))
-        .filter((sequence) => sequence !== null)
-
-      let targetStopSequence = numberOrNull(arrival?.stopSequence)
-
-      if (targetStopSequence === null && matchingStopSequences.length === 1) {
-        targetStopSequence = matchingStopSequences[0]
-      }
-
-      if (targetStopSequence !== null) {
-        arrivalPassageSequenceCache.set(passageCacheKey, {
-          cachedAt: Date.now(),
-          stopSequence: targetStopSequence,
+      const key = JSON.stringify([vehicleId, tripId])
+      const previous = vehiclesByExactTrip.get(key)
+      if (!previous || timestamp > previous.timestamp) {
+        vehiclesByExactTrip.set(key, {
+          timestamp,
+          sequence,
+          routeId: cleanText(vehicle?.trip?.routeId),
         })
       }
-      else if (matchingStopSequences.length > 1) {
-        // Loop routes can visit the same stop_id more than once. If the
-        // occurrence is ambiguous, only retire it when ALL occurrences are
-        // behind the vehicle. Otherwise leave the upstream prediction alone.
-        return !matchingStopSequences.every(
-          (sequence) => vehicle.currentStopSequence > sequence
-        )
-      }
-      else {
-        // A producer may drop a stop update after passage. Reuse a sequence we
-        // proved for this exact vehicle + trip + stop during an earlier poll.
-        const cachedSequence = arrivalPassageSequenceCache.get(passageCacheKey)
-        if (
-          cachedSequence &&
-          Date.now() - cachedSequence.cachedAt < ARRIVAL_PASSAGE_SEQUENCE_CACHE_MS
-        ) {
-          targetStopSequence = cachedSequence.stopSequence
-        }
-        else {
-          arrivalPassageSequenceCache.delete(passageCacheKey)
-          return true
-        }
+    }
+
+    return candidates.filter((arrival) => {
+      const vehicleId = cleanText(arrival?.vehicleId)
+      const tripId = cleanText(arrival?.tripId)
+      const targetSequence = numberOrNull(arrival?.stopSequence)
+      if (!vehicleId || !tripId || targetSequence === null) return true
+
+      const matched = vehiclesByExactTrip.get(JSON.stringify([vehicleId, tripId]))
+      if (!matched) return true
+
+      // A realtime route conflict makes passage ambiguous; preserve the ETA.
+      const arrivalRouteId = cleanText(arrival?.routeId)
+      if (arrivalRouteId && matched.routeId && arrivalRouteId !== matched.routeId) {
+        return true
       }
 
-      return !(vehicle.currentStopSequence > targetStopSequence)
+      return matched.sequence <= targetSequence
     })
   }
   catch (error) {
-    console.warn(
-      'LIVE TTC ARRIVAL PASSAGE GUARD:',
-      error?.message || error
-    )
-    return candidateArrivals
+    console.warn('LIVE TTC ARRIVAL PASSAGE GUARD:', error?.message || error)
+    return candidates
   }
 }
 
@@ -3971,6 +3909,32 @@ async function getGtfsArrivalsPayload(
             : []
         )
 
+  const primaryDiagnostics = {
+    tripFeedUpstream:
+      tripUpdateCache?.feed === feed ? (tripUpdateCache.upstream || null) : null,
+    usedLegacyTripFeed:
+      tripUpdateCache?.feed === feed ? Boolean(tripUpdateCache.usedLegacyFallback) : null,
+    tripFeedAgeSeconds:
+      numberOrNull(feed?.header?.timestamp) === null
+        ? null
+        : Math.max(0, nowSeconds - numberOrNull(feed.header.timestamp)),
+    rawExactStopUpdates: 0,
+    parsedFutureArrivals: 0,
+    removedByPassage: 0,
+    keptAfterPassage: 0,
+  }
+
+  // Count matching raw updates BEFORE route, time and vehicle filters.
+  // This distinguishes "TTC sent no arrivals" from "we discarded arrivals".
+  for (const entity of candidateEntities) {
+    for (const update of Array.isArray(entity?.tripUpdate?.stopTimeUpdate)
+      ? entity.tripUpdate.stopTimeUpdate : []) {
+      if (cleanText(update?.stopId) === normalizedStopId) {
+        primaryDiagnostics.rawExactStopUpdates += 1
+      }
+    }
+  }
+
   candidateEntities
     .forEach(
       (
@@ -4115,15 +4079,17 @@ async function getGtfsArrivalsPayload(
       }
     )
 
+  primaryDiagnostics.parsedFutureArrivals = arrivals.length
+
   const reconciledArrivals =
     await removeArrivalsForVehiclesPastStop(
       arrivals,
-      normalizedStopId,
-      {
-        tripFeed:
-          feed,
-      }
+      normalizedStopId
     )
+
+  primaryDiagnostics.keptAfterPassage = reconciledArrivals.length
+  primaryDiagnostics.removedByPassage =
+    arrivals.length - reconciledArrivals.length
 
   reconciledArrivals.sort(
     (
@@ -4140,7 +4106,8 @@ async function getGtfsArrivalsPayload(
     source:
       'Toronto Transit Commission GTFS-Realtime Trip Updates',
     upstream:
-      TTC_TRIPS_URL,
+      primaryDiagnostics.tripFeedUpstream || TTC_TRIPS_URL,
+    primaryDiagnostics,
     attribution:
       TORONTO_ATTRIBUTION,
     updatedAt:
@@ -4349,6 +4316,10 @@ async function getArrivalsPayload({
           TTC_PREDICTIONS_URL,
         predictionAuthority:
           'UMO_FALLBACK',
+        primaryDiagnostics: gtfsPayload?.primaryDiagnostics || {
+          status: gtfsError ? 'GTFS_FETCH_ERROR' : 'GTFS_NO_RESULT',
+          error: gtfsError ? String(gtfsError.message || gtfsError).slice(0, 220) : null,
+        },
         attribution:
           TORONTO_ATTRIBUTION,
         updatedAt:
