@@ -1,3 +1,4 @@
+// TTC STOP PASSAGE V16 - confirm UMO vehicle progress without equating trip IDs
 // TTC STOP TRUTH V15 - distinguish predicted, GPS-confirmed and unverified arrivals
 // TTC STOP ARRIVALS V14 - no network waits in passage reconciliation; conservative GPS
 // TTC STOP INSTANT V12 - realtime arrivals never wait for static SurfaceGTFS
@@ -97,6 +98,17 @@ const stopArrivalHistory = new Map()
 const STOP_UNVERIFIED_GRACE_MS = 75 * 1000
 const STOP_HISTORY_LIMIT = 120
 const STOP_GPS_MAX_AGE_SECONDS = 25
+// Only same-route/same-vehicle BusTime trip progression can retire a UMO ETA.
+// Delayed observations may be used to prove a PAST stop, never to claim
+// a vehicle is currently at a stop.
+const UMO_PASSAGE_MAX_GPS_AGE_SECONDS = 100
+const UMO_TRIP_STOP_MEMORY_MS = 12 * 60 * 1000
+const UMO_PASSED_SUPPRESSION_MS = 4 * 60 * 1000
+const STOP_EXPIRED_ETA_GRACE_SECONDS = 20
+const UMO_STOP_TARGET_LIMIT = 3500
+const UMO_PASSED_LIMIT = 1500
+const umoTripStopTargets = new Map()
+const umoConfirmedPassages = new Map()
 
 
 // ============================================================
@@ -4479,6 +4491,94 @@ function arrivalTruthVehicleIndex(nowSeconds) {
   return index
 }
 
+// Capture proof that a particular BusTime trip SERVES this precise GTFS stop.
+// Keep the last known sequence briefly because TTC can omit a served stop
+// from the very next TripUpdate; this is not a static stop proximity guess.
+function rememberUmoTripStopTargets(stopId, nowMs) {
+  const normalizedStop = cleanText(stopId)
+  for (const [key, record] of umoTripStopTargets) {
+    if (nowMs - record.observedAt > UMO_TRIP_STOP_MEMORY_MS) {
+      umoTripStopTargets.delete(key)
+    }
+  }
+  if (!normalizedStop || !tripUpdateCache || tripUpdateCache.usedLegacyFallback ||
+      nowMs - tripUpdateCache.cachedAt > 90 * 1000) return
+  const feedTimestamp = numberOrNull(tripUpdateCache.feed?.header?.timestamp)
+  if (feedTimestamp === null ||
+      Math.abs(Math.floor(nowMs / 1000) - feedTimestamp) > 120) return
+  const entities = tripUpdateStopIndex?.get(normalizedStop) || []
+  for (const entity of entities) {
+    const update = entity?.tripUpdate
+    const vehicleId = cleanText(update?.vehicle?.id)
+    const tripId = cleanText(update?.trip?.tripId)
+    const routeId = cleanText(update?.trip?.routeId)
+    if (!vehicleId || !tripId || !routeId) continue
+    const stopSequences = (Array.isArray(update?.stopTimeUpdate) ? update.stopTimeUpdate : [])
+      .filter((item) => cleanText(item?.stopId) === normalizedStop)
+      .map((item) => numberOrNull(item?.stopSequence))
+      .filter((sequence) => sequence !== null)
+    const key = JSON.stringify([normalizedStop, vehicleId, tripId])
+    // A stop can occur twice on a loop. Never guess which occurrence UMO means.
+    if (stopSequences.length !== 1) {
+      umoTripStopTargets.delete(key)
+      continue
+    }
+    const matchingTimeUpdate = update.stopTimeUpdate.find((item) =>
+      cleanText(item?.stopId) === normalizedStop &&
+      numberOrNull(item?.stopSequence) === stopSequences[0])
+    const predictedVisitTime = realtimeStopTime(matchingTimeUpdate)
+    // Route and vehicle alone cannot identify the same scheduled VISIT:
+    // UMO may show this vehicle's next trip on the same line.
+    if (predictedVisitTime === null) continue
+    umoTripStopTargets.delete(key)
+    umoTripStopTargets.set(key, {
+      routeId, sequence: stopSequences[0],
+      predictedVisitTime, observedAt: nowMs,
+    })
+  }
+  while (umoTripStopTargets.size > UMO_STOP_TARGET_LIMIT) {
+    umoTripStopTargets.delete(umoTripStopTargets.keys().next().value)
+  }
+}
+
+function proveUmoVehiclePassedStop(arrival, stopId, vehicleIndex, nowSeconds) {
+  const vehicleId = cleanText(arrival?.vehicleId)
+  const routeId = cleanText(arrival?.routeId)
+  const normalizedStop = cleanText(stopId)
+  if (!vehicleId || !routeId || !normalizedStop) return false
+  // UMO tripTag is NOT a GTFS trip_id. The ONLY cross-feed link is a
+  // matching physical vehicle ID, route, and BusTime trip that lists the stop.
+  for (const [key, vehicle] of vehicleIndex) {
+    let identity
+    try { identity = JSON.parse(key) } catch { continue }
+    if (!Array.isArray(identity) || identity[0] !== vehicleId) continue
+    const tripId = cleanText(identity[1])
+    const target = umoTripStopTargets.get(
+      JSON.stringify([normalizedStop, vehicleId, tripId])
+    )
+    if (!target || target.routeId !== routeId ||
+        (vehicle.routeId && vehicle.routeId !== routeId)) continue
+    const umoEta = numberOrNull(arrival?.arrivalTime)
+    if (umoEta === null ||
+        Math.abs(umoEta - target.predictedVisitTime) > 120) continue
+    const age = nowSeconds - vehicle.timestamp
+    if (!Number.isFinite(age) || age < -15 || age > UMO_PASSAGE_MAX_GPS_AGE_SECONDS) continue
+    if (vehicle.sequence !== null && vehicle.sequence > target.sequence) {
+      return true
+    }
+  }
+  return false
+}
+
+function pruneUmoPassageHistory(nowMs) {
+  for (const [key, expiry] of umoConfirmedPassages) {
+    if (expiry <= nowMs) umoConfirmedPassages.delete(key)
+  }
+  while (umoConfirmedPassages.size > UMO_PASSED_LIMIT) {
+    umoConfirmedPassages.delete(umoConfirmedPassages.keys().next().value)
+  }
+}
+
 function addArrivalEvidence(arrival, authority, stop, nowSeconds, vehicleIndex) {
   const time = numberOrNull(arrival?.arrivalTime)
   const secondsUntil = time === null ? null : time - nowSeconds
@@ -4544,41 +4644,96 @@ function applyArrivalTruth(payload, stopId, stopCode) {
   const authority = cleanText(payload.predictionAuthority || 'GTFS-RT')
   const key = cleanText(stopId) || `code:${cleanText(stopCode)}`
   if (!key) return payload
-  const last = stopArrivalHistory.get(key)
+  const previousState = stopArrivalHistory.get(key)
+  const sameAuthority = previousState?.authority === authority
+  const previousEntries = sameAuthority ? previousState.entries : new Map()
   const fresh = new Map()
+  const records = []
+  const ghost = []
   const vehicleIndex = arrivalTruthVehicleIndex(nowSeconds)
-  const records = payload.arrivals.map((arrival) => {
-    const observed = addArrivalEvidence(arrival, authority, payload.stop, nowSeconds, vehicleIndex)
-    const id = arrivalTruthKey(observed, authority)
-    if (id) fresh.set(id, { arrival: observed, lastSeen: nowMs, missingSince: null })
-    return observed
-  })
   const passed = new Set((payload.confirmedPassedArrivals || [])
     .map((arrival) => arrivalTruthKey(arrival, authority))
     .filter(Boolean))
-  const ghost = []
-  const sameAuthority = last?.authority === authority
+  const fallback = authority === 'UMO_FALLBACK'
+  if (fallback) {
+    rememberUmoTripStopTargets(stopId, nowMs)
+    pruneUmoPassageHistory(nowMs)
+  }
+  let newlyProvenUmoPassages = 0
+  let expiredEstimateCount = 0
+
+  for (const arrival of payload.arrivals) {
+    const observed = addArrivalEvidence(arrival, authority, payload.stop, nowSeconds, vehicleIndex)
+    const id = arrivalTruthKey(observed, authority)
+    const passageKey = id ? JSON.stringify([key, id]) : ''
+    if (fallback && id) {
+      if (proveUmoVehiclePassedStop(arrival, stopId, vehicleIndex, nowSeconds)) {
+        umoConfirmedPassages.delete(passageKey)
+        umoConfirmedPassages.set(passageKey, nowMs + UMO_PASSED_SUPPRESSION_MS)
+        newlyProvenUmoPassages++
+      }
+      if ((umoConfirmedPassages.get(passageKey) || 0) > nowMs) {
+        passed.add(id)
+        continue
+      }
+    }
+
+    const eta = numberOrNull(observed.arrivalTime)
+    const previouslyUnverifiedAt = id ? previousEntries.get(id)?.firstUnverifiedAt : null
+    // An expired prediction is NOT a served stop. Remove its countdown, and
+    // show it briefly under unverified instead of presenting a phantom bus.
+    if (eta !== null && eta < nowSeconds - STOP_EXPIRED_ETA_GRACE_SECONDS &&
+        observed.etaState !== 'at_stop') {
+      expiredEstimateCount++
+      const firstUnverifiedAt = previouslyUnverifiedAt ?? nowMs
+      if (nowMs - firstUnverifiedAt <= STOP_UNVERIFIED_GRACE_MS) {
+        const uncertain = {
+          ...observed,
+          etaState: 'unverified',
+          positionNote: 'ETA expired; vehicle passage unconfirmed',
+          lastPredictedTime: eta,
+          arrivalTime: null,
+          minutes: null,
+        }
+        ghost.push(uncertain)
+        if (id) {
+          fresh.set(id, {arrival: uncertain, lastSeen: nowMs,
+            missingSince: nowMs, firstUnverifiedAt})
+        }
+      }
+      continue
+    }
+    records.push(observed)
+    if (id) fresh.set(id, {arrival: observed, lastSeen: nowMs, missingSince: null})
+  }
+
   if (sameAuthority) {
-    for (const [id, previous] of last.entries) {
+    for (const [id, previous] of previousEntries) {
       if (fresh.has(id) || passed.has(id)) continue
       const missingSince = previous.missingSince ?? nowMs
       const ageSinceSeen = nowMs - previous.lastSeen
       const eta = numberOrNull(previous.arrival?.arrivalTime) ??
         numberOrNull(previous.arrival?.lastPredictedTime)
-      // Only recently imminent predictions are interesting to retain;
-      // older/far future cancellations should not pollute the board.
       const near = eta !== null && eta <= Math.floor(previous.lastSeen / 1000) + 150 &&
         eta >= Math.floor(previous.lastSeen / 1000) - 90
       if (!near || nowMs - missingSince > STOP_UNVERIFIED_GRACE_MS ||
-        ageSinceSeen > 2 * STOP_UNVERIFIED_GRACE_MS) continue
-      const pending = { ...previous.arrival, etaState: 'unverified',
-        positionNote: 'TTC prediction disappeared; passage not confirmed',
-        lastPredictedTime: eta, arrivalTime: null, minutes: null }
+          ageSinceSeen > 2 * STOP_UNVERIFIED_GRACE_MS ||
+          (previous.firstUnverifiedAt && nowMs - previous.firstUnverifiedAt > STOP_UNVERIFIED_GRACE_MS)) continue
+      const pending = {
+        ...previous.arrival,
+        etaState: 'unverified',
+        positionNote: previous.firstUnverifiedAt
+          ? 'ETA expired; vehicle passage unconfirmed'
+          : 'TTC prediction disappeared; passage not confirmed',
+        lastPredictedTime: eta,
+        arrivalTime: null,
+        minutes: null,
+      }
       ghost.push(pending)
       fresh.set(id, { ...previous, arrival: pending, missingSince })
     }
   }
-  // Reinsert recency to keep the map bounded, even on busy stops.
+
   stopArrivalHistory.delete(key)
   stopArrivalHistory.set(key, {
     authority,
@@ -4587,14 +4742,23 @@ function applyArrivalTruth(payload, stopId, stopCode) {
   while (stopArrivalHistory.size > STOP_HISTORY_LIMIT) {
     stopArrivalHistory.delete(stopArrivalHistory.keys().next().value)
   }
+  const uniqueUnverified = Array.from(new Map(ghost.map((arrival) =>
+    [arrivalTruthKey(arrival, authority) || String(arrival.lastPredictedTime), arrival]
+  )).values())
   return {
     ...payload,
     arrivals: records,
-    // Not an arrival; show this as an explicitly uncertain historical row.
-    unverifiedArrivals: ghost.sort((a,b) =>
+    unverifiedArrivals: uniqueUnverified.sort((a,b) =>
       (numberOrNull(b.lastPredictedTime) || 0) - (numberOrNull(a.lastPredictedTime) || 0)).slice(0,2),
     passageConfirmedCount: passed.size,
-    arrivalStateVersion: 15,
+    passageDiagnostics: {
+      umoNewlyConfirmed: newlyProvenUmoPassages,
+      expiredEstimatesRemoved: expiredEstimateCount,
+      knownGtfsTripStopTargets: fallback ? umoTripStopTargets.size : null,
+      vehicleCacheAgeSeconds: vehicleCache
+        ? Math.round((nowMs - vehicleCache.cachedAt) / 1000) : null,
+    },
+    arrivalStateVersion: 16,
   }
 }
 

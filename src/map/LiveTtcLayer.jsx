@@ -4353,6 +4353,8 @@ function LiveTtcLayer({
             layout: {
               'icon-image':
                 STREETCAR_MARKER_IMAGE_ID,
+              // Use the exact bus footprint for streetcars (routes 501/512 etc.).
+              // Never shrink a marker because its route number has three digits.
               'icon-size': [
                 'interpolate',
                 [
@@ -4362,13 +4364,17 @@ function LiveTtcLayer({
                   'zoom',
                 ],
                 5.5,
-                0.58,
-                9,
                 0.68,
+                9,
+                0.78,
                 13,
-                0.82,
-                17,
                 0.94,
+                15,
+                1.30,
+                17,
+                1.48,
+                18,
+                1.58,
               ],
               'icon-rotate': [
                 'coalesce',
