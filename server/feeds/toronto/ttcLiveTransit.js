@@ -1,3 +1,4 @@
+// TTC V17 - stable UMO-to-GTFS vehicle/trip/stop association across ETA revisions
 // TTC STOP PASSAGE V16 - confirm UMO vehicle progress without equating trip IDs
 // TTC STOP TRUTH V15 - distinguish predicted, GPS-confirmed and unverified arrivals
 // TTC STOP ARRIVALS V14 - no network waits in passage reconciliation; conservative GPS
@@ -109,6 +110,12 @@ const UMO_STOP_TARGET_LIMIT = 3500
 const UMO_PASSED_LIMIT = 1500
 const umoTripStopTargets = new Map()
 const umoConfirmedPassages = new Map()
+// Separate, stable association for the UMO prediction's OWN tripTag.
+// The UMO tripTag is not a GTFS trip_id; it is never compared as one.
+const umoArrivalTripLinks = new Map()
+const UMO_ARRIVAL_LINK_MAX = 3000
+const UMO_ARRIVAL_LINK_MAX_MS = 12 * 60 * 1000
+const UMO_ARRIVAL_INITIAL_TIME_TOLERANCE_SECONDS = 4 * 60
 
 
 // ============================================================
@@ -4541,33 +4548,109 @@ function rememberUmoTripStopTargets(stopId, nowMs) {
   }
 }
 
-function proveUmoVehiclePassedStop(arrival, stopId, vehicleIndex, nowSeconds) {
+// The physical TTC vehicle ID is shared by UMO and BusTime. We can connect
+// their DIFFERENT trip IDs only when the current BusTime trip lists this exact
+// scheduled stop and the two initial visit-time predictions are compatible.
+// Once established, keep the link across ETA revisions: a change from 1 to
+// 4 minutes must not make a known approaching vehicle suddenly unmatched.
+function umoArrivalLinkKey(arrival, stopId) {
   const vehicleId = cleanText(arrival?.vehicleId)
+  const tripTag = cleanText(arrival?.tripId)
   const routeId = cleanText(arrival?.routeId)
-  const normalizedStop = cleanText(stopId)
-  if (!vehicleId || !routeId || !normalizedStop) return false
-  // UMO tripTag is NOT a GTFS trip_id. The ONLY cross-feed link is a
-  // matching physical vehicle ID, route, and BusTime trip that lists the stop.
-  for (const [key, vehicle] of vehicleIndex) {
-    let identity
-    try { identity = JSON.parse(key) } catch { continue }
-    if (!Array.isArray(identity) || identity[0] !== vehicleId) continue
-    const tripId = cleanText(identity[1])
-    const target = umoTripStopTargets.get(
-      JSON.stringify([normalizedStop, vehicleId, tripId])
-    )
-    if (!target || target.routeId !== routeId ||
-        (vehicle.routeId && vehicle.routeId !== routeId)) continue
-    const umoEta = numberOrNull(arrival?.arrivalTime)
-    if (umoEta === null ||
-        Math.abs(umoEta - target.predictedVisitTime) > 120) continue
-    const age = nowSeconds - vehicle.timestamp
-    if (!Number.isFinite(age) || age < -15 || age > UMO_PASSAGE_MAX_GPS_AGE_SECONDS) continue
-    if (vehicle.sequence !== null && vehicle.sequence > target.sequence) {
-      return true
+  const directionId = cleanText(arrival?.directionId)
+  const stop = cleanText(stopId)
+  return vehicleId && tripTag && routeId && stop
+    ? JSON.stringify([stop, vehicleId, routeId, directionId, tripTag])
+    : ''
+}
+
+function pruneUmoArrivalLinks(nowMs) {
+  for (const [key, link] of umoArrivalTripLinks) {
+    if (nowMs - link.observedAt > UMO_ARRIVAL_LINK_MAX_MS) {
+      umoArrivalTripLinks.delete(key)
     }
   }
-  return false
+  while (umoArrivalTripLinks.size > UMO_ARRIVAL_LINK_MAX) {
+    umoArrivalTripLinks.delete(umoArrivalTripLinks.keys().next().value)
+  }
+}
+
+function bindUmoArrivalsToActiveTrips(arrivals, stopId, vehicleIndex, nowSeconds) {
+  const nowMs = nowSeconds * 1000
+  const stop = cleanText(stopId)
+  pruneUmoArrivalLinks(nowMs)
+  if (!stop || !Array.isArray(arrivals)) return
+  for (const arrival of arrivals) {
+    const key = umoArrivalLinkKey(arrival, stop)
+    if (!key) continue
+    const vehicleId = cleanText(arrival.vehicleId)
+    const routeId = cleanText(arrival.routeId)
+    const existing = umoArrivalTripLinks.get(key)
+    if (existing) {
+      const currentVehicle = vehicleIndex.get(JSON.stringify([vehicleId, existing.gtfsTripId]))
+      // A vehicle assigned to a DIFFERENT live trip is not proof this
+      // prediction still belongs to the old trip; leave the ETA unverified.
+      if (!currentVehicle) {
+        // A transiently empty/stale VehiclePositions cache is not a trip change.
+        // Keep the exact UMO -> GTFS association briefly; matching is suspended
+        // until the SAME vehicle+GTFS trip becomes visible again.
+        continue
+      }
+      if (!currentVehicle.routeId || currentVehicle.routeId === routeId) {
+        existing.observedAt = nowMs
+        continue
+      }
+      umoArrivalTripLinks.delete(key)
+    }
+    const umoTime = numberOrNull(arrival.arrivalTime)
+    if (umoTime === null) continue
+    const candidates = []
+    for (const [vehicleKey, currentVehicle] of vehicleIndex) {
+      let pair
+      try { pair = JSON.parse(vehicleKey) } catch { continue }
+      if (!Array.isArray(pair) || pair[0] !== vehicleId) continue
+      const gtfsTripId = cleanText(pair[1])
+      if (!gtfsTripId) continue
+      const target = umoTripStopTargets.get(JSON.stringify([stop, vehicleId, gtfsTripId]))
+      if (!target || target.routeId !== routeId ||
+          (currentVehicle.routeId && currentVehicle.routeId !== routeId)) continue
+      const age = nowSeconds - currentVehicle.timestamp
+      if (!Number.isFinite(age) || age < -15 || age > UMO_PASSAGE_MAX_GPS_AGE_SECONDS) continue
+      // Never make a NEW link to a trip that already passed this stop.
+      // Already-established links are handled above.
+      if (currentVehicle.sequence !== null && currentVehicle.sequence > target.sequence) continue
+      const difference = Math.abs(umoTime - target.predictedVisitTime)
+      if (difference > UMO_ARRIVAL_INITIAL_TIME_TOLERANCE_SECONDS) continue
+      candidates.push({gtfsTripId, sequence:target.sequence, difference})
+    }
+    candidates.sort((a,b) => a.difference-b.difference)
+    // If two different trip identities fit equally well, do not guess.
+    if (!candidates.length || (candidates.length > 1 &&
+        candidates[1].difference - candidates[0].difference < 60)) continue
+    umoArrivalTripLinks.set(key, {
+      gtfsTripId:candidates[0].gtfsTripId, routeId, vehicleId,
+      stopSequence:candidates[0].sequence, observedAt:nowMs,
+    })
+  }
+  pruneUmoArrivalLinks(nowMs)
+}
+
+function matchedUmoVehicle(arrival, stopId, vehicleIndex) {
+  const key = umoArrivalLinkKey(arrival, stopId)
+  const link = key ? umoArrivalTripLinks.get(key) : null
+  if (!link) return null
+  const vehicle = vehicleIndex.get(JSON.stringify([link.vehicleId, link.gtfsTripId]))
+  if (!vehicle || (vehicle.routeId && vehicle.routeId !== link.routeId)) return null
+  return {link, vehicle}
+}
+
+function proveUmoVehiclePassedStop(arrival, stopId, vehicleIndex, nowSeconds) {
+  const matched = matchedUmoVehicle(arrival, stopId, vehicleIndex)
+  if (!matched) return false
+  const {vehicle, link} = matched
+  const age = nowSeconds - vehicle.timestamp
+  if (!Number.isFinite(age) || age < -15 || age > UMO_PASSAGE_MAX_GPS_AGE_SECONDS) return false
+  return vehicle.sequence !== null && vehicle.sequence > link.stopSequence
 }
 
 function pruneUmoPassageHistory(nowMs) {
@@ -4583,9 +4666,54 @@ function addArrivalEvidence(arrival, authority, stop, nowSeconds, vehicleIndex) 
   const time = numberOrNull(arrival?.arrivalTime)
   const secondsUntil = time === null ? null : time - nowSeconds
   const output = { ...arrival, etaState: 'predicted', gpsAgeSeconds: null }
-  // UMO tripTags do not identify GTFS trips. Do NOT cross-join them.
+  // UMO tripTag and GTFS trip_id are different. Only use a previously
+  // established vehicle+route+scheduled-stop association (above) to corroborate
+  // position; never treat a matching route number alone as proof.
+  if (authority === 'UMO_FALLBACK') {
+    const paired = matchedUmoVehicle(arrival, stop?.id, vehicleIndex)
+    if (!paired) {
+      output.positionNote = 'TTC ETA estimate; vehicle/trip not matched'
+      return output
+    }
+    const {vehicle, link} = paired
+    const age = Math.max(0, nowSeconds - vehicle.timestamp)
+    output.gpsAgeSeconds = Math.round(age)
+    output.linkedVehicleId = link.vehicleId
+    output.linkedGtfsTripId = link.gtfsTripId
+    if (age > STOP_GPS_MAX_AGE_SECONDS) {
+      output.positionNote = `Bus ${link.vehicleId} linked; GPS ${Math.round(age)}s old`
+      return output
+    }
+    if (vehicle.sequence === null || vehicle.sequence !== link.stopSequence) {
+      output.etaState = 'tracking'
+      output.positionNote = `Bus ${link.vehicleId} tracked; scheduled stop not yet confirmed`
+      return output
+    }
+    const lat = numberOrNull(stop?.latitude)
+    const lon = numberOrNull(stop?.longitude)
+    const canMeasure = lat !== null && lon !== null &&
+      vehicle.latitude !== null && vehicle.longitude !== null
+    const distance = canMeasure
+      ? distanceMeters(lat, lon, vehicle.latitude, vehicle.longitude) : null
+    output.gpsDistanceMeters = distance === null ? null : Math.round(distance)
+    const sameTarget = !vehicle.stopId || !cleanText(stop?.id) ||
+      vehicle.stopId === cleanText(stop.id)
+    if (sameTarget && vehicle.status === 1 && distance !== null && distance <= 90) {
+      output.etaState = 'at_stop'
+      output.positionNote = `Bus ${link.vehicleId} at stop (GPS confirmed)`
+    } else if (sameTarget && distance !== null && distance <= 130) {
+      output.etaState = 'approaching'
+      output.positionNote = `Bus ${link.vehicleId} approaching (${Math.round(distance)}m away)`
+    } else {
+      output.etaState = 'tracking'
+      output.positionNote = distance === null
+        ? `Bus ${link.vehicleId} tracked; location unavailable`
+        : `Bus ${link.vehicleId} tracked; ${Math.round(distance)}m from stop`
+    }
+    return output
+  }
   if (authority !== 'GTFS-RT') {
-    output.positionNote = 'Prediction only; position not verified'
+    output.positionNote = 'TTC prediction; vehicle location not verified'
     return output
   }
   const vehicleId = cleanText(arrival?.vehicleId)
@@ -4657,6 +4785,7 @@ function applyArrivalTruth(payload, stopId, stopCode) {
   const fallback = authority === 'UMO_FALLBACK'
   if (fallback) {
     rememberUmoTripStopTargets(stopId, nowMs)
+    bindUmoArrivalsToActiveTrips(payload.arrivals, stopId, vehicleIndex, nowSeconds)
     pruneUmoPassageHistory(nowMs)
   }
   let newlyProvenUmoPassages = 0
@@ -4755,6 +4884,7 @@ function applyArrivalTruth(payload, stopId, stopCode) {
       umoNewlyConfirmed: newlyProvenUmoPassages,
       expiredEstimatesRemoved: expiredEstimateCount,
       knownGtfsTripStopTargets: fallback ? umoTripStopTargets.size : null,
+      linkedUmoVehicleTrips: fallback ? umoArrivalTripLinks.size : null,
       vehicleCacheAgeSeconds: vehicleCache
         ? Math.round((nowMs - vehicleCache.cachedAt) / 1000) : null,
     },
