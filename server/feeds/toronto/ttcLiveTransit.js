@@ -1,3 +1,4 @@
+// TTC V18 - disputed stop arrivals stay visibly unresolved until proven passed
 // TTC V17 - stable UMO-to-GTFS vehicle/trip/stop association across ETA revisions
 // TTC STOP PASSAGE V16 - confirm UMO vehicle progress without equating trip IDs
 // TTC STOP TRUTH V15 - distinguish predicted, GPS-confirmed and unverified arrivals
@@ -96,7 +97,7 @@ const umoPredictionCache =
 // Short-lived, bounded in-memory history for each clicked stop. This is NOT
 // a claim that a disappeared ETA was served; it makes that uncertainty visible.
 const stopArrivalHistory = new Map()
-const STOP_UNVERIFIED_GRACE_MS = 75 * 1000
+const STOP_UNVERIFIED_GRACE_MS = 150 * 1000
 const STOP_HISTORY_LIMIT = 120
 const STOP_GPS_MAX_AGE_SECONDS = 25
 // Only same-route/same-vehicle BusTime trip progression can retire a UMO ETA.
@@ -4452,6 +4453,26 @@ async function getArrivalsPayloadUnreconciled({
 }
 
 
+// TTC V18 - Check previously-listed arrivals for positive passage even if the
+// upstream TripUpdate / UMO row has already disappeared. This is evidence-only;
+// expiration, a missing prediction, and spatial proximity are NOT proof.
+function provePreviouslyListedArrivalPassed(arrival, authority, stopId, vehicleIndex, nowSeconds) {
+  if (authority === 'UMO_FALLBACK') {
+    return proveUmoVehiclePassedStop(arrival, stopId, vehicleIndex, nowSeconds)
+  }
+  if (authority !== 'GTFS-RT' || tripUpdateCache?.usedLegacyFallback) return false
+  const vehicleId = cleanText(arrival?.vehicleId)
+  const tripId = cleanText(arrival?.tripId)
+  const target = numberOrNull(arrival?.stopSequence)
+  if (!vehicleId || !tripId || target === null) return false
+  const vehicle = vehicleIndex.get(JSON.stringify([vehicleId, tripId]))
+  if (!vehicle || vehicle.sequence === null) return false
+  const age = nowSeconds - vehicle.timestamp
+  if (!Number.isFinite(age) || age < -15 || age > ARRIVAL_PASSAGE_MAX_VEHICLE_AGE_SECONDS) return false
+  if (vehicle.routeId && cleanText(arrival.routeId) && vehicle.routeId !== cleanText(arrival.routeId)) return false
+  return vehicle.sequence > target
+}
+
 // Stop truth: absence from a prediction feed is NOT evidence of passage.
 // A short history is maintained only for stops someone has queried. It is
 // bounded in time and size, and never fabricates an updated ETA.
@@ -4774,7 +4795,10 @@ function applyArrivalTruth(payload, stopId, stopCode) {
   if (!key) return payload
   const previousState = stopArrivalHistory.get(key)
   const sameAuthority = previousState?.authority === authority
-  const previousEntries = sameAuthority ? previousState.entries : new Map()
+  // A source switch (BusTime -> UMO, or back) must NOT silently imply the
+  // prior imminent bus passed. Preserve history with the original authority
+  // per entry; never cross-join GTFS and UMO trip identifiers.
+  const previousEntries = previousState?.entries || new Map()
   const fresh = new Map()
   const records = []
   const ghost = []
@@ -4790,6 +4814,7 @@ function applyArrivalTruth(payload, stopId, stopCode) {
   }
   let newlyProvenUmoPassages = 0
   let expiredEstimateCount = 0
+  let previouslyMissingPassagesConfirmed = 0
 
   for (const arrival of payload.arrivals) {
     const observed = addArrivalEvidence(arrival, authority, payload.stop, nowSeconds, vehicleIndex)
@@ -4807,6 +4832,14 @@ function applyArrivalTruth(payload, stopId, stopCode) {
       }
     }
 
+    // Even if TTC continues publishing an already-expired row, the *only*
+    // valid retirement signal is this exact vehicle/trip moving to a later
+    // scheduled stop. An expired countdown by itself cannot retire it.
+    if (id && provePreviouslyListedArrivalPassed(observed, authority, stopId, vehicleIndex, nowSeconds)) {
+      passed.add(id)
+      previouslyMissingPassagesConfirmed++
+      continue
+    }
     const eta = numberOrNull(observed.arrivalTime)
     const previouslyUnverifiedAt = id ? previousEntries.get(id)?.firstUnverifiedAt : null
     // An expired prediction is NOT a served stop. Remove its countdown, and
@@ -4819,7 +4852,8 @@ function applyArrivalTruth(payload, stopId, stopCode) {
         const uncertain = {
           ...observed,
           etaState: 'unverified',
-          positionNote: 'ETA expired; vehicle passage unconfirmed',
+          unverifiedReason: 'ETA_EXPIRED',
+          positionNote: 'ETA expired; stop visit not confirmed',
           lastPredictedTime: eta,
           arrivalTime: null,
           minutes: null,
@@ -4827,18 +4861,31 @@ function applyArrivalTruth(payload, stopId, stopCode) {
         ghost.push(uncertain)
         if (id) {
           fresh.set(id, {arrival: uncertain, lastSeen: nowMs,
-            missingSince: nowMs, firstUnverifiedAt})
+            missingSince: nowMs, firstUnverifiedAt, sourceAuthority: authority})
         }
       }
       continue
     }
     records.push(observed)
-    if (id) fresh.set(id, {arrival: observed, lastSeen: nowMs, missingSince: null})
+    if (id) fresh.set(id, {arrival: observed, lastSeen: nowMs, missingSince: null, sourceAuthority: authority})
   }
 
-  if (sameAuthority) {
+  if (previousEntries.size) {
     for (const [id, previous] of previousEntries) {
       if (fresh.has(id) || passed.has(id)) continue
+      const sourceAuthority = previous.sourceAuthority || previousState.authority
+      if (!sameAuthority && payload.arrivals.some((next) =>
+        cleanText(next?.vehicleId) && cleanText(next.vehicleId) === cleanText(previous.arrival?.vehicleId) &&
+        cleanText(next.routeId) === cleanText(previous.arrival?.routeId))) {
+        // Same physical bus + route remains in the new source. No duplicate
+        // "missing" banner just because the trip-ID schemes differ.
+        continue
+      }
+      if (provePreviouslyListedArrivalPassed(previous.arrival, sourceAuthority, stopId, vehicleIndex, nowSeconds)) {
+        passed.add(id)
+        previouslyMissingPassagesConfirmed++
+        continue
+      }
       const missingSince = previous.missingSince ?? nowMs
       const ageSinceSeen = nowMs - previous.lastSeen
       const eta = numberOrNull(previous.arrival?.arrivalTime) ??
@@ -4851,9 +4898,13 @@ function applyArrivalTruth(payload, stopId, stopCode) {
       const pending = {
         ...previous.arrival,
         etaState: 'unverified',
-        positionNote: previous.firstUnverifiedAt
-          ? 'ETA expired; vehicle passage unconfirmed'
-          : 'TTC prediction disappeared; passage not confirmed',
+        unverifiedReason: !sameAuthority ? 'FEED_SWITCHED' :
+          (previous.firstUnverifiedAt ? 'ETA_EXPIRED' : 'PREDICTION_WITHDRAWN'),
+        positionNote: !sameAuthority
+          ? 'TTC prediction source changed; previous stop visit not confirmed'
+          : (previous.firstUnverifiedAt
+              ? 'ETA expired; stop visit not confirmed'
+              : 'TTC estimate changed or disappeared; stop visit not confirmed'),
         lastPredictedTime: eta,
         arrivalTime: null,
         minutes: null,
@@ -4877,18 +4928,22 @@ function applyArrivalTruth(payload, stopId, stopCode) {
   return {
     ...payload,
     arrivals: records,
+    // Earliest unresolved near-term arrival appears first. These are status
+    // notices, NOT active ETAs; the client renders them above later buses.
     unverifiedArrivals: uniqueUnverified.sort((a,b) =>
-      (numberOrNull(b.lastPredictedTime) || 0) - (numberOrNull(a.lastPredictedTime) || 0)).slice(0,2),
+      (numberOrNull(a.lastPredictedTime) || 0) - (numberOrNull(b.lastPredictedTime) || 0)).slice(0,2),
     passageConfirmedCount: passed.size,
     passageDiagnostics: {
       umoNewlyConfirmed: newlyProvenUmoPassages,
       expiredEstimatesRemoved: expiredEstimateCount,
+      storedArrivalsConfirmedPassed: previouslyMissingPassagesConfirmed,
+      unresolvedArrivals: uniqueUnverified.length,
       knownGtfsTripStopTargets: fallback ? umoTripStopTargets.size : null,
       linkedUmoVehicleTrips: fallback ? umoArrivalTripLinks.size : null,
       vehicleCacheAgeSeconds: vehicleCache
         ? Math.round((nowMs - vehicleCache.cachedAt) / 1000) : null,
     },
-    arrivalStateVersion: 16,
+    arrivalStateVersion: 18,
   }
 }
 

@@ -1,3 +1,4 @@
+// TTC V18 - show unresolved nearest arrivals before future predictions
 // TTC STOP TRUTH V15 - show whether imminent ETA is GPS-confirmed or unverified
 // TTC BUS NUMBERS RESTORE V11.1 - restore proven vehicle route label expression
 // TTC STOP POLISH V11 - early arrival prewarm + readable 3-digit route labels
@@ -845,6 +846,51 @@ function fillStopArrivals({
     }
   )
 
+  // A just-due vehicle must not silently fall behind all the later TTC
+  // predictions when the upstream row disappears. We have NO passage proof;
+  // keep it as a clearly-labelled unresolved status, never a fabricated ETA.
+  if (unverifiedArrivals.length > 0) {
+    const uncertain = document.createElement('div')
+    uncertain.className = 'ttc-live-stop-unverified'
+    Object.assign(uncertain.style, {
+      padding: '8px 0',
+      borderBottom: '1px solid rgba(0,0,0,0.12)',
+    })
+    addTextLine({
+      parent: uncertain,
+      text: 'Arrival not confirmed',
+      style: { fontSize: '10px', fontWeight: '800', color: '#664c2d', marginBottom: '4px' },
+    })
+    for (const prior of unverifiedArrivals.slice(0, 2)) {
+      const row = document.createElement('div')
+      Object.assign(row.style, {
+        display: 'grid', gridTemplateColumns: '42px 1fr auto',
+        alignItems: 'center', gap: '7px', padding: '4px 0',
+      })
+      addTextLine({
+        parent: row,
+        text: prior.routeShortName || prior.routeId || 'Bus',
+        style: { fontSize: '12px', fontWeight: '900' },
+      })
+      const bus = prior.vehicleId ? `Bus ${prior.vehicleId}: ` : ''
+      const explanation = prior.unverifiedReason === 'ETA_EXPIRED'
+        ? 'TTC estimate elapsed; stop visit not confirmed'
+        : 'TTC changed/removed ETA; stop visit not confirmed'
+      addTextLine({
+        parent: row,
+        text: bus + explanation,
+        style: { fontSize: '9px', lineHeight: '1.25' },
+      })
+      addTextLine({
+        parent: row,
+        text: 'Checking',
+        style: { fontSize: '10px', fontWeight: '800', whiteSpace: 'nowrap' },
+      })
+      uncertain.appendChild(row)
+    }
+    list.appendChild(uncertain)
+  }
+
   arrivals
     .slice(
       0,
@@ -938,18 +984,6 @@ function fillStopArrivals({
       }
     )
 
-  if (unverifiedArrivals.length > 0) {
-    const uncertain = document.createElement('div')
-    uncertain.className = 'ttc-live-stop-unverified'
-    Object.assign(uncertain.style, { marginTop: '6px', fontSize: '9px',
-      color: '#735c3a', lineHeight: '1.45' })
-    for (const prior of unverifiedArrivals.slice(0, 2)) {
-      const row = document.createElement('div')
-      row.textContent = `${prior.routeShortName || prior.routeId || 'Bus'} · prediction lost · passage unverified`
-      uncertain.appendChild(row)
-    }
-    list.appendChild(uncertain)
-  }
   shell.appendChild(
     list
   )
