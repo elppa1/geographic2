@@ -1,3 +1,4 @@
+// TTC STOP TRUTH V15 - distinguish predicted, GPS-confirmed and unverified arrivals
 // TTC STOP ARRIVALS V14 - no network waits in passage reconciliation; conservative GPS
 // TTC STOP INSTANT V12 - realtime arrivals never wait for static SurfaceGTFS
 // TTC STOP POLISH V11 - indexed stop arrivals + explicit live-layer prewarm
@@ -89,6 +90,13 @@ let tripUpdateStopIndex = null
 
 const umoPredictionCache =
   new Map()
+
+// Short-lived, bounded in-memory history for each clicked stop. This is NOT
+// a claim that a disappeared ETA was served; it makes that uncertainty visible.
+const stopArrivalHistory = new Map()
+const STOP_UNVERIFIED_GRACE_MS = 75 * 1000
+const STOP_HISTORY_LIMIT = 120
+const STOP_GPS_MAX_AGE_SECONDS = 25
 
 
 // ============================================================
@@ -3404,10 +3412,10 @@ function dedupeArrivalsByVehicleOrTrip(
           )
 
         const key =
-          vehicleId
-            ? `vehicle:${routeId}:${vehicleId}`
-            : tripId
-              ? `trip:${routeId}:${tripId}`
+          tripId
+            ? `trip:${routeId}:${tripId}:${numberOrNull(arrival?.stopSequence) ?? ''}`
+            : vehicleId
+              ? `vehicle:${routeId}:${vehicleId}`
               : ''
 
         if (
@@ -3694,7 +3702,8 @@ async function getUmoArrivalsForStopCode(
 // ID alone: the TripUpdate feed can contain multiple trips for a vehicle.
 async function removeArrivalsForVehiclesPastStop(
   arrivals,
-  stopId
+  stopId,
+  onConfirmedPassed = null
 ) {
   const candidates = Array.isArray(arrivals) ? arrivals : []
   if (
@@ -3761,7 +3770,13 @@ async function removeArrivalsForVehiclesPastStop(
         return true
       }
 
-      return matched.sequence <= targetSequence
+      if (matched.sequence > targetSequence) {
+        if (typeof onConfirmedPassed === 'function') {
+          onConfirmedPassed(arrival)
+        }
+        return false
+      }
+      return true
     })
   }
   catch (error) {
@@ -4097,10 +4112,12 @@ async function getGtfsArrivalsPayload(
 
   primaryDiagnostics.parsedFutureArrivals = arrivals.length
 
+  const confirmedPassedArrivals = []
   const reconciledArrivals =
     await removeArrivalsForVehiclesPastStop(
       arrivals,
-      normalizedStopId
+      normalizedStopId,
+      (arrival) => confirmedPassedArrivals.push(arrival)
     )
 
   primaryDiagnostics.keptAfterPassage = reconciledArrivals.length
@@ -4124,6 +4141,7 @@ async function getGtfsArrivalsPayload(
     upstream:
       primaryDiagnostics.tripFeedUpstream || TTC_TRIPS_URL,
     primaryDiagnostics,
+    confirmedPassedArrivals,
     attribution:
       TORONTO_ATTRIBUTION,
     updatedAt:
@@ -4176,7 +4194,7 @@ async function getGtfsArrivalsPayload(
 }
 
 
-async function getArrivalsPayload({
+async function getArrivalsPayloadUnreconciled({
   stopId,
   stopCode,
 }) {
@@ -4412,6 +4430,177 @@ async function getArrivalsPayload({
   return getGtfsArrivalsPayload(
     normalizedStopId
   )
+}
+
+
+// Stop truth: absence from a prediction feed is NOT evidence of passage.
+// A short history is maintained only for stops someone has queried. It is
+// bounded in time and size, and never fabricates an updated ETA.
+function arrivalTruthKey(arrival, authority) {
+  const tripId = cleanText(arrival?.tripId)
+  const vehicleId = cleanText(arrival?.vehicleId)
+  const routeId = cleanText(arrival?.routeId)
+  const directionId = cleanText(arrival?.directionId)
+  if (!tripId && !vehicleId) return ''
+  // GTFS trip+stop is stable even if TTC reassigns the vehicle or omits
+  // direction metadata on a subsequent update. UMO uses a different identity.
+  return authority === 'GTFS-RT'
+    ? JSON.stringify([authority, routeId, tripId, numberOrNull(arrival?.stopSequence)])
+    : JSON.stringify([authority, routeId, directionId, tripId, vehicleId])
+}
+
+function arrivalTruthVehicleIndex(nowSeconds) {
+  const index = new Map()
+  const feed = vehicleCache?.feed
+  // Never let old cached GPS pretend to be a live observation.
+  if (!feed || Date.now() - vehicleCache.cachedAt > REALTIME_STALE_FALLBACK_MS) {
+    return index
+  }
+  for (const entity of Array.isArray(feed.entity) ? feed.entity : []) {
+    const vehicle = entity?.vehicle
+    const id = cleanText(vehicle?.vehicle?.id) || cleanText(vehicle?.vehicle?.label)
+    const trip = cleanText(vehicle?.trip?.tripId)
+    const timestamp = numberOrNull(vehicle?.timestamp)
+    if (!id || !trip || timestamp === null) continue
+    const key = JSON.stringify([id, trip])
+    const prev = index.get(key)
+    if (!prev || timestamp > prev.timestamp) {
+      index.set(key, {
+        timestamp,
+        routeId: cleanText(vehicle?.trip?.routeId),
+        sequence: numberOrNull(vehicle?.currentStopSequence),
+        stopId: cleanText(vehicle?.stopId),
+        status: numberOrNull(vehicle?.currentStatus),
+        latitude: numberOrNull(vehicle?.position?.latitude),
+        longitude: numberOrNull(vehicle?.position?.longitude),
+      })
+    }
+  }
+  return index
+}
+
+function addArrivalEvidence(arrival, authority, stop, nowSeconds, vehicleIndex) {
+  const time = numberOrNull(arrival?.arrivalTime)
+  const secondsUntil = time === null ? null : time - nowSeconds
+  const output = { ...arrival, etaState: 'predicted', gpsAgeSeconds: null }
+  // UMO tripTags do not identify GTFS trips. Do NOT cross-join them.
+  if (authority !== 'GTFS-RT') {
+    output.positionNote = 'Prediction only; position not verified'
+    return output
+  }
+  const vehicleId = cleanText(arrival?.vehicleId)
+  const tripId = cleanText(arrival?.tripId)
+  const matched = vehicleId && tripId
+    ? vehicleIndex.get(JSON.stringify([vehicleId, tripId]))
+    : null
+  if (!matched || (matched.routeId && cleanText(arrival.routeId) &&
+    matched.routeId !== cleanText(arrival.routeId))) {
+    output.positionNote = 'Vehicle location not verified'
+    return output
+  }
+  const age = Math.max(0, nowSeconds - matched.timestamp)
+  output.gpsAgeSeconds = age
+  if (age > STOP_GPS_MAX_AGE_SECONDS) {
+    output.positionNote = 'Vehicle GPS delayed'
+    return output
+  }
+  const target = numberOrNull(arrival?.stopSequence)
+  if (target === null || matched.sequence === null || matched.sequence !== target) {
+    output.positionNote = 'Location tracked; stop arrival not confirmed'
+    return output
+  }
+  // A TTC vehicle can report INCOMING_AT (0) while still a long way away.
+  // Only the exact trip/stop + a near position, or STOPPED_AT (1), warrants
+  // an approaching/at-stop claim. Do not infer this from the ETA clock.
+  const lat = numberOrNull(stop?.latitude)
+  const lon = numberOrNull(stop?.longitude)
+  const canMeasure = lat !== null && lon !== null &&
+    matched.latitude !== null && matched.longitude !== null
+  const distance = canMeasure
+    ? distanceMeters(lat, lon, matched.latitude, matched.longitude)
+    : null
+  output.gpsDistanceMeters = distance === null ? null : Math.round(distance)
+  const sameTarget = !matched.stopId || !cleanText(stop?.id) ||
+    matched.stopId === cleanText(stop.id)
+  if (sameTarget && matched.status === 1 && (distance === null || distance <= 90)) {
+    output.etaState = 'at_stop'
+    output.positionNote = 'TTC reports vehicle at this stop'
+  } else if (sameTarget && distance !== null && distance <= 130) {
+    output.etaState = 'approaching'
+    output.positionNote = 'Vehicle located near stop'
+  } else {
+    output.etaState = 'tracking'
+    output.positionNote = secondsUntil !== null && secondsUntil <= 90
+      ? 'ETA not confirmed by vehicle position'
+      : 'Location tracked'
+  }
+  return output
+}
+
+function applyArrivalTruth(payload, stopId, stopCode) {
+  if (!payload || !Array.isArray(payload.arrivals)) return payload
+  const nowMs = Date.now()
+  const nowSeconds = Math.floor(nowMs / 1000)
+  const authority = cleanText(payload.predictionAuthority || 'GTFS-RT')
+  const key = cleanText(stopId) || `code:${cleanText(stopCode)}`
+  if (!key) return payload
+  const last = stopArrivalHistory.get(key)
+  const fresh = new Map()
+  const vehicleIndex = arrivalTruthVehicleIndex(nowSeconds)
+  const records = payload.arrivals.map((arrival) => {
+    const observed = addArrivalEvidence(arrival, authority, payload.stop, nowSeconds, vehicleIndex)
+    const id = arrivalTruthKey(observed, authority)
+    if (id) fresh.set(id, { arrival: observed, lastSeen: nowMs, missingSince: null })
+    return observed
+  })
+  const passed = new Set((payload.confirmedPassedArrivals || [])
+    .map((arrival) => arrivalTruthKey(arrival, authority))
+    .filter(Boolean))
+  const ghost = []
+  const sameAuthority = last?.authority === authority
+  if (sameAuthority) {
+    for (const [id, previous] of last.entries) {
+      if (fresh.has(id) || passed.has(id)) continue
+      const missingSince = previous.missingSince ?? nowMs
+      const ageSinceSeen = nowMs - previous.lastSeen
+      const eta = numberOrNull(previous.arrival?.arrivalTime) ??
+        numberOrNull(previous.arrival?.lastPredictedTime)
+      // Only recently imminent predictions are interesting to retain;
+      // older/far future cancellations should not pollute the board.
+      const near = eta !== null && eta <= Math.floor(previous.lastSeen / 1000) + 150 &&
+        eta >= Math.floor(previous.lastSeen / 1000) - 90
+      if (!near || nowMs - missingSince > STOP_UNVERIFIED_GRACE_MS ||
+        ageSinceSeen > 2 * STOP_UNVERIFIED_GRACE_MS) continue
+      const pending = { ...previous.arrival, etaState: 'unverified',
+        positionNote: 'TTC prediction disappeared; passage not confirmed',
+        lastPredictedTime: eta, arrivalTime: null, minutes: null }
+      ghost.push(pending)
+      fresh.set(id, { ...previous, arrival: pending, missingSince })
+    }
+  }
+  // Reinsert recency to keep the map bounded, even on busy stops.
+  stopArrivalHistory.delete(key)
+  stopArrivalHistory.set(key, {
+    authority,
+    entries: new Map([...fresh].slice(0, 32)),
+  })
+  while (stopArrivalHistory.size > STOP_HISTORY_LIMIT) {
+    stopArrivalHistory.delete(stopArrivalHistory.keys().next().value)
+  }
+  return {
+    ...payload,
+    arrivals: records,
+    // Not an arrival; show this as an explicitly uncertain historical row.
+    unverifiedArrivals: ghost.sort((a,b) =>
+      (numberOrNull(b.lastPredictedTime) || 0) - (numberOrNull(a.lastPredictedTime) || 0)).slice(0,2),
+    passageConfirmedCount: passed.size,
+    arrivalStateVersion: 15,
+  }
+}
+
+async function getArrivalsPayload({ stopId, stopCode }) {
+  const payload = await getArrivalsPayloadUnreconciled({ stopId, stopCode })
+  return applyArrivalTruth(payload, stopId, stopCode)
 }
 
 async function getNearbyArrivalsPayload(
