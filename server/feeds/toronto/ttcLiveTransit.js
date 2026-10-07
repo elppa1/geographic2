@@ -1,3 +1,4 @@
+// TTC V19 - truthful stop delay notice + exact-trip bus route labels (no movement changes)
 // TTC V18 - disputed stop arrivals stay visibly unresolved until proven passed
 // TTC V17 - stable UMO-to-GTFS vehicle/trip/stop association across ETA revisions
 // TTC STOP PASSAGE V16 - confirm UMO vehicle progress without equating trip IDs
@@ -90,6 +91,12 @@ let vehiclePromise = null
 let tripUpdateCache = null
 let tripUpdatePromise = null
 let tripUpdateStopIndex = null
+// Route labels for VehiclePositions lacking a route_id come ONLY from matching
+// BusTime trip_id data (not from a vehicle-number or branch guess).
+let bustimeRouteByTripId = new Map()
+const recentBusTimeRoutes = new Map()
+const ROUTE_ID_MEMORY_MS = 10 * 60 * 1000
+const ROUTE_ID_MEMORY_MAX = 6000
 
 const umoPredictionCache =
   new Map()
@@ -2874,6 +2881,17 @@ function refreshTripUpdateFeedInBackground() {
             buildTripUpdateStopIndex(
               feed
             )
+          // Never mix old GTFS trip identifiers into the BusTime vehicle feed.
+          const nextRoutes = new Map()
+          if (!result.usedLegacyFallback) {
+            for (const entity of Array.isArray(feed?.entity) ? feed.entity : []) {
+              const descriptor = entity?.tripUpdate?.trip
+              const tripId = cleanText(descriptor?.tripId)
+              const routeId = cleanText(descriptor?.routeId)
+              if (tripId && routeId) nextRoutes.set(tripId, routeId)
+            }
+          }
+          bustimeRouteByTripId = nextRoutes
           return feed
         }
       )
@@ -3116,12 +3134,34 @@ async function getVehiclesPayload(
               tripId
             )
 
+          const directlyReportedRouteId = cleanText(vehicle?.trip?.routeId)
+          const matchingBusTimeRouteId =
+            !tripUpdateCache?.usedLegacyFallback &&
+            tripUpdateCache &&
+            Date.now() - tripUpdateCache.cachedAt <= REALTIME_STALE_FALLBACK_MS
+              ? cleanText(bustimeRouteByTripId.get(tripId))
+              : ''
+          const rememberedRoute = recentBusTimeRoutes.get(tripId)
+          const recentRouteId = rememberedRoute &&
+            Date.now() - rememberedRoute.seenAt < ROUTE_ID_MEMORY_MS
+              ? rememberedRoute.routeId
+              : ''
           const routeId =
-            cleanText(
-              vehicle?.trip?.routeId
-            ) ||
+            directlyReportedRouteId ||
+            matchingBusTimeRouteId ||
+            recentRouteId ||
             staticTrip?.routeId ||
             ''
+          if (tripId && (directlyReportedRouteId || matchingBusTimeRouteId)) {
+            recentBusTimeRoutes.delete(tripId)
+            recentBusTimeRoutes.set(tripId, {
+              routeId: directlyReportedRouteId || matchingBusTimeRouteId,
+              seenAt: Date.now(),
+            })
+            while (recentBusTimeRoutes.size > ROUTE_ID_MEMORY_MAX) {
+              recentBusTimeRoutes.delete(recentBusTimeRoutes.keys().next().value)
+            }
+          }
 
           const route =
             surface?.routes?.get(
@@ -3196,7 +3236,8 @@ async function getVehiclesPayload(
             routeId,
             routeShortName:
               route?.shortName ||
-              routeId,
+              routeId ||
+              'TTC',
             routeLongName:
               route?.longName ||
               '',

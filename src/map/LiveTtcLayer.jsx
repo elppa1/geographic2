@@ -1,3 +1,4 @@
+// TTC V19 - one clear live-estimate delay note; vehicle styling untouched
 // TTC V18 - show unresolved nearest arrivals before future predictions
 // TTC STOP TRUTH V15 - show whether imminent ETA is GPS-confirmed or unverified
 // TTC BUS NUMBERS RESTORE V11.1 - restore proven vehicle route label expression
@@ -790,7 +791,7 @@ function fillStopArrivals({
 }) {
   shell
     .querySelectorAll(
-      '.ttc-live-stop-loading, .ttc-live-stop-arrivals, .ttc-live-stop-empty, .ttc-live-stop-error'
+      '.ttc-live-stop-loading, .ttc-live-stop-arrivals, .ttc-live-stop-empty, .ttc-live-stop-error, .ttc-live-stop-delay-note'
     )
     .forEach(
       (
@@ -805,17 +806,14 @@ function fillStopArrivals({
     )
       ? payload.arrivals
       : []
-  const unverifiedArrivals = Array.isArray(payload?.unverifiedArrivals)
-    ? payload.unverifiedArrivals : []
-
-  if (arrivals.length === 0 && unverifiedArrivals.length === 0) {
+  if (arrivals.length === 0) {
     addTextLine({
       parent:
         shell,
       className:
         'ttc-live-stop-empty',
       text:
-        'No current arrival predictions. This does not confirm whether a bus is nearby.',
+        'No current TTC arrival estimates.',
       style: {
         fontSize:
           '10px',
@@ -824,6 +822,12 @@ function fillStopArrivals({
         marginTop:
           '6px',
       },
+    })
+    addTextLine({
+      parent: shell,
+      className: 'ttc-live-stop-delay-note',
+      text: 'Live estimates may lag by approximately 1 minute.',
+      style: { fontSize: '10px', opacity: '0.7', marginTop: '7px' },
     })
     return
   }
@@ -845,51 +849,6 @@ function fillStopArrivals({
         '1px solid rgba(0,0,0,0.12)',
     }
   )
-
-  // A just-due vehicle must not silently fall behind all the later TTC
-  // predictions when the upstream row disappears. We have NO passage proof;
-  // keep it as a clearly-labelled unresolved status, never a fabricated ETA.
-  if (unverifiedArrivals.length > 0) {
-    const uncertain = document.createElement('div')
-    uncertain.className = 'ttc-live-stop-unverified'
-    Object.assign(uncertain.style, {
-      padding: '8px 0',
-      borderBottom: '1px solid rgba(0,0,0,0.12)',
-    })
-    addTextLine({
-      parent: uncertain,
-      text: 'Arrival not confirmed',
-      style: { fontSize: '10px', fontWeight: '800', color: '#664c2d', marginBottom: '4px' },
-    })
-    for (const prior of unverifiedArrivals.slice(0, 2)) {
-      const row = document.createElement('div')
-      Object.assign(row.style, {
-        display: 'grid', gridTemplateColumns: '42px 1fr auto',
-        alignItems: 'center', gap: '7px', padding: '4px 0',
-      })
-      addTextLine({
-        parent: row,
-        text: prior.routeShortName || prior.routeId || 'Bus',
-        style: { fontSize: '12px', fontWeight: '900' },
-      })
-      const bus = prior.vehicleId ? `Bus ${prior.vehicleId}: ` : ''
-      const explanation = prior.unverifiedReason === 'ETA_EXPIRED'
-        ? 'TTC estimate elapsed; stop visit not confirmed'
-        : 'TTC changed/removed ETA; stop visit not confirmed'
-      addTextLine({
-        parent: row,
-        text: bus + explanation,
-        style: { fontSize: '9px', lineHeight: '1.25' },
-      })
-      addTextLine({
-        parent: row,
-        text: 'Checking',
-        style: { fontSize: '10px', fontWeight: '800', whiteSpace: 'nowrap' },
-      })
-      uncertain.appendChild(row)
-    }
-    list.appendChild(uncertain)
-  }
 
   arrivals
     .slice(
@@ -937,15 +896,9 @@ function fillStopArrivals({
           },
         })
 
-        const estimateSeconds = Number(arrival?.arrivalTime) - Date.now() / 1000
-        const needsPositionNotice = Number.isFinite(estimateSeconds) && estimateSeconds <= 180
-        const verification = needsPositionNotice
-          ? (arrival.positionNote || 'ETA estimate; vehicle position not verified')
-          : ''
         addTextLine({
           parent: row,
-          text: [arrival.headsign || arrival.routeLongName || '', verification]
-            .filter(Boolean).join(' · '),
+          text: arrival.headsign || arrival.routeLongName || '',
           style: {
             fontSize: '9px',
             lineHeight: '1.25',
@@ -960,10 +913,10 @@ function fillStopArrivals({
         const secondsLate = Date.now() / 1000 - Number(arrival?.arrivalTime)
         const timeLabel = arrival?.etaState === 'at_stop'
           ? 'At stop'
-          : (Number.isFinite(secondsLate) && secondsLate > 20)
-            ? 'ETA uncertain'
+          : Number.isFinite(secondsLate) && secondsLate > 20
+            ? 'Updating...'
             : minutes <= 0
-              ? (arrival?.etaState === 'approaching' ? 'Approaching' : '<1 min est.')
+              ? '<1 min'
               : `${minutes} min`
         addTextLine({
           parent: row,
@@ -987,6 +940,17 @@ function fillStopArrivals({
   shell.appendChild(
     list
   )
+  addTextLine({
+    parent: list,
+    className: 'ttc-live-stop-delay-note',
+    text: 'Live estimates may lag by approximately 1 minute.',
+    style: {
+      fontSize: '10px',
+      opacity: '0.7',
+      marginTop: '7px',
+      paddingBottom: '3px',
+    },
+  })
 }
 
 
