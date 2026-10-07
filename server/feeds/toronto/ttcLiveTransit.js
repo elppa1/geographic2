@@ -1,3 +1,4 @@
+// TTC STOP ARRIVALS V14 - no network waits in passage reconciliation; conservative GPS
 // TTC STOP INSTANT V12 - realtime arrivals never wait for static SurfaceGTFS
 // TTC STOP POLISH V11 - indexed stop arrivals + explicit live-layer prewarm
 // TTC STOP FAST V10 - hot TripUpdate cache for instant stop popups
@@ -60,8 +61,10 @@ const TRIP_UPDATE_WARM_INTERVAL_MS =
 const UMO_PREDICTION_CACHE_MS =
   10 * 1000
 
+// Do not remove an imminent arrival based on GPS as old as the TTC
+// VehiclePosition samples seen in the live stop 3121 diagnostic (~50s).
 const ARRIVAL_PASSAGE_MAX_VEHICLE_AGE_SECONDS =
-  90
+  25
 
 const TORONTO_ATTRIBUTION =
   'Contains information licensed under the Open Government Licence - Toronto'
@@ -3706,7 +3709,16 @@ async function removeArrivalsForVehiclesPastStop(
   }
 
   try {
-    const vehicleFeed = await getRawVehicleFeed({ preferFresh: false })
+    // Stop clicks must not wait for a vehicle GPS network request. The
+    // vehicle feed has its own warm loop; only use a recent cached snapshot
+    // for positive passage evidence. No snapshot means keep the prediction.
+    // Legacy GTFS trip identifiers may not match BusTime vehicle trips.
+    if (tripUpdateCache?.usedLegacyFallback) return candidates
+    const vehicleFeed = vehicleCache &&
+      Date.now() - vehicleCache.cachedAt <= REALTIME_STALE_FALLBACK_MS
+        ? vehicleCache.feed
+        : null
+    if (!vehicleFeed) return candidates
     const nowSeconds = Math.floor(Date.now() / 1000)
     const vehiclesByExactTrip = new Map()
 
@@ -3922,6 +3934,10 @@ async function getGtfsArrivalsPayload(
     parsedFutureArrivals: 0,
     removedByPassage: 0,
     keptAfterPassage: 0,
+    vehicleCacheAgeSeconds:
+      vehicleCache ? Math.max(0, Math.round((Date.now() - vehicleCache.cachedAt) / 1000)) : null,
+    passageRequiresRecentGpsSeconds:
+      ARRIVAL_PASSAGE_MAX_VEHICLE_AGE_SECONDS,
   }
 
   // Count matching raw updates BEFORE route, time and vehicle filters.
@@ -4164,6 +4180,7 @@ async function getArrivalsPayload({
   stopId,
   stopCode,
 }) {
+  const arrivalRequestStart = Date.now()
   const normalizedStopId =
     cleanText(
       stopId
@@ -4234,6 +4251,7 @@ async function getArrivalsPayload({
           ...gtfsPayload,
           predictionAuthority:
             'GTFS-RT',
+          requestElapsedMs: Date.now() - arrivalRequestStart,
         }
       }
     }
@@ -4280,9 +4298,9 @@ async function getArrivalsPayload({
     normalizedStopCode
   ) {
     try {
-      const fallbackSurface =
-        surface ||
-        await getSurfaceNetwork()
+      // The caller already has the stopCode. Never delay a UMO fallback on
+      // loading the huge SurfaceGTFS archive; route metadata is optional.
+      const fallbackSurface = surface
 
       const arrivals =
         await getUmoArrivalsForStopCode(
@@ -4316,6 +4334,7 @@ async function getArrivalsPayload({
           TTC_PREDICTIONS_URL,
         predictionAuthority:
           'UMO_FALLBACK',
+        requestElapsedMs: Date.now() - arrivalRequestStart,
         primaryDiagnostics: gtfsPayload?.primaryDiagnostics || {
           status: gtfsError ? 'GTFS_FETCH_ERROR' : 'GTFS_NO_RESULT',
           error: gtfsError ? String(gtfsError.message || gtfsError).slice(0, 220) : null,
@@ -4380,6 +4399,7 @@ async function getArrivalsPayload({
       ...gtfsPayload,
       predictionAuthority:
         'GTFS-RT_EMPTY',
+      requestElapsedMs: Date.now() - arrivalRequestStart,
     }
   }
 
