@@ -1,3 +1,4 @@
+// TTC V20 - faster first paint + exact-next-stop ETA-aware pacing
 // TTC V19 - one clear live-estimate delay note; vehicle styling untouched
 // TTC V18 - show unresolved nearest arrivals before future predictions
 // TTC STOP TRUTH V15 - show whether imminent ETA is GPS-confirmed or unverified
@@ -220,7 +221,77 @@ function prewarmStopArrivals() {
 }
 
 
-function takeInitialVehiclePreloadSnapshot() {
+function initialVehiclePayloadForBounds(
+  payload,
+  bounds
+) {
+  if (
+    !validVehiclePayload(
+      payload
+    ) ||
+    !bounds
+  ) {
+    return payload
+  }
+
+  const west = Number(bounds.getWest?.())
+  const south = Number(bounds.getSouth?.())
+  const east = Number(bounds.getEast?.())
+  const north = Number(bounds.getNorth?.())
+
+  if (
+    !Number.isFinite(west) ||
+    !Number.isFinite(south) ||
+    !Number.isFinite(east) ||
+    !Number.isFinite(north) ||
+    west >= east ||
+    south >= north
+  ) {
+    return payload
+  }
+
+  const longitudePadding =
+    Math.max(
+      0.015,
+      (east - west) *
+        0.18
+    )
+  const latitudePadding =
+    Math.max(
+      0.012,
+      (north - south) *
+        0.18
+    )
+
+  const vehicles =
+    payload.vehicles.filter(
+      (vehicle) => {
+        const longitude = Number(vehicle?.longitude)
+        const latitude = Number(vehicle?.latitude)
+
+        return (
+          Number.isFinite(longitude) &&
+          Number.isFinite(latitude) &&
+          longitude >= west - longitudePadding &&
+          longitude <= east + longitudePadding &&
+          latitude >= south - latitudePadding &&
+          latitude <= north + latitudePadding
+        )
+      }
+    )
+
+  return {
+    ...payload,
+    count: vehicles.length,
+    vehicles,
+    initialPreloadViewportFiltered: true,
+  }
+}
+
+
+function takeInitialVehiclePreloadSnapshot(
+  bounds
+) {
   if (
     initialVehiclePreloadPayload &&
     Date.now() -
@@ -235,7 +306,17 @@ function takeInitialVehiclePreloadSnapshot() {
     initialVehiclePreloadAt =
       0
 
-    return payload
+    const boundedPayload =
+      initialVehiclePayloadForBounds(
+        payload,
+        bounds
+      )
+
+    return validVehiclePayload(
+      boundedPayload
+    )
+      ? boundedPayload
+      : null
   }
 
   return null
@@ -290,6 +371,12 @@ const CITY_VIEW_RAW_MAX_LEAD_METERS =
   32
 const NEXT_STOP_ROUTE_LOCK_MAX_METERS =
   90
+const VEHICLE_ETA_PACING_MIN_SECONDS =
+  20
+const VEHICLE_ETA_PACING_MIN_SPEED_MPS =
+  0.65
+const VEHICLE_ETA_PACING_BUFFER =
+  1.3
 const ANIMATION_FRAME_MS =
   50
 const ROUTE_INDEX_ROUTE_BATCH_SIZE =
@@ -5596,6 +5683,58 @@ function LiveTtcLayer({
                     0,
                     vehicleState.path.totalMeters
                   )
+                const nextStopArrivalTime =
+                  vehicleState.properties?.nextStopArrivalTime ===
+                    null ||
+                  vehicleState.properties?.nextStopArrivalTime ===
+                    undefined
+                    ? null
+                    : Number(
+                        vehicleState.properties?.nextStopArrivalTime
+                      )
+                const nextStopProgressForPacing =
+                  Number(
+                    vehicleState.nextStopProgress
+                  )
+                const secondsUntilNextStop =
+                  nextStopArrivalTime -
+                  Date.now() /
+                    1000
+
+                if (
+                  !vehicleState.stopped &&
+                  nextStopArrivalTime !==
+                    null &&
+                  Number.isFinite(
+                    nextStopArrivalTime
+                  ) &&
+                  Number.isFinite(
+                    nextStopProgressForPacing
+                  ) &&
+                  nextStopProgressForPacing >
+                    currentDisplayProgress +
+                      5 &&
+                  secondsUntilNextStop >=
+                    VEHICLE_ETA_PACING_MIN_SECONDS
+                ) {
+                  const remainingMeters =
+                    nextStopProgressForPacing -
+                    currentDisplayProgress
+                  const etaMatchedSpeed =
+                    Math.max(
+                      VEHICLE_ETA_PACING_MIN_SPEED_MPS,
+                      remainingMeters /
+                        secondsUntilNextStop *
+                        VEHICLE_ETA_PACING_BUFFER
+                    )
+
+                  visualSpeed =
+                    Math.min(
+                      visualSpeed,
+                      etaMatchedSpeed
+                    )
+                }
+
                 const strictRouteMode =
                   Boolean(
                     selectedRouteRef.current
@@ -5666,11 +5805,10 @@ function LiveTtcLayer({
                     vehicleState.path.totalMeters
                   )
 
-                // Only the selected route is stop-bounded. stopId comes from
-                // this vehicle's actual GTFS trip, so express buses freely pass
-                // physical stops that are not scheduled for this trip.
+                // stopId comes from this vehicle's actual GTFS trip. Bound
+                // animation at that exact scheduled stop in every view; express
+                // buses still pass physical stops they are not scheduled to serve.
                 if (
-                  strictRouteMode &&
                   Number.isFinite(
                     Number(
                       vehicleState.nextStopProgress
@@ -6005,7 +6143,9 @@ function LiveTtcLayer({
 
           let payload =
             firstVehicleRefresh
-              ? takeInitialVehiclePreloadSnapshot()
+              ? takeInitialVehiclePreloadSnapshot(
+                  bounds
+                )
               : null
 
           if (
@@ -6029,9 +6169,15 @@ function LiveTtcLayer({
                       (
                         value
                       ) => {
+                        const boundedValue =
+                          initialVehiclePayloadForBounds(
+                            value,
+                            bounds
+                          )
+
                         if (
                           !validVehiclePayload(
-                            value
+                            boundedValue
                           )
                         ) {
                           throw new Error(
@@ -6039,7 +6185,7 @@ function LiveTtcLayer({
                           )
                         }
 
-                        return value
+                        return boundedValue
                       }
                     ),
                   boundedPromise
@@ -6098,39 +6244,26 @@ function LiveTtcLayer({
               0
           ) {
             try {
-              const fallbackResponse =
-                await fetch(
-                  VEHICLES_ENDPOINT,
-                  {
-                    cache:
-                      'no-store',
-                    signal:
-                      controller.signal,
-                  }
+              const fallbackPayload =
+                await fetchLivePayload(
+                  false
                 )
 
+              const fallbackVehicles =
+                Array.isArray(
+                  fallbackPayload?.vehicles
+                )
+                  ? fallbackPayload.vehicles
+                  : []
+
               if (
-                fallbackResponse.ok
+                fallbackVehicles.length >
+                  0
               ) {
-                const fallbackPayload =
-                  await fallbackResponse.json()
-
-                const fallbackVehicles =
-                  Array.isArray(
-                    fallbackPayload?.vehicles
-                  )
-                    ? fallbackPayload.vehicles
-                    : []
-
-                if (
-                  fallbackVehicles.length >
-                    0
-                ) {
-                  payload =
-                    fallbackPayload
-                  nextVehicles =
-                    fallbackVehicles
-                }
+                payload =
+                  fallbackPayload
+                nextVehicles =
+                  fallbackVehicles
               }
             }
             catch (
@@ -6330,6 +6463,20 @@ function LiveTtcLayer({
                               )
                             : previous.properties?.nextStopLongitude ??
                               null,
+                        nextStopArrivalTime:
+                          vehicle.nextStopArrivalTime !==
+                            null &&
+                          vehicle.nextStopArrivalTime !==
+                            undefined &&
+                          Number.isFinite(
+                            Number(
+                              vehicle.nextStopArrivalTime
+                            )
+                          )
+                            ? Number(
+                                vehicle.nextStopArrivalTime
+                              )
+                            : null,
                         occupancyStatus:
                           vehicle.occupancyStatus ||
                           previous.properties?.occupancyStatus ||
@@ -6724,6 +6871,20 @@ function LiveTtcLayer({
                         )
                           ? Number(
                               vehicle.nextStopLongitude
+                            )
+                          : null,
+                      nextStopArrivalTime:
+                        vehicle.nextStopArrivalTime !==
+                          null &&
+                        vehicle.nextStopArrivalTime !==
+                          undefined &&
+                        Number.isFinite(
+                          Number(
+                            vehicle.nextStopArrivalTime
+                          )
+                        )
+                          ? Number(
+                              vehicle.nextStopArrivalTime
                             )
                           : null,
                       currentStatus,

@@ -1,3 +1,4 @@
+// TTC V20 - route-complete stop boards + ETA-aware vehicle pacing + faster first paint
 // TTC V19 - truthful stop delay notice + exact-trip bus route labels (no movement changes)
 // TTC V18 - disputed stop arrivals stay visibly unresolved until proven passed
 // TTC V17 - stable UMO-to-GTFS vehicle/trip/stop association across ETA revisions
@@ -94,6 +95,7 @@ let tripUpdateStopIndex = null
 // Route labels for VehiclePositions lacking a route_id come ONLY from matching
 // BusTime trip_id data (not from a vehicle-number or branch guess).
 let bustimeRouteByTripId = new Map()
+let bustimeTripUpdateByTripId = new Map()
 const recentBusTimeRoutes = new Map()
 const ROUTE_ID_MEMORY_MS = 10 * 60 * 1000
 const ROUTE_ID_MEMORY_MAX = 6000
@@ -2883,15 +2885,19 @@ function refreshTripUpdateFeedInBackground() {
             )
           // Never mix old GTFS trip identifiers into the BusTime vehicle feed.
           const nextRoutes = new Map()
+          const nextTripUpdates = new Map()
           if (!result.usedLegacyFallback) {
             for (const entity of Array.isArray(feed?.entity) ? feed.entity : []) {
-              const descriptor = entity?.tripUpdate?.trip
+              const tripUpdate = entity?.tripUpdate
+              const descriptor = tripUpdate?.trip
               const tripId = cleanText(descriptor?.tripId)
               const routeId = cleanText(descriptor?.routeId)
               if (tripId && routeId) nextRoutes.set(tripId, routeId)
+              if (tripId && tripUpdate) nextTripUpdates.set(tripId, tripUpdate)
             }
           }
           bustimeRouteByTripId = nextRoutes
+          bustimeTripUpdateByTripId = nextTripUpdates
           return feed
         }
       )
@@ -3040,6 +3046,101 @@ function routeMode(
 }
 
 
+function realtimeArrivalForVehicleStop(
+  tripId,
+  stopId,
+  stopSequence
+) {
+  const normalizedTripId =
+    cleanText(
+      tripId
+    )
+  const normalizedStopId =
+    cleanText(
+      stopId
+    )
+
+  if (
+    !normalizedTripId ||
+    !normalizedStopId ||
+    tripUpdateCache?.usedLegacyFallback ||
+    !tripUpdateCache ||
+    Date.now() -
+      tripUpdateCache.cachedAt >
+      REALTIME_STALE_FALLBACK_MS
+  ) {
+    return null
+  }
+
+  const tripUpdate =
+    bustimeTripUpdateByTripId.get(
+      normalizedTripId
+    )
+
+  if (
+    !tripUpdate
+  ) {
+    return null
+  }
+
+  const targetSequence =
+    numberOrNull(
+      stopSequence
+    )
+
+  const candidates =
+    (
+      Array.isArray(
+        tripUpdate?.stopTimeUpdate
+      )
+        ? tripUpdate.stopTimeUpdate
+        : []
+    )
+      .filter(
+        (
+          update
+        ) =>
+          cleanText(
+            update?.stopId
+          ) ===
+            normalizedStopId
+      )
+
+  if (
+    candidates.length ===
+      0
+  ) {
+    return null
+  }
+
+  if (
+    targetSequence !==
+      null
+  ) {
+    const exactSequence =
+      candidates.find(
+        (
+          update
+        ) =>
+          numberOrNull(
+            update?.stopSequence
+          ) ===
+            targetSequence
+      )
+
+    return exactSequence
+      ? realtimeStopTime(
+          exactSequence
+        )
+      : null
+  }
+
+  return realtimeStopTime(
+    candidates[0]
+  )
+}
+
+
 async function getVehiclesPayload(
   url
 ) {
@@ -3178,6 +3279,18 @@ async function getVehiclesPayload(
               stopId
             )
 
+          const currentStopSequence =
+            numberOrNull(
+              vehicle?.currentStopSequence
+            )
+
+          const nextStopArrivalTime =
+            realtimeArrivalForVehicleStop(
+              tripId,
+              stopId,
+              currentStopSequence
+            )
+
           const timestamp =
             numberOrNull(
               vehicle?.timestamp
@@ -3272,14 +3385,20 @@ async function getVehiclesPayload(
                 nowSeconds -
                   timestamp
               ),
-            currentStopSequence:
-              numberOrNull(
-                vehicle?.currentStopSequence
-              ),
+            currentStopSequence,
             stopId,
             stopName:
               stop?.name ||
               '',
+            nextStopLatitude:
+              numberOrNull(
+                stop?.latitude
+              ),
+            nextStopLongitude:
+              numberOrNull(
+                stop?.longitude
+              ),
+            nextStopArrivalTime,
             currentStatus:
               cleanText(
                 vehicle?.currentStatus
@@ -4051,9 +4170,27 @@ async function getGtfsArrivalsPayload(
             tripId
           )
 
+        const rememberedRoute =
+          recentBusTimeRoutes.get(
+            tripId
+          )
+
         const routeId =
           cleanText(
             tripUpdate?.trip?.routeId
+          ) ||
+          cleanText(
+            bustimeRouteByTripId.get(
+              tripId
+            )
+          ) ||
+          (
+            rememberedRoute &&
+            Date.now() -
+              rememberedRoute.seenAt <
+              ROUTE_ID_MEMORY_MS
+              ? rememberedRoute.routeId
+              : ''
           ) ||
           staticTrip?.routeId ||
           ''
@@ -4255,6 +4392,220 @@ async function getGtfsArrivalsPayload(
 }
 
 
+function freshCachedUmoArrivals(
+  stopCode
+) {
+  const normalizedStopCode =
+    cleanText(
+      stopCode
+    )
+
+  if (
+    !normalizedStopCode
+  ) {
+    return null
+  }
+
+  const cached =
+    umoPredictionCache.get(
+      normalizedStopCode
+    )
+
+  if (
+    !cached ||
+    Date.now() -
+      cached.cachedAt >=
+      UMO_PREDICTION_CACHE_MS
+  ) {
+    return null
+  }
+
+  return Array.isArray(
+    cached.arrivals
+  )
+    ? cached.arrivals
+    : null
+}
+
+
+function routeSetFromArrivals(
+  arrivals
+) {
+  return new Set(
+    (
+      Array.isArray(
+        arrivals
+      )
+        ? arrivals
+        : []
+    )
+      .map(
+        (
+          arrival
+        ) =>
+          cleanText(
+            arrival?.routeId
+          )
+      )
+      .filter(
+        Boolean
+      )
+  )
+}
+
+
+function cachedUmoAddsMissingRoutes(
+  gtfsArrivals,
+  umoArrivals
+) {
+  const gtfsRoutes =
+    routeSetFromArrivals(
+      gtfsArrivals
+    )
+  const umoRoutes =
+    routeSetFromArrivals(
+      umoArrivals
+    )
+
+  if (
+    gtfsRoutes.size ===
+      0 ||
+    umoRoutes.size <=
+      gtfsRoutes.size
+  ) {
+    return false
+  }
+
+  for (
+    const routeId of
+      gtfsRoutes
+  ) {
+    if (
+      !umoRoutes.has(
+        routeId
+      )
+    ) {
+      return false
+    }
+  }
+
+  return true
+}
+
+
+function buildUmoStopPayload({
+  arrivals,
+  normalizedStopId,
+  normalizedStopCode,
+  staticStop,
+  gtfsPayload,
+  gtfsError,
+  arrivalRequestStart,
+  fallbackReason =
+    'GTFS_NO_RESULT',
+}) {
+  const sortedArrivals =
+    [
+      ...(
+        Array.isArray(
+          arrivals
+        )
+          ? arrivals
+          : []
+      ),
+    ].sort(
+      (
+        a,
+        b
+      ) =>
+        Number(
+          a?.arrivalTime ||
+          0
+        ) -
+        Number(
+          b?.arrivalTime ||
+          0
+        )
+    )
+
+  return {
+    ok:
+      true,
+    source:
+      'TTC Next Vehicle Arrival System Â· UMO NextBus Â· fallback',
+    upstream:
+      TTC_PREDICTIONS_URL,
+    predictionAuthority:
+      'UMO_FALLBACK',
+    requestElapsedMs:
+      Date.now() -
+      arrivalRequestStart,
+    primaryDiagnostics:
+      gtfsPayload?.primaryDiagnostics ||
+      {
+        status:
+          gtfsError
+            ? 'GTFS_FETCH_ERROR'
+            : fallbackReason,
+        error:
+          gtfsError
+            ? String(
+                gtfsError.message ||
+                gtfsError
+              ).slice(
+                0,
+                220
+              )
+            : null,
+      },
+    routeCompletenessFallback:
+      fallbackReason ===
+        'GTFS_ROUTE_SET_INCOMPLETE',
+    attribution:
+      TORONTO_ATTRIBUTION,
+    updatedAt:
+      new Date()
+        .toISOString(),
+    stop:
+      staticStop
+        ? {
+            id:
+              staticStop.id,
+            code:
+              staticStop.code,
+            name:
+              staticStop.name,
+            latitude:
+              staticStop.latitude,
+            longitude:
+              staticStop.longitude,
+          }
+        : {
+            id:
+              normalizedStopId,
+            code:
+              normalizedStopCode,
+            name:
+              '',
+            latitude:
+              null,
+            longitude:
+              null,
+          },
+    count:
+      Math.min(
+        sortedArrivals.length,
+        18
+      ),
+    arrivals:
+      sortedArrivals.slice(
+        0,
+        18
+      ),
+  }
+}
+
+
 async function getArrivalsPayloadUnreconciled({
   stopId,
   stopCode,
@@ -4326,6 +4677,53 @@ async function getArrivalsPayloadUnreconciled({
         gtfsPayload.arrivals.length >
           0
       ) {
+        const cachedUmoArrivals =
+          freshCachedUmoArrivals(
+            normalizedStopCode
+          )
+
+        if (
+          cachedUmoArrivals &&
+          cachedUmoAddsMissingRoutes(
+            gtfsPayload.arrivals,
+            cachedUmoArrivals
+          )
+        ) {
+          return buildUmoStopPayload({
+            arrivals:
+              cachedUmoArrivals,
+            normalizedStopId,
+            normalizedStopCode,
+            staticStop,
+            gtfsPayload,
+            gtfsError,
+            arrivalRequestStart,
+            fallbackReason:
+              'GTFS_ROUTE_SET_INCOMPLETE',
+          })
+        }
+
+        if (
+          normalizedStopCode &&
+          !cachedUmoArrivals
+        ) {
+          getUmoArrivalsForStopCode(
+            normalizedStopCode,
+            surface
+          )
+            .catch(
+              (
+                error
+              ) => {
+                console.warn(
+                  'LIVE TTC ROUTE COMPLETENESS WARMUP:',
+                  error?.message ||
+                    error
+                )
+              }
+            )
+        }
+
         return {
           ...gtfsPayload,
           predictionAuthority:
@@ -4386,79 +4784,15 @@ async function getArrivalsPayloadUnreconciled({
           normalizedStopCode,
           fallbackSurface
         )
-      const sortedArrivals =
-        [
-          ...arrivals,
-        ].sort(
-          (
-            a,
-            b
-          ) =>
-            Number(
-              a?.arrivalTime ||
-              0
-            ) -
-            Number(
-              b?.arrivalTime ||
-              0
-            )
-        )
-
-      return {
-        ok:
-          true,
-        source:
-          'TTC Next Vehicle Arrival System Â· UMO NextBus Â· fallback',
-        upstream:
-          TTC_PREDICTIONS_URL,
-        predictionAuthority:
-          'UMO_FALLBACK',
-        requestElapsedMs: Date.now() - arrivalRequestStart,
-        primaryDiagnostics: gtfsPayload?.primaryDiagnostics || {
-          status: gtfsError ? 'GTFS_FETCH_ERROR' : 'GTFS_NO_RESULT',
-          error: gtfsError ? String(gtfsError.message || gtfsError).slice(0, 220) : null,
-        },
-        attribution:
-          TORONTO_ATTRIBUTION,
-        updatedAt:
-          new Date()
-            .toISOString(),
-        stop: staticStop
-          ? {
-              id:
-                staticStop.id,
-              code:
-                staticStop.code,
-              name:
-                staticStop.name,
-              latitude:
-                staticStop.latitude,
-              longitude:
-                staticStop.longitude,
-            }
-          : {
-              id:
-                normalizedStopId,
-              code:
-                normalizedStopCode,
-              name:
-                '',
-              latitude:
-                null,
-              longitude:
-                null,
-            },
-        count:
-          Math.min(
-            sortedArrivals.length,
-            18
-          ),
-        arrivals:
-          sortedArrivals.slice(
-            0,
-            18
-          ),
-      }
+      return buildUmoStopPayload({
+        arrivals,
+        normalizedStopId,
+        normalizedStopCode,
+        staticStop,
+        gtfsPayload,
+        gtfsError,
+        arrivalRequestStart,
+      })
     }
     catch (
       error
