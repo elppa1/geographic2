@@ -82,6 +82,88 @@ const TPS_NEWS_RELEASES_URL =
   'https://www.tps.ca/media-centre/news-releases/'
 
 
+// Production safety net: poll the official TPS releases page as well as accepting
+// email/webhook delivery. A missing webhook secret must not make NEWSROOM go dark.
+const TPS_DIRECT_POLL_MS =
+  2 * 60 * 1000
+
+
+const TPS_DIRECT_POLL_INITIAL_DELAY_MS =
+  2500
+
+
+const TPS_DIRECT_POLL_MAX_AGE_MS =
+  72 * 60 * 60 * 1000
+
+
+const TPS_DIRECT_POLL_HEADERS = {
+  'User-Agent':
+    (
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
+      'AppleWebKit/537.36 (KHTML, like Gecko) ' +
+      'Chrome/151.0.0.0 Safari/537.36'
+    ),
+
+  Accept:
+    'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+
+  'Accept-Language':
+    'en-CA,en;q=0.9',
+
+  'Cache-Control':
+    'no-cache',
+
+  Pragma:
+    'no-cache',
+
+  Referer:
+    'https://www.tps.ca/',
+}
+
+
+let tpsDirectPollTimer =
+  null
+
+
+let tpsDirectInitialTimer =
+  null
+
+
+let tpsDirectPollInFlight =
+  null
+
+
+const tpsDirectSeenReleaseIds =
+  new Set()
+
+
+let tpsDirectPollStatus = {
+  running:
+    false,
+
+  lastStartedAt:
+    '',
+
+  lastFinishedAt:
+    '',
+
+  lastSuccessAt:
+    '',
+
+  lastError:
+    '',
+
+  candidates:
+    0,
+
+  processed:
+    0,
+
+  actionable:
+    0,
+}
+
+
 let webhookSecret =
   ''
 
@@ -4429,6 +4511,466 @@ function storeRecord(
 
 
 // ============================================================
+// OFFICIAL TPS WEB POLL
+// ============================================================
+//
+// Every directly observed TPS release still enters the existing Police NEWSROOM
+// lifecycle. Nothing here auto-publishes a Police pin. LOCATED / FOUND records
+// continue through queueLiveNewsroomRecord(), preserving immediate removal of the
+// original missing-person pin and ACK-only newsroom handling.
+// ============================================================
+
+async function fetchOfficialTpsHtml(
+  url
+) {
+  const response =
+    await fetch(
+      url,
+      {
+        method:
+          'GET',
+
+        headers:
+          TPS_DIRECT_POLL_HEADERS,
+
+        cache:
+          'no-store',
+
+        redirect:
+          'follow',
+
+        signal:
+          AbortSignal.timeout(
+            15000
+          ),
+      }
+    )
+
+
+  if (
+    !response.ok
+  ) {
+    throw new Error(
+      (
+        'TPS DIRECT POLL FETCH FAILED · ' +
+        `${response.status} · ` +
+        url
+      )
+    )
+  }
+
+
+  const html =
+    await response.text()
+
+
+  if (
+    !html ||
+    html.length <
+      500
+  ) {
+    throw new Error(
+      'TPS DIRECT POLL RETURNED EMPTY HTML'
+    )
+  }
+
+
+  return html
+}
+
+
+function directPollRecordIsFresh(
+  record
+) {
+  const publishedAt =
+    new Date(
+      record?.publishedAt ||
+      ''
+    )
+      .getTime()
+
+
+  if (
+    !Number.isFinite(
+      publishedAt
+    )
+  ) {
+    return false
+  }
+
+
+  const age =
+    Date.now() -
+    publishedAt
+
+
+  return (
+    age >=
+      -6 * 60 * 60 * 1000 &&
+    age <=
+      TPS_DIRECT_POLL_MAX_AGE_MS
+  )
+}
+
+
+async function buildDirectPollRecord(
+  candidate
+) {
+  let detailHtml =
+    ''
+
+
+  try {
+    detailHtml =
+      await fetchOfficialTpsHtml(
+        candidate.url
+      )
+  }
+  catch (
+    error
+  ) {
+    console.warn(
+      'TPS DIRECT POLL · DETAIL FETCH FAILED:',
+      candidate.url,
+      String(
+        error?.message ||
+        error
+      )
+    )
+  }
+
+
+  const body =
+    cleanText(
+      [
+        candidate.context ||
+          '',
+        detailHtml
+          ? htmlToText(
+              detailHtml
+            )
+          : '',
+        candidate.url,
+      ]
+        .filter(
+          Boolean
+        )
+        .join(
+          '\n\n'
+        )
+    )
+
+
+  const candidatePublishedAt =
+    parseTpsReleaseTimestamp(
+      body
+    )
+
+
+  const record =
+    await buildPoliceRecord({
+      subject:
+        candidate.title,
+
+      body,
+
+      from:
+        'official-web-poll@tps.ca',
+
+      receivedAt:
+        candidatePublishedAt ||
+        new Date()
+          .toISOString(),
+    })
+
+
+  return {
+    ...record,
+
+    sourceUrl:
+      candidate.url,
+
+    tpsReleaseUrl:
+      candidate.url,
+
+    tpsReleaseId:
+      candidate.releaseId,
+
+    sender:
+      'official-web-poll@tps.ca',
+
+    forwardedBy:
+      '',
+
+    trustedSender:
+      true,
+
+    ingestionMethod:
+      'official-tps-web-poll',
+  }
+}
+
+
+async function executeOfficialTpsReleasePoll() {
+  const startedAt =
+    new Date()
+      .toISOString()
+
+
+  tpsDirectPollStatus = {
+    ...tpsDirectPollStatus,
+
+    running:
+      true,
+
+    lastStartedAt:
+      startedAt,
+
+    lastError:
+      '',
+  }
+
+
+  try {
+    const listingHtml =
+      await fetchOfficialTpsHtml(
+        TPS_NEWS_RELEASES_URL
+      )
+
+
+    const candidates =
+      parseTpsSearchCandidates(
+        listingHtml
+      )
+        .slice(
+          0,
+          30
+        )
+
+
+    let processed =
+      0
+
+
+    let actionable =
+      0
+
+
+    for (
+      const candidate
+      of candidates
+    ) {
+      if (
+        !candidate?.releaseId ||
+        !candidate?.title ||
+        tpsDirectSeenReleaseIds.has(
+          candidate.releaseId
+        )
+      ) {
+        continue
+      }
+
+
+      try {
+        const record =
+          await buildDirectPollRecord(
+            candidate
+          )
+
+
+        // Normal map stories remain geographic. LOCATED / FOUND may omit the
+        // location because the Case # is enough to resolve the existing pin.
+        if (
+          record.category !==
+            'located' &&
+          !cleanText(
+            record.location
+          )
+        ) {
+          tpsDirectSeenReleaseIds.add(
+            candidate.releaseId
+          )
+
+          continue
+        }
+
+
+        if (
+          !directPollRecordIsFresh(
+            record
+          )
+        ) {
+          tpsDirectSeenReleaseIds.add(
+            candidate.releaseId
+          )
+
+          continue
+        }
+
+
+        const storedRecord =
+          storeRecord(
+            record
+          )
+
+
+        const queued =
+          await queueLiveNewsroomRecord({
+            sourceKey:
+              'police',
+
+            record:
+              storedRecord,
+
+            action:
+              storedRecord.newsroomAction ||
+              (
+                storedRecord.category ===
+                  'located'
+                  ? 'resolve'
+                  : ''
+              ),
+          })
+
+
+        processed++
+
+
+        if (
+          queued?.action &&
+          queued.action !==
+            'seen'
+        ) {
+          actionable++
+        }
+
+
+        tpsDirectSeenReleaseIds.add(
+          candidate.releaseId
+        )
+      }
+      catch (
+        error
+      ) {
+        console.warn(
+          'TPS DIRECT POLL · RELEASE FAILED:',
+          candidate.releaseId,
+          candidate.title,
+          String(
+            error?.message ||
+            error
+          )
+        )
+      }
+    }
+
+
+    const finishedAt =
+      new Date()
+        .toISOString()
+
+
+    tpsDirectPollStatus = {
+      running:
+        false,
+
+      lastStartedAt:
+        startedAt,
+
+      lastFinishedAt:
+        finishedAt,
+
+      lastSuccessAt:
+        finishedAt,
+
+      lastError:
+        '',
+
+      candidates:
+        candidates.length,
+
+      processed,
+
+      actionable,
+    }
+
+
+    console.log(
+      'TPS DIRECT POLL COMPLETE:',
+      candidates.length,
+      'candidates ·',
+      processed,
+      'processed ·',
+      actionable,
+      'newsroom actions'
+    )
+
+
+    return {
+      ok:
+        true,
+
+      candidates:
+        candidates.length,
+
+      processed,
+
+      actionable,
+    }
+  }
+  catch (
+    error
+  ) {
+    const finishedAt =
+      new Date()
+        .toISOString()
+
+
+    tpsDirectPollStatus = {
+      ...tpsDirectPollStatus,
+
+      running:
+        false,
+
+      lastFinishedAt:
+        finishedAt,
+
+      lastError:
+        String(
+          error?.message ||
+          error
+        ),
+    }
+
+
+    throw error
+  }
+}
+
+
+async function runOfficialTpsReleasePoll() {
+  if (
+    tpsDirectPollInFlight
+  ) {
+    return tpsDirectPollInFlight
+  }
+
+
+  tpsDirectPollInFlight =
+    executeOfficialTpsReleasePoll()
+
+
+  try {
+    return await tpsDirectPollInFlight
+  }
+  finally {
+    tpsDirectPollInFlight =
+      null
+  }
+}
+
+
+// ============================================================
 // GET
 // ============================================================
 
@@ -4447,6 +4989,9 @@ function handleGet(
 
       records:
         recentPoliceRecords,
+
+      directPoll:
+        tpsDirectPollStatus,
     },
   })
 }
@@ -4721,7 +5266,7 @@ export function tpsWebhookFeed() {
         !webhookSecret
       ) {
         console.warn(
-          'TPS WEBHOOK · TPS_WEBHOOK_SECRET NOT CONFIGURED'
+          'TPS WEBHOOK · TPS_WEBHOOK_SECRET NOT CONFIGURED · EMAIL POST DISABLED · OFFICIAL WEB POLL ACTIVE'
         )
       }
       else {
@@ -4822,6 +5367,77 @@ export function tpsWebhookFeed() {
                   ),
               },
             })
+          }
+        }
+      )
+
+
+      if (
+        !tpsDirectPollTimer
+      ) {
+        tpsDirectInitialTimer =
+          setTimeout(
+            () => {
+              runOfficialTpsReleasePoll()
+                .catch(
+                  (
+                    error
+                  ) => {
+                    console.warn(
+                      'TPS DIRECT POLL · INITIAL FAILED:',
+                      error
+                    )
+                  }
+                )
+            },
+            TPS_DIRECT_POLL_INITIAL_DELAY_MS
+          )
+
+
+        tpsDirectPollTimer =
+          setInterval(
+            () => {
+              runOfficialTpsReleasePoll()
+                .catch(
+                  (
+                    error
+                  ) => {
+                    console.warn(
+                      'TPS DIRECT POLL · BACKGROUND FAILED:',
+                      error
+                    )
+                  }
+                )
+            },
+            TPS_DIRECT_POLL_MS
+          )
+      }
+
+
+      server.httpServer?.once(
+        'close',
+        () => {
+          if (
+            tpsDirectInitialTimer
+          ) {
+            clearTimeout(
+              tpsDirectInitialTimer
+            )
+
+            tpsDirectInitialTimer =
+              null
+          }
+
+
+          if (
+            tpsDirectPollTimer
+          ) {
+            clearInterval(
+              tpsDirectPollTimer
+            )
+
+            tpsDirectPollTimer =
+              null
           }
         }
       )
