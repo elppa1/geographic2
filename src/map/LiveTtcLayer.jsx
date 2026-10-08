@@ -336,7 +336,7 @@ const VEHICLE_POLL_MS =
 const VEHICLE_VISUAL_MAX_SPEED_MPS =
   8.5
 const VEHICLE_ETA_MAX_SPEED_MPS =
-  16
+  12.5
 const VEHICLE_ETA_SIM_DEFAULT_SPEED_MPS =
   5
 const VEHICLE_ETA_SIM_MIN_SPEED_MPS =
@@ -344,7 +344,11 @@ const VEHICLE_ETA_SIM_MIN_SPEED_MPS =
 const VEHICLE_ETA_SIM_MAX_SPEED_MPS =
   11
 const VEHICLE_ETA_REANCHOR_MAX_METERS =
-  5000
+  80
+const VEHICLE_ETA_MAX_ACCEL_MPS2 =
+  1.15
+const VEHICLE_ETA_MAX_DECEL_MPS2 =
+  2.4
 const VEHICLE_DEFAULT_MOVING_SPEED_MPS =
   3.2
 // TTC TRUTH MODE · do not force a vehicle to crawl without a new TTC sample.
@@ -5792,17 +5796,31 @@ function LiveTtcLayer({
                     nextStopProgressForPacing
                   )
 
-                // V23 ETA-MASTER: TTC's stop prediction owns the visual
-                // clock. If stale GPS/older animation has the marker materially
-                // closer to (or beyond) the next stop than TTC's ETA allows,
-                // re-anchor it to the schedule-consistent point behind that
-                // exact trip stop. After this correction the ordinary frame
-                // loop advances it continuously to the pole at TTC's ETA.
+                // V25 SMOOTH ETA MASTER: TTC still owns the stop clock, but
+                // never let a changing prediction teleport a vehicle kilometres
+                // backward or repeatedly re-anchor it on every 2-second poll.
+                // Apply at most one small correction when the exact trip/stop
+                // anchor changes, then let the frame loop converge smoothly.
+                const etaAnchorKey =
+                  etaAnchorActive
+                    ? [
+                        vehicleState.properties?.tripId || '',
+                        vehicleState.properties?.vehicleId || '',
+                        vehicleState.properties?.nextStopId || '',
+                        vehicleState.properties?.nextStopSequence ?? '',
+                      ].join('|')
+                    : ''
+
                 if (
                   etaAnchorActive &&
                   secondsUntilNextStop >
-                    2
+                    2 &&
+                  vehicleState.etaAnchorKey !==
+                    etaAnchorKey
                 ) {
+                  vehicleState.etaAnchorKey =
+                    etaAnchorKey
+
                   const etaReanchorDistance =
                     Math.min(
                       VEHICLE_ETA_REANCHOR_MAX_METERS,
@@ -5819,17 +5837,30 @@ function LiveTtcLayer({
                       0,
                       nextStopProgressForPacing
                     )
+                  const aheadMeters =
+                    currentDisplayProgress -
+                    etaScheduledProgress
 
-                  if (
-                    currentDisplayProgress >
-                      etaScheduledProgress +
-                        25
-                  ) {
+                  if (aheadMeters > 25) {
+                    const correctionMeters =
+                      Math.min(
+                        aheadMeters,
+                        VEHICLE_ETA_REANCHOR_MAX_METERS
+                      )
                     currentDisplayProgress =
-                      etaScheduledProgress
+                      clampNumber(
+                        currentDisplayProgress -
+                          correctionMeters,
+                        0,
+                        vehicleState.path.totalMeters
+                      )
                     vehicleState.displayProgress =
-                      etaScheduledProgress
+                      currentDisplayProgress
                   }
+                }
+                else if (!etaAnchorActive) {
+                  vehicleState.etaAnchorKey =
+                    ''
                 }
 
                 const strictRouteMode =
@@ -5904,22 +5935,53 @@ function LiveTtcLayer({
                         currentDisplayProgress
                     )
 
-                  if (
+                  const desiredEtaSpeed =
                     secondsUntilNextStop >
                       0.35
-                  ) {
-                    visualSpeed =
-                      clampNumber(
-                        remainingMeters /
-                          secondsUntilNextStop,
-                        0.08,
-                        VEHICLE_ETA_MAX_SPEED_MPS
+                      ? clampNumber(
+                          remainingMeters /
+                            secondsUntilNextStop,
+                          0.08,
+                          VEHICLE_ETA_MAX_SPEED_MPS
+                        )
+                      : VEHICLE_ETA_MAX_SPEED_MPS
+                  const previousEtaSpeed =
+                    Number(
+                      vehicleState.etaVisualSpeed
+                    )
+                  const etaSpeedBase =
+                    Number.isFinite(
+                      previousEtaSpeed
+                    )
+                      ? previousEtaSpeed
+                      : clampNumber(
+                          visualSpeed,
+                          0,
+                          VEHICLE_ETA_MAX_SPEED_MPS
+                        )
+                  const maxEtaIncrease =
+                    VEHICLE_ETA_MAX_ACCEL_MPS2 *
+                    elapsedSeconds
+                  const maxEtaDecrease =
+                    VEHICLE_ETA_MAX_DECEL_MPS2 *
+                    elapsedSeconds
+
+                  visualSpeed =
+                    clampNumber(
+                      desiredEtaSpeed,
+                      Math.max(
+                        0,
+                        etaSpeedBase -
+                          maxEtaDecrease
+                      ),
+                      Math.min(
+                        VEHICLE_ETA_MAX_SPEED_MPS,
+                        etaSpeedBase +
+                          maxEtaIncrease
                       )
-                  }
-                  else {
-                    visualSpeed =
-                      VEHICLE_ETA_MAX_SPEED_MPS
-                  }
+                    )
+                  vehicleState.etaVisualSpeed =
+                    visualSpeed
 
                   targetProgress =
                     clampNumber(
@@ -5955,15 +6017,24 @@ function LiveTtcLayer({
 
                 let nextProgress
 
-                if (
+                const etaLandingDistance =
+                  etaAnchorActive
+                    ? Math.abs(
+                        nextStopProgressForPacing -
+                          currentDisplayProgress
+                      )
+                    : Infinity
+                const canLandOnEtaStop =
                   etaAnchorActive &&
                   secondsUntilNextStop <=
-                    0.35
-                ) {
-                  // Land on the stop at TTC's predicted time. The server moves
-                  // the anchor to the next TripUpdate stop on the next 2-second
-                  // poll, so a stale GPS sample cannot leave the bus parked at
-                  // a stop it has already simulated through.
+                    0.35 &&
+                  etaLandingDistance <=
+                    35
+
+                if (canLandOnEtaStop) {
+                  // Land exactly on the pole only when the marker is already
+                  // physically close. Never teleport a late marker hundreds of
+                  // metres just because the countdown reached zero.
                   nextProgress =
                     clampNumber(
                       nextStopProgressForPacing,
@@ -7043,6 +7114,19 @@ function LiveTtcLayer({
                     displayProgress,
                     filteredSpeed:
                       speedState.filteredSpeed,
+                    etaVisualSpeed:
+                      Number.isFinite(
+                        Number(
+                          previous?.etaVisualSpeed
+                        )
+                      )
+                        ? Number(
+                            previous.etaVisualSpeed
+                          )
+                        : speedState.filteredSpeed,
+                    etaAnchorKey:
+                      previous?.etaAnchorKey ||
+                      '',
                     stopped:
                       speedState.stopped,
                     sampleTimestamp:
