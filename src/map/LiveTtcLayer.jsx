@@ -1,3 +1,4 @@
+// TTC V29 - progressive vehicle scaling: compact citywide, V28 size from close zoom onward
 // TTC V28 - one-step larger vehicle icons + route-number labels; no logic changes
 // TTC V23 - TTC ETA-master vehicle simulation + prompt expiry of passed card rows
 // TTC V22 - canonical TTC stop IDs on stop clicks + exact stop context
@@ -4401,11 +4402,13 @@ function LiveTtcLayer({
                   'zoom',
                 ],
                 5.5,
-                0.76,
+                0.40,
                 9,
-                0.88,
+                0.48,
+                11,
+                0.56,
                 13,
-                1.05,
+                0.78,
                 15,
                 1.42,
                 17,
@@ -4474,11 +4477,13 @@ function LiveTtcLayer({
                   'zoom',
                 ],
                 5.5,
-                0.76,
+                0.40,
                 9,
-                0.88,
+                0.48,
+                11,
+                0.56,
                 13,
-                1.05,
+                0.78,
                 15,
                 1.42,
                 17,
