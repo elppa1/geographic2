@@ -950,6 +950,10 @@ async function ensureLoaded() {
   // server version that marked source history resolved but left the public
   // Police pin active.
   await reconcilePublishedPoliceMissingPersonResolutions()
+
+  // Catch up TPS arrest / custody updates that were already observed but
+  // never produced a RESOLVE card for an active wanted / suspect-sought pin.
+  await reconcilePublishedPoliceWantedSuspectResolutions()
 }
 
 
@@ -2388,6 +2392,187 @@ function policeRecordIsMissingPersonResolution({
 }
 
 
+function policeRecordIsWantedOrSuspectSought(
+  record
+) {
+  if (
+    policeRecordIsMissingOrElopeePerson(
+      record
+    )
+  ) {
+    return false
+  }
+
+
+  const category =
+    cleanText(
+      record?.category
+    )
+      .toLowerCase()
+
+
+  const text =
+    cleanText(
+      [
+        record?.title,
+        record?.description,
+        record?.tpsReleaseTitle,
+      ]
+        .filter(
+          Boolean
+        )
+        .join(
+          ' '
+        )
+    )
+
+
+  return (
+    category ===
+      'wanted' ||
+    /\bsuspects?\s+sought\b/i
+      .test(
+        text
+      ) ||
+    /\bsought\s+for\s+identification\b/i
+      .test(
+        text
+      ) ||
+    /\b(?:person|male|female|man|woman|suspect|suspects)\s+wanted\b/i
+      .test(
+        text
+      )
+  )
+}
+
+
+function policeRecordIsWantedSuspectArrestResolution(
+  record
+) {
+  if (
+    policeRecordIsMissingPersonResolution({
+      record,
+      rawAction:
+        '',
+    })
+  ) {
+    return false
+  }
+
+
+  const title =
+    cleanText(
+      record?.tpsReleaseTitle ||
+      record?.title
+    )
+
+
+  if (
+    !title
+  ) {
+    return false
+  }
+
+
+  return (
+    /\barrested\b/i
+      .test(
+        title
+      ) ||
+    /\bcharged\b/i
+      .test(
+        title
+      ) ||
+    /\bin\s+custody\b/i
+      .test(
+        title
+      ) ||
+    /\btaken\s+into\s+custody\b/i
+      .test(
+        title
+      ) ||
+    /\barrest\s+made\b/i
+      .test(
+        title
+      )
+  )
+}
+
+
+function findPoliceWantedSuspectResolutionTarget(
+  record
+) {
+  const requestedCaseNumber =
+    normalizePoliceCaseNumber(
+      policeCaseNumberFromRecord(
+        record
+      )
+    )
+
+
+  if (
+    !requestedCaseNumber
+  ) {
+    return null
+  }
+
+
+  const matches =
+    Object.values(
+      store.publishedNews ||
+      {}
+    )
+      .filter(
+        (candidate) => {
+          if (
+            candidate?.active ===
+              false
+          ) {
+            return false
+          }
+
+
+          const candidateCaseNumber =
+            normalizePoliceCaseNumber(
+              policeCaseNumberFromRecord(
+                candidate
+              )
+            )
+
+
+          return (
+            candidateCaseNumber ===
+              requestedCaseNumber &&
+            policeRecordIsWantedOrSuspectSought(
+              candidate
+            )
+          )
+        }
+      )
+      .sort(
+        (a, b) =>
+          new Date(
+            b?.serverUpdatedAt ||
+            b?.approvedAt ||
+            b?.publishedAt ||
+            0
+          )
+            .getTime() -
+          new Date(
+            a?.serverUpdatedAt ||
+            a?.approvedAt ||
+            a?.publishedAt ||
+            0
+          )
+            .getTime()
+      )
+
+
+  return matches[0] ||
+    null
+}
+
+
 function findPoliceMissingPersonResolutionTarget(
   record
 ) {
@@ -2668,6 +2853,159 @@ async function archivePublishedPoliceMissingPersonPin(
 }
 
 
+async function archivePublishedPoliceWantedSuspectPin({
+  target,
+  record,
+}) {
+  await ensureLoaded()
+
+
+  if (
+    !target ||
+    target.active ===
+      false ||
+    !policeRecordIsWantedOrSuspectSought(
+      target
+    )
+  ) {
+    return target ||
+      null
+  }
+
+
+  const externalId =
+    cleanText(
+      target.externalId ||
+      target.id
+    )
+
+
+  if (
+    !externalId
+  ) {
+    return null
+  }
+
+
+  const resolvedAt =
+    cleanText(
+      record?.resolvedAt
+    ) ||
+    new Date()
+      .toISOString()
+
+
+  const resolutionReason =
+    cleanText(
+      record?.resolutionReason
+    ) ||
+    'police-wanted-suspect-arrested'
+
+
+  return archivePublishedNewsRecord({
+    id:
+      target.id ||
+      '',
+
+    externalId:
+      target.externalId ||
+      '',
+
+    record: {
+      ...target,
+      ...record,
+
+      id:
+        target.id ||
+        record?.id ||
+        '',
+
+      externalId:
+        target.externalId ||
+        record?.externalId ||
+        '',
+
+      // Resolving an arrest / custody update must never move the old pin.
+      longitude:
+        target.longitude,
+
+      latitude:
+        target.latitude,
+
+      searchedLongitude:
+        target.searchedLongitude,
+
+      searchedLatitude:
+        target.searchedLatitude,
+
+      pinPositionMode:
+        target.pinPositionMode,
+
+      active:
+        false,
+
+      resolved:
+        true,
+
+      resolvedAt,
+
+      resolutionReason,
+    },
+
+    reason:
+      resolutionReason,
+  })
+}
+
+
+async function reconcilePublishedPoliceWantedSuspectResolutions() {
+  const sourceRecords =
+    Object.values(
+      store.sources?.police ||
+      {}
+    )
+
+
+  for (
+    const sourceRecord
+    of sourceRecords
+  ) {
+    if (
+      !policeRecordIsWantedSuspectArrestResolution(
+        sourceRecord
+      )
+    ) {
+      continue
+    }
+
+
+    const target =
+      findPoliceWantedSuspectResolutionTarget(
+        sourceRecord
+      )
+
+
+    if (
+      !target
+    ) {
+      continue
+    }
+
+
+    await queueLiveNewsroomRecord({
+      sourceKey:
+        'police',
+
+      record:
+        sourceRecord,
+
+      action:
+        '',
+    })
+  }
+}
+
+
 async function reconcilePublishedPoliceMissingPersonResolutions() {
   const sourceRecords =
     Object.values(
@@ -2891,6 +3229,135 @@ export async function queueLiveNewsroomRecord({
           ? ''
           : 'resolve',
     })
+  }
+
+
+  const isWantedSuspectArrestResolution =
+    isPolice &&
+    policeRecordIsWantedSuspectArrestResolution(
+      record
+    )
+
+
+  if (
+    isWantedSuspectArrestResolution
+  ) {
+    await ensureLoaded()
+
+
+    const target =
+      findPoliceWantedSuspectResolutionTarget(
+        record
+      )
+
+
+    if (
+      target
+    ) {
+      const incomingExternalId =
+        cleanText(
+          record?.externalId
+        )
+
+
+      const resolvedAt =
+        cleanText(
+          record?.resolvedAt
+        ) ||
+        new Date()
+          .toISOString()
+
+
+      const resolutionRecord = {
+        ...target,
+        ...record,
+
+        externalId:
+          target.externalId,
+
+        caseNumber:
+          policeCaseNumberFromRecord(
+            record
+          ) ||
+          target.caseNumber ||
+          target.policeCaseNumber ||
+          '',
+
+        targetExternalId:
+          target.externalId,
+
+        targetId:
+          target.id ||
+          '',
+
+        resolutionNoticeExternalId:
+          incomingExternalId &&
+          incomingExternalId !==
+            target.externalId
+            ? incomingExternalId
+            : (
+                record?.resolutionNoticeExternalId ||
+                ''
+              ),
+
+        active:
+          false,
+
+        resolved:
+          true,
+
+        resolvedAt,
+
+        resolutionReason:
+          'police-wanted-suspect-arrested',
+      }
+
+
+      await archivePublishedPoliceWantedSuspectPin({
+        target,
+        record:
+          resolutionRecord,
+      })
+
+
+      return observeRecord({
+        sourceKey,
+        record:
+          resolutionRecord,
+        forceAction:
+          'resolve',
+      })
+    }
+
+
+    const existingResolution =
+      store.sources?.[
+        sourceKey
+      ]?.[
+        cleanText(
+          record?.externalId
+        )
+      ] ||
+      null
+
+
+    if (
+      existingResolution?.resolved ===
+        true &&
+      cleanText(
+        existingResolution?.resolutionReason
+      )
+        .toLowerCase() ===
+        'police-wanted-suspect-arrested'
+    ) {
+      return {
+        action:
+          'seen',
+
+        record:
+          existingResolution,
+      }
+    }
   }
 
 

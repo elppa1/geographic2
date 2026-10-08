@@ -7134,7 +7134,7 @@ function appendEmojiMarkerIcon(
 //
 // NEWS:
 //   - an active TTC alert keeps pulsing while it remains active
-//   - Police pulse for 4 hours from first newsroom arrival
+//   - Police pulse for 4 hours from the TPS release timestamp
 //   - Fire pulses for 4 hours from first newsroom arrival
 //
 // NEW:
@@ -7566,6 +7566,45 @@ function getNewsroomPulseTimestamp(
 }
 
 
+function getPoliceReleasePulseTimestamp(
+  pin
+) {
+  const values = [
+    pin?.tpsBroadcastAt,
+    pin?.publishedAt,
+  ]
+
+
+  for (
+    const value of values
+  ) {
+    if (
+      !value
+    ) {
+      continue
+    }
+
+
+    const date =
+      new Date(
+        value
+      )
+
+
+    if (
+      !Number.isNaN(
+        date.getTime()
+      )
+    ) {
+      return date
+    }
+  }
+
+
+  return null
+}
+
+
 function getMarkerPulseState({
   pin,
   pinType,
@@ -7632,9 +7671,15 @@ function getMarkerPulseState({
 
 
   const date =
-    getNewsroomPulseTimestamp(
+    isTorontoPolicePin(
       pin
     )
+      ? getPoliceReleasePulseTimestamp(
+          pin
+        )
+      : getNewsroomPulseTimestamp(
+          pin
+        )
 
 
   if (
