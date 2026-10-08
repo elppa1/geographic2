@@ -951,6 +951,12 @@ async function ensureLoaded() {
   // Police pin active.
   await reconcilePublishedPoliceMissingPersonResolutions()
 
+  // Remove only synthetic pending arrest-story cards created by the
+  // over-broad startup reconciliation. Ordinary original TPS arrest stories
+  // are never touched.
+  await removeErroneousStandalonePoliceArrestCompanionStories()
+
+
   // Catch up TPS arrest / custody updates that were already observed but
   // never produced a RESOLVE card for an active wanted / suspect-sought pin.
   await reconcilePublishedPoliceWantedSuspectResolutions()
@@ -3166,6 +3172,150 @@ async function archivePublishedPoliceWantedSuspectPin({
 }
 
 
+
+async function removeErroneousStandalonePoliceArrestCompanionStories() {
+  const policeSources =
+    store.sources?.police ||
+    {}
+
+
+  const erroneousExternalIds =
+    new Set()
+
+
+  Object.values(
+    policeSources
+  )
+    .forEach(
+      (
+        sourceRecord
+      ) => {
+        const externalId =
+          cleanText(
+            sourceRecord?.externalId
+          )
+
+
+        if (
+          !externalId ||
+          !externalId.includes(
+            ':arrest-story:'
+          )
+        ) {
+          return
+        }
+
+
+        const targetExternalId =
+          cleanText(
+            sourceRecord?.targetExternalId
+          )
+
+
+        const resolutionNoticeExternalId =
+          cleanText(
+            sourceRecord?.resolutionNoticeExternalId
+          )
+
+
+        // The bad startup reconciliation created synthetic arrest-story
+        // records from ordinary standalone arrest releases. In those records,
+        // the "target" and the "resolution notice" collapse to the same
+        // source release ID because there was never an older wanted/suspect
+        // story to resolve.
+        //
+        // A real wanted/suspect resolution has two distinct identities:
+        // the old public target and the incoming arrest/update release.
+        if (
+          targetExternalId &&
+          resolutionNoticeExternalId &&
+          targetExternalId ===
+            resolutionNoticeExternalId
+        ) {
+          erroneousExternalIds.add(
+            externalId
+          )
+        }
+      }
+    )
+
+
+  if (
+    erroneousExternalIds.size ===
+      0
+  ) {
+    return
+  }
+
+
+  const beforeEventCount =
+    store.events.length
+
+
+  store.events =
+    store.events.filter(
+      (
+        event
+      ) =>
+        !(
+          event.sourceKey ===
+            'police' &&
+          event.status ===
+            'pending' &&
+          erroneousExternalIds.has(
+            cleanText(
+              event.externalId
+            )
+          )
+        )
+    )
+
+
+  erroneousExternalIds.forEach(
+    (
+      externalId
+    ) => {
+      const sourceRecord =
+        policeSources[
+          externalId
+        ]
+
+
+      if (
+        sourceRecord?.published ===
+          true
+      ) {
+        return
+      }
+
+
+      delete policeSources[
+        externalId
+      ]
+    }
+  )
+
+
+  const removedEvents =
+    beforeEventCount -
+    store.events.length
+
+
+  if (
+    removedEvents >
+      0
+  ) {
+    console.warn(
+      'LIVE NEWSROOM · REMOVED ERRONEOUS STANDALONE POLICE ARREST COMPANION CARDS:',
+      removedEvents
+    )
+
+
+    await persistStore()
+  }
+}
+
+
 async function reconcilePublishedPoliceWantedSuspectResolutions() {
   const sourceRecords =
     Object.values(
@@ -3187,18 +3337,47 @@ async function reconcilePublishedPoliceWantedSuspectResolutions() {
     }
 
 
+    const target =
+      findPoliceWantedSuspectResolutionTarget(
+        sourceRecord
+      )
+
+
+    const knownStoredResolution =
+      sourceRecord?.resolved ===
+        true &&
+      cleanText(
+        sourceRecord?.resolutionReason
+      )
+        .toLowerCase() ===
+        'police-wanted-suspect-arrested' &&
+      Boolean(
+        cleanText(
+          sourceRecord?.targetExternalId
+        )
+      )
+
+
+    // Only create the companion arrest/update story when we can prove this
+    // release resolves an older wanted/suspect story, or when it is already
+    // a stored resolution created by that exact path.
+    //
+    // Do NOT turn ordinary standalone "Man Arrested..." / "Woman Arrested..."
+    // releases into synthetic follow-up cards on server startup.
+    if (
+      !target &&
+      !knownStoredResolution
+    ) {
+      continue
+    }
+
+
     // The arrest / custody bulletin is a real follow-up story, not merely
     // a close notice. Make sure that full story has its own approvable
     // newsroom card even if an older server version only created RESOLVE.
     await queuePoliceWantedSuspectResolutionStory(
       sourceRecord
     )
-
-
-    const target =
-      findPoliceWantedSuspectResolutionTarget(
-        sourceRecord
-      )
 
 
     if (
