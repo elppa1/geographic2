@@ -3331,8 +3331,10 @@ function LiveTtcLayer({
               '50%',
             transform:
               'translateX(-50%)',
+            // Keep the LIVE BUSES route controls above every DOM map marker.
+            // This is stacking only: no map snapping, marker positioning, or click logic changes.
             zIndex:
-              '18',
+              '1200',
             display:
               'flex',
             gap:
@@ -3590,8 +3592,10 @@ function LiveTtcLayer({
               '50%',
             transform:
               'translate(-50%, -50%)',
+            // The GPS/Browse prompt is modal map UI and must sit above map
+            // markers and normal map popups.
             zIndex:
-              '22',
+              '1600',
             width:
               'min(330px, calc(100% - 34px))',
             background:
