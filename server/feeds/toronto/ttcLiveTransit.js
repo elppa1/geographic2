@@ -1,3 +1,4 @@
+// TTC V23 - TTC stop predictions are authoritative; vehicles receive next + following ETA anchors
 // TTC V22 - canonical TTC stop identity + exact route boards + ETA stop simulation
 // TTC V21 - exact-stop TTC boards + ETA-authoritative vehicle simulation + no stop-code crossfeed
 // TTC V20 - route-complete stop boards + ETA-aware vehicle pacing + faster first paint
@@ -3556,8 +3557,25 @@ function realtimeNextPredictedStopForVehicle(
             )
       )
 
-  return candidates[0] ||
+  const nextStop =
+    candidates[0] ||
     null
+
+  if (
+    !nextStop
+  ) {
+    return null
+  }
+
+  // V23: expose the next two TTC TripUpdate anchors. The client uses the
+  // following stop only to derive a plausible schedule pace; the actual ETA
+  // for the next stop remains TTC's prediction and is never rewritten.
+  return {
+    ...nextStop,
+    followingStop:
+      candidates[1] ||
+      null,
+  }
 }
 
 
@@ -3864,6 +3882,24 @@ async function getVehiclesPayload(
               stop?.name ||
               '',
             nextStopArrivalTime,
+            followingStopId:
+              predictedStop?.followingStop?.stopId ||
+              '',
+            followingStopSequence:
+              predictedStop?.followingStop?.stopSequence ??
+              null,
+            followingStopLatitude:
+              predictedStop?.followingStop?.latitude ??
+              null,
+            followingStopLongitude:
+              predictedStop?.followingStop?.longitude ??
+              null,
+            followingStopName:
+              predictedStop?.followingStop?.stopName ||
+              '',
+            followingStopArrivalTime:
+              predictedStop?.followingStop?.arrivalTime ??
+              null,
             currentStatus:
               cleanText(
                 vehicle?.currentStatus
@@ -4704,7 +4740,7 @@ async function getGtfsArrivalsPayload(
                   null ||
                 time <
                   nowSeconds -
-                    60
+                    8
               ) {
                 return
               }

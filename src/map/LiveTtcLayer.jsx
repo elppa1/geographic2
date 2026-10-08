@@ -1,3 +1,4 @@
+// TTC V23 - TTC ETA-master vehicle simulation + prompt expiry of passed card rows
 // TTC V22 - canonical TTC stop IDs on stop clicks + exact stop context
 // TTC V21 - exact TTC stop boards + ETA-authoritative stop-to-stop vehicle simulation
 // TTC V20 - faster first paint + exact-next-stop ETA-aware pacing
@@ -336,6 +337,14 @@ const VEHICLE_VISUAL_MAX_SPEED_MPS =
   8.5
 const VEHICLE_ETA_MAX_SPEED_MPS =
   16
+const VEHICLE_ETA_SIM_DEFAULT_SPEED_MPS =
+  5
+const VEHICLE_ETA_SIM_MIN_SPEED_MPS =
+  1.5
+const VEHICLE_ETA_SIM_MAX_SPEED_MPS =
+  11
+const VEHICLE_ETA_REANCHOR_MAX_METERS =
+  5000
 const VEHICLE_DEFAULT_MOVING_SPEED_MPS =
   3.2
 // TTC TRUTH MODE · do not force a vehicle to crawl without a new TTC sample.
@@ -5682,7 +5691,7 @@ function LiveTtcLayer({
                     VEHICLE_VISUAL_MAX_SPEED_MPS
                   )
 
-                const currentDisplayProgress =
+                let currentDisplayProgress =
                   clampNumber(
                     Number(
                       vehicleState.displayProgress
@@ -5700,13 +5709,79 @@ function LiveTtcLayer({
                         vehicleState.properties?.nextStopArrivalTime
                       )
                 const nextStopProgressForPacing =
-                  Number(
-                    vehicleState.nextStopProgress
-                  )
+                  vehicleState.nextStopProgress ===
+                    null ||
+                  vehicleState.nextStopProgress ===
+                    undefined
+                    ? null
+                    : Number(
+                        vehicleState.nextStopProgress
+                      )
+                const followingStopArrivalTime =
+                  vehicleState.properties?.followingStopArrivalTime ===
+                    null ||
+                  vehicleState.properties?.followingStopArrivalTime ===
+                    undefined
+                    ? null
+                    : Number(
+                        vehicleState.properties?.followingStopArrivalTime
+                      )
+                const followingStopProgressForPacing =
+                  vehicleState.followingStopProgress ===
+                    null ||
+                  vehicleState.followingStopProgress ===
+                    undefined
+                    ? null
+                    : Number(
+                        vehicleState.followingStopProgress
+                      )
                 const secondsUntilNextStop =
                   nextStopArrivalTime -
                   Date.now() /
                     1000
+                const etaSegmentSeconds =
+                  followingStopArrivalTime !==
+                    null &&
+                  Number.isFinite(
+                    followingStopArrivalTime
+                  ) &&
+                  Number.isFinite(
+                    nextStopArrivalTime
+                  )
+                    ? followingStopArrivalTime -
+                      nextStopArrivalTime
+                    : null
+                const etaSegmentMeters =
+                  Number.isFinite(
+                    followingStopProgressForPacing
+                  ) &&
+                  Number.isFinite(
+                    nextStopProgressForPacing
+                  )
+                    ? followingStopProgressForPacing -
+                      nextStopProgressForPacing
+                    : null
+                const etaReferenceSpeed =
+                  etaSegmentSeconds >
+                    8 &&
+                  etaSegmentMeters >
+                    15
+                    ? clampNumber(
+                        etaSegmentMeters /
+                          etaSegmentSeconds,
+                        VEHICLE_ETA_SIM_MIN_SPEED_MPS,
+                        VEHICLE_ETA_SIM_MAX_SPEED_MPS
+                      )
+                    : clampNumber(
+                        Number(
+                          vehicleState.filteredSpeed ||
+                          vehicleState.properties?.speed ||
+                          VEHICLE_ETA_SIM_DEFAULT_SPEED_MPS
+                        ) ||
+                          VEHICLE_ETA_SIM_DEFAULT_SPEED_MPS,
+                        VEHICLE_ETA_SIM_MIN_SPEED_MPS,
+                        VEHICLE_ETA_SIM_MAX_SPEED_MPS
+                      )
                 const etaAnchorActive =
                   nextStopArrivalTime !==
                     null &&
@@ -5715,10 +5790,47 @@ function LiveTtcLayer({
                   ) &&
                   Number.isFinite(
                     nextStopProgressForPacing
-                  ) &&
-                  nextStopProgressForPacing >=
-                    currentDisplayProgress -
-                      3
+                  )
+
+                // V23 ETA-MASTER: TTC's stop prediction owns the visual
+                // clock. If stale GPS/older animation has the marker materially
+                // closer to (or beyond) the next stop than TTC's ETA allows,
+                // re-anchor it to the schedule-consistent point behind that
+                // exact trip stop. After this correction the ordinary frame
+                // loop advances it continuously to the pole at TTC's ETA.
+                if (
+                  etaAnchorActive &&
+                  secondsUntilNextStop >
+                    2
+                ) {
+                  const etaReanchorDistance =
+                    Math.min(
+                      VEHICLE_ETA_REANCHOR_MAX_METERS,
+                      Math.max(
+                        20,
+                        etaReferenceSpeed *
+                          secondsUntilNextStop
+                      )
+                    )
+                  const etaScheduledProgress =
+                    clampNumber(
+                      nextStopProgressForPacing -
+                        etaReanchorDistance,
+                      0,
+                      nextStopProgressForPacing
+                    )
+
+                  if (
+                    currentDisplayProgress >
+                      etaScheduledProgress +
+                        25
+                  ) {
+                    currentDisplayProgress =
+                      etaScheduledProgress
+                    vehicleState.displayProgress =
+                      etaScheduledProgress
+                  }
+                }
 
                 const strictRouteMode =
                   Boolean(
@@ -5855,7 +5967,7 @@ function LiveTtcLayer({
                   nextProgress =
                     clampNumber(
                       nextStopProgressForPacing,
-                      currentDisplayProgress,
+                      0,
                       vehicleState.path.totalMeters
                     )
                 }
@@ -6548,6 +6660,61 @@ function LiveTtcLayer({
                                 vehicle.nextStopArrivalTime
                               )
                             : null,
+                        followingStopId:
+                          vehicle.followingStopId ||
+                          previous.properties?.followingStopId ||
+                          '',
+                        followingStopSequence:
+                          Number.isFinite(
+                            Number(
+                              vehicle.followingStopSequence
+                            )
+                          )
+                            ? Number(
+                                vehicle.followingStopSequence
+                              )
+                            : previous.properties?.followingStopSequence ??
+                              null,
+                        followingStopName:
+                          vehicle.followingStopName ||
+                          previous.properties?.followingStopName ||
+                          '',
+                        followingStopLatitude:
+                          Number.isFinite(
+                            Number(
+                              vehicle.followingStopLatitude
+                            )
+                          )
+                            ? Number(
+                                vehicle.followingStopLatitude
+                              )
+                            : previous.properties?.followingStopLatitude ??
+                              null,
+                        followingStopLongitude:
+                          Number.isFinite(
+                            Number(
+                              vehicle.followingStopLongitude
+                            )
+                          )
+                            ? Number(
+                                vehicle.followingStopLongitude
+                              )
+                            : previous.properties?.followingStopLongitude ??
+                              null,
+                        followingStopArrivalTime:
+                          vehicle.followingStopArrivalTime !==
+                            null &&
+                          vehicle.followingStopArrivalTime !==
+                            undefined &&
+                          Number.isFinite(
+                            Number(
+                              vehicle.followingStopArrivalTime
+                            )
+                          )
+                            ? Number(
+                                vehicle.followingStopArrivalTime
+                              )
+                            : null,
                         occupancyStatus:
                           vehicle.occupancyStatus ||
                           previous.properties?.occupancyStatus ||
@@ -6781,6 +6948,40 @@ function LiveTtcLayer({
                     NEXT_STOP_ROUTE_LOCK_MAX_METERS
                     ? nextStopProjection.progressMeters
                     : null
+                const followingStopCoordinate =
+                  Number.isFinite(
+                    Number(
+                      vehicle.followingStopLongitude
+                    )
+                  ) &&
+                  Number.isFinite(
+                    Number(
+                      vehicle.followingStopLatitude
+                    )
+                  )
+                    ? [
+                        Number(
+                          vehicle.followingStopLongitude
+                        ),
+                        Number(
+                          vehicle.followingStopLatitude
+                        ),
+                      ]
+                    : null
+                const followingStopProjection =
+                  path &&
+                  followingStopCoordinate
+                    ? projectCoordinateOntoRoutePath(
+                        followingStopCoordinate,
+                        path
+                      )
+                    : null
+                const followingStopProgress =
+                  followingStopProjection &&
+                  followingStopProjection.distanceMeters <=
+                    NEXT_STOP_ROUTE_LOCK_MAX_METERS
+                    ? followingStopProjection.progressMeters
+                    : null
 
                 let displayProgress =
                   null
@@ -6838,6 +7039,7 @@ function LiveTtcLayer({
                     sampleProgress,
                     realProgress,
                     nextStopProgress,
+                    followingStopProgress,
                     displayProgress,
                     filteredSpeed:
                       speedState.filteredSpeed,
@@ -6974,6 +7176,56 @@ function LiveTtcLayer({
                         )
                           ? Number(
                               vehicle.nextStopArrivalTime
+                            )
+                          : null,
+                      followingStopId:
+                        vehicle.followingStopId ||
+                        '',
+                      followingStopSequence:
+                        Number.isFinite(
+                          Number(
+                            vehicle.followingStopSequence
+                          )
+                        )
+                          ? Number(
+                              vehicle.followingStopSequence
+                            )
+                          : null,
+                      followingStopName:
+                        vehicle.followingStopName ||
+                        '',
+                      followingStopLatitude:
+                        Number.isFinite(
+                          Number(
+                            vehicle.followingStopLatitude
+                          )
+                        )
+                          ? Number(
+                              vehicle.followingStopLatitude
+                            )
+                          : null,
+                      followingStopLongitude:
+                        Number.isFinite(
+                          Number(
+                            vehicle.followingStopLongitude
+                          )
+                        )
+                          ? Number(
+                              vehicle.followingStopLongitude
+                            )
+                          : null,
+                      followingStopArrivalTime:
+                        vehicle.followingStopArrivalTime !==
+                          null &&
+                        vehicle.followingStopArrivalTime !==
+                          undefined &&
+                        Number.isFinite(
+                          Number(
+                            vehicle.followingStopArrivalTime
+                          )
+                        )
+                          ? Number(
+                              vehicle.followingStopArrivalTime
                             )
                           : null,
                       currentStatus,
