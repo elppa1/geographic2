@@ -8624,9 +8624,88 @@ function createHistoricStackMarker({
 function getHistoricMarkerScale(
   zoom
 ) {
-  // Historic markers use their natural/original size at every zoom.
-  // Keep the helper in place so marker creation remains otherwise untouched.
-  void zoom
+  const numericZoom =
+    Number(
+      zoom
+    )
+
+  if (
+    !Number.isFinite(
+      numericZoom
+    )
+  ) {
+    return 1
+  }
+
+  const stops = [
+    [9, 0.42],
+    [10.5, 0.50],
+    [12, 0.62],
+    [13.5, 0.76],
+    [15, 1],
+  ]
+
+  if (
+    numericZoom <=
+      stops[0][0]
+  ) {
+    return stops[0][1]
+  }
+
+  const lastStop =
+    stops[
+      stops.length - 1
+    ]
+
+  if (
+    numericZoom >=
+      lastStop[0]
+  ) {
+    return lastStop[1]
+  }
+
+  for (
+    let index = 1;
+    index < stops.length;
+    index += 1
+  ) {
+    const [
+      upperZoom,
+      upperScale,
+    ] = stops[index]
+
+    const [
+      lowerZoom,
+      lowerScale,
+    ] = stops[
+      index - 1
+    ]
+
+    if (
+      numericZoom <=
+        upperZoom
+    ) {
+      const progress =
+        (
+          numericZoom -
+          lowerZoom
+        ) /
+        (
+          upperZoom -
+          lowerZoom
+        )
+
+      return (
+        lowerScale +
+        (
+          upperScale -
+          lowerScale
+        ) *
+          progress
+      )
+    }
+  }
+
   return 1
 }
 
@@ -8748,23 +8827,11 @@ function createMarker({
     element.className =
       'geographic-pin-emoji-marker geographic-pin-historic-emoji-marker'
 
-    const historicMarkerScale =
-      getHistoricMarkerScale(
-        map?.getZoom?.()
-      )
-
-
     element.style.width =
-      `${Math.round(
-        32 *
-          historicMarkerScale
-      )}px`
+      '32px'
 
     element.style.height =
-      `${Math.round(
-        32 *
-          historicMarkerScale
-      )}px`
+      '32px'
 
     element.style.padding =
       '0'
@@ -8814,9 +8881,26 @@ function createMarker({
       historicIcon.emoji
     )
 
+    const historicIconShell =
+      element.firstElementChild
 
-    // Use the same emoji sizing as Police / Fire / TTC news markers.
-    // appendEmojiMarkerIcon() already applies the correct desktop/mobile size.
+    if (
+      historicIconShell instanceof
+        HTMLElement
+    ) {
+      // Keep the full 32px click target and scale only the visible Historic
+      // artwork. This preserves marker anchoring, snapping, popup behavior,
+      // and the existing close-zoom size while decluttering citywide views.
+      historicIconShell.style.transform =
+        'scale(var(--geographic-historic-pin-scale, 1))'
+
+      historicIconShell.style.willChange =
+        'transform'
+    }
+
+
+    // Use the same base emoji sizing as Police / Fire / TTC news markers.
+    // Historic artwork alone is progressively scaled by map zoom.
 
 
   }
@@ -12562,8 +12646,31 @@ function MapPins({
         return
       }
 
+      const syncHistoricMarkerScale =
+        () => {
+          const container =
+            map.getContainer?.()
+
+          if (
+            !container
+          ) {
+            return
+          }
+
+          container.style.setProperty(
+            '--geographic-historic-pin-scale',
+            String(
+              getHistoricMarkerScale(
+                map.getZoom?.()
+              )
+            )
+          )
+        }
+
       const refreshViewport =
         () => {
+          syncHistoricMarkerScale()
+
           setViewportRevision(
             (
               current
@@ -12571,6 +12678,15 @@ function MapPins({
               current + 1
           )
         }
+
+      // Historic pin artwork scales continuously without rebuilding markers.
+      // That keeps open popups/snapping stable while decluttering far zooms.
+      syncHistoricMarkerScale()
+
+      map.on(
+        'zoom',
+        syncHistoricMarkerScale
+      )
 
       // Pin visibility is zoom-dependent, not pan-dependent. Rebuilding every
       // marker after a popup auto-pan tears down the popup that just opened,
@@ -12583,9 +12699,20 @@ function MapPins({
 
       return () => {
         map.off(
+          'zoom',
+          syncHistoricMarkerScale
+        )
+
+        map.off(
           'zoomend',
           refreshViewport
         )
+
+        map
+          .getContainer?.()
+          ?.style.removeProperty(
+            '--geographic-historic-pin-scale'
+          )
       }
     },
     [
