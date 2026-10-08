@@ -1,3 +1,4 @@
+// TTC V22 - canonical TTC stop identity + exact route boards + ETA stop simulation
 // TTC V21 - exact-stop TTC boards + ETA-authoritative vehicle simulation + no stop-code crossfeed
 // TTC V20 - route-complete stop boards + ETA-aware vehicle pacing + faster first paint
 // TTC V19 - truthful stop delay notice + exact-trip bus route labels (no movement changes)
@@ -1765,6 +1766,10 @@ async function buildStationIndex() {
 
   const stations =
     []
+  const stopsById =
+    new Map()
+  const stopsByCode =
+    new Map()
 
   forEachCsvRow(
     stopsText,
@@ -1774,6 +1779,10 @@ async function buildStationIndex() {
       const id =
         cleanText(
           row.stop_id
+        )
+      const code =
+        cleanText(
+          row.stop_code
         )
       const latitude =
         numberOrNull(
@@ -1803,19 +1812,9 @@ async function buildStationIndex() {
         return
       }
 
-      if (
-        locationType !==
-        1
-      ) {
-        return
-      }
-
-      stations.push({
+      const stop = {
         id,
-        code:
-          cleanText(
-            row.stop_code
-          ),
+        code,
         name,
         latitude,
         longitude,
@@ -1824,7 +1823,40 @@ async function buildStationIndex() {
           cleanText(
             row.parent_station
           ),
-      })
+      }
+
+      stopsById.set(
+        id,
+        stop
+      )
+
+      if (
+        code
+      ) {
+        const sameCode =
+          stopsByCode.get(
+            code
+          ) ||
+          []
+
+        sameCode.push(
+          stop
+        )
+
+        stopsByCode.set(
+          code,
+          sameCode
+        )
+      }
+
+      if (
+        locationType ===
+          1
+      ) {
+        stations.push(
+          stop
+        )
+      }
     }
   )
 
@@ -1834,6 +1866,8 @@ async function buildStationIndex() {
   return {
     loadedAt:
       Date.now(),
+    stopsById,
+    stopsByCode,
     stations:
       stations.filter(
         (
@@ -1898,9 +1932,13 @@ async function getStationIndex() {
 
           const fallback = {
             loadedAt:
-              Date.now(),
+              0,
             stations:
               [],
+            stopsById:
+              new Map(),
+            stopsByCode:
+              new Map(),
           }
 
           stationsCache =
@@ -1916,6 +1954,213 @@ async function getStationIndex() {
       )
 
   return stationsPromise
+}
+
+
+function chooseCanonicalStop(
+  candidates,
+  {
+    name =
+      '',
+    latitude =
+      null,
+    longitude =
+      null,
+  } = {}
+) {
+  const list =
+    Array.isArray(
+      candidates
+    )
+      ? candidates.filter(
+          Boolean
+        )
+      : []
+
+  if (
+    list.length ===
+      0
+  ) {
+    return null
+  }
+
+  if (
+    list.length ===
+      1
+  ) {
+    return list[0]
+  }
+
+  const normalizedName =
+    cleanText(
+      name
+    )
+      .toLowerCase()
+  const lat =
+    numberOrNull(
+      latitude
+    )
+  const lon =
+    numberOrNull(
+      longitude
+    )
+
+  const ranked =
+    list.map(
+      (
+        stop
+      ) => ({
+        stop,
+        nameMatch:
+          normalizedName &&
+          cleanText(
+            stop?.name
+          )
+            .toLowerCase() ===
+            normalizedName,
+        distance:
+          lat !==
+              null &&
+            lon !==
+              null
+            ? distanceMeters(
+                lat,
+                lon,
+                stop.latitude,
+                stop.longitude
+              )
+            : Number.POSITIVE_INFINITY,
+      })
+    )
+
+  ranked.sort(
+    (
+      a,
+      b
+    ) =>
+      Number(
+        b.nameMatch
+      ) -
+        Number(
+          a.nameMatch
+        ) ||
+      a.distance -
+        b.distance
+  )
+
+  return ranked[0]?.stop ||
+    null
+}
+
+
+function canonicalStopFromIndex(
+  index,
+  {
+    stopId =
+      '',
+    stopCode =
+      '',
+    stopName =
+      '',
+    latitude =
+      null,
+    longitude =
+      null,
+  } = {}
+) {
+  if (
+    !index
+  ) {
+    return null
+  }
+
+  const normalizedCode =
+    cleanText(
+      stopCode
+    )
+
+  if (
+    normalizedCode
+  ) {
+    const byCode =
+      chooseCanonicalStop(
+        index.stopsByCode?.get(
+          normalizedCode
+        ),
+        {
+          name:
+            stopName,
+          latitude,
+          longitude,
+        }
+      )
+
+    if (
+      byCode
+    ) {
+      return byCode
+    }
+  }
+
+  const normalizedId =
+    cleanText(
+      stopId
+    )
+
+  return normalizedId
+    ? index.stopsById?.get(
+        normalizedId
+      ) ||
+        null
+    : null
+}
+
+
+async function resolveCanonicalStop({
+  stopId,
+  stopCode,
+  stopName =
+    '',
+  latitude =
+    null,
+  longitude =
+    null,
+}) {
+  const index =
+    await getStationIndex()
+
+  const canonical =
+    canonicalStopFromIndex(
+      index,
+      {
+        stopId,
+        stopCode,
+        stopName,
+        latitude,
+        longitude,
+      }
+    )
+
+  if (
+    canonical
+  ) {
+    return {
+      stop:
+        canonical,
+      stopId:
+        canonical.id,
+      resolution:
+        cleanText(
+          stopCode
+        )
+          ? 'TTC_FULL_GTFS_STOP_CODE'
+          : 'TTC_FULL_GTFS_STOP_ID',
+    }
+  }
+
+  throw new Error(
+    `Unable to resolve TTC stop identity for code ${cleanText(stopCode) || '(none)'}`
+  )
 }
 
 
@@ -1966,12 +2211,31 @@ function routeShapeFeature(
 
 
 function stopFeature(
-  stop
+  stop,
+  canonicalIndex
 ) {
+  const canonical =
+    canonicalStopFromIndex(
+      canonicalIndex,
+      {
+        stopId:
+          stop.id,
+        stopCode:
+          stop.code,
+        stopName:
+          stop.name,
+        latitude:
+          stop.latitude,
+        longitude:
+          stop.longitude,
+      }
+    )
+
   return {
     type:
       'Feature',
     id:
+      canonical?.id ||
       stop.id,
     geometry: {
       type:
@@ -1983,6 +2247,9 @@ function stopFeature(
     },
     properties: {
       stopId:
+        canonical?.id ||
+        '',
+      surfaceStopId:
         stop.id,
       stopCode:
         stop.code,
@@ -1992,6 +2259,10 @@ function stopFeature(
         stop.locationType,
       parentStation:
         stop.parentStation,
+      stopIdentitySource:
+        canonical
+          ? 'TTC_FULL_GTFS'
+          : 'UNRESOLVED',
     },
   }
 }
@@ -2096,7 +2367,13 @@ async function getNetworkPayload(
               )
           )
           .map(
-            stopFeature
+            (
+              stop
+            ) =>
+              stopFeature(
+                stop,
+                stationIndex
+              )
           )
       : []
 
@@ -3145,7 +3422,7 @@ function realtimeArrivalForVehicleStop(
 function realtimeNextPredictedStopForVehicle(
   tripId,
   currentStopSequence,
-  surface,
+  stopIndex,
   nowSeconds = Math.floor(Date.now() / 1000)
 ) {
   const normalizedTripId =
@@ -3155,7 +3432,7 @@ function realtimeNextPredictedStopForVehicle(
 
   if (
     !normalizedTripId ||
-    !surface ||
+    !stopIndex ||
     tripUpdateCache?.usedLegacyFallback ||
     !tripUpdateCache ||
     Date.now() -
@@ -3206,7 +3483,7 @@ function realtimeNextPredictedStopForVehicle(
               update
             )
           const stop =
-            surface?.stopsById?.get(
+            stopIndex?.stopsById?.get(
               stopId
             )
 
@@ -3303,6 +3580,25 @@ async function getVehiclesPayload(
 
   const surface =
     surfaceCache
+  const canonicalStops =
+    stationsCache
+
+  if (
+    !canonicalStops
+  ) {
+    getStationIndex()
+      .catch(
+        (
+          error
+        ) => {
+          console.warn(
+            'LIVE TTC CANONICAL STOP WARMUP:',
+            error?.message ||
+              error
+          )
+        }
+      )
+  }
 
   if (
     !surface
@@ -3418,9 +3714,10 @@ async function getVehiclesPayload(
             )
 
           const stop =
-            surface?.stopsById?.get(
+            canonicalStops?.stopsById?.get(
               stopId
-            )
+            ) ||
+            null
 
           const currentStopSequence =
             numberOrNull(
@@ -3435,7 +3732,7 @@ async function getVehiclesPayload(
             realtimeNextPredictedStopForVehicle(
               tripId,
               currentStopSequence,
-              surface,
+              canonicalStops,
               nowSeconds
             )
 
@@ -4212,7 +4509,9 @@ function realtimeStopTime(
 
 
 async function getGtfsArrivalsPayload(
-  stopId
+  stopId,
+  stopMetadata =
+    null
 ) {
   const normalizedStopId =
     cleanText(
@@ -4254,6 +4553,7 @@ async function getGtfsArrivalsPayload(
   }
 
   const stop =
+    stopMetadata ||
     surface?.stopsById?.get(
       normalizedStopId
     )
@@ -4777,39 +5077,47 @@ function buildUmoStopPayload({
 async function getArrivalsPayloadUnreconciled({
   stopId,
   stopCode,
+  stopName =
+    '',
+  latitude =
+    null,
+  longitude =
+    null,
 }) {
   const arrivalRequestStart =
     Date.now()
-  const normalizedStopId =
-    cleanText(
-      stopId
-    )
 
-  if (
-    !normalizedStopId
-  ) {
-    throw new Error(
-      'stopId is required'
-    )
-  }
+  const resolved =
+    await resolveCanonicalStop({
+      stopId,
+      stopCode,
+      stopName,
+      latitude,
+      longitude,
+    })
 
-  // V21 STOP TRUTH: exact stop popups use the exact GTFS stop_id against
-  // TTC BusTime GTFS-Realtime TripUpdates. Do NOT send public GTFS stop_code
-  // to UMO as stopId: those are different identifier namespaces and can map
-  // a Dufferin pole to an unrelated stop, producing impossible routes.
   const gtfsPayload =
     await getGtfsArrivalsPayload(
-      normalizedStopId
+      resolved.stopId,
+      resolved.stop
     )
 
   return {
     ...gtfsPayload,
     predictionAuthority:
       'GTFS-RT',
+    requestedStopId:
+      cleanText(
+        stopId
+      ),
     requestedStopCode:
       cleanText(
         stopCode
       ),
+    resolvedStopId:
+      resolved.stopId,
+    stopIdentityResolution:
+      resolved.resolution,
     requestElapsedMs:
       Date.now() -
       arrivalRequestStart,
@@ -5404,10 +5712,33 @@ function applyArrivalTruth(payload, stopId, stopCode) {
   }
 }
 
-async function getArrivalsPayload({ stopId, stopCode }) {
-  const payload = await getArrivalsPayloadUnreconciled({ stopId, stopCode })
-  return applyArrivalTruth(payload, stopId, stopCode)
+async function getArrivalsPayload({
+  stopId,
+  stopCode,
+  stopName =
+    '',
+  latitude =
+    null,
+  longitude =
+    null,
+}) {
+  const payload =
+    await getArrivalsPayloadUnreconciled({
+      stopId,
+      stopCode,
+      stopName,
+      latitude,
+      longitude,
+    })
+
+  return applyArrivalTruth(
+    payload,
+    payload.resolvedStopId ||
+      stopId,
+    stopCode
+  )
 }
+
 
 async function getNearbyArrivalsPayload(
   latitude,
@@ -5771,6 +6102,23 @@ export function ttcLiveTransitFeed() {
                     )
                 }
 
+                if (
+                  !stationsCache
+                ) {
+                  getStationIndex()
+                    .catch(
+                      (
+                        error
+                      ) => {
+                        console.warn(
+                          'LIVE TTC STOP IDENTITY PREWARM:',
+                          error?.message ||
+                            error
+                        )
+                      }
+                    )
+                }
+
                 sendJson(
                   res,
                   200,
@@ -5800,6 +6148,18 @@ export function ttcLiveTransitFeed() {
                 url.searchParams.get(
                   'stopCode'
                 )
+              const stopName =
+                url.searchParams.get(
+                  'stopName'
+                )
+              const latitude =
+                url.searchParams.get(
+                  'latitude'
+                )
+              const longitude =
+                url.searchParams.get(
+                  'longitude'
+                )
 
               sendJson(
                 res,
@@ -5807,6 +6167,9 @@ export function ttcLiveTransitFeed() {
                 await getArrivalsPayload({
                   stopId,
                   stopCode,
+                  stopName,
+                  latitude,
+                  longitude,
                 })
               )
               return

@@ -1,3 +1,4 @@
+// TTC V22 - canonical TTC stop IDs on stop clicks + exact stop context
 // TTC V21 - exact TTC stop boards + ETA-authoritative stop-to-stop vehicle simulation
 // TTC V20 - faster first paint + exact-next-stop ETA-aware pacing
 // TTC V19 - one clear live-estimate delay note; vehicle styling untouched
@@ -7245,9 +7246,37 @@ function LiveTtcLayer({
             controller
 
           try {
+            const stopCoordinates =
+              Array.isArray(
+                feature.geometry?.coordinates
+              )
+                ? feature.geometry.coordinates
+                : [
+                    event.lngLat.lng,
+                    event.lngLat.lat,
+                  ]
+            const params =
+              new URLSearchParams({
+                stopId,
+                stopCode,
+                stopName:
+                  String(
+                    properties.stopName ||
+                    ''
+                  ),
+                latitude:
+                  String(
+                    stopCoordinates[1]
+                  ),
+                longitude:
+                  String(
+                    stopCoordinates[0]
+                  ),
+              })
+
             const response =
               await fetch(
-                `${ARRIVALS_ENDPOINT}?stopId=${encodeURIComponent(stopId)}&stopCode=${encodeURIComponent(stopCode)}`,
+                `${ARRIVALS_ENDPOINT}?${params.toString()}`,
                 {
                   cache:
                     'no-store',
