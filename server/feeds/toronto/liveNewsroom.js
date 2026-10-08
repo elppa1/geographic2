@@ -1598,6 +1598,24 @@ async function observeRecord({
       : null
 
 
+  const pendingPoliceNewEvent =
+    sourceKey ===
+      'police'
+      ? findPendingEvent({
+          sourceKey:
+            'police',
+
+          action:
+            'new',
+
+          externalId,
+
+          version:
+            currentFingerprint,
+        })
+      : null
+
+
   const fireRaised =
     isFire &&
     existing
@@ -1670,6 +1688,25 @@ async function observeRecord({
       // story that was already published remain eligible for later review.
       action =
         'seen'
+    }
+    else if (
+      sourceKey ===
+        'police' &&
+      existing.published !==
+        true &&
+      previousFingerprint ===
+        currentFingerprint &&
+      !existing.lastEditorialAction &&
+      !pendingPoliceNewEvent
+    ) {
+      // Recovery path for a trusted TPS delivery whose source state was
+      // persisted but whose pending NEW newsroom card is no longer present.
+      //
+      // This does not resurrect rejected stories and does not change normal
+      // Police NEW / UPDATE / RESOLVE classification. It only rebuilds the
+      // missing pending NEW card when the exact same source version is replayed.
+      action =
+        'new'
     }
     else if (
       isFire
