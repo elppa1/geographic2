@@ -24374,7 +24374,12 @@ function AdminRoom() {
                                   }}
                                 >
                                   <div className="admin-record-meta">
-                                    PUBLIC MISSING PIN ALREADY CLOSED
+                                    {
+                                      record.resolutionReason ===
+                                        'police-wanted-suspect-arrested'
+                                        ? 'PUBLIC WANTED / SUSPECT PIN ALREADY CLOSED'
+                                        : 'PUBLIC MISSING PIN ALREADY CLOSED'
+                                    }
                                   </div>
 
                                   <h2>
@@ -24409,7 +24414,12 @@ function AdminRoom() {
                                   {isTpsNewsroomRecord(
                                     record
                                   )
-                                    ? 'OFFICIAL TPS LOCATED NOTICE · ACKNOWLEDGE ONLY'
+                                    ? (
+                                        record.resolutionReason ===
+                                          'police-wanted-suspect-arrested'
+                                          ? 'OFFICIAL TPS ARREST UPDATE · CLOSE ACKNOWLEDGEMENT ONLY'
+                                          : 'OFFICIAL TPS LOCATED NOTICE · ACKNOWLEDGE ONLY'
+                                      )
                                     : (
                                         record.resolutionReason ===
                                           'missing-from-live-feed'

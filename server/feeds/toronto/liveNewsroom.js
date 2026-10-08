@@ -2499,6 +2499,214 @@ function policeRecordIsWantedSuspectArrestResolution(
 }
 
 
+
+function policeWantedSuspectResolutionWasAcknowledged(
+  record
+) {
+  const version =
+    cleanText(
+      record?.sourceFingerprint
+    ) ||
+    fingerprint(
+      record
+    )
+
+
+  return store.events.some(
+    (
+      event
+    ) =>
+      event.sourceKey ===
+        'police' &&
+      event.newsroomAction ===
+        'resolve' &&
+      event.status ===
+        'acked' &&
+      cleanText(
+        event.resolutionReason
+      )
+        .toLowerCase() ===
+        'police-wanted-suspect-arrested' &&
+      event.sourceFingerprint ===
+        version
+  )
+}
+
+
+function policeWantedSuspectResolutionStoryExternalId(
+  record
+) {
+  const targetExternalId =
+    cleanText(
+      record?.targetExternalId ||
+      record?.externalId
+    )
+
+
+  const noticeExternalId =
+    cleanText(
+      record?.resolutionNoticeExternalId
+    )
+
+
+  if (
+    noticeExternalId &&
+    noticeExternalId !==
+      targetExternalId
+  ) {
+    return noticeExternalId
+  }
+
+
+  const caseNumber =
+    normalizePoliceCaseNumber(
+      policeCaseNumberFromRecord(
+        record
+      )
+    )
+
+
+  const version =
+    cleanText(
+      record?.sourceFingerprint
+    ) ||
+    fingerprint(
+      record
+    )
+
+
+  const identity =
+    [
+      targetExternalId,
+      caseNumber,
+      version,
+    ]
+      .filter(
+        Boolean
+      )
+      .join(
+        '|'
+      )
+
+
+  if (
+    !identity
+  ) {
+    return ''
+  }
+
+
+  return (
+    (
+      targetExternalId ||
+      'police'
+    ) +
+    ':arrest-story:' +
+    smallHash(
+      identity
+    )
+  )
+}
+
+
+function buildPoliceWantedSuspectResolutionStoryRecord(
+  record
+) {
+  const externalId =
+    policeWantedSuspectResolutionStoryExternalId(
+      record
+    )
+
+
+  if (
+    !externalId
+  ) {
+    return null
+  }
+
+
+  return {
+    ...record,
+
+    externalId,
+
+    targetExternalId:
+      cleanText(
+        record?.targetExternalId ||
+        record?.externalId
+      ),
+
+    resolutionNoticeExternalId:
+      cleanText(
+        record?.resolutionNoticeExternalId ||
+        record?.externalId
+      ),
+
+    active:
+      false,
+
+    published:
+      false,
+
+    resolved:
+      false,
+
+    resolvedAt:
+      '',
+
+    resolutionReason:
+      '',
+
+    newsroomAction:
+      '',
+
+    serverAction:
+      '',
+
+    action:
+      '',
+
+    lastEditorialAction:
+      '',
+
+    lastEditorialActionAt:
+      '',
+  }
+}
+
+
+async function queuePoliceWantedSuspectResolutionStory(
+  record
+) {
+  const storyRecord =
+    buildPoliceWantedSuspectResolutionStoryRecord(
+      record
+    )
+
+
+  if (
+    !storyRecord
+  ) {
+    return {
+      action:
+        'seen',
+
+      record:
+        null,
+    }
+  }
+
+
+  return observeRecord({
+    sourceKey:
+      'police',
+
+    record:
+      storyRecord,
+  })
+}
+
+
 function findPoliceWantedSuspectResolutionTarget(
   record
 ) {
@@ -2979,6 +3187,14 @@ async function reconcilePublishedPoliceWantedSuspectResolutions() {
     }
 
 
+    // The arrest / custody bulletin is a real follow-up story, not merely
+    // a close notice. Make sure that full story has its own approvable
+    // newsroom card even if an older server version only created RESOLVE.
+    await queuePoliceWantedSuspectResolutionStory(
+      sourceRecord
+    )
+
+
     const target =
       findPoliceWantedSuspectResolutionTarget(
         sourceRecord
@@ -2986,7 +3202,10 @@ async function reconcilePublishedPoliceWantedSuspectResolutions() {
 
 
     if (
-      !target
+      !target ||
+      policeWantedSuspectResolutionWasAcknowledged(
+        sourceRecord
+      )
     ) {
       continue
     }
@@ -3320,13 +3539,50 @@ export async function queueLiveNewsroomRecord({
       })
 
 
-      return observeRecord({
-        sourceKey,
-        record:
-          resolutionRecord,
-        forceAction:
-          'resolve',
-      })
+      const resolutionWasAcknowledged =
+        policeWantedSuspectResolutionWasAcknowledged(
+          resolutionRecord
+        )
+
+
+      const resolutionResult =
+        resolutionWasAcknowledged
+          ? {
+              action:
+                'seen',
+
+              record:
+                resolutionRecord,
+            }
+          : await observeRecord({
+              sourceKey,
+              record:
+                resolutionRecord,
+              forceAction:
+                'resolve',
+            })
+
+
+      const storyResult =
+        await queuePoliceWantedSuspectResolutionStory({
+          ...record,
+
+          targetExternalId:
+            target.externalId,
+
+          resolutionNoticeExternalId:
+            incomingExternalId ||
+            record?.resolutionNoticeExternalId ||
+            '',
+        })
+
+
+      return {
+        ...resolutionResult,
+
+        companionStory:
+          storyResult,
+      }
     }
 
 
@@ -6896,12 +7152,23 @@ async function acknowledgeEvents({
           null
 
 
+        const policeResolveAcknowledged =
+          event.sourceKey ===
+            'police' &&
+          event.newsroomAction ===
+            'resolve' &&
+          normalizedOutcome.includes(
+            'acknowledged'
+          )
+
+
         const approved =
           normalizedOutcome.includes(
             'approved'
           ) ||
           normalizedOutcome ===
-            'already-published'
+            'already-published' ||
+          policeResolveAcknowledged
 
 
         const rejected =
