@@ -1,3 +1,4 @@
+// TTC V24 - restore ETA anchors through exact trip+vehicle fallback matching; show branch labels
 // TTC V23 - TTC stop predictions are authoritative; vehicles receive next + following ETA anchors
 // TTC V22 - canonical TTC stop identity + exact route boards + ETA stop simulation
 // TTC V21 - exact-stop TTC boards + ETA-authoritative vehicle simulation + no stop-code crossfeed
@@ -99,6 +100,12 @@ let tripUpdateStopIndex = null
 // BusTime trip_id data (not from a vehicle-number or branch guess).
 let bustimeRouteByTripId = new Map()
 let bustimeTripUpdateByTripId = new Map()
+// Safe cross-endpoint bridge: when BusTime TripUpdates are unavailable and the
+// TTC fallback feed is used, only link a TripUpdate to a VehiclePosition when
+// BOTH the exact trip_id and exact vehicle_id agree. This avoids the historical
+// mistake of joining unrelated TTC identifier namespaces while still allowing
+// ETA anchors when TTC exposes the same physical trip/vehicle in both feeds.
+let exactTripUpdateByVehicleTrip = new Map()
 const recentBusTimeRoutes = new Map()
 const ROUTE_ID_MEMORY_MS = 10 * 60 * 1000
 const ROUTE_ID_MEMORY_MAX = 6000
@@ -3162,21 +3169,39 @@ function refreshTripUpdateFeedInBackground() {
             buildTripUpdateStopIndex(
               feed
             )
-          // Never mix old GTFS trip identifiers into the BusTime vehicle feed.
+          // Primary BusTime TripUpdates can be indexed by exact trip_id.
+          // For the TTC fallback feed we remain stricter: only a TripUpdate
+          // carrying BOTH the same trip_id and the same vehicle_id may anchor
+          // a BusTime VehiclePosition. No route-only or vehicle-only join.
           const nextRoutes = new Map()
           const nextTripUpdates = new Map()
-          if (!result.usedLegacyFallback) {
-            for (const entity of Array.isArray(feed?.entity) ? feed.entity : []) {
-              const tripUpdate = entity?.tripUpdate
-              const descriptor = tripUpdate?.trip
-              const tripId = cleanText(descriptor?.tripId)
-              const routeId = cleanText(descriptor?.routeId)
+          const nextExactVehicleTrips = new Map()
+
+          for (const entity of Array.isArray(feed?.entity) ? feed.entity : []) {
+            const tripUpdate = entity?.tripUpdate
+            const descriptor = tripUpdate?.trip
+            const tripId = cleanText(descriptor?.tripId)
+            const routeId = cleanText(descriptor?.routeId)
+            const vehicleId =
+              cleanText(tripUpdate?.vehicle?.id) ||
+              cleanText(tripUpdate?.vehicle?.label)
+
+            if (tripId && vehicleId && tripUpdate) {
+              nextExactVehicleTrips.set(
+                JSON.stringify([tripId, vehicleId]),
+                tripUpdate
+              )
+            }
+
+            if (!result.usedLegacyFallback) {
               if (tripId && routeId) nextRoutes.set(tripId, routeId)
               if (tripId && tripUpdate) nextTripUpdates.set(tripId, tripUpdate)
             }
           }
+
           bustimeRouteByTripId = nextRoutes
           bustimeTripUpdateByTripId = nextTripUpdates
+          exactTripUpdateByVehicleTrip = nextExactVehicleTrips
           return feed
         }
       )
@@ -3325,8 +3350,140 @@ function routeMode(
 }
 
 
+
+
+function vehicleRouteDisplayName(
+  routeShortName,
+  headsign
+) {
+  const base =
+    cleanText(
+      routeShortName
+    )
+  const text =
+    cleanText(
+      headsign
+    )
+
+  if (
+    !base ||
+    !text
+  ) {
+    return (
+      base ||
+      'TTC'
+    )
+  }
+
+  const escapedBase =
+    base.replace(
+      /[.*+?^${}()|[\]\\]/g,
+      '\\$&'
+    )
+  const branchMatch =
+    text.match(
+      new RegExp(
+        `(?:^|\\s)(${escapedBase}[A-Z])(?:\\s|$)`,
+        'i'
+      )
+    )
+
+  return branchMatch?.[1]
+    ? branchMatch[1].toUpperCase()
+    : base
+}
+
+
+function realtimeTripUpdateForVehicle({
+  tripId,
+  vehicleId,
+  routeId,
+  directionId,
+}) {
+  const normalizedTripId = cleanText(tripId)
+  const normalizedVehicleId = cleanText(vehicleId)
+
+  if (
+    !normalizedTripId ||
+    !tripUpdateCache ||
+    Date.now() -
+      tripUpdateCache.cachedAt >
+      REALTIME_STALE_FALLBACK_MS
+  ) {
+    return null
+  }
+
+  let tripUpdate = null
+
+  if (!tripUpdateCache.usedLegacyFallback) {
+    tripUpdate =
+      bustimeTripUpdateByTripId.get(
+        normalizedTripId
+      ) ||
+      null
+  }
+  else if (normalizedVehicleId) {
+    tripUpdate =
+      exactTripUpdateByVehicleTrip.get(
+        JSON.stringify([
+          normalizedTripId,
+          normalizedVehicleId,
+        ])
+      ) ||
+      null
+  }
+
+  if (!tripUpdate) {
+    return null
+  }
+
+  const updateRouteId =
+    cleanText(
+      tripUpdate?.trip?.routeId
+    )
+  const normalizedRouteId =
+    cleanText(
+      routeId
+    )
+
+  if (
+    updateRouteId &&
+    normalizedRouteId &&
+    updateRouteId !==
+      normalizedRouteId
+  ) {
+    return null
+  }
+
+  const updateDirectionId =
+    numberOrNull(
+      tripUpdate?.trip?.directionId
+    )
+  const normalizedDirectionId =
+    numberOrNull(
+      directionId
+    )
+
+  if (
+    updateDirectionId !==
+      null &&
+    normalizedDirectionId !==
+      null &&
+    updateDirectionId !==
+      normalizedDirectionId
+  ) {
+    return null
+  }
+
+  return tripUpdate
+}
+
+
 function realtimeArrivalForVehicleStop(
   tripId,
+  vehicleId,
+  routeId,
+  directionId,
   stopId,
   stopSequence
 ) {
@@ -3341,20 +3498,18 @@ function realtimeArrivalForVehicleStop(
 
   if (
     !normalizedTripId ||
-    !normalizedStopId ||
-    tripUpdateCache?.usedLegacyFallback ||
-    !tripUpdateCache ||
-    Date.now() -
-      tripUpdateCache.cachedAt >
-      REALTIME_STALE_FALLBACK_MS
+    !normalizedStopId
   ) {
     return null
   }
 
   const tripUpdate =
-    bustimeTripUpdateByTripId.get(
-      normalizedTripId
-    )
+    realtimeTripUpdateForVehicle({
+      tripId: normalizedTripId,
+      vehicleId,
+      routeId,
+      directionId,
+    })
 
   if (
     !tripUpdate
@@ -3422,6 +3577,9 @@ function realtimeArrivalForVehicleStop(
 
 function realtimeNextPredictedStopForVehicle(
   tripId,
+  vehicleId,
+  routeId,
+  directionId,
   currentStopSequence,
   stopIndex,
   nowSeconds = Math.floor(Date.now() / 1000)
@@ -3433,20 +3591,18 @@ function realtimeNextPredictedStopForVehicle(
 
   if (
     !normalizedTripId ||
-    !stopIndex ||
-    tripUpdateCache?.usedLegacyFallback ||
-    !tripUpdateCache ||
-    Date.now() -
-      tripUpdateCache.cachedAt >
-      REALTIME_STALE_FALLBACK_MS
+    !stopIndex
   ) {
     return null
   }
 
   const tripUpdate =
-    bustimeTripUpdateByTripId.get(
-      normalizedTripId
-    )
+    realtimeTripUpdateForVehicle({
+      tripId: normalizedTripId,
+      vehicleId,
+      routeId,
+      directionId,
+    })
 
   if (
     !tripUpdate
@@ -3742,13 +3898,35 @@ async function getVehiclesPayload(
               vehicle?.currentStopSequence
             )
 
-          // V21: animation follows the next TTC TripUpdate stop by ETA, not
-          // merely the possibly stale VehiclePosition stopId. When an ETA
-          // passes, the next server poll advances to the next TTC-predicted
-          // stop even if GPS/currentStopSequence has not caught up yet.
+          const vehicleDescriptor =
+            vehicle?.vehicle ||
+            {}
+          const vehicleIdForPrediction =
+            cleanText(
+              vehicleDescriptor.id
+            ) ||
+            cleanText(
+              vehicleDescriptor.label
+            ) ||
+            cleanText(
+              entity?.id
+            )
+          const directionId =
+            numberOrNull(
+              vehicle?.trip?.directionId
+            ) ??
+            staticTrip?.directionId ??
+            null
+
+          // V24: animation anchors may come from the primary BusTime TripUpdate
+          // feed OR, when that feed is unavailable, from the TTC fallback feed
+          // only when exact trip_id + exact vehicle_id match this VehiclePosition.
           const predictedStop =
             realtimeNextPredictedStopForVehicle(
               tripId,
+              vehicleIdForPrediction,
+              routeId,
+              directionId,
               currentStopSequence,
               canonicalStops,
               nowSeconds
@@ -3758,6 +3936,9 @@ async function getVehiclesPayload(
             predictedStop?.arrivalTime ??
             realtimeArrivalForVehicleStop(
               tripId,
+              vehicleIdForPrediction,
+              routeId,
+              directionId,
               stopId,
               currentStopSequence
             )
@@ -3770,10 +3951,6 @@ async function getVehiclesPayload(
               feed?.header?.timestamp
             ) ??
             nowSeconds
-
-          const vehicleDescriptor =
-            vehicle?.vehicle ||
-            {}
 
           const id =
             cleanText(
@@ -3819,9 +3996,13 @@ async function getVehiclesPayload(
             tripId,
             routeId,
             routeShortName:
-              route?.shortName ||
-              routeId ||
-              'TTC',
+              vehicleRouteDisplayName(
+                route?.shortName ||
+                  routeId ||
+                  'TTC',
+                staticTrip?.headsign ||
+                  ''
+              ),
             routeLongName:
               route?.longName ||
               '',
@@ -3833,12 +4014,7 @@ async function getVehiclesPayload(
             headsign:
               staticTrip?.headsign ||
               '',
-            directionId:
-              numberOrNull(
-                vehicle?.trip?.directionId
-              ) ??
-              staticTrip?.directionId ??
-              null,
+            directionId,
             latitude,
             longitude,
             bearing:
@@ -3900,6 +4076,14 @@ async function getVehiclesPayload(
             followingStopArrivalTime:
               predictedStop?.followingStop?.arrivalTime ??
               null,
+            predictionAnchorSource:
+              predictedStop
+                ? (
+                    tripUpdateCache?.usedLegacyFallback
+                      ? 'EXACT_TRIP_VEHICLE_FALLBACK'
+                      : 'BUSTIME_TRIP'
+                  )
+                : '',
             currentStatus:
               cleanText(
                 vehicle?.currentStatus
