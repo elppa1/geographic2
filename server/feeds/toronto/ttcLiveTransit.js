@@ -1,3 +1,4 @@
+// TTC V21 - exact-stop TTC boards + ETA-authoritative vehicle simulation + no stop-code crossfeed
 // TTC V20 - route-complete stop boards + ETA-aware vehicle pacing + faster first paint
 // TTC V19 - truthful stop delay notice + exact-trip bus route labels (no movement changes)
 // TTC V18 - disputed stop arrivals stay visibly unresolved until proven passed
@@ -3141,6 +3142,148 @@ function realtimeArrivalForVehicleStop(
 }
 
 
+function realtimeNextPredictedStopForVehicle(
+  tripId,
+  currentStopSequence,
+  surface,
+  nowSeconds = Math.floor(Date.now() / 1000)
+) {
+  const normalizedTripId =
+    cleanText(
+      tripId
+    )
+
+  if (
+    !normalizedTripId ||
+    !surface ||
+    tripUpdateCache?.usedLegacyFallback ||
+    !tripUpdateCache ||
+    Date.now() -
+      tripUpdateCache.cachedAt >
+      REALTIME_STALE_FALLBACK_MS
+  ) {
+    return null
+  }
+
+  const tripUpdate =
+    bustimeTripUpdateByTripId.get(
+      normalizedTripId
+    )
+
+  if (
+    !tripUpdate
+  ) {
+    return null
+  }
+
+  const minimumSequence =
+    numberOrNull(
+      currentStopSequence
+    )
+
+  const candidates =
+    (
+      Array.isArray(
+        tripUpdate?.stopTimeUpdate
+      )
+        ? tripUpdate.stopTimeUpdate
+        : []
+    )
+      .map(
+        (
+          update
+        ) => {
+          const stopId =
+            cleanText(
+              update?.stopId
+            )
+          const stopSequence =
+            numberOrNull(
+              update?.stopSequence
+            )
+          const arrivalTime =
+            realtimeStopTime(
+              update
+            )
+          const stop =
+            surface?.stopsById?.get(
+              stopId
+            )
+
+          if (
+            !stopId ||
+            arrivalTime ===
+              null ||
+            !stop ||
+            !Number.isFinite(
+              Number(
+                stop.latitude
+              )
+            ) ||
+            !Number.isFinite(
+              Number(
+                stop.longitude
+              )
+            ) ||
+            (
+              minimumSequence !==
+                null &&
+              stopSequence !==
+                null &&
+              stopSequence <
+                minimumSequence
+            ) ||
+            arrivalTime <
+              nowSeconds -
+                3
+          ) {
+            return null
+          }
+
+          return {
+            stopId,
+            stopSequence,
+            arrivalTime,
+            latitude:
+              Number(
+                stop.latitude
+              ),
+            longitude:
+              Number(
+                stop.longitude
+              ),
+            stopName:
+              cleanText(
+                stop.name
+              ),
+          }
+        }
+      )
+      .filter(
+        Boolean
+      )
+      .sort(
+        (
+          a,
+          b
+        ) =>
+          a.arrivalTime -
+            b.arrivalTime ||
+          (
+            a.stopSequence ??
+            Number.MAX_SAFE_INTEGER
+          ) -
+            (
+              b.stopSequence ??
+              Number.MAX_SAFE_INTEGER
+            )
+      )
+
+  return candidates[0] ||
+    null
+}
+
+
 async function getVehiclesPayload(
   url
 ) {
@@ -3284,7 +3427,20 @@ async function getVehiclesPayload(
               vehicle?.currentStopSequence
             )
 
+          // V21: animation follows the next TTC TripUpdate stop by ETA, not
+          // merely the possibly stale VehiclePosition stopId. When an ETA
+          // passes, the next server poll advances to the next TTC-predicted
+          // stop even if GPS/currentStopSequence has not caught up yet.
+          const predictedStop =
+            realtimeNextPredictedStopForVehicle(
+              tripId,
+              currentStopSequence,
+              surface,
+              nowSeconds
+            )
+
           const nextStopArrivalTime =
+            predictedStop?.arrivalTime ??
             realtimeArrivalForVehicleStop(
               tripId,
               stopId,
@@ -3390,14 +3546,26 @@ async function getVehiclesPayload(
             stopName:
               stop?.name ||
               '',
+            nextStopId:
+              predictedStop?.stopId ||
+              stopId,
+            nextStopSequence:
+              predictedStop?.stopSequence ??
+              currentStopSequence,
             nextStopLatitude:
+              predictedStop?.latitude ??
               numberOrNull(
                 stop?.latitude
               ),
             nextStopLongitude:
+              predictedStop?.longitude ??
               numberOrNull(
                 stop?.longitude
               ),
+            nextStopName:
+              predictedStop?.stopName ||
+              stop?.name ||
+              '',
             nextStopArrivalTime,
             currentStatus:
               cleanText(
@@ -4610,221 +4778,42 @@ async function getArrivalsPayloadUnreconciled({
   stopId,
   stopCode,
 }) {
-  const arrivalRequestStart = Date.now()
+  const arrivalRequestStart =
+    Date.now()
   const normalizedStopId =
     cleanText(
       stopId
     )
 
-  // Do not block an exact-stop GTFS-RT request on static GTFS.
-  // Surface metadata is optional for the fast path and warms independently.
-  let surface =
-    surfaceCache
-
   if (
-    !surface
+    !normalizedStopId
   ) {
-    getSurfaceNetwork()
-      .catch(
-        (
-          error
-        ) => {
-          console.warn(
-            'LIVE TTC ARRIVALS STATIC WARMUP:',
-            error?.message ||
-              error
-          )
-        }
-      )
+    throw new Error(
+      'stopId is required'
+    )
   }
 
-  const staticStop =
-    surface?.stopsById?.get(
+  // V21 STOP TRUTH: exact stop popups use the exact GTFS stop_id against
+  // TTC BusTime GTFS-Realtime TripUpdates. Do NOT send public GTFS stop_code
+  // to UMO as stopId: those are different identifier namespaces and can map
+  // a Dufferin pole to an unrelated stop, producing impossible routes.
+  const gtfsPayload =
+    await getGtfsArrivalsPayload(
       normalizedStopId
     )
 
-  let normalizedStopCode =
-    cleanText(
-      stopCode
-    ) ||
-    cleanText(
-      staticStop?.code
-    )
-
-  // TTC TRUTH MODE Â· Exact-stop ETA authority is GTFS-Realtime first.
-  // VehiclePosition + TripUpdate share GTFS trip/vehicle/stop identities.
-  // Never delete a UMO prediction using a GTFS stop sequence: UMO tripTag is
-  // a separate identifier system and cross-splicing the two can drop the
-  // actually-nearest vehicle.
-  let gtfsPayload =
-    null
-  let gtfsError =
-    null
-
-  if (
-    normalizedStopId
-  ) {
-    try {
-      gtfsPayload =
-        await getGtfsArrivalsPayload(
-          normalizedStopId
-        )
-
-      if (
-        Array.isArray(
-          gtfsPayload?.arrivals
-        ) &&
-        gtfsPayload.arrivals.length >
-          0
-      ) {
-        const cachedUmoArrivals =
-          freshCachedUmoArrivals(
-            normalizedStopCode
-          )
-
-        if (
-          cachedUmoArrivals &&
-          cachedUmoAddsMissingRoutes(
-            gtfsPayload.arrivals,
-            cachedUmoArrivals
-          )
-        ) {
-          return buildUmoStopPayload({
-            arrivals:
-              cachedUmoArrivals,
-            normalizedStopId,
-            normalizedStopCode,
-            staticStop,
-            gtfsPayload,
-            gtfsError,
-            arrivalRequestStart,
-            fallbackReason:
-              'GTFS_ROUTE_SET_INCOMPLETE',
-          })
-        }
-
-        if (
-          normalizedStopCode &&
-          !cachedUmoArrivals
-        ) {
-          getUmoArrivalsForStopCode(
-            normalizedStopCode,
-            surface
-          )
-            .catch(
-              (
-                error
-              ) => {
-                console.warn(
-                  'LIVE TTC ROUTE COMPLETENESS WARMUP:',
-                  error?.message ||
-                    error
-                )
-              }
-            )
-        }
-
-        return {
-          ...gtfsPayload,
-          predictionAuthority:
-            'GTFS-RT',
-          requestElapsedMs: Date.now() - arrivalRequestStart,
-        }
-      }
-    }
-    catch (
-      error
-    ) {
-      gtfsError =
-        error
-      console.warn(
-        'LIVE TTC ARRIVALS Â· GTFS-RT primary unavailable:',
-        error?.message ||
-        error
-      )
-    }
+  return {
+    ...gtfsPayload,
+    predictionAuthority:
+      'GTFS-RT',
+    requestedStopCode:
+      cleanText(
+        stopCode
+      ),
+    requestElapsedMs:
+      Date.now() -
+      arrivalRequestStart,
   }
-
-  if (
-    !normalizedStopCode &&
-    normalizedStopId
-  ) {
-    try {
-      surface =
-        surface ||
-        await getSurfaceNetwork()
-      normalizedStopCode =
-        cleanText(
-          surface?.stopsById?.get(
-            normalizedStopId
-          )?.code
-        )
-    }
-    catch (
-      error
-    ) {
-      console.warn(
-        'LIVE TTC ARRIVALS FALLBACK STATIC LOOKUP:',
-        error?.message ||
-          error
-      )
-    }
-  }
-
-  if (
-    normalizedStopCode
-  ) {
-    try {
-      // The caller already has the stopCode. Never delay a UMO fallback on
-      // loading the huge SurfaceGTFS archive; route metadata is optional.
-      const fallbackSurface = surface
-
-      const arrivals =
-        await getUmoArrivalsForStopCode(
-          normalizedStopCode,
-          fallbackSurface
-        )
-      return buildUmoStopPayload({
-        arrivals,
-        normalizedStopId,
-        normalizedStopCode,
-        staticStop,
-        gtfsPayload,
-        gtfsError,
-        arrivalRequestStart,
-      })
-    }
-    catch (
-      error
-    ) {
-      console.warn(
-        'LIVE TTC ARRIVALS Â· UMO fallback unavailable:',
-        error?.message ||
-        error
-      )
-    }
-  }
-
-  if (
-    gtfsPayload
-  ) {
-    return {
-      ...gtfsPayload,
-      predictionAuthority:
-        'GTFS-RT_EMPTY',
-      requestElapsedMs: Date.now() - arrivalRequestStart,
-    }
-  }
-
-  if (
-    gtfsError
-  ) {
-    throw gtfsError
-  }
-
-  return getGtfsArrivalsPayload(
-    normalizedStopId
-  )
 }
 
 
@@ -5168,6 +5157,99 @@ function applyArrivalTruth(payload, stopId, stopCode) {
   const authority = cleanText(payload.predictionAuthority || 'GTFS-RT')
   const key = cleanText(stopId) || `code:${cleanText(stopCode)}`
   if (!key) return payload
+
+  // V21: the stop board is a live TTC board, not a historical uncertainty
+  // ledger. GTFS-RT is already exact-stop data. Retire a prediction shortly
+  // after its TTC ETA (or immediately on positive vehicle passage) so the card
+  // advances with the ETA-driven vehicle simulation instead of holding a stale
+  // row for up to a minute while GPS catches up.
+  if (authority === 'GTFS-RT') {
+    const vehicleIndex =
+      arrivalTruthVehicleIndex(
+        nowSeconds
+      )
+    const records = []
+    let expiredEstimateCount =
+      0
+    let passedCount =
+      0
+
+    for (const arrival of payload.arrivals) {
+      const observed =
+        addArrivalEvidence(
+          arrival,
+          authority,
+          payload.stop,
+          nowSeconds,
+          vehicleIndex
+        )
+
+      if (
+        provePreviouslyListedArrivalPassed(
+          observed,
+          authority,
+          stopId,
+          vehicleIndex,
+          nowSeconds
+        )
+      ) {
+        passedCount++
+        continue
+      }
+
+      const eta =
+        numberOrNull(
+          observed.arrivalTime
+        )
+
+      if (
+        eta !==
+          null &&
+        eta <
+          nowSeconds -
+            3
+      ) {
+        expiredEstimateCount++
+        continue
+      }
+
+      records.push(
+        observed
+      )
+    }
+
+    stopArrivalHistory.delete(
+      key
+    )
+
+    return {
+      ...payload,
+      arrivals:
+        records,
+      unverifiedArrivals:
+        [],
+      passageConfirmedCount:
+        passedCount,
+      passageDiagnostics: {
+        exactGtfsBoard:
+          true,
+        expiredEstimatesRemoved:
+          expiredEstimateCount,
+        vehicleCacheAgeSeconds:
+          vehicleCache
+            ? Math.round(
+                (
+                  nowMs -
+                  vehicleCache.cachedAt
+                ) /
+                  1000
+              )
+            : null,
+      },
+      arrivalStateVersion:
+        21,
+    }
+  }
   const previousState = stopArrivalHistory.get(key)
   const sameAuthority = previousState?.authority === authority
   // A source switch (BusTime -> UMO, or back) must NOT silently imply the

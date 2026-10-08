@@ -1,3 +1,4 @@
+// TTC V21 - exact TTC stop boards + ETA-authoritative stop-to-stop vehicle simulation
 // TTC V20 - faster first paint + exact-next-stop ETA-aware pacing
 // TTC V19 - one clear live-estimate delay note; vehicle styling untouched
 // TTC V18 - show unresolved nearest arrivals before future predictions
@@ -82,7 +83,7 @@ const ARRIVALS_ENDPOINT =
   '/api/geographic/toronto/ttc/live/arrivals'
 
 const STOP_ARRIVAL_REFRESH_MS =
-  2500
+  1500
 
 const VEHICLE_PRELOAD_MAX_AGE_MS =
   20 * 1000
@@ -323,16 +324,17 @@ function takeInitialVehiclePreloadSnapshot(
 }
 
 
-// Adopt the page-level preload. It is memory-only: never stringify the full
-// fleet into localStorage during live operation, which was causing main-thread
-// stalls while the user panned/zoomed the map.
-startInitialVehiclePreload()
+// V21 FAST START: do not start a whole-city vehicle request at module import.
+// The live layer's first request is viewport-bounded and can use the server's
+// warmed realtime cache without competing with a duplicate preload request.
 
 
 const VEHICLE_POLL_MS =
   2000
 const VEHICLE_VISUAL_MAX_SPEED_MPS =
   8.5
+const VEHICLE_ETA_MAX_SPEED_MPS =
+  16
 const VEHICLE_DEFAULT_MOVING_SPEED_MPS =
   3.2
 // TTC TRUTH MODE · do not force a vehicle to crawl without a new TTC sample.
@@ -602,14 +604,18 @@ function createVehiclePopup(
     })
   }
 
-  if (
+  const nextStopName =
+    properties.nextStopName ||
     properties.stopName
+
+  if (
+    nextStopName
   ) {
     addTextLine({
       parent:
         shell,
       text:
-        `Next stop · ${properties.stopName}`,
+        `Next stop · ${nextStopName}`,
       style: {
         fontSize:
           '11px',
@@ -5700,9 +5706,7 @@ function LiveTtcLayer({
                   nextStopArrivalTime -
                   Date.now() /
                     1000
-
-                if (
-                  !vehicleState.stopped &&
+                const etaAnchorActive =
                   nextStopArrivalTime !==
                     null &&
                   Number.isFinite(
@@ -5711,29 +5715,9 @@ function LiveTtcLayer({
                   Number.isFinite(
                     nextStopProgressForPacing
                   ) &&
-                  nextStopProgressForPacing >
-                    currentDisplayProgress +
-                      5 &&
-                  secondsUntilNextStop >=
-                    VEHICLE_ETA_PACING_MIN_SECONDS
-                ) {
-                  const remainingMeters =
-                    nextStopProgressForPacing -
-                    currentDisplayProgress
-                  const etaMatchedSpeed =
-                    Math.max(
-                      VEHICLE_ETA_PACING_MIN_SPEED_MPS,
-                      remainingMeters /
-                        secondsUntilNextStop *
-                        VEHICLE_ETA_PACING_BUFFER
-                    )
-
-                  visualSpeed =
-                    Math.min(
-                      visualSpeed,
-                      etaMatchedSpeed
-                    )
-                }
+                  nextStopProgressForPacing >=
+                    currentDisplayProgress -
+                      3
 
                 const strictRouteMode =
                   Boolean(
@@ -5786,59 +5770,109 @@ function LiveTtcLayer({
                     : Number(
                         vehicleState.realProgress
                       )
-                const leadMeters =
-                  vehicleState.stopped
-                    ? 0
-                    : Math.min(
-                        maxLeadMeters,
-                        Math.max(
-                          0,
-                          visualSpeed
-                        ) *
-                          allowedLeadSeconds
-                      )
-                let targetProgress =
-                  clampNumber(
-                    trustedProgress +
-                      leadMeters,
-                    0,
-                    vehicleState.path.totalMeters
-                  )
 
-                // stopId comes from this vehicle's actual GTFS trip. Bound
-                // animation at that exact scheduled stop in every view; express
-                // buses still pass physical stops they are not scheduled to serve.
+                let targetProgress
+
                 if (
-                  Number.isFinite(
-                    Number(
-                      vehicleState.nextStopProgress
-                    )
-                  ) &&
-                  Number(
-                    vehicleState.nextStopProgress
-                  ) >=
-                    trustedProgress -
-                    8
+                  etaAnchorActive &&
+                  nextStopProgressForPacing >
+                    currentDisplayProgress +
+                      0.5
                 ) {
-                  targetProgress =
-                    Math.min(
-                      targetProgress,
-                      Number(
-                        vehicleState.nextStopProgress
+                  // V21: TTC's TripUpdate ETA is the simulation clock. GPS
+                  // identifies the physical vehicle/trip and route shape; the
+                  // marker then moves at the speed required to reach TTC's
+                  // predicted stop at the predicted time. Unlike V20 this can
+                  // speed a marker up as well as slow it down.
+                  const remainingMeters =
+                    Math.max(
+                      0,
+                      nextStopProgressForPacing -
+                        currentDisplayProgress
+                    )
+
+                  if (
+                    secondsUntilNextStop >
+                      0.35
+                  ) {
+                    visualSpeed =
+                      clampNumber(
+                        remainingMeters /
+                          secondsUntilNextStop,
+                        0.08,
+                        VEHICLE_ETA_MAX_SPEED_MPS
                       )
+                  }
+                  else {
+                    visualSpeed =
+                      VEHICLE_ETA_MAX_SPEED_MPS
+                  }
+
+                  targetProgress =
+                    clampNumber(
+                      nextStopProgressForPacing,
+                      currentDisplayProgress,
+                      vehicleState.path.totalMeters
+                    )
+                }
+                else {
+                  const leadMeters =
+                    vehicleState.stopped
+                      ? 0
+                      : Math.min(
+                          maxLeadMeters,
+                          Math.max(
+                            0,
+                            visualSpeed
+                          ) *
+                            allowedLeadSeconds
+                        )
+
+                  targetProgress =
+                    clampNumber(
+                      Math.max(
+                        currentDisplayProgress,
+                        trustedProgress +
+                          leadMeters
+                      ),
+                      0,
+                      vehicleState.path.totalMeters
                     )
                 }
 
-                const nextProgress =
-                  currentDisplayProgress >
-                    targetProgress
-                    ? targetProgress
-                    : Math.min(
+                let nextProgress
+
+                if (
+                  etaAnchorActive &&
+                  secondsUntilNextStop <=
+                    0.35
+                ) {
+                  // Land on the stop at TTC's predicted time. The server moves
+                  // the anchor to the next TripUpdate stop on the next 2-second
+                  // poll, so a stale GPS sample cannot leave the bus parked at
+                  // a stop it has already simulated through.
+                  nextProgress =
+                    clampNumber(
+                      nextStopProgressForPacing,
+                      currentDisplayProgress,
+                      vehicleState.path.totalMeters
+                    )
+                }
+                else {
+                  nextProgress =
+                    Math.max(
+                      currentDisplayProgress,
+                      Math.min(
                         targetProgress,
                         currentDisplayProgress +
-                          visualSpeed *
+                          Math.max(
+                            0,
+                            visualSpeed
+                          ) *
                           elapsedSeconds
                       )
+                    )
+                }
 
                 vehicleState.displayProgress =
                   nextProgress
@@ -6404,9 +6438,22 @@ function LiveTtcLayer({
                   previous.sampleIdentity ===
                     sampleIdentity
 
+                const sameSimulationAnchor =
+                  String(
+                    previous?.properties?.nextStopId ||
+                    previous?.properties?.stopId ||
+                    ''
+                  ) ===
+                  String(
+                    vehicle.nextStopId ||
+                    vehicle.stopId ||
+                    ''
+                  )
+
                 if (
                   sameRealtimeSample &&
-                  previous?.path
+                  previous?.path &&
+                  sameSimulationAnchor
                 ) {
                   nextAnimations.set(
                     vehicleId,
@@ -6438,6 +6485,29 @@ function LiveTtcLayer({
                           previous.properties?.stopId ||
                           '',
                         stopName:
+                          vehicle.stopName ||
+                          previous.properties?.stopName ||
+                          '',
+                        nextStopId:
+                          vehicle.nextStopId ||
+                          previous.properties?.nextStopId ||
+                          vehicle.stopId ||
+                          previous.properties?.stopId ||
+                          '',
+                        nextStopSequence:
+                          Number.isFinite(
+                            Number(
+                              vehicle.nextStopSequence
+                            )
+                          )
+                            ? Number(
+                                vehicle.nextStopSequence
+                              )
+                            : previous.properties?.nextStopSequence ??
+                              null,
+                        nextStopName:
+                          vehicle.nextStopName ||
+                          previous.properties?.nextStopName ||
                           vehicle.stopName ||
                           previous.properties?.stopName ||
                           '',
@@ -6851,6 +6921,24 @@ function LiveTtcLayer({
                             )
                           : null,
                       stopName:
+                        vehicle.stopName ||
+                        '',
+                      nextStopId:
+                        vehicle.nextStopId ||
+                        vehicle.stopId ||
+                        '',
+                      nextStopSequence:
+                        Number.isFinite(
+                          Number(
+                            vehicle.nextStopSequence
+                          )
+                        )
+                          ? Number(
+                              vehicle.nextStopSequence
+                            )
+                          : null,
+                      nextStopName:
+                        vehicle.nextStopName ||
                         vehicle.stopName ||
                         '',
                       nextStopLatitude:
