@@ -20,6 +20,7 @@ import {
 
 import {
   appendPostgresLedgerEvent,
+  readPostgresDocument,
   seedPostgresDocument,
   writePostgresDocument,
 } from '../../db/postgresMirror.js'
@@ -695,6 +696,14 @@ async function ensureLoaded() {
     true
 
 
+  let localSnapshot =
+    null
+
+
+  let postgresSnapshot =
+    null
+
+
   try {
     const raw =
       await readFile(
@@ -714,41 +723,8 @@ async function ensureLoaded() {
       typeof parsed ===
         'object'
     ) {
-      store = {
-        ...store,
-        ...parsed,
-
-        events:
-          Array.isArray(
-            parsed.events
-          )
-            ? parsed.events
-            : [],
-
-        sources: {
-          ttc:
-            parsed.sources?.ttc ||
-            {},
-
-          fire:
-            parsed.sources?.fire ||
-            {},
-
-          police:
-            parsed.sources?.police ||
-            {},
-        },
-
-        publishedNews:
-          parsed.publishedNews &&
-          typeof parsed.publishedNews ===
-            'object' &&
-          !Array.isArray(
-            parsed.publishedNews
-          )
-            ? parsed.publishedNews
-            : {},
-      }
+      localSnapshot =
+        parsed
     }
   }
   catch (
@@ -766,13 +742,214 @@ async function ensureLoaded() {
   }
 
 
+  try {
+    const postgres =
+      await readPostgresDocument({
+        storeKey:
+          'toronto-live-newsroom',
+      })
+
+
+    if (
+      postgres?.found &&
+      postgres.payload &&
+      typeof postgres.payload ===
+        'object'
+    ) {
+      postgresSnapshot =
+        postgres.payload
+    }
+  }
+  catch (
+    error
+  ) {
+    // Postgres is the durable mirror, but a temporary database read failure
+    // must not prevent the server from falling back to the local snapshot.
+    console.warn(
+      'LIVE NEWSROOM · POSTGRES READ FAILED:',
+      error?.message ||
+      error
+    )
+  }
+
+
+  const localUpdatedAt =
+    Date.parse(
+      localSnapshot?.updatedAt ||
+      ''
+    )
+
+
+  const postgresUpdatedAt =
+    Date.parse(
+      postgresSnapshot?.updatedAt ||
+      ''
+    )
+
+
+  const localTimestamp =
+    Number.isFinite(
+      localUpdatedAt
+    )
+      ? localUpdatedAt
+      : 0
+
+
+  const postgresTimestamp =
+    Number.isFinite(
+      postgresUpdatedAt
+    )
+      ? postgresUpdatedAt
+      : 0
+
+
+  const selectedSnapshot =
+    (
+      postgresSnapshot &&
+      (
+        !localSnapshot ||
+        postgresTimestamp >=
+          localTimestamp
+      )
+    )
+      ? postgresSnapshot
+      : (
+          localSnapshot ||
+          postgresSnapshot
+        )
+
+
+  if (
+    selectedSnapshot
+  ) {
+    store = {
+      ...store,
+      ...selectedSnapshot,
+
+      events:
+        Array.isArray(
+          selectedSnapshot.events
+        )
+          ? selectedSnapshot.events
+          : [],
+
+      sources: {
+        ttc:
+          selectedSnapshot.sources?.ttc ||
+          {},
+
+        fire:
+          selectedSnapshot.sources?.fire ||
+          {},
+
+        police:
+          selectedSnapshot.sources?.police ||
+          {},
+      },
+
+      publishedNews:
+        selectedSnapshot.publishedNews &&
+        typeof selectedSnapshot.publishedNews ===
+          'object' &&
+        !Array.isArray(
+          selectedSnapshot.publishedNews
+        )
+          ? selectedSnapshot.publishedNews
+          : {},
+    }
+  }
+
+
+  if (
+    selectedSnapshot ===
+      postgresSnapshot &&
+    postgresSnapshot
+  ) {
+    console.log(
+      'LIVE NEWSROOM · RESTORED FROM POSTGRES:',
+      store.updatedAt ||
+      'unknown'
+    )
+
+
+    // Keep the local mirror aligned with the durable snapshot so a temporary
+    // future Postgres outage can still fall back to the latest known store.
+    try {
+      await mkdir(
+        dirname(
+          STORE_PATH
+        ),
+        {
+          recursive:
+            true,
+        }
+      )
+
+
+      await writeFile(
+        STORE_PATH,
+        JSON.stringify(
+          store,
+          null,
+          2
+        ),
+        'utf8'
+      )
+    }
+    catch (
+      error
+    ) {
+      console.warn(
+        'LIVE NEWSROOM · LOCAL RESTORE WRITE FAILED:',
+        error?.message ||
+        error
+      )
+    }
+  }
+  else if (
+    selectedSnapshot ===
+      localSnapshot &&
+    localSnapshot
+  ) {
+    console.log(
+      'LIVE NEWSROOM · RESTORED FROM LOCAL:',
+      store.updatedAt ||
+      'unknown'
+    )
+
+
+    if (
+      !postgresSnapshot
+    ) {
+      seedPostgresStoreOnce()
+    }
+    else if (
+      localTimestamp >
+        postgresTimestamp
+    ) {
+      // The local write can complete a fraction before the async Postgres
+      // mirror. If Railway restarted in that window, preserve the newer local
+      // snapshot and catch Postgres up rather than rolling state backward.
+      void writePostgresDocument({
+        storeKey:
+          'toronto-live-newsroom',
+
+        payload:
+          store,
+      })
+    }
+  }
+  else {
+    // Neither store had an existing snapshot. Seed the empty initial state
+    // once so subsequent writes have a durable document to update.
+    seedPostgresStoreOnce()
+  }
+
+
   // One-time catch-up for LOCATED / FOUND notices processed by an older
   // server version that marked source history resolved but left the public
   // Police pin active.
   await reconcilePublishedPoliceMissingPersonResolutions()
-
-
-  seedPostgresStoreOnce()
 }
 
 
