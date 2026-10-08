@@ -3877,6 +3877,13 @@ async function getVehiclesPayload(
             }
           }
 
+          if (
+            !tripId &&
+            !routeId
+          ) {
+            return null
+          }
+
           const route =
             surface?.routes?.get(
               routeId
@@ -3995,6 +4002,10 @@ async function getVehiclesPayload(
               ),
             tripId,
             routeId,
+            shapeId:
+              cleanText(
+                staticTrip?.shapeId
+              ),
             routeShortName:
               vehicleRouteDisplayName(
                 route?.shortName ||

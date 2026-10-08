@@ -73,7 +73,7 @@ const VEHICLE_ICON_MIN_ZOOM =
 const VEHICLE_DIRECTION_MIN_ZOOM =
   5.5
 const VEHICLE_LABEL_MIN_ZOOM =
-  13.5
+  12
 const GPS_PROMPT_SESSION_KEY =
   'toronto-geographic-live-ttc-gps-prompted'
 
