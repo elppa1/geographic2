@@ -1529,6 +1529,12 @@ const EMPTY_NEW = {
   cuisine:
     '',
 
+  topEats:
+    false,
+
+  michelinDistinction:
+    'selected',
+
   businessIcon:
     '',
 
@@ -22124,6 +22130,40 @@ function AdminRoom() {
                     </option>
                   </select>
                 </label>
+
+                {(
+                  draft.category === 'restaurant' ||
+                  draft.category === 'business' ||
+                  draft.topEats === true
+                ) && (
+                  <>
+                    <label className="admin-field">
+                      <span>TOP EATS</span>
+                      <select
+                        value={draft.topEats === true ? 'yes' : 'no'}
+                        onChange={(event) => updateDraft('topEats', event.target.value === 'yes')}
+                      >
+                        <option value="no">NO — NEW BUSINESSES</option>
+                        <option value="yes">YES — TOP EATS</option>
+                      </select>
+                    </label>
+                    {draft.topEats === true && (
+                      <label className="admin-field">
+                        <span>MICHELIN DISTINCTION</span>
+                        <select
+                          value={draft.michelinDistinction || 'selected'}
+                          onChange={(event) => updateDraft('michelinDistinction', event.target.value)}
+                        >
+                          <option value="selected">MICHELIN SELECTED</option>
+                          <option value="bib">BIB GOURMAND</option>
+                          <option value="1">1 MICHELIN STAR</option>
+                          <option value="2">2 MICHELIN STARS</option>
+                          <option value="3">3 MICHELIN STARS</option>
+                        </select>
+                      </label>
+                    )}
+                  </>
+                )}
 
                 <label className="admin-field">
                   <span>

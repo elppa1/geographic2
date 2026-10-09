@@ -418,16 +418,22 @@ function newPinMatchesSubtype(
   }
 
   if (
+    subtype === 'top-eats'
+  ) {
+    return pin.topEats === true
+  }
+
+  if (
     subtype ===
     'businesses'
   ) {
     return (
-      explicitType ===
-        'business' ||
+      pin.topEats !== true &&
       (
-        !explicitType &&
-        BUSINESS_CATEGORIES.includes(
-          category
+        explicitType === 'business' ||
+        (
+          !explicitType &&
+          BUSINESS_CATEGORIES.includes(category)
         )
       )
     )
@@ -1199,6 +1205,10 @@ function newPinIsCurrent(
         explicitExpiry.getTime()
       )
     }
+  }
+
+  if (pin.topEats === true) {
+    return true
   }
 
   const lifecycleDate =
@@ -9480,6 +9490,23 @@ function createMarker({
         ),
     })
 
+
+    if (pin.topEats === true) {
+      const award = String(pin.michelinDistinction || 'selected').trim().toLowerCase()
+      const awardLabel = {
+        '1': '★ 1 Michelin Star',
+        '2': '★★ 2 Michelin Stars',
+        '3': '★★★ 3 Michelin Stars',
+        bib: 'Bib Gourmand',
+        selected: 'Michelin Selected',
+      }[award] || 'Michelin Selected'
+
+      appendText({
+        parent: popupContent,
+        className: 'geographic-pin-category',
+        text: awardLabel,
+      })
+    }
 
     appendText({
       parent:

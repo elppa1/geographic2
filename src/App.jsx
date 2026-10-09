@@ -3597,6 +3597,18 @@ function GeographicApp() {
             <button
               type="button"
               className={
+                newSubtypeFilter === 'top-eats'
+                  ? 'content-subfilter content-subfilter-active'
+                  : 'content-subfilter'
+              }
+              onClick={() => setNewSubtypeFilter('top-eats')}
+            >
+              TOP EATS
+            </button>
+
+            <button
+              type="button"
+              className={
                 newSubtypeFilter ===
                   'community'
                   ? 'content-subfilter content-subfilter-active'
