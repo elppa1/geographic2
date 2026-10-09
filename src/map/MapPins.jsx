@@ -6824,13 +6824,13 @@ function addTtcRouteToMap({
 
     paint: {
       'line-color':
-        'rgba(18, 18, 18, 0.92)',
+        'rgba(225, 170, 45, 0.98)',
 
       'line-width':
-        7,
+        14,
 
       'line-opacity':
-        0.42,
+        0.72,
     },
   },
     streetLabelLayerId
@@ -6860,7 +6860,7 @@ function addTtcRouteToMap({
         'rgba(225, 170, 45, 0.98)',
 
       'line-width':
-        4,
+        8,
 
       'line-opacity':
         1,
@@ -6919,8 +6919,8 @@ function addTtcRouteToMap({
             pulseLayerId,
             'line-width',
             bright
-              ? 4.8
-              : 3.2
+              ? 9.2
+              : 6.8
           )
         },
         650
