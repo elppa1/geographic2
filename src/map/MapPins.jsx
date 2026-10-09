@@ -9669,7 +9669,9 @@ function createMarker({
           'geographic-pin-year',
 
         text:
-          (
+          pin.topEats === true
+            ? 'TOP EATS'
+            : (
             isEvent ||
             isSport
           )
@@ -9703,6 +9705,16 @@ function createMarker({
         pin.title,
     })
 
+    if (pinType === 'new' && pin.topEats === true) {
+      const award = String(pin.michelinDistinction || '').trim().toLowerCase()
+      const awardLabel = {
+        '1': '★ 1 Michelin Star', '2': '★★ 2 Michelin Stars',
+        '3': '★★★ 3 Michelin Stars', bib: 'Bib Gourmand',
+        selected: 'Michelin Selected',
+      }[award]
+      appendText({ parent: popupContent, className: 'geographic-pin-category',
+        text: awardLabel ? `TOP EATS · ${awardLabel}` : 'TOP EATS · Distinction not recorded' })
+    }
 
     appendText({
       parent:

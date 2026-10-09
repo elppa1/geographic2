@@ -2904,11 +2904,13 @@ function newRecordMatchesType(
   }
 
 
+  if (filter === 'top-eats') return record?.topEats === true
+
   if (
     filter ===
       'business'
   ) {
-    return isBusiness
+    return isBusiness && record?.topEats !== true
   }
 
 
@@ -8301,6 +8303,8 @@ function AdminRoom() {
           business:
             0,
 
+          'top-eats': 0,
+
           community:
             0,
         }
@@ -8350,6 +8354,8 @@ function AdminRoom() {
             )
               .length,
 
+          'top-eats': dateFiltered.filter((record) => newRecordMatchesType(record, 'top-eats')).length,
+
           community:
             dateFiltered.filter(
               (record) =>
@@ -8378,6 +8384,8 @@ function AdminRoom() {
 
           business:
             0,
+
+          'top-eats': 0,
 
           community:
             0,
@@ -8415,6 +8423,8 @@ function AdminRoom() {
                 )
             )
               .length,
+
+          'top-eats': visibleRecords.filter((record) => newRecordMatchesType(record, 'top-eats')).length,
 
           community:
             visibleRecords.filter(
@@ -16352,29 +16362,27 @@ function AdminRoom() {
     }
   }
 
-  async function publishTopEatsImport() {
-    if (!topEatsImport || topEatsImportRunning) return
-    const changes = topEatsPrepared.filter((item) => item.kind !== 'UNCHANGED')
-    if (!changes.length) { setTopEatsImportMessage('Nothing to update.'); return }
-    if (!window.confirm(`Publish ${changes.length} TOP EATS additions/updates for ${topEatsImport.year}? ${topEatsMissing.length} missing entries will NOT be removed.`)) return
-    setTopEatsImportRunning(true)
-    let succeeded = 0
-    try {
-      // Use existing durable Postgres NEW business upsert; abort at first error.
-      for (const item of changes) {
-        const saved = await postPublishedNewRecords([item.candidate], 'business')
-        if (!saved.length) throw new Error('Server returned no saved record.')
-        succeeded++
-      }
-      await refreshPublishedNewFromServer({ allowMigration: false })
-      setTopEatsImport(null)
-      setTopEatsImportMessage(`PUBLISHED ${succeeded} restaurants. Missing entries were left untouched.`)
-    } catch (error) {
-      await refreshPublishedNewFromServer({ allowMigration: false }).catch(() => {})
-      setTopEatsImportMessage(`STOPPED after ${succeeded} saved items: ${error.message}. Re-import the same JSON to review remaining updates.`)
-    } finally {
-      setTopEatsImportRunning(false)
-    }
+  function stageTopEatsImport() {
+    if (!topEatsImport) return
+    const incoming = topEatsPrepared.filter((item) => item.kind !== 'UNCHANGED')
+    if (!incoming.length) { setTopEatsImportMessage('Nothing new to review.'); return }
+    if (!window.confirm(`Add ${incoming.length} TOP EATS records to the Admin review queue? Nothing will publish.`)) return
+    // Preserve existing drafts on reimport; updated JSON replaces only matching pending drafts.
+    const importedKeys = new Set(incoming.map((item) => topEatsKey(item.candidate.title, item.candidate.location)))
+    const retained = reviewItems.filter((item) => !(item.topEats === true && importedKeys.has(topEatsKey(item.title, item.location || item.address))))
+    const stamped = new Date().toISOString()
+    const staged = incoming.map(({ candidate }) => ({
+      ...candidate,
+      id: `review-${candidate.id}`,
+      topEatsPublishedId: candidate.id,
+      createdAt: stamped,
+      origin: 'manual',
+      active: true,
+    }))
+    persistReview([...staged, ...retained])
+    setNewTypeFilter('top-eats')
+    setTopEatsImport(null)
+    setTopEatsImportMessage(`STAGED ${staged.length} TOP EATS drafts. Select a restaurant in REVIEW, edit its details, then publish it individually.`)
   }
 
   // ==========================================================
@@ -17142,13 +17150,16 @@ function AdminRoom() {
       }
 
 
+      const existingTopEats = tab === 'new' && record.topEats === true
+        ? records.find((item) => item.topEats === true &&
+            topEatsKey(item.title, item.location || item.address) ===
+            topEatsKey(record.title, record.location || record.address))
+        : null
+
       let publishedRecord = {
         ...record,
 
-        id:
-          createAdminId(
-            tab
-          ),
+        id: existingTopEats?.id || record.topEatsPublishedId || createAdminId(tab),
 
         city:
           cityKey,
@@ -17204,7 +17215,7 @@ function AdminRoom() {
 
       persistRecords([
         publishedRecord,
-        ...records,
+        ...records.filter((item) => item.id !== publishedRecord.id),
       ])
 
 
@@ -22181,8 +22192,8 @@ function AdminRoom() {
 
             {tab === 'new' && cityKey === 'toronto' && (
               <div className="admin-field admin-field-wide" style={{ border: '1px solid rgba(0,0,0,.25)', padding: 12 }}>
-                <strong>TOP EATS · ANNUAL JSON IMPORT</strong>
-                <p>Choose a JSON file to preview additions, changes and missing restaurants. Nothing publishes until you confirm. Missing restaurants are never automatically removed.</p>
+                <strong>TOP EATS · JSON TO REVIEW EDITOR</strong>
+                <p>Import only stages restaurant drafts in the TOP EATS review list. Select each restaurant, edit it in the existing side editor, and publish individually. Nothing publishes on import.</p>
                 <input type="file" accept=".json,application/json" onChange={loadTopEatsJson} disabled={topEatsImportRunning} />
                 {topEatsImportMessage && <p role="status">{topEatsImportMessage}</p>}
                 {topEatsImport && <div>
@@ -22194,8 +22205,8 @@ function AdminRoom() {
                     {topEatsMissing.map((item) => <div key={item.id}>MISSING, NOT REMOVED · {item.title}</div>)}
                   </div>
                   <div className="admin-form-actions">
-                    <button type="button" className="admin-save" onClick={publishTopEatsImport} disabled={topEatsImportRunning}>
-                      {topEatsImportRunning ? 'PUBLISHING…' : 'CONFIRM AND PUBLISH CHANGES'}
+                    <button type="button" className="admin-save" onClick={stageTopEatsImport} disabled={topEatsImportRunning}>
+                      STAGE IN TOP EATS REVIEW
                     </button>
                     <button type="button" className="admin-cancel" onClick={() => setTopEatsImport(null)} disabled={topEatsImportRunning}>CANCEL</button>
                   </div>
@@ -24173,6 +24184,11 @@ function AdminRoom() {
                     ],
 
                     [
+                      'top-eats',
+                      'TOP EATS',
+                    ],
+
+                    [
                       'community',
                       'COMMUNITY',
                     ],
@@ -25436,6 +25452,11 @@ function AdminRoom() {
                     [
                       'business',
                       'BUSINESSES',
+                    ],
+
+                    [
+                      'top-eats',
+                      'TOP EATS',
                     ],
 
                     [
