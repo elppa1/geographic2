@@ -942,15 +942,6 @@ const GeographicMap =
             attributionControl:
               false,
 
-            // Keep already-requested raster tiles around longer and do not
-            // cancel lower-zoom tile requests while the user is zooming.
-            // This reduces the empty "square" effect during normal movement
-            // without changing map interaction, camera, pins or layer order.
-            maxTileCacheZoomLevels:
-              8,
-            cancelPendingTileRequestsWhileZooming:
-              false,
-
             style: {
               version:
                 8,
