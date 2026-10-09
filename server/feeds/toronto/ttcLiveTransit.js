@@ -5757,16 +5757,62 @@ function applyArrivalTruth(payload, stopId, stopCode) {
       )
     }
 
-    stopArrivalHistory.delete(
-      key
-    )
+    // Remember only exact GTFS trip/stop identities. If TTC briefly withdraws
+    // a prediction, report it as UNVERIFIED (never as a fabricated live ETA).
+    // A confirmed passage, source switch, or elapsed bound removes it.
+    const previous = stopArrivalHistory.get(key)
+    const previousEntries = previous?.authority === authority
+      ? previous.entries : new Map()
+    const fresh = new Map()
+    const listed = new Set()
+    const uncertain = []
+    for (const arrival of records) {
+      const id = arrivalTruthKey(arrival, authority)
+      if (!id) continue
+      listed.add(id)
+      fresh.set(id, {
+        arrival, lastSeen: nowMs, missingSince: null,
+        sourceAuthority: authority,
+      })
+    }
+    for (const [id, old] of previousEntries) {
+      if (listed.has(id)) continue
+      if (provePreviouslyListedArrivalPassed(
+        old.arrival, authority, stopId, vehicleIndex, nowSeconds
+      )) continue
+      const missingSince = old.missingSince ?? nowMs
+      if (nowMs - missingSince > STOP_UNVERIFIED_GRACE_MS ||
+          nowMs - old.lastSeen > STOP_UNVERIFIED_GRACE_MS) continue
+      const eta = numberOrNull(old.arrival?.arrivalTime) ??
+        numberOrNull(old.arrival?.lastPredictedTime)
+      if (eta === null || eta < nowSeconds - 45 ||
+          eta > nowSeconds + 150) continue
+      const note = {
+        ...old.arrival,
+        etaState: 'unverified',
+        unverifiedReason: 'PREDICTION_WITHDRAWN',
+        positionNote: 'TTC estimate temporarily unavailable; stop visit unconfirmed',
+        lastPredictedTime: eta,
+        arrivalTime: null,
+        minutes: null,
+      }
+      uncertain.push(note)
+      fresh.set(id, {...old, arrival: note, missingSince})
+    }
+    stopArrivalHistory.delete(key)
+    stopArrivalHistory.set(key, {
+      authority, entries: new Map([...fresh].slice(0, 32)),
+    })
+    while (stopArrivalHistory.size > STOP_HISTORY_LIMIT) {
+      stopArrivalHistory.delete(stopArrivalHistory.keys().next().value)
+    }
 
     return {
       ...payload,
       arrivals:
         records,
       unverifiedArrivals:
-        [],
+        uncertain.slice(0, 2),
       passageConfirmedCount:
         passedCount,
       passageDiagnostics: {
