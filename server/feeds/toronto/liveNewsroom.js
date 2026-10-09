@@ -1720,7 +1720,10 @@ async function observeRecord({
       publishedTtcRecord?.archiveReason
     )
       .toLowerCase() ===
-      'missing-from-live-feed'
+      'missing-from-live-feed' &&
+    !(publishedTtcRecord?.ttcRemoveAt &&
+      Number.isFinite(Date.parse(publishedTtcRecord.ttcRemoveAt)) &&
+      Date.parse(publishedTtcRecord.ttcRemoveAt) <= Date.now())
   ) {
     publishedTtcRecord =
       await upsertPublishedNewsRecord({
@@ -6890,7 +6893,9 @@ async function expirePublishedNewsShelfLife() {
         now,
 
       archiveReason:
-        'expired-shelf-life',
+        publishedRecordIsTtc(record) && record?.ttcRemoveAt
+          ? 'scheduled-ttc-removal'
+          : 'expired-shelf-life',
 
       serverUpdatedAt:
         now,

@@ -515,6 +515,15 @@ export function getNewsSourceTimestamp(
 export function getNewsExpiresAt(
   record
 ) {
+  // An explicit TTC admin removal deadline overrides the otherwise
+  // feed-controlled, timer-free TTC lifecycle only for that record.
+  if (getNewsSourceKey(record) === 'ttc' && record?.ttcRemoveAt) {
+    const deadline = new Date(record.ttcRemoveAt)
+    if (Number.isFinite(deadline.getTime())) {
+      return deadline.toISOString()
+    }
+  }
+
   const hours =
     getNewsShelfLifeHours(
       record

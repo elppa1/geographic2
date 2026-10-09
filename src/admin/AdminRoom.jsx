@@ -1500,6 +1500,9 @@ const EMPTY_NEWS = {
   expiresAt:
     '',
 
+  ttcRemoveAt:
+    '',
+
   ttcRouteEnabled:
     false,
 
@@ -21987,6 +21990,62 @@ function AdminRoom() {
                     }
                   />
                 </label>
+
+                {(draft.category === 'ttc' ||
+                  draft.ttcRouteEnabled === true ||
+                  /ttc|transit commission/i.test(String(draft.source || ''))) && (
+                  <label className="admin-field">
+                    <span>REMOVE TTC PIN AT (TORONTO TIME)</span>
+                    <input
+                      type="datetime-local"
+                      value={(() => {
+                        const stamp = draft.ttcRemoveAt
+                        if (!stamp) return ''
+                        const date = new Date(stamp)
+                        if (!Number.isFinite(date.getTime())) return ''
+                        const parts = new Intl.DateTimeFormat('en-CA', {
+                          timeZone: 'America/Toronto',
+                          year: 'numeric', month: '2-digit', day: '2-digit',
+                          hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+                        }).formatToParts(date)
+                        const get = (name) => parts.find((part) => part.type === name)?.value || ''
+                        return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`
+                      })()}
+                      onChange={(event) => {
+                        const local = event.target.value
+                        if (!local) {
+                          updateDraft('ttcRemoveAt', '')
+                          return
+                        }
+                        // Use the selected Toronto wall-clock time, not the
+                        // viewer computer's local timezone.
+                        const target = new Date(`${local}:00Z`)
+                        const getTorontoWallTime = (instant) => {
+                          const fields = new Intl.DateTimeFormat('en-CA', {
+                            timeZone: 'America/Toronto',
+                            year: 'numeric', month: '2-digit', day: '2-digit',
+                            hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+                          }).formatToParts(instant)
+                          const value = (key) => fields.find((part) => part.type === key)?.value || ''
+                          return `${value('year')}-${value('month')}-${value('day')}T${value('hour')}:${value('minute')}`
+                        }
+                        let stamp = target.getTime()
+                        for (let i = 0; i < 3; i++) {
+                          const displayed = getTorontoWallTime(new Date(stamp))
+                          const difference = Date.parse(`${local}:00Z`) - Date.parse(`${displayed}:00Z`)
+                          if (!Number.isFinite(difference)) return
+                          stamp += difference
+                        }
+                        if (getTorontoWallTime(new Date(stamp)) !== local) {
+                          window.alert('This Toronto time does not exist due to daylight saving time. Choose another time.')
+                          return
+                        }
+                        updateDraft('ttcRemoveAt', new Date(stamp).toISOString())
+                      }}
+                    />
+                    <small>Optional. Official TTC resolution may remove the pin earlier.</small>
+                  </label>
+                )}
               </>
             )}
 
