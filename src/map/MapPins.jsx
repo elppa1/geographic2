@@ -6772,7 +6772,7 @@ function addTtcRouteToMap({
 
 
   if (
-    !map.isStyleLoaded()
+    !map.getStyle?.()?.layers
   ) {
     return null
   }
