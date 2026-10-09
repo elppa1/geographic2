@@ -4319,11 +4319,11 @@ function LiveTtcLayer({
                   'zoom',
                 ],
                 9,
-                5.8,
+                2.9,
                 13,
-                8.4,
+                4.2,
                 17,
-                11.8,
+                5.9,
               ],
               'line-opacity':
                 0.92,
@@ -4365,11 +4365,11 @@ function LiveTtcLayer({
                   'zoom',
                 ],
                 9,
-                3.4,
+                1.7,
                 13,
-                5.8,
+                2.9,
                 17,
-                9.2,
+                4.6,
               ],
               'line-opacity':
                 0.96,
@@ -4866,11 +4866,11 @@ function LiveTtcLayer({
             'zoom',
           ],
           9,
-          3.4 * multiplier,
+          1.7 * multiplier,
           13,
-          5.8 * multiplier,
+          2.9 * multiplier,
           17,
-          9.2 * multiplier,
+          4.6 * multiplier,
         ]
       }
 
@@ -4887,11 +4887,11 @@ function LiveTtcLayer({
             'zoom',
           ],
           9,
-          5.8 * multiplier,
+          2.9 * multiplier,
           13,
-          8.4 * multiplier,
+          4.2 * multiplier,
           17,
-          11.8 * multiplier,
+          5.9 * multiplier,
         ]
       }
 
