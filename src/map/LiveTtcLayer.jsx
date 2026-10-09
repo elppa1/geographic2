@@ -3927,6 +3927,127 @@ function LiveTtcLayer({
         }
       }
 
+      function enforceCustomTtcRouteLayerOrder() {
+        if (
+          disposed ||
+          !map.getLayer(
+            STOPS_LAYER_ID
+          )
+        ) {
+          return
+        }
+
+        const layers =
+          map.getStyle?.()
+            ?.layers ||
+          []
+
+        const customRouteLayerIds =
+          layers
+            .map(
+              (layer) =>
+                String(
+                  layer?.id ||
+                  ''
+                )
+            )
+            .filter(
+              (layerId) =>
+                layerId.startsWith(
+                  'geographic-ttc-route-base-'
+                ) ||
+                layerId.startsWith(
+                  'geographic-ttc-route-pulse-'
+                )
+            )
+
+        if (
+          customRouteLayerIds.length ===
+            0
+        ) {
+          return
+        }
+
+        const stopIndex =
+          layers.findIndex(
+            (layer) =>
+              layer?.id ===
+                STOPS_LAYER_ID
+          )
+
+        const liveRouteLayerIds = [
+          ROUTES_CASING_LAYER_ID,
+          ROUTES_LAYER_ID,
+          SELECTED_ROUTE_CASING_LAYER_ID,
+          SELECTED_ROUTE_LAYER_ID,
+        ]
+
+        const highestLiveRouteIndex =
+          Math.max(
+            ...liveRouteLayerIds
+              .map(
+                (layerId) =>
+                  layers.findIndex(
+                    (layer) =>
+                      layer?.id ===
+                        layerId
+                  )
+              )
+          )
+
+        const alreadyCorrect =
+          stopIndex >=
+            0 &&
+          customRouteLayerIds.every(
+            (layerId) => {
+              const index =
+                layers.findIndex(
+                  (layer) =>
+                    layer?.id ===
+                      layerId
+                )
+
+              return (
+                index >
+                  highestLiveRouteIndex &&
+                index <
+                  stopIndex
+              )
+            }
+          )
+
+        if (
+          alreadyCorrect
+        ) {
+          return
+        }
+
+        customRouteLayerIds
+          .forEach(
+            (layerId) => {
+              if (
+                !map.getLayer(
+                  layerId
+                )
+              ) {
+                return
+              }
+
+              try {
+                map.moveLayer(
+                  layerId,
+                  STOPS_LAYER_ID
+                )
+              }
+              catch {
+                // A style update can race this reorder. The next styledata
+                // event will retry without affecting TTC state.
+              }
+            }
+          )
+      }
+
+
       function handleStyleData() {
         if (
           disposed
@@ -3935,6 +4056,7 @@ function LiveTtcLayer({
         }
 
         ensureLiveTtcImages()
+        enforceCustomTtcRouteLayerOrder()
       }
 
 
@@ -4727,6 +4849,8 @@ function LiveTtcLayer({
             },
           })
         }
+
+        enforceCustomTtcRouteLayerOrder()
       }
 
       function selectedRouteCoreWidthExpression(
