@@ -6835,13 +6835,16 @@ function addTtcRouteToMap({
 
     paint: {
       'line-color':
-        'rgba(225, 170, 45, 0.98)',
+        '#FFD400',
 
       'line-width':
-        14,
+        1.6,
+
+      'line-gap-width':
+        2.4,
 
       'line-opacity':
-        0.72,
+        0.7,
     },
   },
     beforeLayerId
@@ -6868,10 +6871,13 @@ function addTtcRouteToMap({
 
     paint: {
       'line-color':
-        'rgba(225, 170, 45, 0.98)',
+        '#FFD400',
 
       'line-width':
-        8,
+        2.2,
+
+      'line-gap-width':
+        2.4,
 
       'line-opacity':
         1,
@@ -6922,7 +6928,7 @@ function addTtcRouteToMap({
             'line-opacity',
             bright
               ? 1
-              : 0.24
+              : 0.18
           )
 
 
@@ -6930,8 +6936,8 @@ function addTtcRouteToMap({
             pulseLayerId,
             'line-width',
             bright
-              ? 9.2
-              : 6.8
+              ? 2.8
+              : 1.2
           )
         },
         650
