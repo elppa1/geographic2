@@ -6840,8 +6840,6 @@ function addTtcRouteToMap({
       'line-width':
         1.6,
 
-      'line-gap-width':
-        2.4,
 
       'line-opacity':
         0.7,
@@ -6876,8 +6874,6 @@ function addTtcRouteToMap({
       'line-width':
         2.2,
 
-      'line-gap-width':
-        2.4,
 
       'line-opacity':
         1,
