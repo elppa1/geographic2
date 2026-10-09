@@ -6210,6 +6210,11 @@ function AdminRoom() {
     })
 
 
+  // TOP EATS annual JSON import is an explicit Admin action, never a feed.
+  const [topEatsImport, setTopEatsImport] = useState(null)
+  const [topEatsImportMessage, setTopEatsImportMessage] = useState('')
+  const [topEatsImportRunning, setTopEatsImportRunning] = useState(false)
+
   const [
     historicBulkImportOpen,
     setHistoricBulkImportOpen,
@@ -16255,6 +16260,124 @@ function AdminRoom() {
   // ==========================================================
 
   // ==========================================================
+  // TOP EATS · REVIEWED ANNUAL JSON IMPORT
+  // ==========================================================
+  const topEatsKey = (name, address) =>
+    `${String(name || '').trim().toLowerCase().replace(/\s+/g, ' ')}|${String(address || '').trim().toLowerCase().replace(/\s+/g, ' ')}`
+
+  const topEatsCurrent = records.filter((record) => record.topEats === true)
+  const topEatsPrepared = topEatsImport
+    ? topEatsImport.restaurants.map((item) => {
+        const previous = topEatsCurrent.find((record) =>
+          topEatsKey(record.title, record.location || record.address) === topEatsKey(item.name, item.address)
+        ) || null
+        const candidate = {
+          ...(previous || {}),
+          city: 'toronto', type: 'new', newType: 'business',
+          category: 'restaurant', topEats: true,
+          title: item.name, location: item.address,
+          michelinDistinction: item.michelinDistinction,
+          ...(item.cuisine !== undefined ? { cuisine: item.cuisine } : {}),
+          ...(item.website !== undefined ? { businessUrl: item.website } : {}),
+          ...(item.latitude !== undefined ? { latitude: item.latitude, searchedLatitude: item.latitude } : {}),
+          ...(item.longitude !== undefined ? { longitude: item.longitude, searchedLongitude: item.longitude } : {}),
+          ...(previous ? {} : {
+            id: `top-eats-${topEatsKey(item.name, item.address).split('').reduce((hash, char) => (Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0), 2166136261).toString(36)}`,
+            publishedAt: new Date().toISOString(), active: true, status: 'open',
+            lifecycleOverride: 'keep-live',
+          }),
+          topEatsSelectionYear: topEatsImport.year,
+        }
+        const changed = !previous || ['michelinDistinction', 'cuisine', 'businessUrl', 'latitude', 'longitude', 'location']
+          .some((key) => String(previous[key] ?? '') !== String(candidate[key] ?? ''))
+        return { previous, candidate, kind: !previous ? 'NEW' : changed ? 'UPDATED' : 'UNCHANGED' }
+      })
+    : []
+
+  const topEatsMissing = topEatsImport?.completeSnapshot
+    ? topEatsCurrent.filter((record) => !topEatsImport.restaurants.some((item) =>
+        topEatsKey(record.title, record.location || record.address) === topEatsKey(item.name, item.address)
+      ))
+    : []
+
+  async function loadTopEatsJson(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setTopEatsImport(null)
+    setTopEatsImportMessage('')
+    try {
+      if (file.size > 1000000) throw new Error('File is too large (1 MB maximum).')
+      const payload = JSON.parse(await file.text())
+      if (payload?.category !== 'TOP EATS' || !Number.isInteger(payload.year) ||
+          payload.year < 2020 || payload.year > 2100 ||
+          typeof payload.completeSnapshot !== 'boolean' ||
+          !Array.isArray(payload.restaurants) || !payload.restaurants.length || payload.restaurants.length > 300) {
+        throw new Error('Expected category TOP EATS, year, completeSnapshot boolean, and 1–300 restaurants.')
+      }
+      const seen = new Set()
+      const restaurants = payload.restaurants.map((item, index) => {
+        const name = String(item.name || '').trim()
+        const address = String(item.address || '').trim()
+        const rawDistinction = String(item.michelinDistinction || '').trim().toLowerCase()
+        const distinctions = { selected: 'selected', bib: 'bib', '1': '1', '2': '2', '3': '3',
+          '1 star': '1', '2 stars': '2', '3 stars': '3', 'bib gourmand': 'bib', 'michelin selected': 'selected' }
+        if (!name || !address || !Object.hasOwn(distinctions, rawDistinction)) {
+          throw new Error(`Restaurant ${index + 1}: name, address or Michelin distinction invalid.`)
+        }
+        const key = topEatsKey(name, address)
+        if (seen.has(key)) throw new Error(`Duplicate restaurant: ${name} / ${address}`)
+        seen.add(key)
+        const existing = records.find((record) => record.topEats === true &&
+          topEatsKey(record.title, record.location || record.address) === key)
+        const latitude = item.latitude === undefined ? undefined : Number(item.latitude)
+        const longitude = item.longitude === undefined ? undefined : Number(item.longitude)
+        if ((latitude !== undefined && (!Number.isFinite(latitude) || latitude < 43.4 || latitude > 44)) ||
+            (longitude !== undefined && (!Number.isFinite(longitude) || longitude < -80.1 || longitude > -79))) {
+          throw new Error(`${name}: invalid Toronto coordinates.`)
+        }
+        if (!existing && (latitude === undefined || longitude === undefined)) {
+          throw new Error(`${name}: new restaurants require verified latitude and longitude.`)
+        }
+        return { name, address, michelinDistinction: distinctions[rawDistinction],
+          ...(item.cuisine !== undefined ? { cuisine: String(item.cuisine) } : {}),
+          ...(item.website !== undefined ? { website: String(item.website) } : {}),
+          ...(latitude !== undefined ? { latitude } : {}),
+          ...(longitude !== undefined ? { longitude } : {}) }
+      })
+      setTopEatsImport({ year: payload.year, completeSnapshot: payload.completeSnapshot, restaurants })
+      setTopEatsImportMessage('JSON validated. Review the changes below before publishing.')
+    } catch (error) {
+      setTopEatsImportMessage(`IMPORT BLOCKED: ${error.message}`)
+    }
+  }
+
+  async function publishTopEatsImport() {
+    if (!topEatsImport || topEatsImportRunning) return
+    const changes = topEatsPrepared.filter((item) => item.kind !== 'UNCHANGED')
+    if (!changes.length) { setTopEatsImportMessage('Nothing to update.'); return }
+    if (!window.confirm(`Publish ${changes.length} TOP EATS additions/updates for ${topEatsImport.year}? ${topEatsMissing.length} missing entries will NOT be removed.`)) return
+    setTopEatsImportRunning(true)
+    let succeeded = 0
+    try {
+      // Use existing durable Postgres NEW business upsert; abort at first error.
+      for (const item of changes) {
+        const saved = await postPublishedNewRecords([item.candidate], 'business')
+        if (!saved.length) throw new Error('Server returned no saved record.')
+        succeeded++
+      }
+      await refreshPublishedNewFromServer({ allowMigration: false })
+      setTopEatsImport(null)
+      setTopEatsImportMessage(`PUBLISHED ${succeeded} restaurants. Missing entries were left untouched.`)
+    } catch (error) {
+      await refreshPublishedNewFromServer({ allowMigration: false }).catch(() => {})
+      setTopEatsImportMessage(`STOPPED after ${succeeded} saved items: ${error.message}. Re-import the same JSON to review remaining updates.`)
+    } finally {
+      setTopEatsImportRunning(false)
+    }
+  }
+
+  // ==========================================================
   // PERSIST PUBLISHED
   // ==========================================================
 
@@ -22055,6 +22178,30 @@ function AdminRoom() {
               </>
             )}
 
+
+            {tab === 'new' && cityKey === 'toronto' && (
+              <div className="admin-field admin-field-wide" style={{ border: '1px solid rgba(0,0,0,.25)', padding: 12 }}>
+                <strong>TOP EATS · ANNUAL JSON IMPORT</strong>
+                <p>Choose a JSON file to preview additions, changes and missing restaurants. Nothing publishes until you confirm. Missing restaurants are never automatically removed.</p>
+                <input type="file" accept=".json,application/json" onChange={loadTopEatsJson} disabled={topEatsImportRunning} />
+                {topEatsImportMessage && <p role="status">{topEatsImportMessage}</p>}
+                {topEatsImport && <div>
+                  <p><strong>{topEatsImport.year}</strong> · {topEatsImport.completeSnapshot ? 'Complete selection' : 'Partial update'} · {topEatsPrepared.filter((item) => item.kind === 'NEW').length} new · {topEatsPrepared.filter((item) => item.kind === 'UPDATED').length} changed · {topEatsPrepared.filter((item) => item.kind === 'UNCHANGED').length} unchanged · {topEatsMissing.length} missing (review only)</p>
+                  <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+                    {topEatsPrepared.filter((item) => item.kind !== 'UNCHANGED').map((item) =>
+                      <div key={item.candidate.id} style={{ padding: '4px 0' }}>{item.kind} · {item.candidate.title} · {item.candidate.michelinDistinction}</div>
+                    )}
+                    {topEatsMissing.map((item) => <div key={item.id}>MISSING, NOT REMOVED · {item.title}</div>)}
+                  </div>
+                  <div className="admin-form-actions">
+                    <button type="button" className="admin-save" onClick={publishTopEatsImport} disabled={topEatsImportRunning}>
+                      {topEatsImportRunning ? 'PUBLISHING…' : 'CONFIRM AND PUBLISH CHANGES'}
+                    </button>
+                    <button type="button" className="admin-cancel" onClick={() => setTopEatsImport(null)} disabled={topEatsImportRunning}>CANCEL</button>
+                  </div>
+                </div>}
+              </div>
+            )}
 
             {tab ===
               'new' && (
