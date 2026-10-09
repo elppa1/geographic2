@@ -1,56 +1,3 @@
-function getHistoricalCollections(
-  city
-) {
-  return [
-    {
-      layerType:
-        'map',
-
-      records:
-        city?.maps,
-    },
-
-    {
-      layerType:
-        'aerial',
-
-      records:
-        city?.aerials,
-    },
-  ]
-}
-
-
-function forEachHistoricalLayerId({
-  city,
-  callback,
-}) {
-  getHistoricalCollections(
-    city
-  )
-    .forEach(
-      ({
-        layerType,
-        records,
-      }) => {
-        Object.keys(
-          records ||
-          {}
-        )
-          .forEach(
-            (
-              year
-            ) => {
-              callback(
-                `${city.key}-${layerType}-${year}`
-              )
-            }
-          )
-      }
-    )
-}
-
-
 export function addHistoricalLayers({
   map,
   city,
@@ -63,91 +10,104 @@ export function addHistoricalLayers({
   }
 
 
-  getHistoricalCollections(
-    city
-  )
-    .forEach(
-      ({
-        layerType,
-        records,
-      }) => {
-        Object.entries(
-          records ||
-          {}
-        )
-          .forEach(
-            ([
-              year,
-              item,
-            ]) => {
-              if (
-                !item ||
-                !item.url
-              ) {
-                return
-              }
+  const collections = [
+    {
+      layerType:
+        'map',
+
+      records:
+        city.maps,
+    },
+
+    {
+      layerType:
+        'aerial',
+
+      records:
+        city.aerials,
+    },
+  ]
 
 
-              const id =
-                `${city.key}-${layerType}-${year}`
+  collections.forEach(
+    ({
+      layerType,
+      records,
+    }) => {
+      Object.entries(
+        records || {}
+      ).forEach(
+        ([
+          year,
+          item,
+        ]) => {
+          if (
+            !item ||
+            !item.url
+          ) {
+            return
+          }
 
 
-              if (
-                map.getSource(
-                  id
-                )
-              ) {
-                return
-              }
+          const id =
+            `${city.key}-${layerType}-${year}`
 
 
-              map.addSource(
-                id,
-                {
-                  type:
-                    'raster',
-
-                  tiles: [
-                    item.url,
-                  ],
-
-                  tileSize:
-                    256,
-                }
-              )
+          if (
+            map.getSource(id)
+          ) {
+            return
+          }
 
 
-              map.addLayer({
-                id,
+          map.addSource(
+            id,
+            {
+              type:
+                'raster',
 
-                type:
-                  'raster',
+              tiles: [
+                item.url,
+              ],
 
-                source:
-                  id,
-
-                layout: {
-                  visibility:
-                    'none',
-                },
-
-                paint: {
-                  'raster-opacity':
-                    1,
-                },
-              })
+              tileSize:
+                256,
             }
           )
-      }
-    )
+
+
+          map.addLayer({
+            id,
+
+            type:
+              'raster',
+
+            source:
+              id,
+
+            layout: {
+              visibility:
+                'none',
+            },
+
+            paint: {
+              'raster-opacity':
+                1,
+
+              'raster-fade-duration':
+                0,
+            },
+          })
+        }
+      )
+    }
+  )
 }
 
 
 export function hideHistoricalLayers({
   map,
   city,
-  exceptLayerId =
-    null,
 }) {
   if (
     !map ||
@@ -157,33 +117,51 @@ export function hideHistoricalLayers({
   }
 
 
-  forEachHistoricalLayerId({
-    city,
-    callback:
-      (
-        id
-      ) => {
-        if (
-          id ===
-            exceptLayerId
-        ) {
-          return
-        }
+  const collections = [
+    {
+      layerType:
+        'map',
+
+      records:
+        city.maps,
+    },
+
+    {
+      layerType:
+        'aerial',
+
+      records:
+        city.aerials,
+    },
+  ]
 
 
-        if (
-          map.getLayer(
-            id
-          )
-        ) {
-          map.setLayoutProperty(
-            id,
-            'visibility',
-            'none'
-          )
+  collections.forEach(
+    ({
+      layerType,
+      records,
+    }) => {
+      Object.keys(
+        records || {}
+      ).forEach(
+        (year) => {
+          const id =
+            `${city.key}-${layerType}-${year}`
+
+
+          if (
+            map.getLayer(id)
+          ) {
+            map.setLayoutProperty(
+              id,
+              'visibility',
+              'none'
+            )
+          }
         }
-      },
-  })
+      )
+    }
+  )
 }
 
 
@@ -215,9 +193,7 @@ export function showHistoricalLayer({
 
 
   if (
-    !map.getLayer(
-      id
-    )
+    !map.getLayer(id)
   ) {
     console.warn(
       'HISTORICAL LAYER NOT FOUND:',
