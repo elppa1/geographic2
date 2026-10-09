@@ -2633,10 +2633,10 @@ const GeographicMap =
                     19,
                     Math.max(
                       12,
-                      requestedZoom
+                      requestedZoom + 1.6
                     )
                   )
-                : 16
+                : 17.6
 
 
             // One camera owner at a time. Popup snap corrections and an older
