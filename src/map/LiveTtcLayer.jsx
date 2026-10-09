@@ -102,6 +102,20 @@ let initialVehiclePreloadPromise =
   null
 
 
+// Stop-board display only: use an explicitly named branch from the headsign.
+function stopArrivalRouteLabel(arrival) {
+  const base = String(arrival?.routeShortName || arrival?.routeId || '').trim()
+  const headsign = String(arrival?.headsign || '').trim()
+  if (!base || !headsign) return base
+  const tokens = headsign.match(/[A-Za-z0-9]+/g) || []
+  const branch = tokens.find((token) =>
+    token.length === base.length + 1 &&
+    token.slice(0, base.length).toUpperCase() === base.toUpperCase() &&
+    /^[A-Z]$/i.test(token.slice(-1))
+  )
+  return branch ? branch.toUpperCase() : base
+}
+
 function validVehiclePayload(
   payload
 ) {
@@ -995,8 +1009,7 @@ function fillStopArrivals({
           parent:
             row,
           text:
-            arrival.routeShortName ||
-            arrival.routeId,
+            stopArrivalRouteLabel(arrival),
           style: {
             fontSize:
               '12px',
