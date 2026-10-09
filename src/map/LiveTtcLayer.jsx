@@ -3937,6 +3937,97 @@ function LiveTtcLayer({
         ensureLiveTtcImages()
       }
 
+
+      // Time Machine raster tiles and the live TTC vehicle animation share the
+      // same MapLibre renderer. While a visible historical raster source still
+      // has tiles in flight, let those tiles finish without pushing another
+      // vehicle GeoJSON frame into the renderer every 50 ms.
+      //
+      // Polling/state updates continue normally. As soon as MapLibre reports
+      // the selected historical source loaded, the existing animation timer
+      // paints the current TTC state again on its next tick.
+      function historicalRasterIsLoading() {
+        const layers =
+          map.getStyle?.()
+            ?.layers ||
+          []
+
+        for (
+          const layer of
+          layers
+        ) {
+          const layerId =
+            String(
+              layer?.id ||
+              ''
+            )
+
+          if (
+            !(
+              layerId.startsWith(
+                'toronto-map-'
+              ) ||
+              layerId.startsWith(
+                'toronto-aerial-'
+              )
+            )
+          ) {
+            continue
+          }
+
+          if (
+            map.getLayoutProperty(
+              layerId,
+              'visibility'
+            ) ===
+              'none'
+          ) {
+            continue
+          }
+
+          const opacity =
+            Number(
+              map.getPaintProperty(
+                layerId,
+                'raster-opacity'
+              )
+            )
+
+          if (
+            Number.isFinite(
+              opacity
+            ) &&
+            opacity <=
+              0.001
+          ) {
+            continue
+          }
+
+          const sourceId =
+            typeof layer?.source ===
+              'string'
+              ? layer.source
+              : layerId
+
+          try {
+            if (
+              map.isSourceLoaded?.(
+                sourceId
+              ) ===
+                false
+            ) {
+              return true
+            }
+          }
+          catch {
+            // If MapLibre is between style states, do not block TTC rendering.
+          }
+        }
+
+        return false
+      }
+
+
       function addSourcesAndLayers() {
         const streetLabelLayerId =
           getStreetLabelInsertionLayerId(
@@ -4738,7 +4829,8 @@ function LiveTtcLayer({
             () => {
               if (
                 disposed ||
-                !selectedRouteRef.current
+                !selectedRouteRef.current ||
+                historicalRasterIsLoading()
               ) {
                 return
               }
@@ -5508,7 +5600,8 @@ function LiveTtcLayer({
       function renderAnimatedVehicles() {
         if (
           disposed ||
-          mapIsMoving
+          mapIsMoving ||
+          historicalRasterIsLoading()
         ) {
           return
         }
