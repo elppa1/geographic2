@@ -5746,7 +5746,7 @@ function applyArrivalTruth(payload, stopId, stopCode) {
           null &&
         eta <
           nowSeconds -
-            3
+            STOP_EXPIRED_ETA_GRACE_SECONDS
       ) {
         expiredEstimateCount++
         continue
