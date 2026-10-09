@@ -6670,13 +6670,24 @@ function removeTtcRouteArtifact({
 }
 
 
-function getTtcRouteStreetLabelLayerId(
+function getTtcRouteBeforeLayerId(
   map
 ) {
   const layers =
     map?.getStyle?.()
       ?.layers ||
     []
+
+
+  // Keep the custom TTC route above all Live TTC route-line layers,
+  // but below stops, stations and vehicles so buses remain on top.
+  if (
+    map?.getLayer?.(
+      'ttc-live-stops'
+    )
+  ) {
+    return 'ttc-live-stops'
+  }
 
 
   const preferred =
@@ -6766,8 +6777,8 @@ function addTtcRouteToMap({
     return null
   }
 
-  const streetLabelLayerId =
-    getTtcRouteStreetLabelLayerId(
+  const beforeLayerId =
+    getTtcRouteBeforeLayerId(
       map
     )
 
@@ -6833,7 +6844,7 @@ function addTtcRouteToMap({
         0.72,
     },
   },
-    streetLabelLayerId
+    beforeLayerId
   )
 
 
@@ -6866,7 +6877,7 @@ function addTtcRouteToMap({
         1,
     },
   },
-    streetLabelLayerId
+    beforeLayerId
   )
 
 
