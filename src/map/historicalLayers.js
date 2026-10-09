@@ -225,8 +225,14 @@ export function showHistoricalLayer({
   }
 
 
-  // Turn the requested historical layer on FIRST. Do not blank the previous
-  // layer while the selected raster is still waiting on network tiles.
+  // Switch Time Machine years immediately.
+  //
+  // The previous transition logic waited for MapLibre to report the entire
+  // selected raster source as loaded before hiding the old year. That made
+  // rapid year changes feel delayed and allowed raster requests to pile up.
+  //
+  // Keep the selected layer visible and hide every other historical layer
+  // immediately. Raster tiles can continue loading normally in the background.
   map.setLayoutProperty(
     id,
     'visibility',
@@ -241,82 +247,16 @@ export function showHistoricalLayer({
   )
 
 
-  const finishTransition =
-    () => {
-      hideHistoricalLayers({
-        map,
-        city,
-        exceptLayerId:
-          id,
-      })
-
-      map.triggerRepaint?.()
-    }
+  hideHistoricalLayers({
+    map,
+    city,
+    exceptLayerId:
+      id,
+  })
 
 
-  const sourceLoaded =
-    map.isSourceLoaded?.(
-      id
-    )
+  map.triggerRepaint?.()
 
 
-  if (
-    sourceLoaded
-  ) {
-    finishTransition()
-
-    return undefined
-  }
-
-
-  let finished =
-    false
-
-
-  const handleSourceData =
-    (
-      event
-    ) => {
-      if (
-        finished ||
-        event?.sourceId !==
-          id
-      ) {
-        return
-      }
-
-
-      if (
-        event?.isSourceLoaded ||
-        map.isSourceLoaded?.(
-          id
-        )
-      ) {
-        finished =
-          true
-        map.off(
-          'sourcedata',
-          handleSourceData
-        )
-        finishTransition()
-      }
-    }
-
-
-  map.on(
-    'sourcedata',
-    handleSourceData
-  )
-
-
-  // Do not leave listeners behind if the user scrubs quickly through years.
-  return () => {
-    finished =
-      true
-
-    map.off(
-      'sourcedata',
-      handleSourceData
-    )
-  }
+  return undefined
 }
