@@ -1922,28 +1922,6 @@ const GeographicMap =
         }
 
 
-        // GPS heading is only a fallback. If the phone compass has reported
-        // recently, do not let GPS course and compass fight each other.
-        if (
-          compassHandlerRef.current &&
-          Number.isFinite(
-            position.coords.heading
-          ) &&
-          Number.isFinite(
-            position.coords.speed
-          ) &&
-          position.coords.speed >
-            1.2 &&
-          (
-            Date.now() -
-            compassSensorLastSeenRef.current
-          ) >
-            1500
-        ) {
-          applyMapHeading(
-            position.coords.heading
-          )
-        }
 
 
         if (
@@ -2125,14 +2103,6 @@ const GeographicMap =
         manualCameraUntilRef.current =
           0
 
-        // GPS owns orientation on mobile; request compass permission while
-        // this is still the user's GPS-button gesture (iOS requirement).
-        if (
-          typeof window !== 'undefined' &&
-          window.matchMedia('(max-width: 700px)').matches
-        ) {
-          await startCompassTracking()
-        }
 
 
         try {
