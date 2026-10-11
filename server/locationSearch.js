@@ -473,7 +473,7 @@ function stripStreetSuffix(
   )
     .trim()
     .replace(
-      /\s+(street|st|avenue|ave|road|rd|boulevard|blvd|drive|dr|lane|ln|court|ct|place|pl|crescent|cres|trail|trl|terrace|terr|parkway|pkwy|circle|cir|highway|hwy|expressway|expy|way|square|sq|gardens|garden|gdns|grove|grv|heights|hts|hill|path|row|gate|mews|close|cl)\.?$/i,
+      /\s+(street|st|avenue|ave|av|road|rd|boulevard|blvd|drive|dr|lane|ln|court|crt|ct|place|pl|crescent|cres|cr|trail|trl|terrace|terr|parkway|pkwy|circle|cir|highway|hwy|expressway|expy|way|square|sq|gardens|garden|gdns|grove|grv|heights|hts|hill|path|row|gate|mews|close|cl)\.?$/i,
       ''
     )
     .replace(
@@ -678,9 +678,9 @@ function makeStreetRegex(
 
   const streetType =
     (
-      '( (Street|St\\.?|Avenue|Ave\\.?|Road|Rd\\.?|' +
+      '( (Street|St\\.?|Avenue|Ave\\.?|Av\\.?|Road|Rd\\.?|' +
       'Boulevard|Blvd\\.?|Drive|Dr\\.?|Lane|Ln\\.?|' +
-      'Court|Ct\\.?|Place|Pl\\.?|Crescent|Cres\\.?|' +
+      'Court|Crt\\.?|Ct\\.?|Place|Pl\\.?|Crescent|Cres\\.?|Cr\\.?|' +
       'Trail|Trl\\.?|Terrace|Terr\\.?|Parkway|Pkwy\\.?|' +
       'Circle|Cir\\.?|Highway|Hwy\\.?|Expressway|Expy\\.?|' +
       'Way|Square|Sq\\.?|Gardens|Garden|Gdns\\.?|' +
@@ -819,6 +819,7 @@ const STREET_TYPE_ALIASES =
       st: 'street',
       avenue: 'avenue',
       ave: 'avenue',
+      av: 'avenue',
       road: 'road',
       rd: 'road',
       boulevard: 'boulevard',
@@ -829,10 +830,12 @@ const STREET_TYPE_ALIASES =
       ln: 'lane',
       court: 'court',
       ct: 'court',
+      crt: 'court',
       place: 'place',
       pl: 'place',
       crescent: 'crescent',
       cres: 'crescent',
+      cr: 'crescent',
       trail: 'trail',
       trl: 'trail',
       terrace: 'terrace',
@@ -2909,101 +2912,61 @@ export function locationSearchApi() {
 
 
               // --------------------------------------------------
-              // 1. FULL-STRING INTERSECTION GEOCODE
+              // 1. CITY OF TORONTO INTERSECTION DATA
               // --------------------------------------------------
-              //
-              // Start with the complete street names exactly as parsed.
-              // This is the path that is actually succeeding in production.
-              // Do not make every Admin search wait on the City GIS service
-              // before trying the geocoder that already knows the crossing.
-              //
-              // --------------------------------------------------
+              // Prefer authoritative intersection geometry. Nominatim
+              // can miss a valid crossing based on wording or street order.
+              // Keep an independent deadline; failures still fall back.
 
               try {
+                const cityDeadline =
+                  Date.now() + 3500
+
                 elements =
-                  await searchNominatimIntersection({
-                    streetA,
-                    streetB,
-                    searchOptions,
-                    signal:
-                      requestController.signal,
+                  await waitForSearch({
+                    promise:
+                      searchTorontoIntersection({
+                        streetA,
+                        streetB,
+                        deadline: cityDeadline,
+                      }),
+                    deadline: cityDeadline,
+                    signal: requestController.signal,
                   })
               }
-              catch (
-                error
-              ) {
-                if (
-                  error?.name ===
-                    'AbortError'
-                ) {
+              catch (error) {
+                if (error?.name === 'AbortError') {
                   throw error
                 }
 
-
                 console.warn(
-                  'LOCATION SEARCH · NOMINATIM INTERSECTION FAILED, USING TORONTO DATA:',
-                  String(
-                    error?.message ||
-                    error
-                  )
+                  'LOCATION SEARCH · TORONTO INTERSECTION FAILED, USING NOMINATIM:',
+                  String(error?.message || error)
                 )
               }
 
-
               // --------------------------------------------------
-              // 2. CITY OF TORONTO INTERSECTION DATA
-              // --------------------------------------------------
-              //
-              // The production tests showed this upstream taking roughly
-              // four seconds before the working fallback ran. Keep it only
-              // as a short fallback so it can never stall every lookup.
-              //
+              // 2. NOMINATIM INTERSECTION FALLBACK
               // --------------------------------------------------
 
-              if (
-                elements.length ===
-                  0
-              ) {
+              if (elements.length === 0) {
                 try {
-                  const cityDeadline =
-                    Date.now() +
-                    1500
-
-
                   elements =
-                    await waitForSearch({
-                      promise:
-                        searchTorontoIntersection({
-                          streetA,
-                          streetB,
-                          deadline:
-                            cityDeadline,
-                        }),
-
-                      deadline:
-                        cityDeadline,
-
-                      signal:
-                        requestController.signal,
+                    await searchNominatimIntersection({
+                      streetA,
+                      streetB,
+                      searchOptions,
+                      signal: requestController.signal,
                     })
                 }
-                catch (
-                  error
-                ) {
-                  if (
-                    error?.name ===
-                      'AbortError'
-                  ) {
+                catch (error) {
+                  if (error?.name === 'AbortError') {
                     throw error
                   }
 
-
                   console.warn(
-                    'LOCATION SEARCH · TORONTO INTERSECTION FAILED, USING OVERPASS:',
-                    String(
-                      error?.message ||
-                      error
-                    )
+                    'LOCATION SEARCH · NOMINATIM INTERSECTION FAILED, USING OVERPASS:',
+                    String(error?.message || error)
                   )
                 }
               }
