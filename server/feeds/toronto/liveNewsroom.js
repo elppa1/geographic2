@@ -4645,6 +4645,47 @@ function parseTorontoFireTime(
   }
 
 
+  // Toronto Fire reports dispatch wall-clock times without a timezone.
+  // Convert only those values here; preserve existing parsing for explicit zones.
+  const localDispatch = clean.match(
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?$/
+  )
+  if (localDispatch) {
+    const [, year, month, day, hour, minute, second = '00'] = localDispatch
+    const wallClockUtc = Date.UTC(
+      Number(year), Number(month) - 1, Number(day),
+      Number(hour), Number(minute), Number(second)
+    )
+    const offsetFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Toronto', timeZoneName: 'shortOffset',
+    })
+    const torontoOffsetMinutes = (instant) => {
+      const zone = offsetFormatter.formatToParts(new Date(instant))
+        .find((part) => part.type === 'timeZoneName')?.value || ''
+      const offset = zone.match(/^GMT([+-])(\d{1,2})(?::(\d{2}))?$/)
+      if (!offset) return null
+      return (offset[1] === '+' ? 1 : -1) *
+        (Number(offset[2]) * 60 + Number(offset[3] || 0))
+    }
+    const initialOffset = torontoOffsetMinutes(wallClockUtc)
+    if (initialOffset !== null) {
+      let instant = wallClockUtc - initialOffset * 60000
+      const actualOffset = torontoOffsetMinutes(instant)
+      if (actualOffset !== null) instant = wallClockUtc - actualOffset * 60000
+      const check = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Toronto', year: 'numeric', month: '2-digit',
+        day: '2-digit', hour: '2-digit', minute: '2-digit',
+        second: '2-digit', hourCycle: 'h23',
+      }).formatToParts(new Date(instant))
+      const part = (key) => check.find((entry) => entry.type === key)?.value
+      if (part('year') === year && part('month') === month &&
+          part('day') === day && Number(part('hour')) === Number(hour) &&
+          part('minute') === minute && part('second') === second) {
+        return new Date(instant).toISOString()
+      }
+    }
+  }
+
   const direct =
     new Date(
       clean
