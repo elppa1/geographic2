@@ -2965,6 +2965,7 @@ function LiveTtcLayer({
   map,
   active =
     false,
+  gpsTrackingActive = false,
 }) {
   const popupRef =
     useRef(null)
@@ -3031,6 +3032,12 @@ function LiveTtcLayer({
         false
       let accuracyHintVisible =
         null
+      let gpsChosen = Boolean(gpsTrackingActive)
+      function handleMainGpsChange(event) {
+        gpsChosen = Boolean(event?.detail?.active)
+        updateAccuracyHint()
+      }
+      window.addEventListener('tg-gps-tracking', handleMainGpsChange)
       let firstVehicleRefresh =
         true
       let vehicleRefreshInFlight =
@@ -3299,7 +3306,7 @@ function LiveTtcLayer({
         }
 
         const showHint =
-          !selectedRouteRef.current
+          !selectedRouteRef.current && !gpsChosen
 
         if (
           accuracyHintVisible ===
@@ -3312,7 +3319,7 @@ function LiveTtcLayer({
           showHint
 
         accuracyHint.textContent =
-          'TO IMPROVE ACCURACY, PLEASE CLICK A ROUTE.'
+          'CLICK A ROUTE OR PRESS GPS'
         accuracyHint.style.display =
           showHint
             ? 'block'
@@ -8355,6 +8362,7 @@ function LiveTtcLayer({
       return () => {
         disposed =
           true
+        window.removeEventListener('tg-gps-tracking', handleMainGpsChange)
 
         networkAbortRef.current
           ?.abort?.()

@@ -2099,6 +2099,10 @@ const GeographicMap =
         setLocationTrackingActive(
           false
         )
+
+        window.dispatchEvent(new CustomEvent('tg-gps-tracking', {
+          detail: { active: false },
+        }))
       }
 
 
@@ -2120,6 +2124,15 @@ const GeographicMap =
 
         manualCameraUntilRef.current =
           0
+
+        // GPS owns orientation on mobile; request compass permission while
+        // this is still the user's GPS-button gesture (iOS requirement).
+        if (
+          typeof window !== 'undefined' &&
+          window.matchMedia('(max-width: 700px)').matches
+        ) {
+          await startCompassTracking()
+        }
 
 
         try {
@@ -2176,6 +2189,10 @@ const GeographicMap =
           setLocationTrackingActive(
             true
           )
+
+          window.dispatchEvent(new CustomEvent('tg-gps-tracking', {
+            detail: { active: true },
+          }))
 
 
           return location
@@ -2940,6 +2957,9 @@ const GeographicMap =
               }
               active={
                 liveBusesEnabled
+              }
+              gpsTrackingActive={
+                locationTrackingActive
               }
             />
           )}

@@ -143,44 +143,6 @@ function MapControls({
       </button>
 
 
-      {mobileControls &&
-        locationTrackingActive && (
-        <button
-          type="button"
-          className={[
-            'map-utility-button',
-            'gps-toggle-button',
-            orientationTrackingActive
-              ? 'gps-toggle-button-active'
-              : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-          onClick={
-            handleOrientation
-          }
-          disabled={
-            !locationTrackingActive
-          }
-          aria-label={
-            orientationTrackingActive
-              ? 'Turn phone orientation off'
-              : 'Turn phone orientation on'
-          }
-          aria-pressed={
-            orientationTrackingActive
-          }
-          title={
-            !locationTrackingActive
-              ? 'Turn GPS on first'
-              : orientationTrackingActive
-                ? 'Orientation on — click for north-up'
-                : 'Orientation off — click to follow phone direction'
-          }
-        >
-          ↑
-        </button>
-      )}
 
 
       <SearchControl
