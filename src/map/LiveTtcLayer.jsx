@@ -553,9 +553,9 @@ function popupShell() {
     shell.style,
     {
       minWidth:
-        '210px',
+        '180px',
       maxWidth:
-        '280px',
+        '240px',
       color:
         '#111',
       fontFamily:
@@ -3089,7 +3089,7 @@ function LiveTtcLayer({
         offset =
           14,
         maxWidth =
-          '310px',
+          '260px',
       } = {}) {
         return {
           closeButton:
@@ -3114,20 +3114,9 @@ function LiveTtcLayer({
       function snapPopupToScreen(
         lngLat
       ) {
-        if (
-          !lngLat
-        ) {
-          return
-        }
-
-        map.easeTo({
-          center:
-            lngLat,
-          duration:
-            220,
-          essential:
-            true,
-        })
+        // Do not recenter the whole map on each TTC click.
+        // keepTtcPopupOnScreen applies only the movement needed to fit the card.
+        return
       }
 
       // Use the same viewport-aware card fitting as ordinary map pins.
@@ -3152,7 +3141,7 @@ function LiveTtcLayer({
 
         const content = element.querySelector('.maplibregl-popup-content')
         if (content) {
-          content.style.maxHeight = `${Math.floor(Math.max(92, safeBottom - safeTop - 16))}px`
+          content.style.maxHeight = `${Math.floor(Math.min(window.matchMedia('(max-width: 700px)').matches ? window.innerHeight * 0.38 : Infinity, Math.max(92, safeBottom - safeTop - 16)))}px`
           content.style.overflowY = 'auto'
           content.style.overscrollBehavior = 'contain'
         }
@@ -7793,7 +7782,7 @@ function LiveTtcLayer({
               offset:
                 16,
               maxWidth:
-                '300px',
+                '260px',
             })
           )
             .setLngLat(
@@ -7870,7 +7859,7 @@ function LiveTtcLayer({
               offset:
                 13,
               maxWidth:
-                '330px',
+                '260px',
             })
           )
             .setLngLat(
@@ -8124,7 +8113,7 @@ function LiveTtcLayer({
               offset:
                 14,
               maxWidth:
-                '340px',
+                '260px',
             })
           )
             .setLngLat(
