@@ -914,7 +914,7 @@ function fillStopArrivals({
 }) {
   shell
     .querySelectorAll(
-      '.ttc-live-stop-loading, .ttc-live-stop-arrivals, .ttc-live-stop-empty, .ttc-live-stop-error, .ttc-live-stop-delay-note'
+      '.ttc-live-stop-loading, .ttc-live-stop-arrivals, .ttc-live-stop-empty, .ttc-live-stop-error, .ttc-live-stop-delay-note, .ttc-live-nearby-buses'
     )
     .forEach(
       (
@@ -1075,6 +1075,54 @@ function fillStopArrivals({
   })
 }
 
+
+
+// Display-only TTC fallback. A vehicle is eligible only when its realtime
+// trip identifies this exact stop as its next or following stop. Never infer
+// a scheduled arrival from spatial proximity alone.
+function addVerifiedNearbyVehiclesToStop({ shell, payload, stopId, stopCoordinates, vehicleStates }) {
+  shell.querySelectorAll('.ttc-live-nearby-buses').forEach(node => node.remove())
+  const arrivals = Array.isArray(payload?.arrivals) ? payload.arrivals : []
+  const normalizedStop = String(stopId || '').trim()
+  if (!normalizedStop || !Array.isArray(stopCoordinates)) return
+  const now = performance.now()
+  const matches = []
+  vehicleStates.forEach(state => {
+    const props = state?.properties || {}
+    if (!props.tripId || !props.vehicleId || !props.routeId) return
+    if (!state.lastSeenAt || now - state.lastSeenAt > 45000) return
+    if (Number(props.ageSeconds) > 75) return
+    const next = String(props.nextStopId || '').trim()
+    const following = String(props.followingStopId || '').trim()
+    if (next !== normalizedStop && following !== normalizedStop) return
+    const currentSequence = Number(props.currentStopSequence)
+    const targetSequence = Number(next === normalizedStop ? props.nextStopSequence : props.followingStopSequence)
+    if (!Number.isFinite(currentSequence) || !Number.isFinite(targetSequence) || targetSequence < currentSequence) return
+    const point = state.lastRenderedCoordinate || state.realCoordinate
+    const distance = distanceMetersBetweenCoordinates(point, stopCoordinates)
+    if (!Number.isFinite(distance) || distance > 650) return
+    // The official estimate already represents this trip/vehicle.
+    if (arrivals.some(a =>
+      (a.tripId && String(a.tripId) === String(props.tripId)) ||
+      (a.vehicleId && String(a.vehicleId) === String(props.vehicleId))
+    )) return
+    matches.push({ props, distance })
+  })
+  matches.sort((a, b) => a.distance - b.distance)
+  if (!matches.length) return
+  const list = document.createElement('div')
+  list.className = 'ttc-live-nearby-buses'
+  Object.assign(list.style, { marginTop: '6px', borderTop: '1px solid rgba(0,0,0,0.12)', paddingTop: '5px' })
+  addTextLine({ parent: list, text: 'LIVE VEHICLES NEAR THIS STOP', style: { fontSize: '9px', fontWeight: '800', opacity: '0.65' } })
+  matches.slice(0, 2).forEach(({ props }) => {
+    const row = document.createElement('div')
+    Object.assign(row.style, { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', padding: '5px 0', fontSize: '10px' })
+    addTextLine({ parent: row, text: String(props.routeShortName || props.routeId), style: { fontWeight: '900', fontSize: '11px' } })
+    addTextLine({ parent: row, text: 'Nearby · approaching', style: { fontSize: '10px', textAlign: 'right' } })
+    list.appendChild(row)
+  })
+  shell.appendChild(list)
+}
 
 function featureCollection(
   features
@@ -7989,6 +8037,13 @@ function LiveTtcLayer({
             fillStopArrivals({
               shell,
               payload,
+            })
+            addVerifiedNearbyVehiclesToStop({
+              shell,
+              payload,
+              stopId,
+              stopCoordinates,
+              vehicleStates: vehicleAnimationsRef.current,
             })
 
             if (
