@@ -1983,26 +1983,23 @@ function GeographicApp() {
               display: flex !important;
               flex-wrap: wrap !important;
               justify-content: flex-start !important;
-              padding: 5px 2px 2px !important;
+              padding: 3px 0 0 !important;
               border-top: 1px solid rgba(255,255,255,0.2);
-              gap: 5px !important;
+              gap: 3px !important;
               z-index: 5 !important;
             }
 
             .brand .ttc-live-mobile-menu-controls > select {
-              flex: 1 1 155px;
+              flex: 1 1 135px;
               min-width: 0 !important;
               max-width: none !important;
-              height: 29px !important;
+              height: 23px !important;
               box-shadow: none !important;
             }
 
+            /* Only the main menu GPS remains visible on mobile. */
             .brand .ttc-live-mobile-menu-controls > [data-ttc-gps] {
-              height: 29px !important;
-              min-height: 29px !important;
-              padding: 0 10px !important;
-              font-size: 9px !important;
-              box-shadow: none !important;
+              display: none !important;
             }
 
             .brand .ttc-live-mobile-menu-controls > .ttc-live-mobile-accuracy-warning {
@@ -2015,7 +2012,11 @@ function GeographicApp() {
               width: 100%;
               text-align: center;
               white-space: normal !important;
-              border-radius: 3px !important;
+              padding: 2px 4px !important;
+              font-size: 7px !important;
+              line-height: 1.1 !important;
+              letter-spacing: 0.025em !important;
+              border-radius: 2px !important;
               box-shadow: none !important;
               animation: ttc-mobile-warning-blink 1.25s ease-in-out infinite;
             }
@@ -2482,7 +2483,7 @@ function GeographicApp() {
             .brand .brand-mode-button,
             .brand .about-button {
               min-height: 30px !important;
-              padding: 0 10px !important;
+              padding: 0 6px !important;
               border: 0 !important;
               border-radius: 0 !important;
               background: transparent !important;
@@ -2619,12 +2620,12 @@ function GeographicApp() {
             .brand-primary-filters > .historic-menu-anchor > .brand-mode-button {
               width: 100% !important;
               min-height: 34px !important;
-              padding: 0 10px !important;
+              padding: 0 6px !important;
             }
 
             .brand-primary-filters > .brand-mode-button:not(.about-button) {
               min-height: 34px !important;
-              padding: 0 10px !important;
+              padding: 0 6px !important;
               border-left: 1px solid rgba(17,17,17,0.10) !important;
             }
 
@@ -2717,7 +2718,7 @@ function GeographicApp() {
             }
 
             .about-panel-kicker {
-              font-size: 9px !important;
+              font-size: 8px !important;
               letter-spacing: 0.18em !important;
             }
 
@@ -2774,7 +2775,7 @@ function GeographicApp() {
             .howto-sponsor {
               margin-top: 15px !important;
               padding-top: 13px !important;
-              font-size: 9px !important;
+              font-size: 8px !important;
             }
 
             .about-made-by {

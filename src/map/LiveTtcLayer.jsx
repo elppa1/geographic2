@@ -3580,13 +3580,12 @@ function LiveTtcLayer({
         relocateTtcControls = () => {
           const mobile =
             window.matchMedia('(max-width: 700px)').matches
-          const menuRow =
-            document.querySelector('.brand-main-row')
-          if (mobile && menuRow) {
-            menuRow.insertAdjacentElement(
-              'afterend',
-              controlsRoot
-            )
+          const mobileMenu =
+            document.querySelector('.brand')
+          if (mobile && mobileMenu) {
+            // Append after Historic ALL STORIES, News history,
+            // and every other conditional header control.
+            mobileMenu.appendChild(controlsRoot)
           } else if (controlsRoot.parentElement !== container) {
             container.appendChild(controlsRoot)
           }
