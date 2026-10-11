@@ -5333,6 +5333,65 @@ async function getArrivalsPayloadUnreconciled({
       resolved.stop
     )
 
+  // TTC stop accuracy: an exact-stop GTFS TripUpdate can omit an approaching
+  // vehicle even when TTC's stop-specific UMO prediction still includes it.
+  // Compare actual predictions for THIS stop only; never project a nearby
+  // GPS vehicle onto a stop or invent an ETA.
+  const canonicalCode = cleanText(resolved.stop?.code)
+  let alternative = null
+  if (canonicalCode) {
+    try {
+      // Bound the additional wait; slow/unavailable UMO must not block boards.
+      alternative = await Promise.race([
+        getUmoArrivalsForStopCode(canonicalCode, surfaceCache),
+        new Promise((resolve) => setTimeout(() => resolve(null), 1600)),
+      ])
+    } catch (_) {
+      alternative = null
+    }
+  }
+  const nowSeconds = Math.floor(Date.now() / 1000)
+  const viableUmo = (Array.isArray(alternative) ? alternative : [])
+    .filter((a) => Number.isFinite(Number(a?.arrivalTime)) &&
+      Number(a.arrivalTime) >= nowSeconds - 8)
+  const gtfsArrivals = Array.isArray(gtfsPayload.arrivals)
+    ? gtfsPayload.arrivals : []
+  const firstByRoute = (items) => {
+    const result = new Map()
+    for (const item of items) {
+      const route = cleanText(item?.routeId)
+      const eta = Number(item?.arrivalTime)
+      if (!route || !Number.isFinite(eta)) continue
+      if (!result.has(route) || eta < result.get(route)) result.set(route, eta)
+    }
+    return result
+  }
+  const gtfsFirst = firstByRoute(gtfsArrivals)
+  const umoFirst = firstByRoute(viableUmo)
+  const omittedRoute = [...umoFirst.keys()].some((r) => !gtfsFirst.has(r))
+  // Use alternative authority only when it provides a substantially earlier
+  // independent stop prediction. Do not mix GTFS and UMO trip namespaces.
+  const missedApproachingBus = [...umoFirst].some(([r, eta]) =>
+    gtfsFirst.has(r) && eta + 90 < gtfsFirst.get(r))
+  if (viableUmo.length && (omittedRoute || missedApproachingBus)) {
+    return {
+      ...buildUmoStopPayload({
+        arrivals: viableUmo,
+        normalizedStopId: resolved.stopId,
+        normalizedStopCode: canonicalCode,
+        staticStop: resolved.stop,
+        gtfsPayload,
+        arrivalRequestStart,
+        fallbackReason: omittedRoute
+          ? 'GTFS_MISSING_STOP_ROUTE' : 'GTFS_MISSING_EARLIER_ARRIVAL',
+      }),
+      requestedStopId: cleanText(stopId),
+      requestedStopCode: cleanText(stopCode),
+      resolvedStopId: resolved.stopId,
+      stopIdentityResolution: resolved.resolution,
+    }
+  }
+
   return {
     ...gtfsPayload,
     predictionAuthority:
