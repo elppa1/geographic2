@@ -1,0 +1,44 @@
+/* Cosmetic GPS puck animation only. Do not animate the MapLibre marker's
+   own transform: MapLibre uses that transform for geographic positioning. */
+.user-location-dot {
+  position: relative;
+  background-color: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+.user-location-dot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-sizing: border-box;
+  background: #2789e8;
+  border: 2px solid white;
+  box-shadow: 0 0 5px rgba(30, 115, 205, .3);
+  transform-origin: center;
+  animation: tg-gps-puck-breathe 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+.user-location-dot::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 2px solid rgba(39, 137, 232, .75);
+  border-radius: 50%;
+  box-sizing: border-box;
+  pointer-events: none;
+  animation: tg-gps-sonar-wave 2.4s ease-out infinite;
+}
+@keyframes tg-gps-puck-breathe {
+  0%, 100% { transform: scale(1); }
+  45% { transform: scale(.72); }
+}
+@keyframes tg-gps-sonar-wave {
+  0% { transform: scale(.68); opacity: .75; }
+  70%, 100% { transform: scale(1.8); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .user-location-dot::before,
+  .user-location-dot::after { animation: none !important; }
+  .user-location-dot::after { display: none; }
+}

@@ -15,6 +15,7 @@ import {
 } from 'maplibre-gl'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import './gpsSonar.css'
 import {
   CITIES,
 } from '../cities/index.js'
