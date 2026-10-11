@@ -3308,6 +3308,9 @@ function LiveTtcLayer({
         const showHint =
           !selectedRouteRef.current && !gpsChosen
 
+        accuracyHint.textContent =
+          'TO IMPROVE TTC ACCURACY, CLICK A ROUTE OR PRESS GPS.'
+
         if (
           accuracyHintVisible ===
             showHint
@@ -3317,9 +3320,6 @@ function LiveTtcLayer({
 
         accuracyHintVisible =
           showHint
-
-        accuracyHint.textContent =
-          'CLICK A ROUTE OR PRESS GPS'
         accuracyHint.style.display =
           showHint
             ? 'block'

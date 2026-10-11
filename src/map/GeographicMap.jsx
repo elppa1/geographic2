@@ -1965,7 +1965,7 @@ const GeographicMap =
             // onto the user's building. After this first lock, manual zoom wins.
             zoom:
               walkingZoom
-                ? 14.5
+                ? 15.0
                 : Math.max(
                     map.getZoom(),
                     15.6
