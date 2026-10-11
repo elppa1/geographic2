@@ -9390,12 +9390,21 @@ function createMarker({
                   pin.createdAt ||
                   pin.publishedAt
                 )
-              : (
-                  getNewsRecordTimestamp(
-                    pin
-                  ) ||
-                  pin.publishedAt
+              : isTorontoFirePin(
+                  pin
                 )
+                ? (
+                    pin.publishedAt ||
+                    getNewsRecordTimestamp(
+                      pin
+                    )
+                  )
+                : (
+                    getNewsRecordTimestamp(
+                      pin
+                    ) ||
+                    pin.publishedAt
+                  )
           ),
       })
     }
