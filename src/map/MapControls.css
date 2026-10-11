@@ -2633,3 +2633,17 @@
       0 2px 7px rgba(0, 0, 0, 0.24);
   }
 }
+
+/* Subtle location pulse for the shared GPS marker (desktop and mobile). */
+.user-location-dot {
+  position: relative;
+  overflow: visible;
+  animation: tgGpsDotPulse 2.6s ease-out infinite;
+}
+@keyframes tgGpsDotPulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(47,128,237,.28), 0 1px 4px rgba(0,0,0,.25); }
+  55% { box-shadow: 0 0 0 9px rgba(47,128,237,0), 0 1px 4px rgba(0,0,0,.25); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .user-location-dot { animation: none; }
+}

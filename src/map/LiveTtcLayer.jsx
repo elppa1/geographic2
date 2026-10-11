@@ -3038,7 +3038,10 @@ function LiveTtcLayer({
   active =
     false,
   gpsTrackingActive = false,
+  onGpsToggle,
 }) {
+  const onGpsToggleRef = useRef(onGpsToggle)
+  onGpsToggleRef.current = onGpsToggle
   const popupRef =
     useRef(null)
   const selectedRouteRef =
@@ -3109,6 +3112,11 @@ function LiveTtcLayer({
       let gpsChosen = Boolean(gpsTrackingActive)
       function handleMainGpsChange(event) {
         gpsChosen = Boolean(event?.detail?.active)
+        const button = controlsRoot?.querySelector('[data-ttc-gps]')
+        if (button) {
+          button.textContent = gpsChosen ? 'GPS ✓' : 'GPS'
+          button.setAttribute('aria-pressed', String(gpsChosen))
+        }
         updateAccuracyHint()
       }
       window.addEventListener('tg-gps-tracking', handleMainGpsChange)
@@ -3253,107 +3261,29 @@ function LiveTtcLayer({
         }
       }
 
-      function requestGpsCenter() {
-        if (
-          !navigator?.geolocation
-        ) {
-          if (
-            controlsRoot
-          ) {
-            const button =
-              controlsRoot.querySelector(
-                '[data-ttc-gps]'
-              )
-            if (
-              button
-            ) {
-              button.textContent =
-                'GPS UNAVAILABLE'
-            }
+      async function requestGpsCenter() {
+        // Reuse the main GPS toggle: same tracking, marker, and ON/OFF state.
+        const button = controlsRoot?.querySelector('[data-ttc-gps]')
+        const toggle = onGpsToggleRef.current
+        if (typeof toggle !== 'function') return
+        if (button) button.disabled = true
+        try {
+          const active = Boolean(await toggle())
+          gpsChosen = active
+          if (button) {
+            button.textContent = active ? 'GPS ✓' : 'GPS'
+            button.setAttribute('aria-pressed', String(active))
           }
-          return
-        }
-
-        const button =
-          controlsRoot?.querySelector(
-            '[data-ttc-gps]'
-          )
-
-        if (
-          button
-        ) {
-          button.textContent =
-            'LOCATING…'
-        }
-
-        navigator.geolocation.getCurrentPosition(
-          (
-            position
-          ) => {
-            const longitude =
-              Number(
-                position?.coords?.longitude
-              )
-            const latitude =
-              Number(
-                position?.coords?.latitude
-              )
-
-            if (
-              !Number.isFinite(
-                longitude
-              ) ||
-              !Number.isFinite(
-                latitude
-              )
-            ) {
-              return
-            }
-
-            map.easeTo({
-              center: [
-                longitude,
-                latitude,
-              ],
-              zoom:
-                Math.max(
-                  13.5,
-                  map.getZoom()
-                ),
-              duration:
-                650,
-              essential:
-                true,
-            })
-
-            if (
-              button
-            ) {
-              button.textContent =
-                'GPS ✓'
-            }
-
+          if (active) {
             gpsPrompt?.remove?.()
-            gpsPrompt =
-              null
-          },
-          () => {
-            if (
-              button
-            ) {
-              button.textContent =
-                'GPS'
-            }
-          },
-          {
-            enableHighAccuracy:
-              true,
-            timeout:
-              10000,
-            maximumAge:
-              15000,
+            gpsPrompt = null
           }
-        )
+          updateAccuracyHint()
+        } catch (error) {
+          console.error('TTC GPS TOGGLE ERROR:', error)
+        } finally {
+          if (button) button.disabled = false
+        }
       }
 
       function updateRouteSelector(
@@ -3609,8 +3539,8 @@ function LiveTtcLayer({
           'button'
         gpsButton.dataset.ttcGps =
           '1'
-        gpsButton.textContent =
-          'GPS'
+        gpsButton.textContent = gpsChosen ? 'GPS ✓' : 'GPS'
+        gpsButton.setAttribute('aria-pressed', String(gpsChosen))
         Object.assign(
           gpsButton.style,
           {

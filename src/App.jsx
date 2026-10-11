@@ -2774,6 +2774,7 @@ function GeographicApp() {
         ref={
           geographicMapRef
         }
+        onGpsToggle={handleMainMenuLocate}
 
         cityKey={
           cityKey

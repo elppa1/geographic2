@@ -551,6 +551,7 @@ const GeographicMap =
           'historic',
         liveBusesEnabled =
           false,
+        onGpsToggle,
         onChangePinFilter,
         historicIssueFilter =
           'all',
@@ -2931,6 +2932,7 @@ const GeographicMap =
               gpsTrackingActive={
                 locationTrackingActive
               }
+              onGpsToggle={onGpsToggle}
             />
           )}
           {mapReady && (
