@@ -3130,6 +3130,66 @@ function LiveTtcLayer({
         })
       }
 
+      // Use the same viewport-aware card fitting as ordinary map pins.
+      // This changes popup layout only, never vehicle or arrival calculations.
+      function keepTtcPopupOnScreen(popup) {
+        const element = popup?.getElement?.()
+        const mapElement = map?.getContainer?.()
+        if (!element || !mapElement || !popup.isOpen?.()) return
+
+        const rect = mapElement.getBoundingClientRect()
+        const padding = window.matchMedia('(max-width: 700px)').matches ? 8 : 14
+        let safeTop = rect.top + padding
+        let safeBottom = rect.bottom - padding
+        const header = document.querySelector('.brand')?.getBoundingClientRect()
+        if (header && header.bottom > rect.top && header.top < rect.bottom) {
+          safeTop = Math.max(safeTop, header.bottom + padding)
+        }
+        const timeline = document.querySelector('.timeline-shell')?.getBoundingClientRect()
+        if (timeline && timeline.bottom > rect.top && timeline.top < rect.bottom) {
+          safeBottom = Math.min(safeBottom, timeline.top - padding)
+        }
+
+        const content = element.querySelector('.maplibregl-popup-content')
+        if (content) {
+          content.style.maxHeight = `${Math.floor(Math.max(92, safeBottom - safeTop - 16))}px`
+          content.style.overflowY = 'auto'
+          content.style.overscrollBehavior = 'contain'
+        }
+        element.style.zIndex = '1400'
+        const popupRect = element.getBoundingClientRect()
+        const left = rect.left + padding
+        const right = rect.right - padding
+        const dx = popupRect.left < left ? popupRect.left - left : popupRect.right > right ? popupRect.right - right : 0
+        const dy = popupRect.top < safeTop ? popupRect.top - safeTop : popupRect.bottom > safeBottom ? popupRect.bottom - safeBottom : 0
+        if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+          map.panBy([dx, dy], { duration: 0, essential: true })
+        }
+      }
+
+      function scheduleTtcPopupFit(popup) {
+        // Map easing finishes after the popup opens; refit then and when
+        // the stop board populates. Never attach a permanent map listener.
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            if (popupRef.current === popup) keepTtcPopupOnScreen(popup)
+          })
+        })
+        window.setTimeout(() => {
+          if (popupRef.current === popup) keepTtcPopupOnScreen(popup)
+        }, 260)
+        const content = popup?.getElement?.()?.querySelector('.maplibregl-popup-content')
+        if (content && typeof MutationObserver !== 'undefined') {
+          const observer = new MutationObserver(() => {
+            window.requestAnimationFrame(() => {
+              if (popupRef.current === popup) keepTtcPopupOnScreen(popup)
+            })
+          })
+          observer.observe(content, { childList: true, subtree: true, characterData: true })
+          popup.on('close', () => observer.disconnect())
+        }
+      }
+
       function requestGpsCenter() {
         if (
           !navigator?.geolocation
@@ -7748,6 +7808,8 @@ function LiveTtcLayer({
             .addTo(
               map
             )
+
+        scheduleTtcPopupFit(popupRef.current)
       }
 
       async function handleStopClick(
@@ -7823,6 +7885,7 @@ function LiveTtcLayer({
 
         popupRef.current =
           popup
+        scheduleTtcPopupFit(popup)
 
         popup.on(
           'close',
@@ -8076,6 +8139,7 @@ function LiveTtcLayer({
 
         popupRef.current =
           popup
+        scheduleTtcPopupFit(popup)
 
         try {
           const params =

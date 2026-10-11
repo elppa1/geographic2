@@ -7133,7 +7133,7 @@ function appendEmojiMarkerIcon(
     'drop-shadow(1px 0 0 rgba(0,0,0,0.95)) drop-shadow(-1px 0 0 rgba(0,0,0,0.95)) drop-shadow(0 1px 0 rgba(0,0,0,0.95)) drop-shadow(0 -1px 0 rgba(0,0,0,0.95)) drop-shadow(0 0 1.5px rgba(255,255,255,0.95))'
 
   iconShell.style.fontSize =
-    '19px'
+    '17px'
 
   iconShell.style.lineHeight =
     '1'
