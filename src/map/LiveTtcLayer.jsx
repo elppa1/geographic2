@@ -3012,6 +3012,8 @@ function LiveTtcLayer({
         null
       let relocateTtcControls =
         null
+      let ttcHeaderResizeObserver =
+        null
       let routeSelect =
         null
       let accuracyHint =
@@ -3644,11 +3646,30 @@ function LiveTtcLayer({
             if (controlsRoot.parentElement !== mobileBottomSlot) {
               mobileBottomSlot.appendChild(controlsRoot)
             }
-          } else if (controlsRoot.parentElement !== container) {
-            container.appendChild(controlsRoot)
+          } else {
+            if (controlsRoot.parentElement !== container) {
+              container.appendChild(controlsRoot)
+            }
+            // Anchor below the actual desktop menu, including its filter row.
+            // A fixed 72px offset overlaps the menu when its height changes.
+            const header = document.querySelector('.brand')
+            if (header) {
+              const headerBottom = header.getBoundingClientRect().bottom
+              const mapTop = container.getBoundingClientRect().top
+              controlsRoot.style.top = `${Math.max(72, Math.ceil(headerBottom - mapTop + 8))}px`
+            }
           }
         }
         relocateTtcControls()
+        if (typeof ResizeObserver !== 'undefined') {
+          const header = document.querySelector('.brand')
+          if (header) {
+            ttcHeaderResizeObserver = new ResizeObserver(
+              relocateTtcControls
+            )
+            ttcHeaderResizeObserver.observe(header)
+          }
+        }
         window.addEventListener(
           'resize',
           relocateTtcControls
@@ -8445,6 +8466,8 @@ function LiveTtcLayer({
           )
           relocateTtcControls = null
         }
+        ttcHeaderResizeObserver?.disconnect?.()
+        ttcHeaderResizeObserver = null
         controlsRoot?.remove?.()
         controlsRoot =
           null
