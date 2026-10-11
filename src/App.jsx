@@ -1971,6 +1971,66 @@ function GeographicApp() {
               cursor: pointer;
             }
 
+            /* LIVE BUSES: integrate existing route controls with the mobile header. */
+            .brand .ttc-live-mobile-menu-controls {
+              position: relative !important;
+              top: auto !important;
+              left: auto !important;
+              transform: none !important;
+              width: 100% !important;
+              max-width: 100% !important;
+              box-sizing: border-box !important;
+              display: flex !important;
+              flex-wrap: wrap !important;
+              justify-content: flex-start !important;
+              padding: 5px 2px 2px !important;
+              border-top: 1px solid rgba(255,255,255,0.2);
+              gap: 5px !important;
+              z-index: 5 !important;
+            }
+
+            .brand .ttc-live-mobile-menu-controls > select {
+              flex: 1 1 155px;
+              min-width: 0 !important;
+              max-width: none !important;
+              height: 29px !important;
+              box-shadow: none !important;
+            }
+
+            .brand .ttc-live-mobile-menu-controls > [data-ttc-gps] {
+              height: 29px !important;
+              min-height: 29px !important;
+              padding: 0 10px !important;
+              font-size: 9px !important;
+              box-shadow: none !important;
+            }
+
+            .brand .ttc-live-mobile-menu-controls > .ttc-live-mobile-accuracy-warning {
+              position: relative !important;
+              top: auto !important;
+              left: auto !important;
+              transform: none !important;
+              flex: 1 0 100%;
+              box-sizing: border-box;
+              width: 100%;
+              text-align: center;
+              white-space: normal !important;
+              border-radius: 3px !important;
+              box-shadow: none !important;
+              animation: ttc-mobile-warning-blink 1.25s ease-in-out infinite;
+            }
+
+            @keyframes ttc-mobile-warning-blink {
+              0%, 100% { opacity: 1; }
+              50% { opacity: 0.25; }
+            }
+
+            @media (prefers-reduced-motion: reduce) {
+              .brand .ttc-live-mobile-menu-controls > .ttc-live-mobile-accuracy-warning {
+                animation: none !important;
+              }
+            }
+
             .mobile-header-collapsed .brand-primary-filters,
             .mobile-header-collapsed .brand-secondary-filters,
             .mobile-header-collapsed .brand-range-filters {

@@ -3009,6 +3009,8 @@ function LiveTtcLayer({
         null
       let controlsRoot =
         null
+      let relocateTtcControls =
+        null
       let routeSelect =
         null
       let accuracyHint =
@@ -3567,8 +3569,32 @@ function LiveTtcLayer({
           accuracyHint
         )
 
-        container.appendChild(
-          controlsRoot
+        // The same functional controls live in the mobile top menu;
+        // desktop continues to use the original map overlay.
+        controlsRoot.classList.add(
+          'ttc-live-mobile-menu-controls'
+        )
+        accuracyHint.classList.add(
+          'ttc-live-mobile-accuracy-warning'
+        )
+        relocateTtcControls = () => {
+          const mobile =
+            window.matchMedia('(max-width: 700px)').matches
+          const menuRow =
+            document.querySelector('.brand-main-row')
+          if (mobile && menuRow) {
+            menuRow.insertAdjacentElement(
+              'afterend',
+              controlsRoot
+            )
+          } else if (controlsRoot.parentElement !== container) {
+            container.appendChild(controlsRoot)
+          }
+        }
+        relocateTtcControls()
+        window.addEventListener(
+          'resize',
+          relocateTtcControls
         )
         updateAccuracyHint()
 
@@ -8350,6 +8376,13 @@ function LiveTtcLayer({
         gpsPrompt?.remove?.()
         gpsPrompt =
           null
+        if (relocateTtcControls) {
+          window.removeEventListener(
+            'resize',
+            relocateTtcControls
+          )
+          relocateTtcControls = null
+        }
         controlsRoot?.remove?.()
         controlsRoot =
           null
