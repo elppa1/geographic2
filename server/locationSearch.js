@@ -1527,10 +1527,10 @@ async function searchTorontoIntersection({
                   Math.max(
                     1,
                     Math.min(
-                      4000,
+                      7500,
                       remainingTime(
                         deadline,
-                        4000
+                        7500
                       )
                     )
                   )
@@ -2920,7 +2920,7 @@ export function locationSearchApi() {
 
               try {
                 const cityDeadline =
-                  Date.now() + 3500
+                  Date.now() + 8000
 
                 elements =
                   await waitForSearch({
