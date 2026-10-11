@@ -1972,6 +1972,10 @@ function GeographicApp() {
             }
 
             /* LIVE BUSES: integrate existing route controls with the mobile header. */
+            .brand .ttc-mobile-menu-bottom-slot:empty { display: none; }
+            .brand .ttc-mobile-menu-bottom-slot { width: 100%; min-width: 0; }
+            .brand.mobile-header-collapsed .ttc-mobile-menu-bottom-slot { display: none !important; }
+
             .brand .ttc-live-mobile-menu-controls {
               position: relative !important;
               top: auto !important;
@@ -3743,6 +3747,8 @@ function GeographicApp() {
           </div>
         )}
 
+        {/* Stable bottom slot: TTC controls must follow every React-rendered filter. */}
+        <div id="ttc-mobile-menu-bottom-slot" className="ttc-mobile-menu-bottom-slot" />
       </div>
 
 

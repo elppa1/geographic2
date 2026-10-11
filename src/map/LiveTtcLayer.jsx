@@ -3580,12 +3580,14 @@ function LiveTtcLayer({
         relocateTtcControls = () => {
           const mobile =
             window.matchMedia('(max-width: 700px)').matches
-          const mobileMenu =
-            document.querySelector('.brand')
-          if (mobile && mobileMenu) {
-            // Append after Historic ALL STORIES, News history,
-            // and every other conditional header control.
-            mobileMenu.appendChild(controlsRoot)
+          const mobileBottomSlot =
+            document.getElementById('ttc-mobile-menu-bottom-slot')
+          if (mobile && mobileBottomSlot) {
+            // Dedicated React-owned empty slot prevents subsequent React
+            // renders from inserting CURATED/history controls below TTC.
+            if (controlsRoot.parentElement !== mobileBottomSlot) {
+              mobileBottomSlot.appendChild(controlsRoot)
+            }
           } else if (controlsRoot.parentElement !== container) {
             container.appendChild(controlsRoot)
           }
