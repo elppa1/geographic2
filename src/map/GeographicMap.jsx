@@ -1965,7 +1965,7 @@ const GeographicMap =
             // onto the user's building. After this first lock, manual zoom wins.
             zoom:
               walkingZoom
-                ? 15.6
+                ? 14.5
                 : Math.max(
                     map.getZoom(),
                     15.6
@@ -2630,13 +2630,13 @@ const GeographicMap =
                 requestedZoom
               )
                 ? Math.min(
-                    19,
+                    16,
                     Math.max(
                       12,
-                      requestedZoom + 1.6
+                      requestedZoom - 0.8
                     )
                   )
-                : 17.6
+                : 15.2
 
 
             // One camera owner at a time. Popup snap corrections and an older
