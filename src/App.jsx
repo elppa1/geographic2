@@ -1067,10 +1067,6 @@ function GeographicApp() {
     geographicMapRef.current
       ?.clearSelectedPin?.()
 
-    setActivePinFilter(
-      'historic'
-    )
-
     setSelectedLayer(
       layer
     )
@@ -1097,22 +1093,6 @@ function GeographicApp() {
       ) ||
       defaultLayer
 
-
-    setActivePinFilter(
-      'historic'
-    )
-
-    setHistoricIssueFilter(
-      'all'
-    )
-
-    setHistoricCategoryFilter(
-      'all'
-    )
-
-    setHistoricLayerFilter(
-      'all'
-    )
 
     if (
       timeMachineLayer
