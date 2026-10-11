@@ -9,7 +9,7 @@
 .user-location-dot::before {
   content: '';
   position: absolute;
-  inset: -3px;
+  inset: -6px;
   border-radius: 50%;
   box-sizing: border-box;
   background: #2789e8;
@@ -22,7 +22,7 @@
 .user-location-dot::after {
   content: '';
   position: absolute;
-  inset: -6px;
+  inset: -9px;
   border: 2px solid rgba(39, 137, 232, .75);
   border-radius: 50%;
   box-sizing: border-box;
