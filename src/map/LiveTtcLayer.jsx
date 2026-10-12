@@ -4358,8 +4358,21 @@ function LiveTtcLayer({
             paint: {
               'line-color':
                 '#000000',
-              'line-width':
-                0,
+              'line-width': [
+                'interpolate',
+                [
+                  'linear',
+                ],
+                [
+                  'zoom',
+                ],
+                9,
+                1.65,
+                13,
+                2.15,
+                17,
+                2.8,
+              ],
               'line-opacity':
                 1,
             },
@@ -4382,7 +4395,7 @@ function LiveTtcLayer({
               ROUTES_SOURCE_ID,
             paint: {
               'line-color':
-                '#000000',
+                '#00D5FF',
               'line-width': [
                 'interpolate',
                 [
