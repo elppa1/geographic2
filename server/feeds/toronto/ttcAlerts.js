@@ -311,11 +311,15 @@ function ttcAlertIsStillRelevant(
   const groups =
     Array.isArray(record?.activePeriodGroup)
       ? record.activePeriodGroup
-      : []
+      : [record?.activePeriodGroup]
 
+  // TTC sometimes combines labels in one value, e.g. "Current, Weekend".
+  // Match "Current" as a whole token, not a substring of "Upcoming".
   return groups.some(
     (value) =>
-      cleanText(value).toLowerCase() === 'current'
+      cleanText(value).split(',').some(
+        (part) => part.trim().toLowerCase() === 'current'
+      )
   )
 }
 

@@ -3886,6 +3886,30 @@ function getNewsroomAction(
 }
 
 
+// The persistent newsroom is authoritative for pending official TTC cards.
+// An acknowledged/expired TTC card must not be resurrected from this
+// browser's cached review list after the next successful server pull.
+// Police, Fire, and non-official editorial cards remain unchanged.
+function officialPendingTtcReviewKey(record) {
+  const externalId = String(record?.externalId || '').trim().toLowerCase()
+  if (!externalId.startsWith('ttc-alert-') || getNewsroomSourceKey(record) !== 'transit') {
+    return ''
+  }
+  return externalId + '|' + getNewsroomAction(record)
+}
+
+function keepOnlyServerPendingTtcReviews(localReviews, serverPendingReviews) {
+  const pendingKeys = new Set(
+    serverPendingReviews.map(officialPendingTtcReviewKey).filter(Boolean)
+  )
+
+  return localReviews.filter((record) => {
+    const key = officialPendingTtcReviewKey(record)
+    return !key || pendingKeys.has(key)
+  })
+}
+
+
 function getNewsroomActionLabel(
   record
 ) {
@@ -10750,6 +10774,12 @@ function AdminRoom() {
         await response.json()
 
 
+      // A malformed/partial 200 response is not an authoritative empty
+      // newsroom. Never prune cached review cards on such a response.
+      if (payload?.ok !== true || !Array.isArray(payload?.records)) {
+        throw new Error('Persistent newsroom returned an invalid pending snapshot.')
+      }
+
       const incoming =
         Array.isArray(
           payload?.records
@@ -10799,9 +10829,14 @@ function AdminRoom() {
         )
 
 
-      let nextTorontoReview = [
-        ...torontoReview,
-      ]
+      // The server's successful pending snapshot is authoritative for
+      // official TTC approval cards. Remove browser-cached TTC cards
+      // that were acknowledged after an alert left TTC's Current list.
+      // Do not alter local Police/Fire cards or unpublished manual work.
+      let nextTorontoReview = keepOnlyServerPendingTtcReviews(
+        torontoReview,
+        incoming
+      )
 
 
       const autoAck = []
@@ -11329,7 +11364,7 @@ function AdminRoom() {
       }
 
 
-      await response.json()
+      const syncResult = await response.json()
 
 
       await refreshPublishedNewsFromServer({
@@ -11339,6 +11374,17 @@ function AdminRoom() {
 
 
       await pullPersistentNewsroom()
+
+
+      // The server can return HTTP 200 when TTC fails because it syncs
+      // Fire and TTC independently. Surface that error instead of
+      // reporting a misleading successful refresh of the TTC queue.
+      if (syncResult?.ttc?.error) {
+        throw new Error('TTC newsroom sync failed: ' + syncResult.ttc.error)
+      }
+      if (syncResult?.running === true) {
+        throw new Error('Newsroom sync is still running; please retry shortly.')
+      }
     }
     catch (
       error
