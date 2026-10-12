@@ -1952,7 +1952,7 @@ const GeographicMap =
               walkingZoom
                 ? (
                     desktopSnap
-                      ? 15.5
+                      ? 15.8
                       : 15.0
                   )
                 : Math.max(
@@ -2644,8 +2644,8 @@ const GeographicMap =
             const snapZoom =
               desktopSnap
                 ? Math.min(
-                    16.5,
-                    zoom + 0.5
+                    16.8,
+                    zoom + 0.8
                   )
                 : zoom
 
