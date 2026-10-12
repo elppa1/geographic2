@@ -298,6 +298,42 @@ function normalizeVisibilityPeriods(
 }
 
 
+// The upstream live-alerts API includes a separate inventory of persistent
+// subway Reduced Speed Zones (RSZ). TTC displays those on its RSZ page,
+// not in the short-term Service Alerts section. Do not queue them as NEWS.
+// Use source metadata rather than filtering genuine short-term DELAY alerts.
+function isReducedSpeedZoneRecord(
+  record
+) {
+  const type =
+    cleanText(record?.alertType)
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '')
+
+  if (
+    type === 'rsz' ||
+    type === 'reducedspeedzone' ||
+    type === 'reducedspeedzones' ||
+    type === 'sloworder' ||
+    type === 'sloworders'
+  ) {
+    return true
+  }
+
+  return [
+    record?.rszLength,
+    record?.trackPercent,
+    record?.reducedSpeed,
+    record?.averageSpeed,
+    record?.targetRemoval,
+  ].some((value) =>
+    value !== null &&
+    value !== undefined &&
+    value !== ''
+  )
+}
+
+
 function ttcAlertIsStillRelevant(
   record,
   nowUnixSeconds
@@ -894,6 +930,9 @@ export async function getTtcAlertsSnapshot() {
 
   const records =
     rawRecords
+      .filter(
+        (record) => !isReducedSpeedZoneRecord(record)
+      )
       .map(
         normalizeTtcApiAlert
       )
