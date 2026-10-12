@@ -4091,6 +4091,18 @@ function cleanLocationPiece(
 function ttcLocation(
   record
 ) {
+  // Subway shutdowns usually identify stations, not street corners.
+  // Anchor the map pin to the starting station so geocoding does not
+  // mistake a two-station span for a single intersection.
+  if (
+    cleanText(record?.routeType).toLowerCase() === 'subway' &&
+    cleanText(record?.stopStart)
+  ) {
+    return cleanText(record.stopStart)
+      .replace(/\s+stations?$/i, '') + ' Station'
+  }
+
+
   const text =
     (
       cleanText(
@@ -4399,6 +4411,12 @@ function normalizeTtcRecord(
       : 'TTC'
 
 
+  const subwayEnd =
+    cleanText(raw?.routeType).toLowerCase() === 'subway'
+      ? cleanText(raw?.stopEnd).replace(/\s+stations?$/i, '')
+      : ''
+
+
   const title =
     (
       routeLabel +
@@ -4407,7 +4425,8 @@ function normalizeTtcRecord(
         effect
       ) +
       ' · ' +
-      location
+      location +
+      (subwayEnd ? ' to ' + subwayEnd + ' Station' : '')
     )
 
 

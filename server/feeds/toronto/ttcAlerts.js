@@ -310,6 +310,30 @@ function ttcAlertIsStillRelevant(
       : []
 
 
+  // TTC can identify an alert as CURRENT even when its individual
+  // parent/child schedule timestamps disagree with the public status.
+  // Trust that explicit status (not the `alertType: Planned` label): a
+  // planned disruption may be actively happening right now.
+  const statusGroups =
+    (record?.activePeriodGroup || [])
+      .map((group) => String(group).trim().toLowerCase())
+
+
+  if (statusGroups.includes('current')) {
+    return true
+  }
+
+
+  // A future/expired item lacking timestamps must not slip through the
+  // live endpoint's usual no-schedule fallback.
+  if (
+    statusGroups.includes('upcoming') ||
+    statusGroups.includes('past')
+  ) {
+    return false
+  }
+
+
   if (
     periods.length ===
       0
@@ -445,6 +469,17 @@ function normalizeTtcApiAlert(
       normalizeVisibilityPeriods(
         record
       ),
+
+    // This is TTC's present/upcoming grouping, distinct from alertType.
+    // A "Planned" alert can belong to the "Current" group once active.
+    activePeriodGroup:
+      (
+        Array.isArray(record?.activePeriodGroup)
+          ? record.activePeriodGroup
+          : [record?.activePeriodGroup]
+      )
+        .map(cleanText)
+        .filter(Boolean),
 
     informedEntities:
       routes.map(
