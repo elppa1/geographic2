@@ -302,79 +302,20 @@ function ttcAlertIsStillRelevant(
   record,
   nowUnixSeconds
 ) {
-  const periods =
-    Array.isArray(
-      record?.visibilityPeriods
-    )
-      ? record.visibilityPeriods
+  // This feed powers the TTC website's current-alerts listing, but its
+  // payload also includes upcoming and previously scheduled disruptions.
+  // The TTC-owned "Current" group, not the parent/child schedule clocks,
+  // is the authoritative membership test for the LIVE newsroom.
+  // A current alert may have contradictory schedule windows (Line 2, 77820).
+  // Do not fall back to dates or missing grouping: that re-queues old notices.
+  const groups =
+    Array.isArray(record?.activePeriodGroup)
+      ? record.activePeriodGroup
       : []
 
-
-  // TTC can identify an alert as CURRENT even when its individual
-  // parent/child schedule timestamps disagree with the public status.
-  // Trust that explicit status (not the `alertType: Planned` label): a
-  // planned disruption may be actively happening right now.
-  const statusGroups =
-    (record?.activePeriodGroup || [])
-      .map((group) => String(group).trim().toLowerCase())
-
-
-  if (statusGroups.includes('current')) {
-    return true
-  }
-
-
-  // A future/expired item lacking timestamps must not slip through the
-  // live endpoint's usual no-schedule fallback.
-  if (
-    statusGroups.includes('upcoming') ||
-    statusGroups.includes('past')
-  ) {
-    return false
-  }
-
-
-  if (
-    periods.length ===
-      0
-  ) {
-    // No usable schedule metadata: membership in TTC's live-alert API
-    // remains authoritative.
-    return true
-  }
-
-
-  return periods.some(
-    (
-      period
-    ) => {
-      const start =
-        numberOrNull(
-          period?.start
-        )
-
-
-      const end =
-        numberOrNull(
-          period?.end
-        )
-
-
-      return (
-        (
-          start ===
-            null ||
-          start <=
-            nowUnixSeconds
-        ) &&
-        (
-          end ===
-            null ||
-          end >
-            nowUnixSeconds
-        )
-      )
-    }
+  return groups.some(
+    (value) =>
+      cleanText(value).toLowerCase() === 'current'
   )
 }
 
@@ -925,6 +866,20 @@ export async function getTtcAlertsSnapshot() {
       payload
     )
 
+
+  // Never treat a non-empty TTC payload as an empty current-alert feed.
+  // A changed API response shape must not expire real newsroom alerts.
+  if (
+    !Array.isArray(payload?.routes) ||
+    (
+      rawRecords.length === 0 &&
+      Number(payload?.total) > 0
+    )
+  ) {
+    throw new Error(
+      'TTC live-alert response contained records but could not be parsed'
+    )
+  }
 
   const nowUnixSeconds =
     Math.floor(

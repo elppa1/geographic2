@@ -5468,6 +5468,50 @@ async function reconcilePublishedTtcPins(
 }
 
 
+// After a successful TTC snapshot, only currently-listed TTC alerts should
+// remain in the approval queue. Preserve the ledger/history: never delete
+// the record or change Police/Fire cards. Published TTC pins are reconciled
+// independently by reconcilePublishedTtcPins().
+async function acknowledgeTtcNotOnCurrentPage(
+  seenIds
+) {
+  await ensureLoaded()
+
+  const acknowledgedAt =
+    new Date().toISOString()
+
+  let acknowledged = 0
+
+  store.events =
+    store.events.map(
+      (event) => {
+        if (
+          event?.sourceKey !== 'ttc' ||
+          event?.status !== 'pending' ||
+          !cleanText(event?.externalId) ||
+          seenIds.has(cleanText(event.externalId))
+        ) {
+          return event
+        }
+
+        acknowledged++
+        return {
+          ...event,
+          status: 'acked',
+          outcome: 'expired-before-review',
+          ackedAt: acknowledgedAt,
+        }
+      }
+    )
+
+  if (acknowledged > 0) {
+    await persistStore()
+  }
+
+  return acknowledged
+}
+
+
 async function syncTtc() {
   const payload =
     await getTtcAlertsSnapshot()
@@ -5515,6 +5559,10 @@ async function syncTtc() {
   await reconcilePublishedTtcPins(
     seenIds
   )
+
+  // TTC's Current list is authoritative for what awaits editorial review.
+  // Clear older pending TTC cards even if they were queued before this fix.
+  await acknowledgeTtcNotOnCurrentPage(seenIds)
 
 
   const counts = {
