@@ -1929,6 +1929,11 @@ const GeographicMap =
         if (
           recenter
         ) {
+          const desktopSnap =
+            window.matchMedia(
+              '(min-width: 701px)'
+            ).matches
+
           map.stop()
 
 
@@ -1945,7 +1950,11 @@ const GeographicMap =
             // onto the user's building. After this first lock, manual zoom wins.
             zoom:
               walkingZoom
-                ? 15.0
+                ? (
+                    desktopSnap
+                      ? 15.5
+                      : 15.0
+                  )
                 : Math.max(
                     map.getZoom(),
                     15.6
@@ -2627,6 +2636,19 @@ const GeographicMap =
                   )
                 : 15.2
 
+            const desktopSnap =
+              window.matchMedia(
+                '(min-width: 701px)'
+              ).matches
+
+            const snapZoom =
+              desktopSnap
+                ? Math.min(
+                    16.5,
+                    zoom + 0.5
+                  )
+                : zoom
+
 
             // One camera owner at a time. Popup snap corrections and an older
             // historic flight must never queue behind a new SEE IT THEN click.
@@ -2649,7 +2671,7 @@ const GeographicMap =
                 longitude,
                 latitude,
               ],
-              zoom,
+              zoom: snapZoom,
               duration:
                 460,
               essential:
