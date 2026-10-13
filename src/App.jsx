@@ -134,22 +134,6 @@ function GeographicApp() {
     useRef(null)
 
 
-  const sponsorName =
-    String(
-      import.meta.env.VITE_GEOGRAPHIC_SPONSOR_NAME ||
-      'PROGAINS'
-    )
-      .trim()
-
-
-  const sponsorUrl =
-    String(
-      import.meta.env.VITE_GEOGRAPHIC_SPONSOR_URL ||
-      'https://progains.ca/'
-    )
-      .trim()
-
-
   const timelineLayers =
     useMemo(
       () => {
@@ -3885,32 +3869,10 @@ function GeographicApp() {
               </div>
             )}
 
-            <div className="howto-sponsor">
-              SPONSORED BY{' '}
-              {sponsorUrl
-                ? (
-                    <a
-                      href={
-                        sponsorUrl
-                      }
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {sponsorName.toUpperCase()}
-                    </a>
-                  )
-                : sponsorName.toUpperCase()}
-            </div>
 
             <div className="about-made-by">
               MADE BY{' '}
-              <a
-                href="https://elppa.engineering"
-                target="_blank"
-                rel="noreferrer"
-              >
-                ELPPA.ENGINEERING ↗
-              </a>
+              ELPPA.ENGINEERING
             </div>
           </aside>
         </>
