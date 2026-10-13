@@ -2339,8 +2339,22 @@ async function getNetworkPayload(
     zoom >=
     13
 
+  // SurfaceGTFS includes "Not In Service" depot/deadhead shapes which may
+  // cross the city or contain disconnected points. They remain in the
+  // static trip data; only the publicly drawn route network excludes them.
+  const publicRouteShapes =
+    surface.routeShapes.filter(
+      (
+        shape
+      ) =>
+        cleanText(
+          shape?.headsign
+        ).toLowerCase() !==
+          'not in service'
+    )
+
   const routeFeatures =
-    surface.routeShapes
+    publicRouteShapes
       .filter(
         (
           item
@@ -2404,7 +2418,7 @@ async function getNetworkPayload(
   const routeBounds =
     new Map()
 
-  surface.routeShapes.forEach(
+  publicRouteShapes.forEach(
     (
       shape
     ) => {
