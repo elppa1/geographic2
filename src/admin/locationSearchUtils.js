@@ -861,17 +861,9 @@ export async function searchLocation({
     }
 
 
-    // The direct intersection endpoint can occasionally be unavailable
-    // or return no nodes. Do not let that kill Admin location search.
-    // Fall back to the same bounded place/address search used by ordinary
-    // street searches so the editor can keep working.
-    return searchPlaces({
-      query:
-        clean,
-
-      city,
-      signal,
-    })
+    // Intersections MUST NOT downgrade to a fuzzy place/address search.
+    // That previously returned Woodbine at Kingston instead of Danforth.
+    return []
   }
 
 

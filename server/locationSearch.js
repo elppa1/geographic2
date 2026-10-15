@@ -38,8 +38,19 @@ const OVERPASS_ENDPOINTS = [
   'https://overpass.kumi.systems/api/interpreter',
 ]
 
-const TORONTO_INTERSECTION_ENDPOINT =
-  'https://gis.toronto.ca/arcgis/rest/services/cot_geospatial/FeatureServer/19/query'
+const TORONTO_INTERSECTION_ENDPOINTS = [
+  'https://gis.toronto.ca/arcgis/rest/services/cot_geospatial/FeatureServer/19/query',
+  'https://gis.toronto.ca/arcgis/rest/services/cot_geospatial/MapServer/19/query',
+]
+
+
+// Independent ArcGIS Online hosted copy of Toronto's intersection point dataset.
+// Uses a separate host so a timeout on gis.toronto.ca does not break all search.
+const TORONTO_HOSTED_INTERSECTION_ENDPOINT =
+  'https://services.arcgis.com/a3UyP711tRR4O2v8/ArcGIS/rest/services/Bike_Lanes_Existing_RA/FeatureServer/0/query'
+
+const ARCGIS_GEOCODER_ENDPOINT =
+  'https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates'
 
 const TORONTO_SEARCH_BOUNDS = {
   west:
@@ -1082,7 +1093,7 @@ function splitIntersectionDescription(
   )
     .trim()
     .split(
-      /\s*\/\s*|\s+&\s+|\s+@\s+|\s+AT\s+|\s+AND\s+/i
+      /\s*\/\s*|\s*\|\s*|\s+&\s+|\s+@\s+|\s+AT\s+|\s+AND\s+/i
     )
     .map(
       (part) =>
@@ -1390,263 +1401,201 @@ async function searchNominatimIntersection({
 }
 
 
-async function searchTorontoIntersection({
-  streetA,
-  streetB,
-  deadline,
-}) {
-  const termsA =
-    intersectionSearchTerms(
-      streetA
-    )
+// Accept only descriptions that explicitly identify BOTH crossing roads.
+// A nearby POI or a text match on one road is not an intersection.
+function validatedCityIntersection(feature, streetA, streetB) {
+  const attributes = feature?.attributes || {}
+  const description = String(attributes.INTERSECTION_DESC || '')
+  const lon = Number(attributes.LONGITUDE ?? feature?.geometry?.x)
+  const lat = Number(attributes.LATITUDE ?? feature?.geometry?.y)
 
-
-  const termsB =
-    intersectionSearchTerms(
-      streetB
-    )
-
-
-  if (
-    termsA.length ===
-      0 ||
-    termsB.length ===
-      0
-  ) {
-    return []
+  if (!intersectionDescriptionMatches({ description, streetA, streetB }) ||
+      !Number.isFinite(lon) || !Number.isFinite(lat) ||
+      lon < TORONTO_SEARCH_BOUNDS.west || lon > TORONTO_SEARCH_BOUNDS.east ||
+      lat < TORONTO_SEARCH_BOUNDS.south || lat > TORONTO_SEARCH_BOUNDS.north) {
+    return null
   }
 
-
-  const cacheKey =
-    (
-      'toronto-intersection:' +
-      cleanIntersectionStreet(
-        streetA
-      )
-        .toLowerCase() +
-      '|' +
-      cleanIntersectionStreet(
-        streetB
-      )
-        .toLowerCase()
-    )
-
-
-  const cached =
-    getLocationCache(
-      cacheKey
-    )
-
-
-  if (
-    cached !==
-    null
-  ) {
-    return cached
+  return {
+    type: 'node',
+    id: `toronto-${attributes.INTERSECTION_ID ?? attributes.OBJECTID}`,
+    lon,
+    lat,
+    description,
+    verifiedBy: 'toronto-centreline-intersection',
   }
+}
 
+async function searchTorontoIntersection({ streetA, streetB, deadline }) {
+  const termsA = intersectionSearchTerms(streetA)
+  const termsB = intersectionSearchTerms(streetB)
+  if (!termsA.length || !termsB.length) return []
 
-  const existing =
-    locationSearchInFlight.get(
-      cacheKey
-    )
+  const cacheKey = `toronto-intersection-v2:${[streetA, streetB]
+    .map((s) => cleanIntersectionStreet(s).toLowerCase()).sort().join('|')}`
+  const cached = getLocationCache(cacheKey)
+  if (cached !== null) return cached
+  const existing = locationSearchInFlight.get(cacheKey)
+  if (existing) return existing
 
+  const request = (async () => {
+    // Official GIS data is authoritative. Search both road names, including
+    // case-insensitive SQL variants, then VERIFY the individual road names.
+    const words = [...new Set([...termsA, ...termsB])]
+    const clauses = words.map((term) =>
+      `UPPER(INTERSECTION_DESC) LIKE '%${escapeArcSqlText(term)}%'`
+    ).join(' AND ')
+    const simpleClauses = words.map((term) =>
+      `INTERSECTION_DESC LIKE '%${escapeArcSqlText(term)}%'`
+    ).join(' AND ')
 
-  if (
-    existing
-  ) {
-    return existing
-  }
-
-
-  const request =
-    (
-      async () => {
-        const clauses =
-          [
-            ...termsA,
-            ...termsB,
-          ]
-            .map(
-              (term) =>
-                (
-                  "INTERSECTION_DESC LIKE '%" +
-                  escapeArcSqlText(
-                    term
-                  ) +
-                  "%'")
-            )
-
-
-        const params =
-          new URLSearchParams({
-            where:
-              clauses.join(
-                ' AND '
-              ),
-
-            outFields:
-              (
-                'INTERSECTION_ID,' +
-                'INTERSECTION_DESC,' +
-                'LONGITUDE,' +
-                'LATITUDE'
-              ),
-
-            returnGeometry:
-              'false',
-
-            resultRecordCount:
-              '100',
-
-            f:
-              'json',
-          })
-
-
-        // Query both street cores first. Some City GIS deployments reject
-        // SQL functions or fail to find intersections through a two-LIKE
-        // filter. Fall back to candidates for the rarer-looking street,
-        // then validate BOTH streets locally before accepting coordinates.
-        const fetchCityFeatures = async (queryParams) => {
-          const response = await fetch(
-            TORONTO_INTERSECTION_ENDPOINT + '?' + queryParams.toString(),
-            {
-              headers: {
-                Accept: 'application/json',
-                'User-Agent': 'ELPPA-Geographic/1.0 (Toronto Geographic)',
-              },
-              signal: AbortSignal.timeout(
-                Math.max(1, Math.min(7500, remainingTime(deadline, 7500)))
-              ),
-            }
-          )
-          if (!response.ok) throw new Error(`TORONTO INTERSECTION ${response.status}`)
-          const data = await response.json()
-          if (data?.error) throw new Error(data.error.message || 'TORONTO INTERSECTION QUERY FAILED')
-          return Array.isArray(data?.features) ? data.features : []
-        }
-
-        let features = []
+    for (const endpoint of TORONTO_INTERSECTION_ENDPOINTS) {
+      for (const where of [clauses, simpleClauses]) {
+        if (remainingTime(deadline, 0) < 500) break
+        const params = new URLSearchParams({
+          where,
+          outFields: 'INTERSECTION_ID,OBJECTID,INTERSECTION_DESC,LONGITUDE,LATITUDE',
+          returnGeometry: 'true',
+          outSR: '4326',
+          resultRecordCount: '300',
+          f: 'json',
+        })
         try {
-          features = await fetchCityFeatures(params)
-        } catch (error) {
-          // A transient or unsupported combined query is not proof the
-          // intersection does not exist. Try the single-street lookup.
-          console.warn('LOCATION SEARCH · CITY COMBINED QUERY FAILED:', String(error?.message || error))
-        }
-
-        const containsBothStreetNames = (feature) => {
-          const description = String(feature?.attributes?.INTERSECTION_DESC || '')
-          return intersectionDescriptionMatches({ description, streetA, streetB })
-        }
-        if (!features.some(containsBothStreetNames) && remainingTime(deadline, 400) > 400) {
-          // Prefer the more specific street (often the shorter local road).
-          const candidates = [termsA, termsB].sort((a, b) =>
-            b.join('').length - a.join('').length
-          )
-          for (const terms of candidates) {
-            if (remainingTime(deadline, 400) <= 400) break
-            const fallback = new URLSearchParams(params)
-            fallback.set('where', terms.map((term) =>
-              "INTERSECTION_DESC LIKE '%" + escapeArcSqlText(term) + "%'"
-            ).join(' AND '))
-            fallback.set('resultRecordCount', '1000')
-            try {
-              const candidatesFound = await fetchCityFeatures(fallback)
-              features.push(...candidatesFound)
-              if (features.some(containsBothStreetNames)) break
-            } catch (error) {
-              console.warn('LOCATION SEARCH · CITY SINGLE-STREET QUERY FAILED:', String(error?.message || error))
-            }
+          const response = await fetch(`${endpoint}?${params}`, {
+            headers: { Accept: 'application/json', 'User-Agent': 'ELPPA-Geographic/1.0' },
+            signal: AbortSignal.timeout(Math.max(1, Math.min(3200, remainingTime(deadline, 3200)))),
+          })
+          if (!response.ok) throw new Error(`City GIS HTTP ${response.status}`)
+          const payload = await response.json()
+          if (payload?.error) throw new Error(payload.error.message || 'City GIS query error')
+          const results = (Array.isArray(payload?.features) ? payload.features : [])
+            .map((feature) => validatedCityIntersection(feature, streetA, streetB))
+            .filter(Boolean)
+            .slice(0, 6)
+          if (results.length) {
+            setLocationCache(cacheKey, results)
+            return results
           }
+        } catch (error) {
+          console.warn('LOCATION SEARCH · CITY INTERSECTION ATTEMPT:', String(error?.message || error))
         }
-
-        const elements =
-          features
-            .map(
-              (
-                feature,
-                index
-              ) => {
-                const attributes =
-                  feature?.attributes ||
-                  {}
-
-
-                return {
-                  type:
-                    'node',
-
-                  id:
-                    (
-                      attributes.INTERSECTION_ID ||
-                      `toronto-${index}`
-                    ),
-
-                  lon:
-                    Number(
-                      attributes.LONGITUDE
-                    ),
-
-                  lat:
-                    Number(
-                      attributes.LATITUDE
-                    ),
-
-                  description:
-                    attributes.INTERSECTION_DESC ||
-                    '',
-                }
-              }
-            )
-            .filter(
-              (item) =>
-                Number.isFinite(
-                  item.lon
-                ) &&
-                Number.isFinite(
-                  item.lat
-                ) &&
-                intersectionDescriptionMatches({
-                  description:
-                    item.description,
-
-                  streetA,
-                  streetB,
-                })
-            )
-            .slice(
-              0,
-              6
-            )
-
-
-        setLocationCache(
-          cacheKey,
-          elements
-        )
-
-
-        return elements
       }
-    )()
+    }
+    // Do not cache a failed official lookup. It may be temporary.
+    return []
+  })()
+
+  locationSearchInFlight.set(cacheKey, request)
+  try { return await request }
+  finally { locationSearchInFlight.delete(cacheKey) }
+}
 
 
-  locationSearchInFlight.set(
-    cacheKey,
-    request
-  )
+// Verify an intersection from the independently hosted Toronto Centreline copy.
+// The source geometry is MULTIPOINT, with geographic (longitude, latitude)
+// coordinates. We never accept text-only places or a fuzzy geocode.
+async function searchHostedTorontoIntersection({ streetA, streetB, deadline }) {
+  const termsA = intersectionSearchTerms(streetA)
+  const termsB = intersectionSearchTerms(streetB)
+  if (!termsA.length || !termsB.length) return []
 
+  const cacheKey = `toronto-hosted-crossing:${[streetA,streetB].map(s => cleanIntersectionStreet(s).toLowerCase()).sort().join('|')}`
+  const cached = getLocationCache(cacheKey)
+  if (cached !== null) return cached
+  const existing = locationSearchInFlight.get(cacheKey)
+  if (existing) return existing
 
-  try {
-    return await request
+  const request = (async () => {
+    // Query candidate point FEATURES using both street-name cores, but
+    // only accept results whose separate road names match the request.
+    const allTerms = [...new Set([...termsA, ...termsB])]
+    const where = allTerms.map(term =>
+      `UPPER(INTERSE6) LIKE '%${escapeArcSqlText(term)}%'`
+    ).join(' AND ')
+    const params = new URLSearchParams({
+      where,
+      outFields: 'FID,INTERSE6',
+      returnGeometry: 'true',
+      outSR: '4326',
+      resultRecordCount: '200',
+      f: 'json',
+    })
+    const response = await fetch(`${TORONTO_HOSTED_INTERSECTION_ENDPOINT}?${params}`, {
+      headers: { Accept: 'application/json', 'User-Agent': 'ELPPA-Geographic/1.0' },
+      signal: AbortSignal.timeout(Math.max(1, Math.min(6000, remainingTime(deadline, 6000)))),
+    })
+    if (!response.ok) throw new Error(`Hosted Toronto intersections HTTP ${response.status}`)
+    const payload = await response.json()
+    if (payload?.error) throw new Error(payload.error.message || 'Hosted Toronto intersections GIS error')
+
+    const points = (Array.isArray(payload?.features) ? payload.features : []).flatMap(feature => {
+      const description = String(feature?.attributes?.INTERSE6 || '')
+      if (!intersectionDescriptionMatches({ description, streetA, streetB })) return []
+      const geometry = feature?.geometry || {}
+      const candidates = Array.isArray(geometry.points) ? geometry.points
+        : Number.isFinite(Number(geometry.x)) && Number.isFinite(Number(geometry.y))
+          ? [[geometry.x,geometry.y]] : []
+      return candidates.filter(pair => Array.isArray(pair) && pair.length >= 2)
+        .map((pair,index) => ({
+          type: 'node', id: `hosted-toronto-${feature.attributes?.FID ?? 'unknown'}-${index}`,
+          lon: Number(pair[0]), lat: Number(pair[1]),
+          description, verifiedBy: 'toronto-hosted-centreline-intersection',
+        }))
+        .filter(node => Number.isFinite(node.lon) && Number.isFinite(node.lat) &&
+          node.lon >= TORONTO_SEARCH_BOUNDS.west && node.lon <= TORONTO_SEARCH_BOUNDS.east &&
+          node.lat >= TORONTO_SEARCH_BOUNDS.south && node.lat <= TORONTO_SEARCH_BOUNDS.north)
+    }).slice(0,6)
+    if (points.length) setLocationCache(cacheKey,points)
+    return points
+  })()
+  locationSearchInFlight.set(cacheKey, request)
+  try { return await request }
+  finally { locationSearchInFlight.delete(cacheKey) }
+}
+
+// Second independent provider: only its actual STREET INTERSECTION feature
+// type is allowed. Generic address/POI matches are rejected even if the
+// label happens to mention both street names.
+async function searchArcgisVerifiedIntersection({ streetA, streetB, deadline }) {
+  const searchA = getIntersectionStreetSearch(streetA).name
+  const searchB = getIntersectionStreetSearch(streetB).name
+  for (const [a, b] of [[searchA, searchB], [searchB, searchA]]) {
+    if (remainingTime(deadline, 0) < 500) break
+    const params = new URLSearchParams({
+      SingleLine: `${a} & ${b}, Toronto, Ontario, Canada`,
+      outFields: 'Addr_type,City,Region,Country',
+      maxLocations: '6',
+      f: 'json',
+    })
+    try {
+      const response = await fetch(`${ARCGIS_GEOCODER_ENDPOINT}?${params}`, {
+        headers: { Accept: 'application/json', 'User-Agent': 'ELPPA-Geographic/1.0' },
+        signal: AbortSignal.timeout(Math.max(1, Math.min(3200, remainingTime(deadline, 3200)))),
+      })
+      if (!response.ok) throw new Error(`ArcGIS HTTP ${response.status}`)
+      const payload = await response.json()
+      const candidates = Array.isArray(payload?.candidates) ? payload.candidates : []
+      const verified = candidates.flatMap((candidate, index) => {
+        const attributeType = String(candidate?.attributes?.Addr_type || '')
+        const address = String(candidate?.address || '')
+        const lon = Number(candidate?.location?.x)
+        const lat = Number(candidate?.location?.y)
+        const score = Number(candidate?.score)
+        // Hard gate: ArcGIS must explicitly classify it as a street intersection.
+        if (attributeType.toLowerCase() !== 'streetint' || score < 90 ||
+            !intersectionDescriptionMatches({ description: address.split(/,\s*Toronto/i)[0], streetA, streetB }) ||
+            !Number.isFinite(lon) || !Number.isFinite(lat) ||
+            lon < TORONTO_SEARCH_BOUNDS.west || lon > TORONTO_SEARCH_BOUNDS.east ||
+            lat < TORONTO_SEARCH_BOUNDS.south || lat > TORONTO_SEARCH_BOUNDS.north) return []
+        return [{ type: 'node', id: `arcgis-intersection-${index}`, lon, lat,
+          description: address, verifiedBy: 'arcgis-street-intersection' }]
+      })
+      if (verified.length) return verified
+    } catch (error) {
+      console.warn('LOCATION SEARCH · ARCGIS INTERSECTION ATTEMPT:', String(error?.message || error))
+    }
   }
-  finally {
-    locationSearchInFlight.delete(
-      cacheKey
-    )
-  }
+  return []
 }
 
 
@@ -2916,50 +2865,55 @@ export function locationSearchApi() {
 
 
               // --------------------------------------------------
-              // 1. CITY OF TORONTO INTERSECTION DATA
+              // 1. ARCGIS WORLD GEOCODER (STRICT STREETINT ONLY)
               // --------------------------------------------------
-              // Prefer authoritative intersection geometry. Nominatim
-              // can miss a valid crossing based on wording or street order.
-              // Keep an independent deadline; failures still fall back.
-
+              // Fast provider first. City GIS often times out; don't hold
+              // the entire lookup hostage to it before trying other sources.
               try {
-                const cityDeadline =
-                  Date.now() + 8000
+                const deadline = Date.now() + 6000
+                elements = await waitForSearch({
+                  promise: searchArcgisVerifiedIntersection({streetA,streetB,deadline}),
+                  deadline, signal: requestController.signal,
+                })
+              } catch (error) {
+                if (error?.name === 'AbortError') throw error
+                console.warn('LOCATION SEARCH · VERIFIED ARCGIS FAILED:', String(error?.message || error))
+              }
 
-                elements =
-                  await waitForSearch({
-                    promise:
-                      searchTorontoIntersection({
-                        streetA,
-                        streetB,
-                        deadline: cityDeadline,
-                      }),
-                    deadline: cityDeadline,
-                    signal: requestController.signal,
+              // --------------------------------------------------
+              // 2. TORONTO CENTRELINE HOSTED COPY (VERIFIED GEOMETRY)
+              // --------------------------------------------------
+              if (elements.length === 0) {
+                try {
+                  const deadline = Date.now() + 6500
+                  elements = await waitForSearch({
+                    promise: searchHostedTorontoIntersection({streetA,streetB,deadline}),
+                    deadline, signal: requestController.signal,
                   })
-              }
-              catch (error) {
-                if (error?.name === 'AbortError') {
-                  throw error
+                } catch (error) {
+                  if (error?.name === 'AbortError') throw error
+                  console.warn('LOCATION SEARCH · HOSTED TORONTO INTERSECTION FAILED:', String(error?.message || error))
                 }
-
-                console.warn(
-                  'LOCATION SEARCH · TORONTO INTERSECTION FAILED, USING NOMINATIM:',
-                  String(error?.message || error)
-                )
               }
 
               // --------------------------------------------------
-              // 2. NEVER use Nominatim text matches for intersections.
-              //    A result may mention both roads in its address while
-              //    its coordinates point to a nearby road or POI.
-              //    Only official intersection records or validated
-              //    crossing geometry can locate an intersection.
+              // 3. TORONTO OFFICIAL GIS (STRICT VERIFIED INTERSECTION)
               // --------------------------------------------------
-
+              if (elements.length === 0) {
+                try {
+                  const deadline = Date.now() + 6500
+                  elements = await waitForSearch({
+                    promise: searchTorontoIntersection({streetA,streetB,deadline}),
+                    deadline, signal: requestController.signal,
+                  })
+                } catch (error) {
+                  if (error?.name === 'AbortError') throw error
+                  console.warn('LOCATION SEARCH · TORONTO INTERSECTION FAILED:', String(error?.message || error))
+                }
+              }
 
               // --------------------------------------------------
-              // 3. OVERPASS VERIFIED CROSSING GEOMETRY FALLBACK
+              // 4. OVERPASS VERIFIED CROSSING GEOMETRY FALLBACK
               // --------------------------------------------------
 
               if (
