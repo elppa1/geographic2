@@ -1266,36 +1266,6 @@ function eventId({
 // QUEUE
 // ============================================================
 
-// A TPS release that was already handled must never return as a new
-// pending card just because an older email is delivered again. Preserve
-// the original source version even when Admin edited the approved story.
-// This guard intentionally does not apply to TTC or Fire.
-function policeVersionWasHandled({
-  externalId,
-  version,
-}) {
-  if (!externalId || !version) {
-    return false
-  }
-
-  return store.events.some((event) => {
-    if (
-      event.sourceKey !== 'police' ||
-      event.status !== 'acked' ||
-      event.externalId !== externalId ||
-      !['new', 'update'].includes(event.newsroomAction) ||
-      cleanText(event.outcome).toLowerCase() === 'expired-shelf-life'
-    ) {
-      return false
-    }
-
-    return (
-      event.sourceFingerprint === version ||
-      (event.incomingRecord && fingerprint(event.incomingRecord) === version)
-    )
-  })
-}
-
 function findPendingEvent({
   sourceKey,
   action,
@@ -1746,22 +1716,6 @@ async function observeRecord({
     fingerprint(
       record
     )
-
-
-  // Old TPS emails can arrive after a newer story has already been
-  // published. Do not downgrade the remembered source version or queue
-  // an already-acknowledged release again. Genuine new fingerprints are
-  // still eligible for normal editorial review.
-  if (
-    sourceKey === 'police' &&
-    !forceAction &&
-    policeVersionWasHandled({ externalId, version: currentFingerprint })
-  ) {
-    return {
-      action: 'seen',
-      record: sourceExisting || record,
-    }
-  }
 
 
   let publishedTtcRecord =
@@ -7407,46 +7361,11 @@ async function pendingEvents() {
     []
 
 
-  const replayedPoliceEvents = []
-  const handledPoliceVersions = new Set()
-  store.events.forEach((event) => {
-    if (
-      event.sourceKey === 'police' &&
-      event.status === 'acked' &&
-      ['new', 'update'].includes(event.newsroomAction) &&
-      cleanText(event.outcome).toLowerCase() !== 'expired-shelf-life'
-    ) {
-      if (event.sourceFingerprint) {
-        handledPoliceVersions.add(event.externalId + '\u0000' + event.sourceFingerprint)
-      }
-      if (event.incomingRecord) {
-        handledPoliceVersions.add(event.externalId + '\u0000' + fingerprint(event.incomingRecord))
-      }
-    }
-  })
-
-
   store.events =
     store.events.map(
       (
         event
       ) => {
-        if (
-          event.status === 'pending' &&
-          event.sourceKey === 'police' &&
-          ['new', 'update'].includes(event.newsroomAction) &&
-          handledPoliceVersions.has(event.externalId + '\u0000' + event.sourceFingerprint)
-        ) {
-          const replayed = {
-            ...event,
-            status: 'acked',
-            outcome: 'already-acknowledged-police-version',
-            ackedAt: now,
-          }
-          replayedPoliceEvents.push(replayed)
-          return replayed
-        }
-
         if (
           event.status !==
             'pending' ||
@@ -7492,19 +7411,10 @@ async function pendingEvents() {
 
 
   if (
-    expiredEvents.length > 0 ||
-    replayedPoliceEvents.length > 0
+    expiredEvents.length >
+      0
   ) {
     await persistStore()
-
-
-    for (const event of replayedPoliceEvents) {
-      await appendLedgerEvent({
-        eventType: 'police-replay-acknowledged',
-        outcome: 'already-acknowledged-police-version',
-        record: event,
-      })
-    }
 
 
     for (
@@ -7780,14 +7690,6 @@ async function acknowledgeEvents({
 
           serverQueueId:
             queueId,
-
-          // The editorial record may be geocoded or rewritten. Keep the
-          // exact incoming version for future TPS replay detection.
-          sourceFingerprint:
-            event.sourceFingerprint,
-
-          incomingRecord:
-            event.incomingRecord,
 
           status:
             'acked',
