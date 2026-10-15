@@ -3948,9 +3948,12 @@ function getNewsroomApproveLabel(
     )
 
 
-  // Official-source UPDATE / RESOLVE cards are audit notices.
-  // The server has already applied the factual change to the public
-  // NEWS record, so Admin only acknowledges that the editor saw it.
+  // TPS ordinary updates REQUIRE approval and replace the old public
+  // release. TTC/Fire update and official RESOLVE acknowledgements retain
+  // their original acknowledgement-only workflow.
+  if (action === 'update' && isTpsNewsroomRecord(record)) {
+    return 'APPROVE UPDATE'
+  }
   if (
     action ===
       'resolve' ||
@@ -8816,6 +8819,28 @@ function AdminRoom() {
               'located'
 
 
+          // Historical TPS emails can be replayed on refresh. Ignore an
+          // older release when the map already holds a newer one for its case.
+          // LOCATED/FOUND handling remains separate and untouched.
+          const incomingDate = Date.parse(
+            rawIncomingRecord.tpsBroadcastAt ||
+            rawIncomingRecord.publishedAt || ''
+          )
+          if (!isLocatedResolution && Number.isFinite(incomingDate) &&
+              nextPublished.some((published) => {
+                if (!isTpsNewsroomRecord(published) ||
+                    !sameTpsCase(published, rawIncomingRecord) ||
+                    published.active === false) return false
+                const date = Date.parse(
+                  published.tpsBroadcastAt || published.publishedAt || ''
+                )
+                return Number.isFinite(date) && date > incomingDate
+              })) {
+            skipped++
+            return
+          }
+
+
           const existingReviewIndex =
             nextTorontoReview.findIndex(
               (
@@ -8987,6 +9012,16 @@ function AdminRoom() {
 
             publishedTouched =
               true
+          }
+
+
+          // Image-only changes to an already published TPS release do not
+          // create another pending story. A reused photo is not new news.
+          if (matchingPublished && !isResolve &&
+              meaningfulChanges.length > 0 &&
+              meaningfulChanges.every((field) => field === 'imageUrl')) {
+            skipped++
+            return
           }
 
 
@@ -10839,6 +10874,37 @@ function AdminRoom() {
       )
 
 
+      // Prune only stale local TPS review cards; NEVER touch public records.
+      // The later release must already be approved and have a comparable date.
+      nextTorontoReview = nextTorontoReview.filter((review) => {
+        if (!isTpsNewsroomRecord(review) ||
+            getNewsroomAction(review) === 'resolve') return true
+        const reviewDate = Date.parse(
+          review.tpsBroadcastAt || review.publishedAt || ''
+        )
+        if (!Number.isFinite(reviewDate)) return true
+        const newerServerPending = incoming.some((newer) => {
+          if (!isTpsNewsroomRecord(newer) ||
+              getNewsroomAction(newer) === 'resolve' ||
+              !sameTpsCase(review, newer)) return false
+          const date = Date.parse(
+            newer.tpsBroadcastAt || newer.publishedAt || ''
+          )
+          return Number.isFinite(date) && date > reviewDate
+        })
+        if (newerServerPending) return false
+        return !latestPublished.some((published) => {
+          if (!isTpsNewsroomRecord(published) ||
+              !sameTpsCase(review, published) ||
+              published.active === false) return false
+          const date = Date.parse(
+            published.tpsBroadcastAt || published.publishedAt || ''
+          )
+          return Number.isFinite(date) && date > reviewDate
+        })
+      })
+
+
       const autoAck = []
 
 
@@ -10883,6 +10949,26 @@ function AdminRoom() {
             getNewsroomAction(
               serverRecord
             )
+
+
+          // A newer APPROVED TPS case already supersedes this release.
+          // Ignore only the old queue card; do not archive or alter its pin.
+          if (isTpsNewsroomRecord(serverRecord) && action !== 'resolve') {
+            const incomingTime = Date.parse(
+              serverRecord.tpsBroadcastAt || serverRecord.publishedAt || ''
+            )
+            if (Number.isFinite(incomingTime) &&
+                latestPublished.some((published) => {
+                  if (!isTpsNewsroomRecord(published) ||
+                      published.active === false ||
+                      !sameTpsCase(published, serverRecord)) return false
+                  const publishedTime = Date.parse(
+                    published.tpsBroadcastAt || published.publishedAt || ''
+                  )
+                  return Number.isFinite(publishedTime) &&
+                    publishedTime > incomingTime
+                })) return
+          }
 
 
           const externalId =
@@ -17154,6 +17240,16 @@ function AdminRoom() {
       }
 
 
+      // TPS UPDATE must publish the newly approved case release. The
+      // acknowledge-only path below is for other feeds and TPS RESOLVE.
+      if (tab === 'news' && sourceReview &&
+          isTpsNewsroomRecord(sourceReview) &&
+          getNewsroomAction(sourceReview) === 'update') {
+        await approveTpsNewsroomRecord(sourceReview, record)
+        return
+      }
+
+
       if (
         tab ===
           'news' &&
@@ -17670,17 +17766,9 @@ function AdminRoom() {
               publishedRecord,
               candidate
             ) ||
-            (
-              String(
-                candidate.category ||
-                ''
-              )
-                .toLowerCase() ===
-                'located' &&
-              sameTpsCase(
-                publishedRecord,
-                candidate
-              )
+            sameTpsCase(
+              publishedRecord,
+              candidate
             )
           )
       )
@@ -17693,6 +17781,29 @@ function AdminRoom() {
             existingIndex
           ]
         : null
+
+
+    // Never let an older TPS email replace the newer approved case.
+    // Compare official release dates, not attachments or approval times.
+    const candidateReleaseTime = Date.parse(
+      candidate.tpsBroadcastAt || candidate.publishedAt || ''
+    )
+    const publishedReleaseTime = Date.parse(
+      existingPublished?.tpsBroadcastAt ||
+      existingPublished?.publishedAt || ''
+    )
+    if (
+      existingPublished &&
+      String(candidate.category || '').toLowerCase() !== 'located' &&
+      Number.isFinite(candidateReleaseTime) &&
+      Number.isFinite(publishedReleaseTime) &&
+      candidateReleaseTime < publishedReleaseTime
+    ) {
+      window.alert(
+        'This is an older TPS release for a case already published with a newer story. The public pin has not been changed.'
+      )
+      return
+    }
 
 
     const isLocatedResolution =
@@ -18100,6 +18211,16 @@ function AdminRoom() {
         createAdminId(
           'news'
         ),
+
+      // Preserve the existing public record's key across releases in the
+      // same TPS case. Record the incoming email ID separately for auditing.
+      externalId:
+        existingPublished?.externalId || candidate.externalId,
+
+      tpsLatestReleaseExternalId:
+        candidate.externalId ||
+        existingPublished?.tpsLatestReleaseExternalId ||
+        '',
 
       city:
         'toronto',
@@ -19108,6 +19229,15 @@ function AdminRoom() {
       )
 
 
+      return
+    }
+
+
+    // Ordinary TPS UPDATE approvals replace their public case record;
+    // official RESOLVE acknowledgements continue through the old path.
+    if (tab === 'news' && isTpsNewsroomRecord(reviewRecord) &&
+        getNewsroomAction(reviewRecord) === 'update') {
+      await approveTpsNewsroomRecord(reviewRecord)
       return
     }
 

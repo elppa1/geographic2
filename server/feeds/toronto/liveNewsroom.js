@@ -1325,9 +1325,10 @@ async function addEvent({
 
 
   const version =
-    fingerprint(
-      incoming
-    )
+    sourceKey === 'police' && action !== 'resolve' &&
+    incoming?.resolved !== true
+      ? tpsFingerprint(incoming)
+      : fingerprint(incoming)
 
 
   const duplicate =
@@ -1664,6 +1665,64 @@ function refreshPendingFireNewEvent({
 }
 
 
+// TPS case continuity: a release is identified by its case number and its
+// official publication date, NOT by a reused photograph or an email arrival.
+// These comparisons never modify published NEWS records. Without comparable
+// source dates, do not guess which release is newer.
+function tpsReleaseDateMs(record) {
+  const sourceDate = cleanText(
+    record?.tpsBroadcastAt || record?.publishedAt || ''
+  )
+  const parsed = Date.parse(sourceDate)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function tpsCaseKey(record) {
+  return normalizePoliceCaseNumber(policeCaseNumberFromRecord(record))
+}
+
+function isTpsPublishedRecord(record) {
+  const source = cleanText(record?.source).toLowerCase()
+  return Boolean(
+    source.includes('toronto police') ||
+    record?.newsroomSource === 'tps-email' ||
+    record?.origin === 'tps-email'
+  )
+}
+
+function laterPublishedTpsCaseRelease(record) {
+  const caseKey = tpsCaseKey(record)
+  const incomingDate = tpsReleaseDateMs(record)
+  if (!caseKey || incomingDate === null) return null
+  return Object.values(store.publishedNews || {}).find((published) =>
+    published?.active !== false &&
+    isTpsPublishedRecord(published) &&
+    tpsCaseKey(published) === caseKey &&
+    tpsReleaseDateMs(published) !== null &&
+    tpsReleaseDateMs(published) > incomingDate
+  ) || null
+}
+
+function laterPendingTpsCaseRelease(record) {
+  const caseKey = tpsCaseKey(record)
+  const incomingDate = tpsReleaseDateMs(record)
+  if (!caseKey || incomingDate === null) return null
+  return store.events.find((event) =>
+    event.sourceKey === 'police' &&
+    event.status === 'pending' &&
+    event.newsroomAction !== 'resolve' &&
+    tpsCaseKey(event) === caseKey &&
+    tpsReleaseDateMs(event) !== null &&
+    tpsReleaseDateMs(event) > incomingDate
+  ) || null
+}
+
+// TPS email attachments often reuse old photographs. An image-only alteration
+// must not create a new police release. Fire/TTC fingerprints are unchanged.
+function tpsFingerprint(record) {
+  return fingerprint({ ...record, imageUrl: '' })
+}
+
 // ============================================================
 // SOURCE UPSERT
 // ============================================================
@@ -1712,10 +1771,28 @@ async function observeRecord({
     null
 
 
+  // A genuine newer case update is still queued. Replayed OLDER releases
+  // cannot compete with a newer published or already-pending TPS release.
+  // This guard does not run for special RESOLVE workflows.
+  if (
+    sourceKey === 'police' &&
+    forceAction !== 'resolve' &&
+    (laterPublishedTpsCaseRelease(record) ||
+      laterPendingTpsCaseRelease(record))
+  ) {
+    return { action: 'seen', record: sourceExisting || record }
+  }
+
+
+  const ordinaryPoliceRelease =
+    sourceKey === 'police' &&
+    forceAction !== 'resolve' &&
+    record?.resolved !== true
+
   const currentFingerprint =
-    fingerprint(
-      record
-    )
+    ordinaryPoliceRelease
+      ? tpsFingerprint(record)
+      : fingerprint(record)
 
 
   let publishedTtcRecord =
@@ -1802,8 +1879,10 @@ async function observeRecord({
 
 
   const previousFingerprint =
-    existing?.sourceFingerprint ||
-    ''
+    ordinaryPoliceRelease && existing
+      ? tpsFingerprint(existing)
+      : existing?.sourceFingerprint ||
+        ''
 
 
   let action =
@@ -7361,6 +7440,30 @@ async function pendingEvents() {
     []
 
 
+  // A later approved TPS release makes an older pending case card obsolete.
+  // Acknowledge the QUEUE CARD ONLY. Never archive or edit the map pin.
+  store.events = store.events.map((event) => {
+    if (
+      event.status !== 'pending' ||
+      event.sourceKey !== 'police' ||
+      event.newsroomAction === 'resolve' ||
+      !(laterPublishedTpsCaseRelease(event) ||
+        laterPendingTpsCaseRelease(event))
+    ) return event
+    const newerIsPublished = Boolean(laterPublishedTpsCaseRelease(event))
+    const retired = {
+      ...event,
+      status: 'acked',
+      outcome: newerIsPublished
+        ? 'superseded-by-newer-published-tps-release'
+        : 'superseded-by-newer-pending-tps-release',
+      ackedAt: now,
+    }
+    expiredEvents.push(retired)
+    return retired
+  })
+
+
   store.events =
     store.events.map(
       (
@@ -7423,10 +7526,12 @@ async function pendingEvents() {
     ) {
       await appendLedgerEvent({
         eventType:
-          'shelf-life-expired',
+          cleanText(event.outcome).startsWith('superseded-by-newer-')
+            ? 'police-old-release-superseded'
+            : 'shelf-life-expired',
 
         outcome:
-          'expired-shelf-life',
+          event.outcome || 'expired-shelf-life',
 
         record:
           event,
