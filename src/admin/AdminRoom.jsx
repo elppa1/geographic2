@@ -3910,6 +3910,28 @@ function keepOnlyServerPendingTtcReviews(localReviews, serverPendingReviews) {
 }
 
 
+// Only server-backed TPS cards may be removed using the server's pending
+// snapshot. Manually added police leads and other locally staged work must
+// remain untouched. This clears acknowledged cards from stale browser caches.
+function serverBackedTpsQueueId(record) {
+  if (!isTpsNewsroomRecord(record)) return ''
+
+  const queueId = String(record?.serverQueueId || record?.id || '').trim()
+  return queueId.startsWith('live-newsroom-') ? queueId : ''
+}
+
+function keepOnlyServerPendingTpsReviews(localReviews, serverPendingReviews) {
+  const pendingIds = new Set(
+    serverPendingReviews.map(serverBackedTpsQueueId).filter(Boolean)
+  )
+
+  return localReviews.filter((record) => {
+    const queueId = serverBackedTpsQueueId(record)
+    return !queueId || pendingIds.has(queueId)
+  })
+}
+
+
 function getNewsroomActionLabel(
   record
 ) {
@@ -10835,6 +10857,14 @@ function AdminRoom() {
       // Do not alter local Police/Fire cards or unpublished manual work.
       let nextTorontoReview = keepOnlyServerPendingTtcReviews(
         torontoReview,
+        incoming
+      )
+
+      // A successful authoritative pending snapshot also lets us remove
+      // stale, already-acknowledged TPS queue cards from the browser cache.
+      // Locally created police review items are not pruned.
+      nextTorontoReview = keepOnlyServerPendingTpsReviews(
+        nextTorontoReview,
         incoming
       )
 
