@@ -1109,13 +1109,9 @@ function intersectionDescriptionMatches({
     parts.length <
       2
   ) {
-    // The description can sometimes omit a conventional separator.
-    // A single-street fallback must NEVER accept a point unless BOTH
-    // requested street names are present in the same description.
-    return (
-      textContainsStreetCore(description, streetA) &&
-      textContainsStreetCore(description, streetB)
-    )
+    // FAIL CLOSED: a description mentioning both roads does not
+    // prove that these roads actually intersect at this point.
+    return false
   }
 
 
@@ -2005,6 +2001,16 @@ function streetNamesMatch(
     return false
   }
 
+
+  // If both source and query specify a street type, it must agree.
+  // WOODBINE ROAD is not WOODBINE AVENUE.
+  if (
+    requestedParts.streetType &&
+    actualParts.streetType &&
+    requestedParts.streetType !== actualParts.streetType
+  ) {
+    return false
+  }
 
   return true
 }
@@ -2944,34 +2950,16 @@ export function locationSearchApi() {
               }
 
               // --------------------------------------------------
-              // 2. NOMINATIM INTERSECTION FALLBACK
+              // 2. NEVER use Nominatim text matches for intersections.
+              //    A result may mention both roads in its address while
+              //    its coordinates point to a nearby road or POI.
+              //    Only official intersection records or validated
+              //    crossing geometry can locate an intersection.
               // --------------------------------------------------
-
-              if (elements.length === 0) {
-                try {
-                  elements =
-                    await searchNominatimIntersection({
-                      streetA,
-                      streetB,
-                      searchOptions,
-                      signal: requestController.signal,
-                    })
-                }
-                catch (error) {
-                  if (error?.name === 'AbortError') {
-                    throw error
-                  }
-
-                  console.warn(
-                    'LOCATION SEARCH · NOMINATIM INTERSECTION FAILED, USING OVERPASS:',
-                    String(error?.message || error)
-                  )
-                }
-              }
 
 
               // --------------------------------------------------
-              // 3. OVERPASS GEOMETRY FALLBACK
+              // 3. OVERPASS VERIFIED CROSSING GEOMETRY FALLBACK
               // --------------------------------------------------
 
               if (
