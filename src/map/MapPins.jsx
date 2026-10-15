@@ -8685,6 +8685,61 @@ function createHistoricStackMarker({
 }
 
 
+// The first line of every pin popup identifies what kind of place or
+// story the visitor is looking at. This is display-only: do not modify
+// classification, filtering or newsroom data.
+function getPopupCategoryHeading(pin, pinType) {
+  const readable = (value) =>
+    String(value || '')
+      .replace(/[-_]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toUpperCase()
+
+  const parts = []
+  const add = (value) => {
+    const label = readable(value)
+    if (label && !parts.includes(label)) parts.push(label)
+  }
+
+  if (pinType === 'historic') {
+    add('Historic')
+    add(pin.historicCategoryTitle || pin.category)
+    add(pin.historicLayerTitle)
+  } else if (pinType === 'news') {
+    add('News')
+    if (isTorontoFirePin(pin)) add('Fire')
+    else if (isTorontoPolicePin(pin)) add('Police')
+    else if (isTtcPin(pin)) add('TTC')
+    add(pin.category)
+  } else if (pinType === 'new') {
+    const type = normalizeCompareText(pin.newType)
+    const category = normalizeCompareText(pin.category)
+
+    if (type === 'business' || BUSINESS_CATEGORIES.includes(category)) {
+      add('New Business')
+    } else if (type === 'events' || EVENT_CATEGORIES.includes(category)) {
+      add('Events')
+    } else if (type === 'sports' || SPORTS_CATEGORIES.includes(category)) {
+      add('Sports')
+    } else if (type === 'real-estate' || REAL_ESTATE_CATEGORIES.includes(category)) {
+      add('Real Estate')
+    } else if (type === 'development' || DEVELOPMENT_CATEGORIES.includes(category)) {
+      add('Development')
+    } else if (type === 'community' || COMMUNITY_CATEGORIES.includes(category)) {
+      add('Community')
+    } else {
+      add('New')
+    }
+    add(pin.category)
+  } else {
+    add(pinType)
+    add(pin.category)
+  }
+
+  return parts.join(' · ')
+}
+
 // ============================================================
 // CREATE MARKER
 // ============================================================
@@ -10369,6 +10424,45 @@ function createMarker({
   }
 
 
+  // Keep the category as the first line for every popup on desktop
+  // and mobile. Reuse the existing footer category when it matches,
+  // rather than duplicating the category later in the card.
+  const popupHeadingText = getPopupCategoryHeading(pin, pinType)
+  if (popupHeadingText) {
+    const footerCategoryText = [
+      pinType === 'historic'
+        ? (pin.historicCategoryTitle || pin.category)
+        : pin.category,
+      pinType === 'historic' ? pin.historicLayerTitle : '',
+    ]
+      .filter(Boolean)
+      .map((value) => String(value).replace(/-/g, ' ').toUpperCase())
+      .join(' · ')
+
+    const oldFooterCategory =
+      pinType === 'new' && compactMobilePopup
+        ? null // Keep cuisine and Michelin details below the business name.
+        : Array.from(popupContent.querySelectorAll('.geographic-pin-category'))
+            .find((item) =>
+              footerCategoryText &&
+              item.textContent.trim() === footerCategoryText
+            )
+
+    const heading = oldFooterCategory || document.createElement('div')
+    heading.classList.add('geographic-pin-category', 'geographic-pin-header-category')
+    heading.textContent = popupHeadingText
+    heading.style.marginTop = '0'
+    heading.style.marginBottom = '4px'
+    heading.style.paddingTop = '0'
+    heading.style.borderTop = 'none'
+    heading.style.fontWeight = '700'
+    popupContent.insertBefore(heading, popupContent.firstChild)
+
+    // The old generic NEWS/NEW type would be redundant with this header.
+    popupContent.querySelector('.geographic-pin-type')?.remove()
+  }
+
+
   if (
     compactMobilePopup
   ) {
@@ -10511,7 +10605,9 @@ function createMarker({
         '0.05em'
 
       mobileCategory.style.opacity =
-        '0.55'
+        mobileCategory.classList.contains('geographic-pin-header-category')
+          ? '0.85'
+          : '0.55'
 
 
       if (
