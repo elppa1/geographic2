@@ -2759,11 +2759,17 @@ function buildPoliceWantedSuspectResolutionStoryRecord(
         record?.externalId
       ),
 
+    // TPS often reuses the SAME externalId for a wanted release and the
+    // later arrest release because both share one incident number. Give
+    // the arrest bulletin its own stable companion identity so the
+    // startup cleanup cannot mistake this real update for a synthetic
+    // duplicate (targetExternalId === resolutionNoticeExternalId).
     resolutionNoticeExternalId:
-      cleanText(
-        record?.resolutionNoticeExternalId ||
-        record?.externalId
-      ),
+      (() => {
+        const targetId = cleanText(record?.targetExternalId || record?.externalId)
+        const noticeId = cleanText(record?.resolutionNoticeExternalId || record?.externalId)
+        return noticeId && noticeId !== targetId ? noticeId : externalId
+      })(),
 
     active:
       false,
@@ -3518,6 +3524,22 @@ async function reconcilePublishedPoliceWantedSuspectResolutions() {
         '',
     })
   }
+
+  // The acknowledgement can survive when the separate arrest story was
+  // accidentally removed by the older startup cleaner. Recover it from
+  // that explicit resolution record without unpublishing any other pin.
+  // Snapshot before queuing; adding a card unshifts store.events.
+  for (const event of [...(store.events || [])]) {
+    if (
+      event?.sourceKey !== 'police' ||
+      event?.newsroomAction !== 'resolve' ||
+      cleanText(event?.resolutionReason).toLowerCase() !== 'police-wanted-suspect-arrested' ||
+      !cleanText(event?.targetExternalId) ||
+      !policeRecordIsWantedSuspectArrestResolution(event)
+    ) continue
+
+    await queuePoliceWantedSuspectResolutionStory(event)
+  }
 }
 
 
@@ -3902,6 +3924,11 @@ export async function queueLiveNewsroomRecord({
         .toLowerCase() ===
         'police-wanted-suspect-arrested'
     ) {
+      // Older builds sometimes acknowledged the arrest but lost its
+      // separate approvable companion. Recheck the saved resolution;
+      // normal source editorial history still prevents rejected or
+      // already-approved companion releases from being requeued.
+      await queuePoliceWantedSuspectResolutionStory(existingResolution)
       return {
         action:
           'seen',

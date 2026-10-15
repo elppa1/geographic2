@@ -1109,11 +1109,13 @@ function intersectionDescriptionMatches({
     parts.length <
       2
   ) {
-    // The City service has changed description formatting before.
-    // The SQL query already required the meaningful words from both
-    // streets, so do not throw away a plausible point solely because
-    // its display separator is unfamiliar.
-    return true
+    // The description can sometimes omit a conventional separator.
+    // A single-street fallback must NEVER accept a point unless BOTH
+    // requested street names are present in the same description.
+    return (
+      textContainsStreetCore(description, streetA) &&
+      textContainsStreetCore(description, streetB)
+    )
   }
 
 
@@ -1472,7 +1474,7 @@ async function searchTorontoIntersection({
             .map(
               (term) =>
                 (
-                  "UPPER(INTERSECTION_DESC) LIKE '%" +
+                  "INTERSECTION_DESC LIKE '%" +
                   escapeArcSqlText(
                     term
                   ) +
@@ -1506,70 +1508,66 @@ async function searchTorontoIntersection({
           })
 
 
-        const response =
-          await fetch(
-            (
-              TORONTO_INTERSECTION_ENDPOINT +
-              '?' +
-              params.toString()
-            ),
+        // Query both street cores first. Some City GIS deployments reject
+        // SQL functions or fail to find intersections through a two-LIKE
+        // filter. Fall back to candidates for the rarer-looking street,
+        // then validate BOTH streets locally before accepting coordinates.
+        const fetchCityFeatures = async (queryParams) => {
+          const response = await fetch(
+            TORONTO_INTERSECTION_ENDPOINT + '?' + queryParams.toString(),
             {
               headers: {
-                Accept:
-                  'application/json',
-
-                'User-Agent':
-                  'ELPPA-Geographic/1.0 (Toronto Geographic)',
+                Accept: 'application/json',
+                'User-Agent': 'ELPPA-Geographic/1.0 (Toronto Geographic)',
               },
-
-              signal:
-                AbortSignal.timeout(
-                  Math.max(
-                    1,
-                    Math.min(
-                      7500,
-                      remainingTime(
-                        deadline,
-                        7500
-                      )
-                    )
-                  )
-                ),
+              signal: AbortSignal.timeout(
+                Math.max(1, Math.min(7500, remainingTime(deadline, 7500)))
+              ),
             }
           )
-
-
-        if (
-          !response.ok
-        ) {
-          throw new Error(
-            `TORONTO INTERSECTION ${response.status}`
-          )
+          if (!response.ok) throw new Error(`TORONTO INTERSECTION ${response.status}`)
+          const data = await response.json()
+          if (data?.error) throw new Error(data.error.message || 'TORONTO INTERSECTION QUERY FAILED')
+          return Array.isArray(data?.features) ? data.features : []
         }
 
-
-        const data =
-          await response.json()
-
-
-        if (
-          data?.error
-        ) {
-          throw new Error(
-            data.error.message ||
-            'TORONTO INTERSECTION QUERY FAILED'
-          )
+        let features = []
+        try {
+          features = await fetchCityFeatures(params)
+        } catch (error) {
+          // A transient or unsupported combined query is not proof the
+          // intersection does not exist. Try the single-street lookup.
+          console.warn('LOCATION SEARCH · CITY COMBINED QUERY FAILED:', String(error?.message || error))
         }
 
+        const containsBothStreetNames = (feature) => {
+          const description = String(feature?.attributes?.INTERSECTION_DESC || '')
+          return intersectionDescriptionMatches({ description, streetA, streetB })
+        }
+        if (!features.some(containsBothStreetNames) && remainingTime(deadline, 400) > 400) {
+          // Prefer the more specific street (often the shorter local road).
+          const candidates = [termsA, termsB].sort((a, b) =>
+            b.join('').length - a.join('').length
+          )
+          for (const terms of candidates) {
+            if (remainingTime(deadline, 400) <= 400) break
+            const fallback = new URLSearchParams(params)
+            fallback.set('where', terms.map((term) =>
+              "INTERSECTION_DESC LIKE '%" + escapeArcSqlText(term) + "%'"
+            ).join(' AND '))
+            fallback.set('resultRecordCount', '1000')
+            try {
+              const candidatesFound = await fetchCityFeatures(fallback)
+              features.push(...candidatesFound)
+              if (features.some(containsBothStreetNames)) break
+            } catch (error) {
+              console.warn('LOCATION SEARCH · CITY SINGLE-STREET QUERY FAILED:', String(error?.message || error))
+            }
+          }
+        }
 
         const elements =
-          (
-            Array.isArray(
-              data?.features
-            )
-              ? data.features
-              : []
-          )
+          features
             .map(
               (
                 feature,
