@@ -5728,6 +5728,79 @@ async function fetchFireSnapshot() {
 }
 
 
+// Keep Fire's published alarm in sync independently of newsroom acknowledgement.
+// Source and queued Fire versions are both server-observed official CAD data;
+// include queued/acked versions so a later CAD downgrade cannot erase a peak.
+async function reconcilePublishedFireAlarmLevels() {
+  const peakByExternalId =
+    new Map()
+
+
+  const remember = (record) => {
+    const externalId =
+      cleanText(record?.externalId)
+
+    if (!externalId) return
+
+    const level =
+      fireAlarmLevelNumber(record?.alarmLevel)
+
+    if (level > (peakByExternalId.get(externalId) || 0)) {
+      peakByExternalId.set(externalId, level)
+    }
+  }
+
+
+  Object.values(store.sources.fire || {}).forEach(remember)
+
+  for (const event of store.events) {
+    if (event.sourceKey !== 'fire') continue
+    remember(event.incomingRecord || event)
+  }
+
+
+  for (const published of Object.values(store.publishedNews || {})) {
+    if (cleanText(published?.category).toLowerCase() !== 'fire') {
+      continue
+    }
+
+    const peak =
+      peakByExternalId.get(cleanText(published.externalId)) || 0
+
+    if (peak <= fireAlarmLevelNumber(published.alarmLevel)) {
+      continue
+    }
+
+
+    // Only replace the structured Alarm clause. Preserve approved title,
+    // location, coordinates, manual copy, pin styling and publication state.
+    let alarmClauseFound = false
+    const parts = cleanText(published.description)
+      .split(/\s*·\s*/)
+      .filter(Boolean)
+      .map((part) => {
+        if (!/^Alarm\s+\d+\b/i.test(part)) return part
+        alarmClauseFound = true
+        return 'Alarm ' + peak
+      })
+
+    if (!alarmClauseFound) {
+      parts.push('Alarm ' + peak)
+    }
+
+
+    await upsertPublishedNewsRecord({
+      record: {
+        ...published,
+        alarmLevel: String(peak),
+        description: parts.join(' · '),
+        updatedAt: new Date().toISOString(),
+      },
+    })
+  }
+}
+
+
 async function syncFire() {
   const records =
     await fetchFireSnapshot()
@@ -5810,6 +5883,12 @@ async function syncFire() {
     resolvePublishedMissing:
       false,
   })
+
+
+  // The newsroom audit event is not the public pin. Carry the highest
+  // official Fire alarm into the already-approved published record as well.
+  // This also repairs escalations acknowledged before this code was deployed.
+  await reconcilePublishedFireAlarmLevels()
 
 
   const afterResolveEvents =
