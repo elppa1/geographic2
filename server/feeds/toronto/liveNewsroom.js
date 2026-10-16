@@ -991,6 +991,8 @@ async function ensureLoaded() {
   // are never touched.
   await removeErroneousStandalonePoliceArrestCompanionStories()
 
+  await recoverFalsePositiveTpsAlreadyPublishedAcknowledgements()
+
 
   // Catch up TPS arrest / custody updates that were already observed but
   // never produced a RESOLVE card for an active wanted / suspect-sought pin.
@@ -1717,6 +1719,27 @@ function laterPendingTpsCaseRelease(record) {
   ) || null
 }
 
+// A shared TPS case number does not mean the same official release.
+// WANTED and later ARRESTED notices must remain distinct versions.
+function sameTpsOfficialRelease(a, b) {
+  const aCase = tpsCaseKey(a)
+  if (!aCase || aCase !== tpsCaseKey(b)) return false
+  const aTime = tpsReleaseDateMs(a)
+  const bTime = tpsReleaseDateMs(b)
+  if (aTime === null || bTime === null || aTime !== bTime) return false
+  const aTitle = cleanText(a?.tpsReleaseTitle || a?.title).toLowerCase()
+  const bTitle = cleanText(b?.tpsReleaseTitle || b?.title).toLowerCase()
+  return Boolean(aTitle && aTitle === bTitle)
+}
+
+function publishedTpsOfficialRelease(record) {
+  return Object.values(store.publishedNews || {}).find((published) =>
+    published?.active !== false &&
+    isTpsPublishedRecord(published) &&
+    sameTpsOfficialRelease(published, record)
+  ) || null
+}
+
 // TPS email attachments often reuse old photographs. An image-only alteration
 // must not create a new police release. Fire/TTC fingerprints are unchanged.
 function tpsFingerprint(record) {
@@ -1769,6 +1792,26 @@ async function observeRecord({
       externalId
     ] ||
     null
+
+
+  // Earlier Admin code acknowledged ALL police NEW cards when their
+  // case-based externalId matched a public pin. That incorrectly marked
+  // an unpublished newer arrest bulletin as "already-published". Do not
+  // let that false positive permanently block the actual pending update.
+  if (
+    sourceKey === 'police' &&
+    forceAction !== 'resolve' &&
+    record?.resolved !== true &&
+    policeRecordIsWantedSuspectArrestResolution(record) &&
+    cleanText(sourceExisting?.lastEditorialAction).toLowerCase() === 'already-published' &&
+    !publishedTpsOfficialRelease(record) &&
+    !laterPublishedTpsCaseRelease(record) &&
+    !laterPendingTpsCaseRelease(record)
+  ) {
+    sourceExisting.published = false
+    sourceExisting.lastEditorialAction = ''
+    sourceExisting.lastEditorialActionAt = ''
+  }
 
 
   // A genuine newer case update is still queued. Replayed OLDER releases
@@ -1878,9 +1921,12 @@ async function observeRecord({
       : sourceExisting
 
 
+  // Compare against the fingerprint saved when this release was ingested.
+  // Recomputing it from the enriched source-state object could manufacture
+  // a new TPS update when the identical release was replayed after approval.
   const previousFingerprint =
     ordinaryPoliceRelease && existing
-      ? tpsFingerprint(existing)
+      ? (existing.sourceFingerprint || tpsFingerprint(existing))
       : existing?.sourceFingerprint ||
         ''
 
@@ -3435,6 +3481,65 @@ async function removeErroneousStandalonePoliceArrestCompanionStories() {
 
 
     await persistStore()
+  }
+}
+
+
+// Repair only the queue state damaged by the old same-case auto-ACK.
+// Never touch published pins, regular acknowledgements, rejections, Fire,
+// TTC, or missing-person FOUND/LOCATED workflows.
+async function recoverFalsePositiveTpsAlreadyPublishedAcknowledgements() {
+  let repaired = 0
+  const now = new Date().toISOString()
+
+  for (const event of store.events || []) {
+    if (
+      event?.sourceKey !== 'police' ||
+      event?.status !== 'acked' ||
+      cleanText(event?.outcome).toLowerCase() !== 'already-published' ||
+      !['new', 'update'].includes(event?.newsroomAction) ||
+      event?.resolved === true ||
+      !policeRecordIsWantedSuspectArrestResolution(event) ||
+      policeRecordIsMissingOrElopeePerson(event) ||
+      !tpsCaseKey(event) ||
+      tpsReleaseDateMs(event) === null ||
+      publishedTpsOfficialRelease(event) ||
+      laterPublishedTpsCaseRelease(event) ||
+      laterPendingTpsCaseRelease(event)
+    ) continue
+
+    const otherPending = store.events.some((candidate) =>
+      candidate !== event &&
+      candidate.sourceKey === 'police' &&
+      candidate.status === 'pending' &&
+      candidate.newsroomAction !== 'resolve' &&
+      sameTpsOfficialRelease(candidate, event)
+    )
+    if (otherPending) continue
+
+    event.status = 'pending'
+    event.reviewStatus = 'pending'
+    event.outcome = ''
+    event.ackedAt = ''
+    event.approvedAt = ''
+    event.queuedAt = now
+    repaired++
+
+    const source = store.sources?.police?.[event.externalId]
+    if (
+      source &&
+      sameTpsOfficialRelease(source, event) &&
+      cleanText(source.lastEditorialAction).toLowerCase() === 'already-published'
+    ) {
+      source.published = false
+      source.lastEditorialAction = ''
+      source.lastEditorialActionAt = ''
+    }
+  }
+
+  if (repaired) {
+    await persistStore()
+    console.warn('LIVE NEWSROOM · RESTORED FALSE TPS AUTO-ACK CARDS:', repaired)
   }
 }
 

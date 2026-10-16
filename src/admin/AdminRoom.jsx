@@ -513,6 +513,25 @@ function sameTpsCase(
 }
 
 
+// Matching a TPS CASE is not proof that two bulletins are the same
+// RELEASE. A later arrest bulletin uses the same case identity as WANTED.
+// Require both an official broadcast timestamp and a matching headline.
+// If either is missing, do not automatically acknowledge the release.
+function sameTpsRelease(a, b) {
+  if (!sameTpsCase(a, b)) return false
+
+  const aTime = Date.parse(a?.tpsBroadcastAt || a?.publishedAt || '')
+  const bTime = Date.parse(b?.tpsBroadcastAt || b?.publishedAt || '')
+  if (!Number.isFinite(aTime) || !Number.isFinite(bTime) || aTime !== bTime) {
+    return false
+  }
+
+  const aHeadline = normalizeTpsIdentityPart(a?.tpsReleaseTitle || a?.title)
+  const bHeadline = normalizeTpsIdentityPart(b?.tpsReleaseTitle || b?.title)
+  return Boolean(aHeadline && bHeadline && aHeadline === bHeadline)
+}
+
+
 function sameTpsIncident(
   a,
   b
@@ -727,41 +746,12 @@ function hasProcessedTpsVersion(
 }
 
 
-function hasRejectedUnpublishedTpsIncident(
-  record
-) {
-  const identity =
-    getTpsIncidentIdentity(
-      record
-    )
-
-
-  if (
-    !identity
-  ) {
-    return false
-  }
-
-
-  const prefix =
-    identity +
-    '::'
-
-
-  return Object.entries(
-    getProcessedTpsVersions()
-  )
-    .some(
-      ([
-        key,
-        value,
-      ]) =>
-        key.startsWith(
-          prefix
-        ) &&
-        value?.status ===
-          'new-rejected'
-    )
+function hasRejectedUnpublishedTpsIncident(record) {
+  // A rejection applies to one official RELEASE, not every future update
+  // that reuses the same TPS case number / externalId.
+  const key = getTpsProcessedVersionKey(record)
+  if (!key) return false
+  return getProcessedTpsVersions()[key]?.status === 'new-rejected'
 }
 
 
@@ -8841,6 +8831,26 @@ function AdminRoom() {
           }
 
 
+          // A replayed older WANTED/photo bulletin must never replace a
+          // newer ARRESTED release already waiting for editorial approval.
+          if (
+            !isLocatedResolution &&
+            Number.isFinite(incomingDate) &&
+            nextTorontoReview.some((review) => {
+              if (!isTpsNewsroomRecord(review) ||
+                  getNewsroomAction(review) === 'resolve' ||
+                  !sameTpsCase(review, rawIncomingRecord)) return false
+              const reviewDate = Date.parse(
+                review.tpsBroadcastAt || review.publishedAt || ''
+              )
+              return Number.isFinite(reviewDate) && reviewDate > incomingDate
+            })
+          ) {
+            skipped++
+            return
+          }
+
+
           const existingReviewIndex =
             nextTorontoReview.findIndex(
               (
@@ -10967,7 +10977,12 @@ function AdminRoom() {
                   )
                   return Number.isFinite(publishedTime) &&
                     publishedTime > incomingTime
-                })) return
+                })) {
+              // Mark ONLY the superseded pending release as handled.
+              // The public pin is not altered by this acknowledgement.
+              autoAck.push(queueId)
+              return
+            }
           }
 
 
@@ -11001,15 +11016,29 @@ function AdminRoom() {
           // Reconcile those initial server NEW cards automatically instead
           // of asking the editor to publish the same pin twice.
           if (
-            action ===
-              'new' &&
-            matchingPublished
+            action === 'new' &&
+            matchingPublished &&
+            !isTpsNewsroomRecord(serverRecord)
           ) {
-            autoAck.push(
-              queueId
+            // Existing migration behaviour for TTC and Fire ONLY.
+            autoAck.push(queueId)
+            return
+          }
+
+          // For TPS, externalId may identify the whole case, not the
+          // individual bulletin. Only acknowledge a release when the
+          // actual same release is already approved and active on the map.
+          // WANTED -> PHOTOGRAPHS -> ARRESTED must reach approval separately.
+          if (
+            isTpsNewsroomRecord(serverRecord) &&
+            action !== 'resolve' &&
+            latestPublished.some((published) =>
+              published.active !== false &&
+              isTpsNewsroomRecord(published) &&
+              sameTpsRelease(published, serverRecord)
             )
-
-
+          ) {
+            autoAck.push(queueId)
             return
           }
 
