@@ -2629,6 +2629,10 @@ function policeRecordIsWantedSuspectArrestResolution(
   }
 
 
+  // The official TPS webhook checks the current headline and the lead of
+  // the actual release, not an old photo or historical narrative.
+  if (record?.tpsArrestConfirmed === true) return true
+
   const title =
     cleanText(
       record?.tpsReleaseTitle ||
@@ -2637,7 +2641,8 @@ function policeRecordIsWantedSuspectArrestResolution(
 
 
   if (
-    !title
+    !title ||
+    /\b(?:not|never|no one|nobody)\s+(?:been\s+)?arrested\b/i.test(title)
   ) {
     return false
   }
@@ -3571,6 +3576,12 @@ async function reconcilePublishedPoliceWantedSuspectResolutions() {
       )
 
 
+    // An arrest of one suspect does not clear a case if TPS says another
+    // suspect is still wanted. For older, unclassified releases, do not
+    // auto-close an active wanted pin on server startup.
+    if (target && sourceRecord?.tpsSuspectStillWanted !== false) continue
+
+
     const knownStoredResolution =
       sourceRecord?.resolved ===
         true &&
@@ -3882,7 +3893,11 @@ export async function queueLiveNewsroomRecord({
 
 
   if (
-    isWantedSuspectArrestResolution
+    isWantedSuspectArrestResolution &&
+    // Only resolve a wanted pin if TPS explicitly confirms that no suspect
+    // remains wanted in this release. Older stored releases without that
+    // metadata remain pending editorial review rather than guessing.
+    record?.tpsSuspectStillWanted === false
   ) {
     await ensureLoaded()
 
@@ -3955,57 +3970,50 @@ export async function queueLiveNewsroomRecord({
       }
 
 
+      // FIRST create a durable approvable copy of the arrest bulletin.
+      // Never archive a WANTED pin if a source-identity collision, stale
+      // acknowledgement, or store write prevented the replacement from
+      // reaching the newsroom.
+      const storyResult = await queuePoliceWantedSuspectResolutionStory({
+        ...record,
+        targetExternalId: target.externalId,
+        resolutionNoticeExternalId:
+          incomingExternalId || record?.resolutionNoticeExternalId || '',
+      })
+      const arrestStory = buildPoliceWantedSuspectResolutionStoryRecord({
+        ...record,
+        targetExternalId: target.externalId,
+        resolutionNoticeExternalId:
+          incomingExternalId || record?.resolutionNoticeExternalId || '',
+      })
+      const companionIsPending = Boolean(arrestStory && store.events.some((event) =>
+        event.sourceKey === 'police' &&
+        event.status === 'pending' &&
+        event.newsroomAction !== 'resolve' &&
+        event.externalId === arrestStory.externalId
+      ))
+      const companionIsPublished = Boolean(arrestStory && publishedTpsOfficialRelease(record))
+      if (!companionIsPending && !companionIsPublished) {
+        console.warn('TPS WANTED ARREST: arrest story not pending/published; retaining wanted pin:',
+          policeCaseNumberFromRecord(record))
+        return { action: 'seen', record, companionStory: storyResult,
+          warning: 'arrest-story-not-queued-wanted-pin-preserved' }
+      }
+
       await archivePublishedPoliceWantedSuspectPin({
         target,
-        record:
-          resolutionRecord,
+        record: resolutionRecord,
       })
 
-
       const resolutionWasAcknowledged =
-        policeWantedSuspectResolutionWasAcknowledged(
-          resolutionRecord
-        )
+        policeWantedSuspectResolutionWasAcknowledged(resolutionRecord)
+      const resolutionResult = resolutionWasAcknowledged
+        ? { action: 'seen', record: resolutionRecord }
+        : await observeRecord({
+            sourceKey, record: resolutionRecord, forceAction: 'resolve',
+          })
 
-
-      const resolutionResult =
-        resolutionWasAcknowledged
-          ? {
-              action:
-                'seen',
-
-              record:
-                resolutionRecord,
-            }
-          : await observeRecord({
-              sourceKey,
-              record:
-                resolutionRecord,
-              forceAction:
-                'resolve',
-            })
-
-
-      const storyResult =
-        await queuePoliceWantedSuspectResolutionStory({
-          ...record,
-
-          targetExternalId:
-            target.externalId,
-
-          resolutionNoticeExternalId:
-            incomingExternalId ||
-            record?.resolutionNoticeExternalId ||
-            '',
-        })
-
-
-      return {
-        ...resolutionResult,
-
-        companionStory:
-          storyResult,
-      }
+      return { ...resolutionResult, companionStory: storyResult }
     }
 
 

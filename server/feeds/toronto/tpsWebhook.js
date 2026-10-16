@@ -4015,6 +4015,23 @@ function buildExternalId({
 }
 
 
+// Confirm the CURRENT bulletin's arrest, not a historical arrest mentioned
+// somewhere in a long investigation recap. This metadata is only consulted
+// for non-missing TPS wanted/suspect updates by liveNewsroom.
+function tpsWantedArrestSignals({ subject, body }) {
+  const headline = cleanText(subject)
+  const text = cleanText(body)
+  const lead = text.split(/\b(?:See previous release|Previous release|It is reported that)\b/i)[0].slice(0, 1500)
+  const confirmedHeadline = /\b(?:arrested|arrests? made|taken into custody|in custody)\b/i.test(headline) &&
+    !/\b(?:not|never|no one|nobody)\s+(?:been\s+)?arrested\b/i.test(headline)
+  const confirmedLead = /\b(?:has|have|was|were|is|are|been)\s+(?:now\s+)?(?:located and\s+)?arrested\b|\barrest(?:s)?\s+(?:has|have|was|were)\s+been\s+made\b/i.test(lead) &&
+    !/\b(?:not|never|no one|nobody)\s+(?:been\s+)?arrested\b/i.test(lead)
+  // A later bulletin can arrest one suspect while expressly keeping another
+  // wanted. Do not close every wanted notice sharing that TPS case number.
+  const stillWanted = /\b(?:is|are|remains?|still)\s+(?:still\s+)?wanted\b|\bstill\s+(?:at large|outstanding)\b|\bcontinues?\s+to\s+be\s+wanted\b/i.test(text)
+  return { confirmed: Boolean(confirmedHeadline || confirmedLead), stillWanted: Boolean(stillWanted) }
+}
+
 // ============================================================
 // BUILD POLICE RECORD
 // ============================================================
@@ -4046,6 +4063,11 @@ async function buildPoliceRecord(
       body:
         email.body,
     })
+
+
+  const tpsWantedArrest = category === 'missing' || category === 'located'
+    ? { confirmed: false, stillWanted: false }
+    : tpsWantedArrestSignals({ subject: cleanedSubject, body: email.body })
 
 
   const subjectGeographic =
@@ -4300,6 +4322,11 @@ async function buildPoliceRecord(
     incidentNumber,
 
     caseNumber,
+
+    // Explicit bulletin status. The photo and a historical narrative must
+    // never supersede the official current arrest/wanted language.
+    tpsArrestConfirmed: tpsWantedArrest.confirmed,
+    tpsSuspectStillWanted: tpsWantedArrest.stillWanted,
 
     policeUnit:
       unit,
