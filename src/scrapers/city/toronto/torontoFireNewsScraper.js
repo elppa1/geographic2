@@ -1,3 +1,5 @@
+import { isExcludedTorontoFireCall } from '../../../fireCallFilter.js'
+
 const TORONTO_FIRE_ENDPOINT =
   (
     '/api/toronto/fire/' +
@@ -1235,6 +1237,7 @@ function parseFirePage(
     .filter(
       Boolean
     )
+    .filter((incident) => !isExcludedTorontoFireCall(incident))
     .map(
       buildRecord
     )

@@ -31,6 +31,8 @@ import {
   newsRecordIsLocallyRetained,
 } from '../newsPolicy.js'
 
+import { isExcludedTorontoFireCall } from '../fireCallFilter.js'
+
 
 const PUBLISHED_NEWS_ENDPOINT =
   '/api/geographic/toronto/news/published?status=all'
@@ -13313,6 +13315,7 @@ function MapPins({
                 cityKey
               )
           )
+          .filter((pin) => !isExcludedTorontoFireCall(pin))
           .filter(
             (pin) =>
               newsRecordMatchesHistoryRange({

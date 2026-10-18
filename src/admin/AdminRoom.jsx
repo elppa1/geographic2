@@ -63,6 +63,8 @@ import {
   getNewsTimeRemainingMs,
 } from '../newsPolicy.js'
 
+import { isExcludedTorontoFireCall } from '../fireCallFilter.js'
+
 import './AdminRoom.css'
 
 
@@ -10874,13 +10876,20 @@ function AdminRoom() {
         )
 
 
-      // The server's successful pending snapshot is authoritative for
-      // official TTC approval cards. Remove browser-cached TTC cards
-      // that were acknowledged after an alert left TTC's Current list.
-      // Do not alter local Police/Fire cards or unpublished manual work.
+      // Retroactive Fire call-type rejection. Only four named official CAD
+      // incident classifications are excluded; preserve all Fire escalation
+      // acknowledgements and every other newsroom source unchanged.
+      for (const record of torontoReview) {
+        if (isExcludedTorontoFireCall(record)) {
+          markScraperRecordProcessed(record, 'rejected')
+        }
+      }
+
+      // Keep the normal TTC reconciliation; remove only excluded cached
+      // Fire calls once the server has returned a valid pending snapshot.
       let nextTorontoReview = keepOnlyServerPendingTtcReviews(
-        torontoReview,
-        incoming
+        torontoReview.filter((record) => !isExcludedTorontoFireCall(record)),
+        incoming.filter((record) => !isExcludedTorontoFireCall(record))
       )
 
 

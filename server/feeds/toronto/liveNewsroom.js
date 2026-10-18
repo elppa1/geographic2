@@ -32,6 +32,8 @@ import {
   newsRecordIsCurrent,
 } from '../../../src/newsPolicy.js'
 
+import { isExcludedTorontoFireCall } from '../../../src/fireCallFilter.js'
+
 
 const __filename =
   fileURLToPath(
@@ -997,6 +999,10 @@ async function ensureLoaded() {
   // Catch up TPS arrest / custody updates that were already observed but
   // never produced a RESOLVE card for an active wanted / suspect-sought pin.
   await reconcilePublishedPoliceWantedSuspectResolutions()
+
+  // One-time catch-up for existing excluded Fire newsroom cards and live pins.
+  // Safe to repeat after restart; already processed records remain untouched.
+  await autoRejectExcludedFireCalls()
 }
 
 
@@ -1491,6 +1497,82 @@ async function addEvent({
 }
 
 
+// Retroactive, idempotent Fire CAD category cleanup. This acts only on
+// four unwanted call classifications. It intentionally does not change
+// Fire's UPDATE detection, peak alarm reconciliation, or acknowledgement flow.
+async function autoRejectExcludedFireCalls() {
+  const now = new Date().toISOString()
+  const changedEvents = []
+  const archivedPins = []
+  let changedSources = 0
+
+  for (const [id, source] of Object.entries(store.sources.fire || {})) {
+    if (!isExcludedTorontoFireCall(source)) continue
+    if (source.lastEditorialAction === 'auto-rejected-fire-call-type' &&
+        source.published === false) continue
+    store.sources.fire[id] = {
+      ...source,
+      published: false,
+      lastEditorialAction: 'auto-rejected-fire-call-type',
+      lastEditorialActionAt: now,
+    }
+    changedSources++
+  }
+
+  store.events = store.events.map((event) => {
+    if (event.sourceKey !== 'fire' || event.status !== 'pending' ||
+        !isExcludedTorontoFireCall(event)) return event
+    const rejected = {
+      ...event,
+      active: false,
+      status: 'acked',
+      reviewStatus: 'rejected',
+      outcome: 'auto-rejected-fire-call-type',
+      ackedAt: now,
+    }
+    changedEvents.push(rejected)
+    return rejected
+  })
+
+  for (const [identity, published] of Object.entries(store.publishedNews || {})) {
+    if (published?.active === false) continue
+    const source = store.sources.fire?.[published?.externalId]
+    if (!isExcludedTorontoFireCall(published) &&
+        !(source && isExcludedTorontoFireCall(source))) continue
+    const archived = {
+      ...published,
+      active: false,
+      archivedAt: now,
+      archiveReason: 'auto-rejected-fire-call-type',
+      serverUpdatedAt: now,
+    }
+    store.publishedNews[identity] = archived
+    archivedPins.push(archived)
+  }
+
+  if (!changedEvents.length && !archivedPins.length && !changedSources) return
+  await persistStore()
+  for (const event of changedEvents) {
+    await appendLedgerEvent({
+      eventType: 'editorial-action',
+      outcome: 'auto-rejected-fire-call-type',
+      record: event,
+    })
+  }
+  for (const record of archivedPins) {
+    await appendLedgerEvent({
+      eventType: 'published-news-archived',
+      outcome: 'auto-rejected-fire-call-type',
+      record,
+    })
+  }
+  console.log('FIRE CALL FILTER · automatically rejected/archived:', {
+    pending: changedEvents.length,
+    published: archivedPins.length,
+    sourceRecords: changedSources,
+  })
+}
+
 // ============================================================
 // FIRE NEWSROOM RULES
 // ============================================================
@@ -1792,6 +1874,19 @@ async function observeRecord({
       externalId
     ] ||
     null
+
+
+  // If an official Fire call was initially excluded but TTC Fire CAD later
+  // reclassifies it as an actual fire, let the normal NEW approval path run.
+  // This does NOT modify the published-Fire alarm escalation/update path.
+  if (
+    sourceKey === 'fire' &&
+    sourceExisting?.lastEditorialAction === 'auto-rejected-fire-call-type' &&
+    !isExcludedTorontoFireCall(record)
+  ) {
+    sourceExisting.lastEditorialAction = ''
+    sourceExisting.lastEditorialActionAt = ''
+  }
 
 
   // Earlier Admin code acknowledged ALL police NEW cards when their
@@ -5088,7 +5183,8 @@ function fireIncidentShouldBeReviewed({
     ) ||
     /^alarm single source\b/i.test(
       type
-    )
+    ) ||
+    isExcludedTorontoFireCall({ incidentType: type })
   )
 }
 
@@ -6611,18 +6707,29 @@ async function upsertPublishedNewsRecord({
       : null
 
 
+  const incomingHasOfficialFireType = Boolean(
+    cleanText(record?.incidentType || record?.fireIncidentType)
+  )
+  const rejectedFireCall =
+    isExcludedTorontoFireCall(record) ||
+    (!incomingHasOfficialFireType && existing &&
+      isExcludedTorontoFireCall(existing))
+
   const normalized =
     normalizePublishedNewsRecord({
-      record,
+      record: rejectedFireCall
+        ? { ...record, active: false }
+        : record,
       existing,
 
       active:
-        record?.active ===
-          false
+        rejectedFireCall || record?.active === false
           ? false
           : true,
 
-      archiveReason,
+      archiveReason: rejectedFireCall
+        ? 'auto-rejected-fire-call-type'
+        : archiveReason,
     })
 
 
