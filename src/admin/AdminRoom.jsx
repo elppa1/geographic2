@@ -20,6 +20,7 @@ import {
   initializeHistoricAdminPersistence,
   refreshHistoricAdminPersistence,
   getNewsItems,
+  rejectStoredExcludedTorontoFireRecords,
   getNewsReviewItems,
   getNewItems,
   getNewReviewItems,
@@ -6515,12 +6516,25 @@ function AdminRoom() {
 
       hydrateAdminStoresFromPostgres()
         .then(
-          () => {
+          async (result) => {
             if (
               cancelled
             ) {
               return
             }
+
+            // The Fire feed filter cannot clean records already stored in
+            // Postgres. Reject those after hydration, before displaying counts.
+            // Never write on a failed/non-authoritative Postgres read.
+            if (result?.authoritative === true) {
+              try {
+                await rejectStoredExcludedTorontoFireRecords()
+              } catch (error) {
+                console.error('TORONTO FIRE · STORED REJECTION FAILED:', error)
+              }
+            }
+
+            if (cancelled) return
 
 
             setAllNewsItems(
@@ -10925,6 +10939,7 @@ function AdminRoom() {
 
 
       const autoAck = []
+      const autoRejectFire = []
 
 
       incoming.forEach(
@@ -10945,6 +10960,15 @@ function AdminRoom() {
           const queueId =
             serverRecord.serverQueueId ||
             serverRecord.id
+
+
+          // A pre-existing server queue may still contain these four CAD
+          // types, even after the incoming Fire feed was filtered. Reject
+          // the specific Fire card without touching any real fire UPDATE.
+          if (isExcludedTorontoFireCall(serverRecord)) {
+            if (queueId) autoRejectFire.push(queueId)
+            return
+          }
 
 
           if (
@@ -11182,6 +11206,26 @@ function AdminRoom() {
       setAllNewsReviewItems(
         nextAllReview
       )
+
+
+      if (autoRejectFire.length > 0) {
+        try {
+          const response = await fetch(PERSISTENT_NEWSROOM_ACK_ENDPOINT, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+            },
+            body: JSON.stringify({
+              ids: autoRejectFire,
+              outcome: 'auto-rejected-fire-call-type',
+            }),
+          })
+          if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        } catch (error) {
+          console.warn('TORONTO FIRE · SERVER AUTO-REJECT FAILED:', error)
+        }
+      }
 
 
       if (

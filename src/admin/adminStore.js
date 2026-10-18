@@ -9,6 +9,8 @@ import {
   writeAdminStoreRecords,
 } from './adminStoreMirror.js'
 
+import { isExcludedTorontoFireCall } from '../fireCallFilter.js'
+
 
 const NEWS_KEY =
   'elppa-geographic-news'
@@ -335,6 +337,11 @@ function currentNewsRecords(
     )
     .filter(
       newsRecordIsCurrent
+    )
+    // The Fire CAD exclusion applies to PostgreSQL-hydrated legacy records,
+    // not just new Fire feed records. Never surface the four unwanted types.
+    .filter(
+      (record) => !isExcludedTorontoFireCall(record)
     )
 }
 
@@ -684,6 +691,95 @@ export function saveNewReviewItems(
     NEW_REVIEW_KEY,
     records
   )
+}
+
+
+// ============================================================
+// RETROACTIVE TORONTO FIRE REJECTION (POSTGRES ADMIN STORES)
+// ============================================================
+// Run only after an authoritative Postgres hydration in AdminRoom.
+// Keep rejected records as inactive/rejected audit history, rather than
+// deleting whole database records. This does not process alarm levels,
+// acknowledge Fire UPDATE events, or alter the server live-newsroom state.
+// ============================================================
+
+export async function rejectStoredExcludedTorontoFireRecords() {
+  const published = readRecords(NEWS_KEY)
+  const review = readRecords(NEWS_REVIEW_KEY)
+  const existingProcessed = readRecords(SCRAPER_PROCESSED_KEY)
+  const excluded = [...published, ...review].filter(isExcludedTorontoFireCall)
+  if (excluded.length === 0) return { archived: 0, rejected: 0 }
+
+  const now = new Date().toISOString()
+  let archived = 0
+  let rejected = 0
+
+  const nextPublished = published.map((record) => {
+    if (!isExcludedTorontoFireCall(record) || record.active === false) return record
+    archived++
+    return {
+      ...record,
+      active: false,
+      archivedAt: now,
+      archiveReason: 'auto-rejected-fire-call-type',
+    }
+  })
+
+  const nextReview = review.map((record) => {
+    if (!isExcludedTorontoFireCall(record) ||
+        (record.reviewStatus === 'rejected' &&
+         record.rejectionReason === 'auto-rejected-fire-call-type')) return record
+    rejected++
+    return {
+      ...record,
+      active: false,
+      reviewStatus: 'rejected',
+      status: record.status === 'pending' ? 'acked' : record.status,
+      outcome: 'auto-rejected-fire-call-type',
+      rejectionReason: 'auto-rejected-fire-call-type',
+      rejectedAt: now,
+    }
+  })
+
+  const processedById = new Map(
+    existingProcessed
+      .filter((item) => item && item.externalId)
+      .map((item) => [String(item.externalId), item])
+  )
+  const unkeyedProcessed = existingProcessed.filter((item) => !item?.externalId)
+  let addedProcessed = 0
+  for (const record of excluded) {
+    const externalId = String(record.externalId || '').trim()
+    if (!externalId || processedById.get(externalId)?.action === 'rejected') continue
+    processedById.set(externalId, {
+      ...processedById.get(externalId),
+      externalId,
+      city: 'toronto',
+      type: 'news',
+      action: 'rejected',
+      source: record.source || record.scraperSource || '',
+      title: record.title || '',
+      processedAt: now,
+    })
+    addedProcessed++
+  }
+
+  const writes = []
+  // Write rejection history before hiding any pending records.
+  if (addedProcessed) {
+    writes.push(writeAdminStoreRecords(
+      SCRAPER_PROCESSED_KEY, [...unkeyedProcessed, ...processedById.values()]
+    ))
+  }
+  if (archived) writes.push(writeAdminStoreRecords(NEWS_KEY, nextPublished))
+  if (rejected) writes.push(writeAdminStoreRecords(NEWS_REVIEW_KEY, nextReview))
+
+  const results = await Promise.all(writes)
+  if (results.some((ok) => ok !== true)) {
+    throw new Error('Toronto Fire cleanup could not persist all admin store changes.')
+  }
+
+  return { archived, rejected, addedProcessed }
 }
 
 
