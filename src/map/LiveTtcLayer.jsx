@@ -53,6 +53,8 @@ const STATION_LABELS_LAYER_ID =
   'ttc-live-station-labels'
 const VEHICLE_CIRCLE_LAYER_ID =
   'ttc-live-vehicle-circles'
+const VEHICLE_GLOW_LAYER_ID =
+  'ttc-live-vehicle-glow'
 const VEHICLE_ICON_LAYER_ID =
   'ttc-live-vehicle-icons'
 const STREETCAR_ICON_LAYER_ID =
@@ -4699,6 +4701,69 @@ function LiveTtcLayer({
 
         if (
           !map.getLayer(
+            VEHICLE_GLOW_LAYER_ID
+          )
+        ) {
+          map.addLayer({
+            id:
+              VEHICLE_GLOW_LAYER_ID,
+            type:
+              'circle',
+            source:
+              VEHICLES_SOURCE_ID,
+            minzoom:
+              VEHICLE_ICON_MIN_ZOOM,
+            paint: {
+              'circle-radius': [
+                'interpolate',
+                [
+                  'linear',
+                ],
+                [
+                  'zoom',
+                ],
+                5.5,
+                5.5,
+                9,
+                6.5,
+                11,
+                7.5,
+                13,
+                9.5,
+                15,
+                11.5,
+                17,
+                13,
+                18,
+                14,
+              ],
+              'circle-color':
+                '#ff3b30',
+              'circle-opacity': [
+                'interpolate',
+                [
+                  'linear',
+                ],
+                [
+                  'zoom',
+                ],
+                5.5,
+                0.24,
+                13,
+                0.26,
+                18,
+                0.3,
+              ],
+              'circle-blur':
+                0.9,
+              'circle-stroke-opacity':
+                0,
+            },
+          })
+        }
+
+        if (
+          !map.getLayer(
             VEHICLE_ICON_LAYER_ID
           )
         ) {
@@ -8579,6 +8644,7 @@ function LiveTtcLayer({
           VEHICLE_ROUTE_LABEL_LAYER_ID,
           STREETCAR_ICON_LAYER_ID,
           VEHICLE_ICON_LAYER_ID,
+          VEHICLE_GLOW_LAYER_ID,
           VEHICLE_CIRCLE_LAYER_ID,
           STATION_LABELS_LAYER_ID,
           STATIONS_LAYER_ID,
