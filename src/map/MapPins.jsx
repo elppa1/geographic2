@@ -8756,7 +8756,7 @@ function getHistoricMarkerScale(
 }
 
 
-// VISUAL ONLY: size HISTORIC, NEWS and COMMUNITY artwork by visible density.
+// VISUAL ONLY: size HISTORIC, NEWS and all TO-DO pin artwork by screen density.
 // Does not hide, move, reclassify, prioritize or change any pin record.
 // Works at citywide and street zoom; measures distances in screen pixels.
 function getDensityScaledPinSizes(map, items, activePinFilter) {
@@ -8777,15 +8777,7 @@ function getDensityScaledPinSizes(map, items, activePinFilter) {
   const projected = []
 
   items.forEach((item, index) => {
-    // COMMUNITY is a subtype of the existing NEW/To-Do pin layer.
-    // Measure and scale community contributions only; never resize
-    // Businesses, Top Eats, Events or the other NEW subtypes.
-    const isCommunityItem =
-      activePinFilter === 'new' &&
-      item?.pinType === 'new' &&
-      item?.pin &&
-      newPinMatchesSubtype(item.pin, 'community')
-    if (activePinFilter === 'new' ? !isCommunityItem : item.pinType !== activePinFilter) return
+    if (item.pinType !== activePinFilter) return
     const latitude = Number(item?.pin?.latitude)
     const longitude = Number(item?.pin?.longitude)
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return
@@ -9171,10 +9163,6 @@ function createMarker({
       element,
       newCommunityIcon.emoji
     )
-
-    // Same artwork-only adaptive sizing as HISTORIC and NEWS.
-    // The button stays 32px for touch/click accessibility.
-    scalePinEmojiArtwork(element, visualScale)
   }
   else if (
     newBusinessIcon
@@ -9462,6 +9450,14 @@ function createMarker({
       pin,
       pinType,
     })
+  }
+
+  // TO-DO is the entire NEW layer. Apply the same artwork-only density
+  // scaling to ALL its icon types (Community, Businesses, Top Eats,
+  // Sports & Rec, Events, Real Estate, and later TO-DO categories).
+  // The 32px click target, map coordinates and popup logic never change.
+  if (pinType === 'new') {
+    scalePinEmojiArtwork(element, visualScale)
   }
 
   element.classList.add(
