@@ -55,6 +55,8 @@ const VEHICLE_CIRCLE_LAYER_ID =
   'ttc-live-vehicle-circles'
 const VEHICLE_GLOW_LAYER_ID =
   'ttc-live-vehicle-glow'
+const VEHICLE_GLOW_OUTER_LAYER_ID =
+  'ttc-live-vehicle-glow-outer'
 const VEHICLE_ICON_LAYER_ID =
   'ttc-live-vehicle-icons'
 const STREETCAR_ICON_LAYER_ID =
@@ -4701,9 +4703,62 @@ function LiveTtcLayer({
 
         if (
           !map.getLayer(
+            VEHICLE_GLOW_OUTER_LAYER_ID
+          )
+        ) {
+          // A wide, diffused red halo stays visible beyond the opaque vehicle art.
+          // This is purely visual: no extra fetch, position update or movement.
+          map.addLayer({
+            id:
+              VEHICLE_GLOW_OUTER_LAYER_ID,
+            type:
+              'circle',
+            source:
+              VEHICLES_SOURCE_ID,
+            minzoom:
+              VEHICLE_ICON_MIN_ZOOM,
+            paint: {
+              'circle-radius': [
+                'interpolate',
+                [
+                  'linear',
+                ],
+                [
+                  'zoom',
+                ],
+                5.5,
+                9.5,
+                9,
+                11.5,
+                11,
+                13.5,
+                13,
+                18,
+                15,
+                23,
+                17,
+                26,
+                18,
+                28,
+              ],
+              'circle-color':
+                '#ff2525',
+              'circle-opacity':
+                0.55,
+              'circle-blur':
+                0.75,
+              'circle-stroke-opacity':
+                0,
+            },
+          })
+        }
+
+        if (
+          !map.getLayer(
             VEHICLE_GLOW_LAYER_ID
           )
         ) {
+          // Smaller brighter center creates the subtle red edge under bus/streetcar.
           map.addLayer({
             id:
               VEHICLE_GLOW_LAYER_ID,
@@ -4723,39 +4778,26 @@ function LiveTtcLayer({
                   'zoom',
                 ],
                 5.5,
-                5.5,
+                6.8,
                 9,
-                6.5,
+                8.5,
                 11,
-                7.5,
+                10.5,
                 13,
-                9.5,
-                15,
-                11.5,
-                17,
-                13,
-                18,
                 14,
+                15,
+                19.5,
+                17,
+                22,
+                18,
+                24,
               ],
               'circle-color':
-                '#ff3b30',
-              'circle-opacity': [
-                'interpolate',
-                [
-                  'linear',
-                ],
-                [
-                  'zoom',
-                ],
-                5.5,
-                0.24,
-                13,
-                0.26,
-                18,
-                0.3,
-              ],
+                '#ff3030',
+              'circle-opacity':
+                0.76,
               'circle-blur':
-                0.9,
+                0.52,
               'circle-stroke-opacity':
                 0,
             },
@@ -8645,6 +8687,7 @@ function LiveTtcLayer({
           STREETCAR_ICON_LAYER_ID,
           VEHICLE_ICON_LAYER_ID,
           VEHICLE_GLOW_LAYER_ID,
+          VEHICLE_GLOW_OUTER_LAYER_ID,
           VEHICLE_CIRCLE_LAYER_ID,
           STATION_LABELS_LAYER_ID,
           STATIONS_LAYER_ID,
