@@ -1,7 +1,7 @@
 // Toronto Fire CAD call-type exclusion policy.
 // Match the OFFICIAL incident classification, never the free-text description,
 // alarm level or responding unit types. Keep higher-alarm fire handling intact.
-const excludedFireType = /^(?:check[\s-]*calls?|water[\s-]*problems?|haz[\s-]*mat(?:erials)?|hazardous[\s-]*materials?|elevator[\s-]*rescues?)\b/i
+const excludedFireType = /^(?:fire[\s-]*alarm[\s\-/:]*check[\s-]*calls?|check[\s-]*calls?|water[\s-]*problems?|haz[\s-]*mat(?:erials)?|hazardous[\s-]*materials?|elevator[\s-]*rescues?|rescue[\s\-/:]*elevators?)\b/i
 
 export function isExcludedTorontoFireCall(record) {
   if (!record || typeof record !== 'object') return false
@@ -28,12 +28,12 @@ export function isExcludedTorontoFireCall(record) {
     record.incomingRecord?.incidentType ||
     ''
   ).trim()
-  if (incidentType) return excludedFireType.test(incidentType)
+  if (incidentType) return excludedFireType.test(incidentType.replace(/[–—−]/g, '-'))
 
   if (category !== 'fire' && !officialFire) return false
 
   // Legacy official Fire headlines start with their incident classification.
   // No matching against the rest of the title or the description.
-  const titleType = String(record.title || '').split(/\s+[·|–—]\s+/)[0].trim()
-  return excludedFireType.test(titleType)
+  const titleType = String(record.title || '').trim()
+  return excludedFireType.test(titleType.replace(/[–—−]/g, '-'))
 }
