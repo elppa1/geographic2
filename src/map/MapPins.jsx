@@ -13347,15 +13347,23 @@ function MapPins({
           )
 
 
+      // CURATED alone uses the editorial citywide pin cap.
+      // An explicitly selected time range is an exploration request:
+      // widening 7 DAYS to 30 DAYS or ALL must never hide eligible pins.
+      // Keep the existing archive, Fire classification and approval
+      // filters above unchanged.
       const limitedNews =
-        limitCityNewsPins({
-          pins:
-            scaleVisibleNews,
+        newsRangeFilter ===
+          'curated'
+          ? limitCityNewsPins({
+              pins:
+                scaleVisibleNews,
 
-          zoom,
+              zoom,
 
-          selectedPinId,
-        })
+              selectedPinId,
+            })
+          : scaleVisibleNews
 
 
       visiblePins =
