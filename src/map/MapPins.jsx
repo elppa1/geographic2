@@ -8756,14 +8756,14 @@ function getHistoricMarkerScale(
 }
 
 
-// VISUAL ONLY: size pin artwork according to current screen density.
+// VISUAL ONLY: size HISTORIC, NEWS and COMMUNITY artwork by visible density.
 // Does not hide, move, reclassify, prioritize or change any pin record.
 // Works at citywide and street zoom; measures distances in screen pixels.
 function getDensityScaledPinSizes(map, items, activePinFilter) {
   const scales = items.map(() => 1)
   if (
     !map?.project ||
-    !['historic', 'news'].includes(activePinFilter)
+    !['historic', 'news', 'new'].includes(activePinFilter)
   ) return scales
 
   const container = map.getContainer?.()
@@ -8777,7 +8777,15 @@ function getDensityScaledPinSizes(map, items, activePinFilter) {
   const projected = []
 
   items.forEach((item, index) => {
-    if (item.pinType !== activePinFilter) return
+    // COMMUNITY is a subtype of the existing NEW/To-Do pin layer.
+    // Measure and scale community contributions only; never resize
+    // Businesses, Top Eats, Events or the other NEW subtypes.
+    const isCommunityItem =
+      activePinFilter === 'new' &&
+      item?.pinType === 'new' &&
+      item?.pin &&
+      newPinMatchesSubtype(item.pin, 'community')
+    if (activePinFilter === 'new' ? !isCommunityItem : item.pinType !== activePinFilter) return
     const latitude = Number(item?.pin?.latitude)
     const longitude = Number(item?.pin?.longitude)
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return
@@ -8803,6 +8811,7 @@ function getDensityScaledPinSizes(map, items, activePinFilter) {
   // is visually denser. Never use the whole database's record count.
   const pinsPerTile = projected.length / Math.max(1, (width * height) / 12000)
   const globalScale = 1 / (1 + 0.14 * Math.max(0, pinsPerTile - 0.65))
+  // Community shares the Historic floor (0.62); NEWS stays 0.68.
   const floor = activePinFilter === 'news' ? 0.68 : 0.62
 
   projected.forEach(({index, x, y, cx, cy}) => {
@@ -9162,6 +9171,10 @@ function createMarker({
       element,
       newCommunityIcon.emoji
     )
+
+    // Same artwork-only adaptive sizing as HISTORIC and NEWS.
+    // The button stays 32px for touch/click accessibility.
+    scalePinEmojiArtwork(element, visualScale)
   }
   else if (
     newBusinessIcon
