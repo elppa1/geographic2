@@ -8756,12 +8756,94 @@ function getHistoricMarkerScale(
 }
 
 
+// VISUAL ONLY: size pin artwork according to current screen density.
+// Does not hide, move, reclassify, prioritize or change any pin record.
+// Works at citywide and street zoom; measures distances in screen pixels.
+function getDensityScaledPinSizes(map, items, activePinFilter) {
+  const scales = items.map(() => 1)
+  if (
+    !map?.project ||
+    !['historic', 'news'].includes(activePinFilter)
+  ) return scales
+
+  const container = map.getContainer?.()
+  const width = Number(container?.clientWidth)
+  const height = Number(container?.clientHeight)
+  if (!(width > 0 && height > 0)) return scales
+
+  const cellSize = 68
+  const neighborDistanceSquared = cellSize * cellSize
+  const cells = new Map()
+  const projected = []
+
+  items.forEach((item, index) => {
+    if (item.pinType !== activePinFilter) return
+    const latitude = Number(item?.pin?.latitude)
+    const longitude = Number(item?.pin?.longitude)
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return
+
+    const point = map.project([longitude, latitude])
+    const x = Number(point?.x) + Number(item?.markerOffset?.[0] || 0)
+    const y = Number(point?.y) + Number(item?.markerOffset?.[1] || 0)
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return
+    if (x < -16 || x > width + 16 || y < -16 || y > height + 16) return
+
+    const cx = Math.floor(x / cellSize)
+    const cy = Math.floor(y / cellSize)
+    const key = `${cx},${cy}`
+    const bucket = cells.get(key) || []
+    const entry = { index, x, y, cx, cy }
+    bucket.push(entry)
+    cells.set(key, bucket)
+    projected.push(entry)
+  })
+
+  // Global pressure: a busy visible map reduces artwork moderately.
+  // The map AREA matters: the same number of pins on a smaller display
+  // is visually denser. Never use the whole database's record count.
+  const pinsPerTile = projected.length / Math.max(1, (width * height) / 12000)
+  const globalScale = 1 / (1 + 0.14 * Math.max(0, pinsPerTile - 0.65))
+  const floor = activePinFilter === 'news' ? 0.68 : 0.62
+
+  projected.forEach(({index, x, y, cx, cy}) => {
+    let nearby = 0
+    neighborSearch: for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const neighbors = cells.get(`${cx + dx},${cy + dy}`) || []
+        for (const neighbor of neighbors) {
+          const deltaX = x - neighbor.x
+          const deltaY = y - neighbor.y
+          if (deltaX * deltaX + deltaY * deltaY <= neighborDistanceSquared) nearby++
+          if (nearby >= 10) break neighborSearch // already at minimum artwork size
+        }
+      }
+    }
+    const localScale = 1 / (1 + 0.09 * Math.max(0, nearby - 1))
+    scales[index] = Math.max(floor, Math.min(1, globalScale, localScale))
+  })
+
+  return scales
+}
+
+// Preserve the original 32px click target and the existing pulse animation.
+// Only the native coloured emoji artwork becomes smaller; do not use CSS
+// transform here because Police/Fire pulsation already animates that property.
+function scalePinEmojiArtwork(element, visualScale) {
+  const glyph = element?.firstElementChild
+  if (!glyph) return
+  const baseFontPx = parseFloat(glyph.style.fontSize)
+  if (!Number.isFinite(baseFontPx)) return
+  const scale = Number.isFinite(visualScale) ? Math.max(0.6, Math.min(1, visualScale)) : 1
+  glyph.style.fontSize = `${(baseFontPx * scale).toFixed(2)}px`
+}
+
 function createMarker({
   map,
   pin,
   pinType,
   markerOffset =
     [0, 0],
+  visualScale = 1,
   city,
   selectedLayer,
   homeLayer,
@@ -8939,6 +9021,8 @@ function createMarker({
       historicIcon.emoji
     )
 
+    scalePinEmojiArtwork(element, visualScale)
+
 
     // Use the same emoji sizing as Police / Fire / TTC news markers.
     // appendEmojiMarkerIcon() already applies the correct desktop/mobile size.
@@ -9009,6 +9093,8 @@ function createMarker({
       element,
       newsEmoji
     )
+
+    scalePinEmojiArtwork(element, visualScale)
 
 
     applyMarkerActivityPulse({
@@ -13680,6 +13766,12 @@ function MapPins({
         historicLayerPulseRef.current.pulseUntil
 
 
+    const densityVisualScales = getDensityScaledPinSizes(
+      map,
+      visiblePins,
+      activePinFilter
+    )
+
     visiblePins.forEach(
       ({
         pin,
@@ -13825,6 +13917,7 @@ function MapPins({
             pin,
             pinType,
             markerOffset,
+            visualScale: densityVisualScales[visibleIndex],
             city,
             selectedLayer,
             homeLayer,
