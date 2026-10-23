@@ -4716,7 +4716,7 @@ function LiveTtcLayer({
             source:
               VEHICLES_SOURCE_ID,
             minzoom:
-              VEHICLE_ICON_MIN_ZOOM,
+              14,
             paint: {
               'circle-radius': [
                 'interpolate',
@@ -4751,14 +4751,8 @@ function LiveTtcLayer({
                 [
                   'zoom',
                 ],
-                5.5,
-                0.38,
-                9,
-                0.39,
-                11,
-                0.4,
-                13,
-                0.43,
+                14,
+                0,
                 15,
                 0.55,
                 17,
@@ -4788,7 +4782,7 @@ function LiveTtcLayer({
             source:
               VEHICLES_SOURCE_ID,
             minzoom:
-              VEHICLE_ICON_MIN_ZOOM,
+              14,
             paint: {
               'circle-radius': [
                 'interpolate',
@@ -4823,14 +4817,8 @@ function LiveTtcLayer({
                 [
                   'zoom',
                 ],
-                5.5,
-                0.5,
-                9,
-                0.52,
-                11,
-                0.55,
-                13,
-                0.6,
+                14,
+                0,
                 15,
                 0.76,
                 17,
