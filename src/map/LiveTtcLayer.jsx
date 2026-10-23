@@ -4718,7 +4718,7 @@ function LiveTtcLayer({
             source:
               VEHICLES_SOURCE_ID,
             minzoom:
-              14,
+              12.5,
             paint: {
               'circle-radius': [
                 'interpolate',
@@ -4753,9 +4753,9 @@ function LiveTtcLayer({
                 [
                   'zoom',
                 ],
-                14,
+                12.5,
                 0,
-                15,
+                13.5,
                 0.55,
                 17,
                 0.55,
@@ -4784,7 +4784,7 @@ function LiveTtcLayer({
             source:
               VEHICLES_SOURCE_ID,
             minzoom:
-              14,
+              12.5,
             paint: {
               'circle-radius': [
                 'interpolate',
@@ -4819,9 +4819,9 @@ function LiveTtcLayer({
                 [
                   'zoom',
                 ],
-                14,
+                12.5,
                 0,
-                15,
+                13.5,
                 0.76,
                 17,
                 0.76,
