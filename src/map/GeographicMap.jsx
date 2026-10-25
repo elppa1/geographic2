@@ -1953,7 +1953,7 @@ const GeographicMap =
                 ? (
                     desktopSnap
                       ? 15.8
-                      : 15.0
+                      : 14.4
                   )
                 : Math.max(
                     map.getZoom(),
