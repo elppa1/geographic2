@@ -1037,13 +1037,22 @@ async function persistStore() {
         )
 
 
-        void writePostgresDocument({
+        // Await the durable mirror before reporting the newsroom save complete.
+        // The helper returns false rather than throwing if Postgres is unavailable;
+        // preserve the existing local fallback, but make that failure visible.
+        const postgresSaved = await writePostgresDocument({
           storeKey:
             'toronto-live-newsroom',
 
           payload:
             store,
         })
+
+        if (!postgresSaved) {
+          console.error(
+            'LIVE NEWSROOM · POSTGRES SAVE UNCONFIRMED; local snapshot saved.'
+          )
+        }
       }
     )
 
