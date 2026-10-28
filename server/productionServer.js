@@ -846,19 +846,22 @@ async function readRequestBuffer(
     []
 
 
+  let totalBytes = 0
+  const maximumBytes = 16 * 1024 * 1024
   for await (
     const chunk of
     req
   ) {
-    chunks.push(
-      chunk
-    )
+    totalBytes += chunk.length
+    if (totalBytes > maximumBytes) {
+      const error = new Error('Proxy request body too large')
+      error.statusCode = 413
+      throw error
+    }
+    chunks.push(chunk)
   }
 
-
-  return Buffer.concat(
-    chunks
-  )
+  return Buffer.concat(chunks, totalBytes)
 }
 
 
@@ -1250,13 +1253,12 @@ async function handleProxyOrStatic(
 
       sendJson(
         res,
-        502,
+        error.statusCode === 413 ? 413 : 502,
         {
-          ok:
-            false,
-
-          error:
-            'Proxy request failed',
+          ok: false,
+          error: error.statusCode === 413
+            ? 'Request body too large'
+            : 'Proxy request failed',
         }
       )
     }
@@ -1347,6 +1349,63 @@ async function handleProxyOrStatic(
 const middlewareStack =
   createMiddlewareStack()
 
+
+// Safe, bounded ingress protection. No feed or newsroom logic is changed.
+const ingressCounters = new Map()
+let ingressLastSweep = 0
+
+function hardenIncomingRequest(req, res, next) {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+  res.setHeader('X-Frame-Options', 'DENY')
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), payment=()')
+
+  const path = new URL(req.url || '/', 'http://localhost').pathname
+  const method = String(req.method || 'GET').toUpperCase()
+  const admin = requestNeedsAdminAuth(req)
+  const api = path.startsWith('/api/')
+  const isWebhook = path === '/api/geographic/toronto/police/incoming'
+
+  // Applies to declared Content-Length. Streaming bodies also need bounded
+  // readers in individual handlers; this is a first-line rejection guard.
+  const maxBody = isWebhook ? 256 * 1024 : 16 * 1024 * 1024
+  const rawLength = req.headers['content-length']
+  const declared = rawLength === undefined ? 0 : Number(rawLength)
+  if (rawLength !== undefined && (!Number.isSafeInteger(declared) || declared < 0 || declared > maxBody)) {
+    res.setHeader('Connection', 'close')
+    sendText(res, 413, 'Request body too large.')
+    return
+  }
+
+  // Conservative per-connection-IP limits. Railway reverse proxies may group
+  // multiple visitors under one address, so limits are intentionally generous.
+  // Do not trust user-supplied X-Forwarded-For for security decisions.
+  if (api || admin) {
+    const now = Date.now()
+    const window = Math.floor(now / 60000)
+    const ip = req.socket.remoteAddress || 'unknown'
+    const bucket = admin ? 'admin' : 'api'
+    const key = ip + ':' + bucket + ':' + window
+    const used = (ingressCounters.get(key) || 0) + 1
+    ingressCounters.set(key, used)
+    if (now - ingressLastSweep > 120000) {
+      ingressLastSweep = now
+      for (const k of ingressCounters.keys()) {
+        const w = Number(k.slice(k.lastIndexOf(':') + 1))
+        if (w < window - 1) ingressCounters.delete(k)
+      }
+    }
+    const limit = admin ? 120 : 1200
+    if (used > limit) {
+      res.setHeader('Retry-After', '60')
+      sendText(res, 429, 'Too many requests. Please retry shortly.')
+      return
+    }
+  }
+  next()
+}
+
+middlewareStack.use(hardenIncomingRequest)
 
 middlewareStack.use(
   adminAuthMiddleware
