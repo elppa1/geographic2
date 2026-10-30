@@ -2702,35 +2702,55 @@ async function fetchRealtimeFeed(
 
 // TripUpdate provenance is carried with the decoded data, so a response never
 // attributes predictions from the legacy fallback URL to BusTime by mistake.
+// The shared tripUpdatePromise above already serializes refreshes. These
+// counters ONLY suppress futile primary retries; the legacy feed remains live.
+const TTC_PRIMARY_FAILURE_LIMIT = 3
+const TTC_PRIMARY_COOLDOWN_MS = 2 * 60 * 1000
+let ttcPrimaryConsecutiveFailures = 0
+let ttcPrimaryRetryAfter = 0
+
 async function fetchRealtimeFeedWithFallback(
   primaryUrl,
   fallbackUrl
 ) {
-  try {
-    return {
-      feed: await fetchRealtimeFeed(primaryUrl),
-      upstream: primaryUrl,
-      usedLegacyFallback: false,
-    }
-  }
-  catch (primaryError) {
+  const primaryCoolingDown = Date.now() < ttcPrimaryRetryAfter
+  let primaryError = null
+
+  if (!primaryCoolingDown) {
     try {
-      const feed = await fetchRealtimeFeed(fallbackUrl)
-      console.warn(
-        'LIVE TTC TRIPS: primary unavailable; using legacy fallback:',
-        primaryError?.message || primaryError
-      )
+      const feed = await fetchRealtimeFeed(primaryUrl)
+      ttcPrimaryConsecutiveFailures = 0
+      ttcPrimaryRetryAfter = 0
       return {
         feed,
-        upstream: fallbackUrl,
-        usedLegacyFallback: true,
+        upstream: primaryUrl,
+        usedLegacyFallback: false,
       }
     }
-    catch (fallbackError) {
-      throw new Error(
-        `TTC realtime feeds unavailable: primary: ${primaryError?.message || primaryError}; fallback: ${fallbackError?.message || fallbackError}`
-      )
+    catch (error) {
+      primaryError = error
+      ttcPrimaryConsecutiveFailures += 1
+      if (ttcPrimaryConsecutiveFailures >= TTC_PRIMARY_FAILURE_LIMIT) {
+        ttcPrimaryRetryAfter = Date.now() + TTC_PRIMARY_COOLDOWN_MS
+        console.warn('LIVE TTC TRIPS: primary retry paused for 2 minutes after repeated failures')
+      } else {
+        console.warn('LIVE TTC TRIPS: primary unavailable; using legacy fallback:', error?.message || error)
+      }
     }
+  }
+
+  try {
+    const feed = await fetchRealtimeFeed(fallbackUrl)
+    return {
+      feed,
+      upstream: fallbackUrl,
+      usedLegacyFallback: true,
+    }
+  }
+  catch (fallbackError) {
+    throw new Error(
+      `TTC realtime feeds unavailable: primary: ${primaryCoolingDown ? 'cooldown active' : (primaryError?.message || primaryError)}; fallback: ${fallbackError?.message || fallbackError}`
+    )
   }
 }
 
