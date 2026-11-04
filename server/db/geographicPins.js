@@ -406,13 +406,24 @@ async function writeStoreAtomic(
   )
 
 
-  void writePostgresDocument({
-    storeKey:
-      'geographic-published-pins',
+  // Apply backpressure: do not queue another full-store Postgres mirror
+  // snapshot while this one is still in flight. The local atomic file
+  // write above remains authoritative if the optional mirror fails.
+  try {
+    await writePostgresDocument({
+      storeKey:
+        'geographic-published-pins',
 
-    payload:
-      nextStore,
-  })
+      payload:
+        nextStore,
+    })
+  }
+  catch (error) {
+    console.error(
+      'GEOGRAPHIC PIN STORE · POSTGRES MIRROR FAILED:',
+      error?.message || error
+    )
+  }
 
 
   return nextStore
