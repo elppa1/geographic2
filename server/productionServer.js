@@ -1494,6 +1494,25 @@ plugins.forEach(
 )
 
 
+// Diagnostic only: sample process memory without changing feed or request behavior.
+// The timer is unref'd so it cannot keep the server alive by itself.
+function logGeographicMemory() {
+  const bytes = process.memoryUsage()
+  const toMb = (value) => Math.round(value / 1024 / 1024)
+  console.log('GEOGRAPHIC MEMORY SAMPLE', {
+    at: new Date().toISOString(),
+    uptimeSeconds: Math.round(process.uptime()),
+    heapUsedMb: toMb(bytes.heapUsed),
+    heapTotalMb: toMb(bytes.heapTotal),
+    rssMb: toMb(bytes.rss),
+    externalMb: toMb(bytes.external),
+    arrayBuffersMb: toMb(bytes.arrayBuffers),
+  })
+}
+
+logGeographicMemory()
+setInterval(logGeographicMemory, 60 * 1000).unref()
+
 httpServer.listen(
   PORT,
   HOST,
