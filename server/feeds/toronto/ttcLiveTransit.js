@@ -90,6 +90,8 @@ let surfaceCache = null
 let surfacePromise = null
 let stationsCache = null
 let stationsPromise = null
+const STATION_INDEX_RETRY_MS = 5 * 60 * 1000
+let stationIndexLastFailureAt = 0
 
 let vehicleCache = null
 let vehiclePromise = null
@@ -1918,6 +1920,16 @@ async function getStationIndex() {
     return stationsPromise
   }
 
+  // Avoid repeated downloads of an invalid/unavailable station archive.
+  // Surface bus/streetcar data remains independent of this station index.
+  if (
+    stationsCache &&
+    stationsCache.loadedAt === 0 &&
+    Date.now() - stationIndexLastFailureAt < STATION_INDEX_RETRY_MS
+  ) {
+    return stationsCache
+  }
+
   stationsPromise =
     buildStationIndex()
       .then(
@@ -1926,6 +1938,7 @@ async function getStationIndex() {
         ) => {
           stationsCache =
             index
+          stationIndexLastFailureAt = 0
           return index
         }
       )
@@ -1949,6 +1962,7 @@ async function getStationIndex() {
               new Map(),
           }
 
+          stationIndexLastFailureAt = Date.now()
           stationsCache =
             fallback
           return fallback
@@ -6449,10 +6463,8 @@ export function ttcLiveTransitFeed() {
                 ) ===
                   '1'
               ) {
+                // warmTripUpdateFeed handles its own asynchronous errors.
                 warmTripUpdateFeed()
-                  .catch(
-                    () => {}
-                  )
                 warmVehicleFeed()
 
                 if (
