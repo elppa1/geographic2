@@ -45,6 +45,7 @@ import {
 } from '../scrapers/index.js'
 
 import LocationSearch from './LocationSearch.jsx'
+import TtcRouteStopSearch from './TtcRouteStopSearch.jsx'
 import AdminPinMap from './AdminPinMap.jsx'
 import HistoricPreviewMap from './HistoricPreviewMap.jsx'
 
@@ -13658,6 +13659,28 @@ function AdminRoom() {
   }
 
 
+  function addSearchedTtcRouteStop(result) {
+    const longitude = Number(result?.longitude)
+    const latitude = Number(result?.latitude)
+
+    if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
+      return
+    }
+
+    const stops = normalizeTtcRouteStops(draft.ttcRouteStops)
+
+    changeTtcRouteStops([
+      ...stops,
+      {
+        id: `ttc-route-stop-${Date.now()}-${stops.length + 1}`,
+        label: String(result.intersection || result.location || result.name || '').trim(),
+        longitude,
+        latitude,
+      },
+    ])
+  }
+
+
   function updateTtcRouteStopLabel(
     index,
     label
@@ -21967,7 +21990,7 @@ function AdminRoom() {
 
                 {draft.ttcRouteEnabled && (
                   <div className="admin-pin-position-note">
-                    CLICK THE MAP BELOW TO ADD STOPS IN ORDER. THE PUBLIC MAP WILL SHOW PINS ONLY AT THE FIRST AND LAST STOP.
+                    SEARCH FOR EACH STOP BELOW, OR CLICK THE MAP TO ADD STOPS IN ORDER. THE PUBLIC MAP WILL SHOW A BUS ICON AT EVERY STOP.
                   </div>
                 )}
               </div>
@@ -22059,6 +22082,14 @@ function AdminRoom() {
                   </div>
                 )}
 
+                {draft.ttcRouteEnabled && (
+                  <TtcRouteStopSearch
+                    city={city}
+                    nextStopNumber={normalizeTtcRouteStops(draft.ttcRouteStops).length + 1}
+                    onSelect={addSearchedTtcRouteStop}
+                  />
+                )}
+
                 <AdminPinMap
                   city={
                     city
@@ -22110,9 +22141,9 @@ function AdminRoom() {
                                 ? ''
                                 : 'S'
                             ) +
-                            ' · CLICK THE MAP TO ADD THE NEXT STOP.'
+                            ' · SEARCH ABOVE OR CLICK THE MAP TO ADD THE NEXT STOP.'
                           )
-                        : 'CLICK THE MAP TO ADD THE START STOP.'
+                        : 'SEARCH ABOVE OR CLICK THE MAP TO ADD THE START STOP.'
                     )
                   : (
                       draft.pinPositionMode ===

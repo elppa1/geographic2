@@ -13820,61 +13820,31 @@ function MapPins({
           }
 
 
-          const endpoints = [
-            {
-              ...pin,
+          // Every selected route stop is a public TTC bus marker.
+          // Reuse the existing TTC marker/popup implementation.
+          const stopPins = routeStops.map((stop, stopIndex) => ({
+            ...pin,
+            longitude: stop.longitude,
+            latitude: stop.latitude,
+            location: stop.label || pin.location,
+            ttcRouteEndpoint:
+              stopIndex === 0
+                ? 'start'
+                : stopIndex === routeStops.length - 1
+                  ? 'end'
+                  : 'intermediate',
+          }))
 
-              longitude:
-                routeStops[0].longitude,
-
-              latitude:
-                routeStops[0].latitude,
-
-              location:
-                routeStops[0].label ||
-                pin.location,
-
-              ttcRouteEndpoint:
-                'start',
-            },
-            {
-              ...pin,
-
-              longitude:
-                routeStops[
-                  routeStops.length -
-                  1
-                ].longitude,
-
-              latitude:
-                routeStops[
-                  routeStops.length -
-                  1
-                ].latitude,
-
-              location:
-                routeStops[
-                  routeStops.length -
-                  1
-                ].label ||
-                pin.location,
-
-              ttcRouteEndpoint:
-                'end',
-            },
-          ]
-
-
-          endpoints.forEach(
+          stopPins.forEach(
             (
-              endpointPin,
-              endpointIndex
+              stopPin,
+              stopIndex
             ) => {
               const marker =
                 createMarker({
                   map,
                   pin:
-                    endpointPin,
+                    stopPin,
                   pinType,
                   markerOffset:
                     [0, 0],
@@ -13904,7 +13874,7 @@ function MapPins({
 
 
               if (
-                endpointIndex ===
+                stopIndex ===
                   0
               ) {
                 markerByIdRef.current.set(
