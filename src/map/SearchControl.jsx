@@ -1,5 +1,6 @@
 import {
   useState,
+  useRef,
 } from 'react'
 
 import {
@@ -57,6 +58,10 @@ function SearchControl({
     setPlaceResults,
   ] =
     useState([])
+
+  // TTC results remain separate from the existing address/place search.
+  const [ttcResults, setTtcResults] = useState([])
+  const ttcRequestIdRef = useRef(0)
 
   const [
     searching,
@@ -844,6 +849,28 @@ function SearchControl({
   }
 
 
+  // Official TTC station / stop search, independent of place geocoding.
+  async function searchTtcStops(cleanQuery) {
+    const response = await fetch(
+      `/api/geographic/toronto/ttc/live/route-stop-search?q=${encodeURIComponent(cleanQuery)}`
+    )
+    if (!response.ok) throw new Error('TTC stop search unavailable')
+    const payload = await response.json()
+    if (!payload?.ok || !Array.isArray(payload.results)) return []
+    return payload.results
+      .filter(item => Number.isFinite(Number(item.longitude)) && Number.isFinite(Number(item.latitude)))
+      .map(item => ({
+        id: item.id || `ttc-${item.stopCode || item.name}`,
+        name: item.name || item.location || 'TTC stop',
+        subtitle: item.stopCode ? `TTC · Stop ${item.stopCode}` : 'TTC station or stop',
+        longitude: Number(item.longitude),
+        latitude: Number(item.latitude),
+        type: 'place',
+        placeType: 'ttc-stop',
+      }))
+      .slice(0, 12)
+  }
+
   // ============================================================
   // SEARCH
   // ============================================================
@@ -880,7 +907,17 @@ function SearchControl({
     setPlaceResults(
       []
     )
+    setTtcResults([])
+    const ttcRequestId = ++ttcRequestIdRef.current
 
+    // An unsuccessful TTC lookup must never break existing searches.
+    // Update the TTC section as soon as its independent request finishes.
+    const ttcPromise = searchTtcStops(cleanQuery)
+      .then(results => {
+        if (ttcRequestId === ttcRequestIdRef.current) setTtcResults(results)
+        return results
+      })
+      .catch(() => [])
 
     const localResults =
       searchGeographic(
@@ -923,9 +960,11 @@ function SearchControl({
       )
 
 
+      const stops = await ttcPromise
       if (
         localResults.length === 0 &&
-        results.length === 0
+        results.length === 0 &&
+        stops.length === 0
       ) {
         setMessage(
           intersection
@@ -942,12 +981,9 @@ function SearchControl({
       )
 
 
-      if (
-        localResults.length === 0
-      ) {
-        setMessage(
-          'SEARCH UNAVAILABLE'
-        )
+      const stops = await ttcPromise
+      if (localResults.length === 0 && stops.length === 0) {
+        setMessage('SEARCH UNAVAILABLE')
       }
     } finally {
       setSearching(
@@ -984,6 +1020,8 @@ function SearchControl({
     setPlaceResults(
       []
     )
+    ++ttcRequestIdRef.current
+    setTtcResults([])
   }
 
 
@@ -1007,6 +1045,8 @@ function SearchControl({
     setPlaceResults(
       []
     )
+    ++ttcRequestIdRef.current
+    setTtcResults([])
   }
 
 
@@ -1046,6 +1086,21 @@ function SearchControl({
     )
 
 
+  const ttcStationQuery = /\b(station|subway|ttc|stop)\b/i.test(query.trim())
+
+  const ttcSection = ttcResults.length > 0 ? (
+    <div className="search-results">
+      <div className="search-section-title">TTC STATIONS & STOPS</div>
+      {ttcResults.map(result => (
+        <button type="button" className="search-result" key={result.id}
+          onClick={() => selectResult(result)}>
+          <span className="search-result-name">{result.name}</span>
+          {result.subtitle && <span className="search-result-subtitle">{result.subtitle}</span>}
+        </button>
+      ))}
+    </div>
+  ) : null
+
   // ============================================================
   // RENDER
   // ============================================================
@@ -1083,10 +1138,11 @@ function SearchControl({
                 query
               }
               onChange={
-                (event) =>
-                  setQuery(
-                    event.target.value
-                  )
+                (event) => {
+                  ++ttcRequestIdRef.current
+                  setTtcResults([])
+                  setQuery(event.target.value)
+                }
               }
               placeholder="Search Toronto"
               autoFocus
@@ -1118,6 +1174,8 @@ function SearchControl({
             </button>
           </form>
 
+
+          {ttcStationQuery && ttcSection}
 
           {placeResults.length > 0 && (
             <div className="search-results">
@@ -1160,6 +1218,8 @@ function SearchControl({
             </div>
           )}
 
+
+          {!ttcStationQuery && ttcSection}
 
           {currentNewsResults.length > 0 && (
             <div className="search-results">
