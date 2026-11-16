@@ -13659,7 +13659,7 @@ function AdminRoom() {
   }
 
 
-  function addSearchedTtcRouteStop(result) {
+  function selectSearchedTtcRouteStop(index, result) {
     const longitude = Number(result?.longitude)
     const latitude = Number(result?.latitude)
 
@@ -13668,16 +13668,25 @@ function AdminRoom() {
     }
 
     const stops = normalizeTtcRouteStops(draft.ttcRouteStops)
+    // A search result may replace an existing stop or append the next one.
+    // Never skip a stop or change the order of other stops.
+    if (index < 0 || index > stops.length) {
+      return
+    }
 
-    changeTtcRouteStops([
-      ...stops,
-      {
-        id: `ttc-route-stop-${Date.now()}-${stops.length + 1}`,
-        label: String(result.intersection || result.location || result.name || '').trim(),
-        longitude,
-        latitude,
-      },
-    ])
+    const stop = {
+      id: stops[index]?.id || `ttc-route-stop-${Date.now()}-${index + 1}`,
+      label: String(result.intersection || result.location || result.name || '').trim(),
+      longitude,
+      latitude,
+    }
+    const updated = [...stops]
+    if (index === updated.length) {
+      updated.push(stop)
+    } else {
+      updated[index] = stop
+    }
+    changeTtcRouteStops(updated)
   }
 
 
@@ -22085,8 +22094,8 @@ function AdminRoom() {
                 {draft.ttcRouteEnabled && (
                   <TtcRouteStopSearch
                     city={city}
-                    nextStopNumber={normalizeTtcRouteStops(draft.ttcRouteStops).length + 1}
-                    onSelect={addSearchedTtcRouteStop}
+                    stops={normalizeTtcRouteStops(draft.ttcRouteStops)}
+                    onSelect={selectSearchedTtcRouteStop}
                   />
                 )}
 
