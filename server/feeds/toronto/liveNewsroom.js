@@ -1831,6 +1831,20 @@ function publishedTpsOfficialRelease(record) {
   ) || null
 }
 
+// A newer official TPS bulletin supersedes earlier public releases for the
+// same case. Never infer order from Gmail receipt time or an attachment.
+function activeEarlierTpsCaseReleases(incoming) {
+  const caseKey = tpsCaseKey(incoming)
+  const incomingAt = tpsReleaseDateMs(incoming)
+  if (!caseKey || incomingAt === null) return []
+  return Object.values(store.publishedNews || {}).filter((published) => {
+    if (published?.active === false || !isTpsPublishedRecord(published) ||
+        tpsCaseKey(published) !== caseKey) return false
+    const publishedAt = tpsReleaseDateMs(published)
+    return publishedAt !== null && incomingAt > publishedAt
+  })
+}
+
 // TPS email attachments often reuse old photographs. An image-only alteration
 // must not create a new police release. Fire/TTC fingerprints are unchanged.
 function tpsFingerprint(record) {
@@ -1935,6 +1949,10 @@ async function observeRecord({
     sourceKey === 'police' &&
     forceAction !== 'resolve' &&
     record?.resolved !== true
+
+  const previousPublicCaseReleases = ordinaryPoliceRelease
+    ? activeEarlierTpsCaseReleases(record)
+    : []
 
   const currentFingerprint =
     ordinaryPoliceRelease
@@ -2090,7 +2108,9 @@ async function observeRecord({
       !existing
     ) {
       action =
-        'new'
+        ordinaryPoliceRelease && previousPublicCaseReleases.length > 0
+          ? 'update'
+          : 'new'
     }
     else if (
       sourceKey ===
@@ -2184,6 +2204,15 @@ async function observeRecord({
             ? 'seen'
             : 'new'
       }
+    }
+    else if (
+      ordinaryPoliceRelease &&
+      previousPublicCaseReleases.length > 0 &&
+      !publishedTpsOfficialRelease(record)
+    ) {
+      // A newer official release is editorial work even when the TPS email
+      // has a different externalId or the earlier source was unpublished.
+      action = 'update'
     }
     else if (
       previousFingerprint !==
@@ -2416,6 +2445,28 @@ async function observeRecord({
     await persistStore()
   }
 
+
+  // Only archive an older TPS public pin AFTER the replacement is durably
+  // queued. Replays are idempotent. A failed queue write keeps the old pin.
+  // The existing LOCATED and wanted/arrest resolution paths are unchanged.
+  if (ordinaryPoliceRelease && previousPublicCaseReleases.length > 0 &&
+      !publishedTpsOfficialRelease(record)) {
+    const queued = store.events.some((event) =>
+      event.sourceKey === 'police' &&
+      event.status === 'pending' &&
+      event.newsroomAction !== 'resolve' &&
+      sameTpsOfficialRelease(event, observed)
+    )
+    if (queued) {
+      for (const prior of previousPublicCaseReleases) {
+        await archivePublishedNewsRecord({
+          id: prior.id || '',
+          externalId: prior.externalId || '',
+          reason: 'superseded-by-pending-tps-release',
+        })
+      }
+    }
+  }
 
   return {
     action,

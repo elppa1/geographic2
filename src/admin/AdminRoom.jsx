@@ -604,10 +604,13 @@ function getTpsSourceSnapshot(
 function getTpsRecordVersion(
   record
 ) {
-  const snapshot =
-    getTpsSourceSnapshot(
-      record
-    )
+  const snapshot = {
+    ...getTpsSourceSnapshot(record),
+    // A new official bulletin for the same case can share most content.
+    // Do not mistake it for an already-approved older release.
+    ...(record?.tpsBroadcastAt ? { tpsBroadcastAt: record.tpsBroadcastAt } : {}),
+    ...(record?.tpsReleaseTitle ? { tpsReleaseTitle: record.tpsReleaseTitle } : {}),
+  }
 
 
   const normalized =
@@ -8775,6 +8778,10 @@ function AdminRoom() {
         ...latestPublished,
       ]
 
+      // Archive only after the replacement has been saved to the review
+      // queue. Keep these targets separate from LOCATED/FOUND resolution.
+      const tpsSupersededPins = new Map()
+
 
       let publishedTouched =
         false
@@ -8908,12 +8915,9 @@ function AdminRoom() {
                     publishedRecord,
                     rawIncomingRecord
                   ) ||
-                  (
-                    isLocatedResolution &&
-                    sameTpsCase(
-                      publishedRecord,
-                      rawIncomingRecord
-                    )
+                  sameTpsCase(
+                    publishedRecord,
+                    rawIncomingRecord
                   )
                 )
             )
@@ -9040,6 +9044,25 @@ function AdminRoom() {
               true
           }
 
+
+          // A distinct official bulletin for the same case is not a silent
+          // refresh, even when its source fields happen to match a legacy
+          // baseline. The title and official broadcast date define versions.
+          const officialNewerCaseRelease = Boolean(
+            matchingPublished && !isLocatedResolution &&
+            sameTpsCase(matchingPublished, rawIncomingRecord) &&
+            !sameTpsRelease(matchingPublished, rawIncomingRecord) &&
+            Number.isFinite(incomingDate) &&
+            Number.isFinite(Date.parse(
+              matchingPublished.tpsBroadcastAt || matchingPublished.publishedAt || ''
+            )) &&
+            incomingDate > Date.parse(
+              matchingPublished.tpsBroadcastAt || matchingPublished.publishedAt || ''
+            )
+          )
+          if (officialNewerCaseRelease && meaningfulChanges.length === 0) {
+            meaningfulChanges = ['officialTpsRelease']
+          }
 
           // Image-only changes to an already published TPS release do not
           // create another pending story. A reused photo is not new news.
@@ -9229,6 +9252,10 @@ function AdminRoom() {
             ] =
               normalized
 
+            if (officialNewerCaseRelease) {
+              tpsSupersededPins.set(matchingPublished.id, matchingPublished)
+            }
+
 
             if (
               previousFingerprint !==
@@ -9256,6 +9283,10 @@ function AdminRoom() {
             return
           }
 
+
+          if (officialNewerCaseRelease) {
+            tpsSupersededPins.set(matchingPublished.id, matchingPublished)
+          }
 
           nextTorontoReview.unshift(
             normalized
@@ -9305,6 +9336,26 @@ function AdminRoom() {
       setAllNewsReviewItems(
         nextAllReview
       )
+
+      // Acknowledge and remove the prior map story only AFTER saving the
+      // incoming release for editing. Failure to archive is logged; the
+      // replacement stays pending and will not be auto-approved.
+      for (const oldPin of tpsSupersededPins.values()) {
+        const archived = await archiveNewsRecordOnServer(
+          oldPin, 'superseded-by-pending-tps-release', { silent: true }
+        )
+        if (archived) {
+          nextPublished = nextPublished.map((item) =>
+            item.id === oldPin.id ? archived : item
+          )
+        } else {
+          console.error('TPS REPLACEMENT: old pin archive failed:', oldPin.id)
+        }
+      }
+      if (tpsSupersededPins.size > 0) {
+        saveNewsItems(nextPublished)
+        setAllNewsItems(nextPublished)
+      }
 
 
       setTpsInboxResult({
@@ -25434,7 +25485,7 @@ function AdminRoom() {
                                           newsroomAction ===
                                             'resolve'
                                             ? 'PUBLIC PIN ALREADY CLOSED'
-                                            : 'PUBLIC PIN ALREADY UPDATED'
+                                            : 'TPS UPDATE · EDIT AND APPROVE TO PUBLISH'
                                         )
                                       )
                                 }
