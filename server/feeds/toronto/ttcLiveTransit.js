@@ -1979,6 +1979,78 @@ async function getStationIndex() {
 }
 
 
+// Dedicated lookup for the administrative TTC route editor only.
+// Does not change the public search, realtime TTC, or route geometry.
+function normalizeRouteStopQuery(value) {
+  return cleanText(value).toLowerCase()
+    .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
+function routeStopRank(stop, query) {
+  const name = normalizeRouteStopQuery(stop.name)
+  const code = normalizeRouteStopQuery(stop.code)
+  const id = normalizeRouteStopQuery(stop.id)
+  const nameWithoutStation = name.replace(/\s+station$/, '')
+  if (code === query || id === query) return 0
+  if (name === query || nameWithoutStation === query) return 1
+  if (name.startsWith(query + ' ') || nameWithoutStation.startsWith(query + ' ')) return 2
+  if (name.split(' ').some((word) => word === query)) return 3
+  if (name.includes(query)) return 4
+  return 100
+}
+
+async function getRouteStopSearchPayload(query) {
+  const q = normalizeRouteStopQuery(query)
+  if (q.length < 2 || q.length > 100) {
+    return { ok: true, results: [], attribution: TORONTO_ATTRIBUTION }
+  }
+
+  const index = await getStationIndex()
+  let candidates = [...(index.stopsById?.values() || [])]
+  let source = 'complete-gtfs'
+  if (!candidates.length) {
+    // TTC complete GTFS can fail temporarily. The surface cache remains
+    // a useful fallback for bus and streetcar stops, but not all subway stations.
+    try {
+      const surface = await getSurfaceNetwork()
+      candidates = surface.stops || []
+      source = 'surface-gtfs'
+    } catch (error) {
+      console.warn('TTC ROUTE STOP LOOKUP:', error?.message || error)
+      return { ok: false, results: [], unavailable: true,
+        message: 'TTC stop data unavailable; use the map or address lookup.',
+        attribution: TORONTO_ATTRIBUTION }
+    }
+  }
+  const found = []
+  const seen = new Set()
+  for (const stop of candidates) {
+    if (!Number.isFinite(stop.latitude) || !Number.isFinite(stop.longitude)) continue
+    const rank = routeStopRank(stop, q)
+    if (rank === 100) continue
+    const key = `${normalizeRouteStopQuery(stop.name)}|${stop.latitude.toFixed(5)}|${stop.longitude.toFixed(5)}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    found.push({ rank, stop })
+  }
+  found.sort((a, b) => a.rank - b.rank ||
+    Number(b.stop.locationType === 1) - Number(a.stop.locationType === 1) ||
+    a.stop.name.localeCompare(b.stop.name))
+  return {
+    ok: true, source, attribution: TORONTO_ATTRIBUTION,
+    results: found.slice(0, 30).map(({ stop }) => ({
+      id: `ttc-${stop.id}`,
+      name: stop.name,
+      location: stop.name,
+      longitude: stop.longitude,
+      latitude: stop.latitude,
+      stopCode: stop.code || '',
+      kind: stop.locationType === 1 ? 'TTC station' : 'TTC stop',
+    })),
+  }
+}
+
 function chooseCanonicalStop(
   candidates,
   {
@@ -6408,6 +6480,14 @@ export function ttcLiveTransitFeed() {
                     'public, max-age=20, stale-while-revalidate=60',
                 }
               )
+              return
+            }
+
+            if (pathname === '/route-stop-search' || pathname === '/route-stop-search/') {
+              const payload = await getRouteStopSearchPayload(url.searchParams.get('q') || '')
+              sendJson(res, payload.ok ? 200 : 503, payload, {
+                cacheControl: 'public, max-age=120, stale-while-revalidate=300',
+              })
               return
             }
 
