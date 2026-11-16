@@ -41,6 +41,14 @@ function StopLookup({ city, stop, value, onChange, onSelect }) {
           ttcUnavailable = true
         }
       }
+      // Show official TTC matches immediately. The independent address/place
+      // geocoder can be slow; it must never block a valid station result.
+      if (requestRef.current.id !== id) return
+      if (found.length) {
+        setResults(found.slice(0, 35))
+        setMessage('')
+      }
+
       // The normal geocoder remains available for arbitrary intersections,
       // addresses and other places. It is not modified by this component.
       let places = []
@@ -60,9 +68,9 @@ function StopLookup({ city, stop, value, onChange, onSelect }) {
           Math.abs(Number(ttc.latitude) - Number(item.latitude)) < 0.00008)
       )].slice(0, 35)
       setResults(combined)
-      if (!combined.length) setMessage(ttcUnavailable
+      setMessage(combined.length ? '' : (ttcUnavailable
         ? 'TTC lookup unavailable; no address results found. Try a map click.'
-        : 'NO MATCHING STOPS OR LOCATIONS')
+        : 'NO MATCHING STOPS OR LOCATIONS'))
     } catch (error) {
       if (error?.name !== 'AbortError' && requestRef.current.id === id) {
         setMessage('SEARCH UNAVAILABLE — YOU CAN STILL CLICK THE MAP')
