@@ -3826,10 +3826,6 @@ function GeographicApp() {
           >
             <div className="about-panel-header">
               <div>
-                <div className="about-panel-kicker">
-                  TORONTO GEOGRAPHIC
-                </div>
-
                 <div className="about-panel-title">
                   HOW TO USE THIS TOOL
                 </div>
@@ -3942,10 +3938,6 @@ function GeographicApp() {
             )}
 
 
-            <div className="about-made-by">
-              MADE BY{' '}
-              ELPPA.ENGINEERING
-            </div>
           </aside>
         </>
       )}
