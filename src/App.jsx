@@ -2884,33 +2884,53 @@ function GeographicApp() {
             .tg-howto-section .tg-howto-note { font-size: 9px; }
             .tg-howto-update { font-size: 9px !important; }
             .tg-howto-inquiries { font-size: 9px; }
-            /* Mobile-only: compact the How-To dialog without altering map UI. */
-            .about-panel {
-              width: calc(100vw - 16px) !important;
-              max-height: calc(100vh - 16px) !important;
-              max-height: calc(100dvh - 16px) !important;
-              padding: 12px 14px 11px !important;
-              box-sizing: border-box;
+            /* Mobile How-To only: lock the dialog inside the visual viewport.
+               Its content scrolls within the box; Real Estate and desktop are unaffected. */
+            .about-panel.tg-howto-panel {
+              top: max(6px, env(safe-area-inset-top)) !important;
+              bottom: max(6px, env(safe-area-inset-bottom)) !important;
+              left: 50% !important;
+              transform: translateX(-50%) !important;
+              width: calc(100vw - 12px) !important;
+              max-width: 430px !important;
+              height: auto !important;
+              max-height: none !important;
+              min-height: 0 !important;
+              padding: 10px 12px !important;
+              box-sizing: border-box !important;
+              overflow-x: hidden !important;
+              overflow-y: auto !important;
+              -webkit-overflow-scrolling: touch;
               overscroll-behavior: contain;
             }
-            .about-panel-header { gap: 12px !important; padding-bottom: 8px !important; }
-            .about-panel-title { font-size: 17px !important; margin-top: 4px !important; }
-            .about-close { width: 30px !important; height: 30px !important; }
-            .about-section { padding: 8px 0 !important; }
-            .about-section h2 { margin-bottom: 4px !important; font-size: 9px !important; }
-            .about-section p { font-size: 11px !important; line-height: 1.4 !important; }
-            .tg-howto-section .tg-howto-note { margin-top: 5px; padding: 5px 7px; font-size: 9px !important; }
-            .tg-howto-controls, .tg-howto-years, .tg-howto-tabs { flex-shrink: 0; }
-            .tg-howto-sponsor { padding: 7px 0; }
-            .tg-howto-sponsor > a { width: min(100%, 140px); margin-top: 4px; }
-            .tg-howto-inquiries { margin-top: 5px; }
-            .howto-actions { gap: 6px !important; margin-top: 10px !important; }
-            .howto-primary, .howto-secondary {
-              min-height: 36px !important;
+            .tg-howto-panel .about-panel-header { gap: 10px !important; padding-bottom: 7px !important; }
+            .tg-howto-panel .about-panel-title { font-size: 16px !important; margin-top: 2px !important; }
+            .tg-howto-panel .about-close { width: 28px !important; height: 28px !important; }
+            .tg-howto-panel .about-section { padding: 7px 0 !important; }
+            .tg-howto-panel .about-section h2 { margin-bottom: 4px !important; font-size: 9px !important; }
+            .tg-howto-panel .about-section p { font-size: 11px !important; line-height: 1.35 !important; }
+            .tg-howto-panel .tg-howto-section .tg-howto-note { margin-top: 5px; padding: 5px 7px; font-size: 9px !important; }
+            .tg-howto-panel .tg-howto-controls,
+            .tg-howto-panel .tg-howto-years,
+            .tg-howto-panel .tg-howto-tabs { flex-shrink: 0; }
+            .tg-howto-panel .tg-howto-sponsor { padding: 6px 0; }
+            .tg-howto-panel .tg-howto-sponsor > a { width: min(100%, 120px); margin-top: 3px; }
+            .tg-howto-panel .tg-howto-inquiries { margin-top: 4px; }
+            .tg-howto-panel .howto-actions {
+              gap: 5px !important;
+              margin-top: 8px !important;
+              position: sticky;
+              bottom: -10px;
+              z-index: 1;
+              padding: 6px 0 4px;
+              background: rgba(255,255,255,0.98);
+            }
+            .tg-howto-panel .howto-primary,
+            .tg-howto-panel .howto-secondary {
+              min-height: 35px !important;
               padding: 7px 8px !important;
               font-size: 9px !important;
             }
-            .about-made-by { margin-top: 6px !important; font-size: 7px !important; }
           }
         `}
       </style>
@@ -3871,7 +3891,7 @@ function GeographicApp() {
           />
 
           <aside
-            className="about-panel"
+            className="about-panel tg-howto-panel"
             role="dialog"
             aria-modal="true"
             aria-label="How to use Toronto Geographic"
