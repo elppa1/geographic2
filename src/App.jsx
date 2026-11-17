@@ -6,6 +6,10 @@ import {
 } from 'react'
 
 import GeographicMap from './map/GeographicMap.jsx'
+import drainUnitOriginal from './assets/drain-unit-original.png'
+import policeMapIcon from './assets/police-map-icon.png'
+import fireMapIcon from './assets/fire-map-icon.png'
+import ttcMapIcon from './assets/ttc-map-icon.png'
 import MapControls from './map/MapControls.jsx'
 import TimeMachine from './map/TimeMachine.jsx'
 import LayerInfo from './map/LayerInfo.jsx'
@@ -2751,6 +2755,49 @@ function GeographicApp() {
               font-size: 8px !important;
             }
           }
+
+          /* How-To only: concise illustrated help; existing actions stay intact. */
+          .tg-howto-section .tg-howto-row { display: flex; gap: 15px; align-items: center; }
+          .tg-howto-section .tg-howto-row > p { flex: 1; min-width: 0; }
+          .tg-howto-controls { display: flex; align-items: center; gap: 0; flex: 0 0 43%; min-width: 0; font-size: 9px; font-weight: 800; }
+          .tg-howto-gps, .tg-howto-search, .tg-howto-tabs > span { padding: 9px 10px; border: 1px solid #ccc; white-space: nowrap; }
+          .tg-howto-gps, .tg-howto-selected { background: #111; color: #fff; }
+          .tg-howto-search { background: #fff; color: #111; font-size: 18px; line-height: 1; }
+          .tg-howto-map-icon { width: 32px; height: 34px; object-fit: contain; margin-left: 8px; image-rendering: pixelated; }
+          .tg-howto-section .tg-howto-note { background: #f3f4f6; padding: 6px 8px; margin-top: 8px; font-size: 10px; line-height: 1.4; }
+          .tg-howto-years { flex: 0 0 48%; background: #111; color: #fff; padding: 9px 9px 7px; border-radius: 2px; }
+          .tg-howto-year-list, .tg-howto-track-labels { display: flex; justify-content: space-between; align-items: center; gap: 2px; font-size: 9px; font-weight: 700; }
+          .tg-howto-year-list strong { background: #eaeaea; color: #111; padding: 2px 4px; }
+          .tg-howto-track { height: 4px; background: #fff; border-radius: 2px; margin: 9px 3px 7px; position: relative; }
+          .tg-howto-track span { position: absolute; width: 9px; height: 9px; top: -3px; left: 34%; background: #1484ff; border-radius: 50%; }
+          .tg-howto-track-labels { font-size: 8px; }
+          .tg-howto-tabs { flex-basis: 48%; }
+          .tg-howto-tabs > span { flex: 1; padding: 9px 4px; text-align: center; font-size: 8px; }
+          .tg-howto-icons { display: flex; align-items: center; gap: 11px; font-size: 19px; margin-top: 7px; }
+          .tg-howto-news-icons { flex: 0 0 32%; gap: 7px; margin: 0; }
+          .tg-howto-news-icons img { width: 43px; height: 44px; object-fit: contain; image-rendering: pixelated; }
+          .tg-howto-update { margin-top: 8px !important; font-size: 10px !important; font-weight: 800; }
+          .tg-howto-sponsor { text-align: center; border-bottom: 1px solid rgba(0,0,0,.12); padding: 10px 0; }
+          .tg-howto-sponsor-label { font-size: 9px; font-weight: 800; letter-spacing: .13em; }
+          .tg-howto-sponsor > a { display: block; width: min(100%, 260px); margin: 7px auto 0; }
+          .tg-howto-sponsor img { width: 100%; height: auto; display: block; }
+          .tg-howto-inquiries { margin-top: 7px; font-size: 10px; font-weight: 700; letter-spacing: 0; overflow-wrap: anywhere; }
+          .tg-howto-inquiries a { color: inherit; }
+          @media (max-width: 700px) {
+            .tg-howto-section .tg-howto-row { gap: 8px; }
+            .tg-howto-controls { flex-basis: 44%; font-size: 7px; }
+            .tg-howto-gps, .tg-howto-search { padding: 7px 6px; }
+            .tg-howto-map-icon { margin-left: 4px; width: 25px; height: 28px; }
+            .tg-howto-years { flex-basis: 48%; padding: 7px 5px; }
+            .tg-howto-year-list, .tg-howto-track-labels { font-size: 7px; }
+            .tg-howto-tabs > span { font-size: 6.5px; padding: 7px 2px; }
+            .tg-howto-news-icons { flex-basis: 34%; gap: 3px; }
+            .tg-howto-news-icons img { width: 30px; height: 32px; }
+            .tg-howto-icons { gap: 7px; font-size: 17px; }
+            .tg-howto-section .tg-howto-note { font-size: 9px; }
+            .tg-howto-update { font-size: 9px !important; }
+            .tg-howto-inquiries { font-size: 9px; }
+          }
         `}
       </style>
 
@@ -3746,12 +3793,6 @@ function GeographicApp() {
                   HOW TO USE THIS TOOL
                 </div>
 
-                <div
-                  className="about-panel-loading-status"
-                  aria-hidden="true"
-                >
-                  LOADING MAP… &nbsp; POPULATING MAP… &nbsp; INITIALIZING TTC BUSES…
-                </div>
               </div>
 
               <button
@@ -3768,67 +3809,57 @@ function GeographicApp() {
               </button>
             </div>
 
-            <section className="about-section">
-              <h2>
-                TIME MACHINE
-              </h2>
-
-              <p>
-                Turn on your gps and walk through time. Use the controls at the
-                bottom of the screen to see how your neighbourhood and our city
-                has changed over the years. Click on historic markers and see
-                what that place looked like back when that event happened or
-                building existed.
-              </p>
+            <section className="about-section tg-howto-section">
+              <h2>LIVE BUSES</h2>
+              <div className="tg-howto-row">
+                <div className="tg-howto-controls" aria-label="GPS and search controls">
+                  <span className="tg-howto-gps">GPS</span>
+                  <span className="tg-howto-search" aria-label="Search">⌕</span>
+                  <img className="tg-howto-map-icon" src={ttcMapIcon} alt="TTC bus map icon" />
+                </div>
+                <p>Click GPS or search an address to see upcoming buses. Click a bus stop marker for times, or just watch the buses.</p>
+              </div>
+              <p className="tg-howto-note"><strong>Note:</strong> Bus times may be delayed by up to 30 seconds. If a bus is visible at your stop, it may already have passed.</p>
             </section>
 
-            <section className="about-section">
-              <h2>
-                NEWS
-              </h2>
-
-              <p>
-                Click news and see transit, police and fire stories. If a map pin
-                is pulsating, it means that it is active or was recently
-                reported. Zoom in further or use the scroll on the top to see
-                police and fire calls from the past. Missing people are updated
-                daily and the ttc is live.
-              </p>
+            <section className="about-section tg-howto-section">
+              <h2>TIME MACHINE</h2>
+              <div className="tg-howto-row">
+                <div className="tg-howto-years" aria-label="Time Machine year selection example">
+                  <div className="tg-howto-year-list"><span>1947</span><strong>1954</strong><span>1965</span><span>1978</span><span>NOW</span></div>
+                  <div className="tg-howto-track"><span /></div>
+                  <div className="tg-howto-track-labels"><span>MODERN</span><span>HISTORICAL</span></div>
+                </div>
+                <p>Click through the years to see what a place looked like.</p>
+              </div>
             </section>
 
-            <section className="about-section">
-              <h2>
-                COMMUNITY
-              </h2>
-
-              <p>
-                See libraries, community centres, farmers' markets, cinemas,
-                learning programs and other community places and programs across
-                the city.
-              </p>
+            <section className="about-section tg-howto-section">
+              <h2>FEATURE PINS</h2>
+              <div className="tg-howto-row">
+                <div className="tg-howto-controls tg-howto-tabs" aria-label="Historic News and TO-DO controls">
+                  <span>HISTORIC</span><span className="tg-howto-selected">NEWS</span><span>TO-DO</span>
+                </div>
+                <p>Explore News, Historic and Community pins to see what's happening nearby, including community program start times.</p>
+              </div>
+              <div className="tg-howto-icons" aria-label="Examples of Geographic community pin symbols"><span>🏀</span><span>📚</span><span>💧</span><span>⛸️</span><span>🎾</span></div>
             </section>
 
-            <section className="about-section">
-              <h2>
-                SPORTS + REC
-              </h2>
-
-              <p>
-                See rinks, pools, skateparks, courts, bike parks and other sports
-                and recreation facilities and programs across the city.
-              </p>
+            <section className="about-section tg-howto-section">
+              <h2>NEWS</h2>
+              <div className="tg-howto-row">
+                <div className="tg-howto-icons tg-howto-news-icons" aria-label="Police car, fire truck, TTC bus"><img src={policeMapIcon} alt="Police car" /><img src={fireMapIcon} alt="Fire truck" /><img src={ttcMapIcon} alt="TTC bus" /></div>
+                <p>See recent or historic news pins from Police, TTC and Fire. A pulsating pin means it is or was recently active.</p>
+              </div>
+              <p className="tg-howto-update">Updated daily: 7 AM · 11 AM · 3 PM · 7 PM</p>
             </section>
 
-            <section className="about-section">
-              <h2>
-                NEW BUSINESS
-              </h2>
-
-              <p>
-                Check out new businesses. Be the first to tell your friends
-                about the new cafe up the street or that new dumpling spot
-                downtown.
-              </p>
+            <section className="tg-howto-sponsor" aria-label="Sponsor and inquiries">
+              <div className="tg-howto-sponsor-label">SPONSORED BY</div>
+              <a href="https://drainunit.com/" target="_blank" rel="noopener noreferrer" aria-label="Visit Drain Unit Inc.">
+                <img src={drainUnitOriginal} alt="Drain Unit Inc. — Plumbing done right, guaranteed!" />
+              </a>
+              <div className="tg-howto-inquiries">INQUIRIES: <a href="mailto:elppa.engineering@gmail.com">elppa.engineering@gmail.com</a></div>
             </section>
 
             <div className="howto-actions">
