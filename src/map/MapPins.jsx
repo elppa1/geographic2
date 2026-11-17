@@ -8699,6 +8699,22 @@ function getPopupCategoryHeading(pin, pinType) {
     else if (isTtcPin(pin)) add('TTC')
     add(pin.category)
   } else if (pinType === 'new') {
+    // Top Eats is editorially distinct from New Business. Display only the
+    // recorded Michelin distinction after its heading; never invent one.
+    if (pin.topEats === true) {
+      add('Top Eats')
+      const award = String(pin.michelinDistinction || '').trim().toLowerCase()
+      const awardLabel = {
+        '1': '1 Michelin Star',
+        '2': '2 Michelin Stars',
+        '3': '3 Michelin Stars',
+        bib: 'Bib Gourmand',
+        selected: 'Michelin Selected',
+      }[award]
+      if (awardLabel) add(awardLabel)
+      return parts.join(' · ')
+    }
+
     const type = normalizeCompareText(pin.newType)
     const category = normalizeCompareText(pin.category)
 
