@@ -11,6 +11,7 @@ function MapControls({
   onLocate,
   onOrientation,
   onSearchResult,
+  onHowTo,
   locationTrackingActive = false,
 }) {
   const [
@@ -150,6 +151,15 @@ function MapControls({
           onSearchResult
         }
       />
+      <button
+        type="button"
+        className="map-utility-button howto-help-button"
+        aria-label="Open How-To"
+        title="How to use Toronto Geographic"
+        onClick={onHowTo}
+      >
+        ?
+      </button>
     </div>
   )
 }

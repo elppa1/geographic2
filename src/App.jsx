@@ -559,6 +559,8 @@ function GeographicApp() {
       true
     )
 
+  const [realEstateOpen, setRealEstateOpen] = useState(false)
+
 
   const [
     timeMachineStarting,
@@ -1214,6 +1216,7 @@ function GeographicApp() {
   function chooseContentMode(
     mode
   ) {
+    setRealEstateOpen(mode === 'real-estate')
     setTodoMenuOpen(false)
     if (
       mode ===
@@ -2342,6 +2345,12 @@ function GeographicApp() {
             min-width: 40px !important;
           }
 
+          .brand-primary-filters .howto-help-button {
+            min-width: 30px !important;
+            font-size: 12px !important;
+            font-weight: 800 !important;
+          }
+
           .brand-primary-filters .search-control {
             position: relative !important;
           }
@@ -2437,6 +2446,11 @@ function GeographicApp() {
 
             .brand-primary-filters .gps-toggle-button {
               min-width: 31px !important;
+            }
+
+            .brand-primary-filters .howto-help-button {
+              min-width: 24px !important;
+              font-size: 10px !important;
             }
 
             .brand-primary-filters .search-control .map-utility-button {
@@ -2590,8 +2604,8 @@ function GeographicApp() {
             }
 
             /* Desktop: compact two-row header.
-               Row 1 = identity + open white search space + GPS/Search.
-               Row 2 = Historic / News / To-Do / Live Buses / How-To.
+               Row 1 = identity + open white search space + GPS/Search/Help.
+               Row 2 = Historic / News / To-Do / Live Buses / Real Estate.
                Search expands into row 1 instead of growing below the menu.
                Mobile markup and behavior remain unchanged. */
             .brand-main-row {
@@ -2635,7 +2649,7 @@ function GeographicApp() {
               border-bottom: 1px solid rgba(17,17,17,0.13) !important;
             }
 
-            /* How-To belongs with the content/navigation row on desktop. */
+            /* Real Estate uses the former How-To navigation slot on desktop. */
             .brand-primary-filters > .about-button {
               grid-column: 5 !important;
               grid-row: 2 !important;
@@ -2701,7 +2715,7 @@ function GeographicApp() {
                Keep GPS and the search trigger visible on the right. */
             .brand-primary-filters .search-panel {
               top: 0 !important;
-              right: 72px !important;
+              right: 102px !important;
               left: auto !important;
               width: 230px !important;
               max-width: calc(100vw - 300px) !important;
@@ -3561,14 +3575,15 @@ function GeographicApp() {
 
             <button
               type="button"
-              className="about-button brand-mode-button"
-              onClick={() =>
-                setAboutOpen(
-                  true
-                )
+              className={
+                activePinFilter === 'real-estate'
+                  ? 'about-button brand-mode-button brand-mode-button-active'
+                  : 'about-button brand-mode-button'
               }
+              onClick={() => chooseContentMode('real-estate')}
+              aria-pressed={activePinFilter === 'real-estate'}
             >
-              HOW-TO
+              REAL ESTATE
             </button>
 
 
@@ -3585,6 +3600,7 @@ function GeographicApp() {
               onSearchResult={
                 handleMainMenuSearchResult
               }
+              onHowTo={() => setAboutOpen(true)}
             />
           </div>
 
@@ -3804,6 +3820,42 @@ function GeographicApp() {
         <div id="ttc-mobile-menu-bottom-slot" className="ttc-mobile-menu-bottom-slot" />
       </div>
 
+
+      {realEstateOpen && (
+        <>
+          <button
+            type="button"
+            className="about-backdrop"
+            aria-label="Close Real Estate announcement"
+            onClick={() => setRealEstateOpen(false)}
+          />
+          <aside
+            className="about-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Real Estate coming soon"
+          >
+            <div className="about-panel-header">
+              <div className="about-panel-title">REAL ESTATE</div>
+              <button
+                type="button"
+                className="about-close"
+                aria-label="Close Real Estate announcement"
+                onClick={() => setRealEstateOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <section className="about-section">
+              <h2>COMING SOON</h2>
+              <p>Interested in publishing your listings here?</p>
+              <p>
+                Contact <a href="mailto:elppa.engineering@gmail.com">elppa.engineering@gmail.com</a>
+              </p>
+            </section>
+          </aside>
+        </>
+      )}
 
       {aboutOpen && (
         <>
