@@ -2667,12 +2667,22 @@ function GeographicApp() {
               grid-row: 2 !important;
             }
 
-            .brand-primary-filters > .brand-mode-button:not(.about-button):nth-of-type(2) {
+            /* TO-DO is a wrapper now: explicitly place it in column 3. */
+            .brand-primary-filters > .todo-menu-anchor {
               grid-column: 3 !important;
               grid-row: 2 !important;
+              min-width: 0 !important;
+              align-self: stretch !important;
             }
 
-            .brand-primary-filters > .brand-mode-button:not(.about-button):nth-of-type(3) {
+            .brand-primary-filters > .todo-menu-anchor > .brand-mode-button {
+              width: 100% !important;
+              min-height: 34px !important;
+              padding: 0 6px !important;
+              border-left: 1px solid rgba(17,17,17,0.10) !important;
+            }
+
+            .brand-primary-filters > .brand-mode-button:not(.about-button):nth-of-type(2) {
               grid-column: 4 !important;
               grid-row: 2 !important;
             }
@@ -3490,33 +3500,24 @@ function GeographicApp() {
                   role="group"
                   aria-label="TO-DO categories"
                 >
-                  <button
-                    type="button"
-                    className={`historic-mobile-picker-option${newSubtypeFilter === 'none' ? ' historic-mobile-picker-option-active' : ''}`}
-                    onClick={() => { setNewSubtypeFilter('none'); setTodoMenuOpen(false) }}
-                  >
-                    TO-DO · CHOOSE A CATEGORY
-                  </button>
                   {[
-                    ['NEW BUSINESS', 'businesses', 'ALL NEW BUSINESSES'],
-                    ['TOP EATS', 'top-eats', 'ALL TOP EATS'],
-                    ['COMMUNITY', 'community', 'ALL COMMUNITY'],
-                    ['SPORTS + REC', 'sports-rec', 'ALL SPORTS + REC'],
-                  ].map(([heading, value, label]) => (
-                    <div key={value}>
-                      <div className="historic-mobile-picker-heading">{heading}</div>
-                      <button
-                        type="button"
-                        className={`historic-mobile-picker-option${newSubtypeFilter === value ? ' historic-mobile-picker-option-active' : ''}`}
-                        onClick={() => {
-                          setNewSubtypeFilter(value)
-                          if (value === 'businesses') setNewBusinessRangeFilter('180')
-                          setTodoMenuOpen(false)
-                        }}
-                      >
-                        {label}
-                      </button>
-                    </div>
+                    ['New Business', 'businesses'],
+                    ['Top Eats', 'top-eats'],
+                    ['Community', 'community'],
+                    ['Sports + Rec', 'sports-rec'],
+                  ].map(([label, value]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={`historic-mobile-picker-option${newSubtypeFilter === value ? ' historic-mobile-picker-option-active' : ''}`}
+                      onClick={() => {
+                        setNewSubtypeFilter(value)
+                        if (value === 'businesses') setNewBusinessRangeFilter('180')
+                        setTodoMenuOpen(false)
+                      }}
+                    >
+                      {label}
+                    </button>
                   ))}
                 </div>
               )}
