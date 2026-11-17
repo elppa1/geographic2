@@ -2779,10 +2779,11 @@ function GeographicApp() {
           .tg-howto-update { margin-top: 8px !important; font-size: 10px !important; font-weight: 800; }
           .tg-howto-sponsor { text-align: center; border-bottom: 1px solid rgba(0,0,0,.12); padding: 10px 0; }
           .tg-howto-sponsor-label { font-size: 9px; font-weight: 800; letter-spacing: .13em; }
-          .tg-howto-sponsor > a { display: block; width: min(100%, 260px); margin: 7px auto 0; }
+          .tg-howto-sponsor > a { display: block; width: min(100%, 185px); margin: 6px auto 0; }
           .tg-howto-sponsor img { width: 100%; height: auto; display: block; }
           .tg-howto-inquiries { margin-top: 7px; font-size: 10px; font-weight: 700; letter-spacing: 0; overflow-wrap: anywhere; }
           .tg-howto-inquiries a { color: inherit; }
+          .tg-howto-inquiries-label { display: inline-block; white-space: nowrap; }
           @media (max-width: 700px) {
             .tg-howto-section .tg-howto-row { gap: 8px; }
             .tg-howto-controls { flex-basis: 44%; font-size: 7px; }
@@ -2797,6 +2798,33 @@ function GeographicApp() {
             .tg-howto-section .tg-howto-note { font-size: 9px; }
             .tg-howto-update { font-size: 9px !important; }
             .tg-howto-inquiries { font-size: 9px; }
+            /* Mobile-only: compact the How-To dialog without altering map UI. */
+            .about-panel {
+              width: calc(100vw - 16px) !important;
+              max-height: calc(100vh - 16px) !important;
+              max-height: calc(100dvh - 16px) !important;
+              padding: 12px 14px 11px !important;
+              box-sizing: border-box;
+              overscroll-behavior: contain;
+            }
+            .about-panel-header { gap: 12px !important; padding-bottom: 8px !important; }
+            .about-panel-title { font-size: 17px !important; margin-top: 4px !important; }
+            .about-close { width: 30px !important; height: 30px !important; }
+            .about-section { padding: 8px 0 !important; }
+            .about-section h2 { margin-bottom: 4px !important; font-size: 9px !important; }
+            .about-section p { font-size: 11px !important; line-height: 1.4 !important; }
+            .tg-howto-section .tg-howto-note { margin-top: 5px; padding: 5px 7px; font-size: 9px !important; }
+            .tg-howto-controls, .tg-howto-years, .tg-howto-tabs { flex-shrink: 0; }
+            .tg-howto-sponsor { padding: 7px 0; }
+            .tg-howto-sponsor > a { width: min(100%, 140px); margin-top: 4px; }
+            .tg-howto-inquiries { margin-top: 5px; }
+            .howto-actions { gap: 6px !important; margin-top: 10px !important; }
+            .howto-primary, .howto-secondary {
+              min-height: 36px !important;
+              padding: 7px 8px !important;
+              font-size: 9px !important;
+            }
+            .about-made-by { margin-top: 6px !important; font-size: 7px !important; }
           }
         `}
       </style>
@@ -3840,7 +3868,7 @@ function GeographicApp() {
                 <div className="tg-howto-controls tg-howto-tabs" aria-label="Historic News and TO-DO controls">
                   <span>HISTORIC</span><span className="tg-howto-selected">NEWS</span><span>TO-DO</span>
                 </div>
-                <p>Explore News, Historic and Community pins to see what's happening nearby, including community program start times.</p>
+                <p>Explore News, Historic and Community pins to see what's happening nearby, including community program start times, new restaurants, recreation and more.</p>
               </div>
               <div className="tg-howto-icons" aria-label="Examples of Geographic community pin symbols"><span>🏀</span><span>📚</span><span>💧</span><span>⛸️</span><span>🎾</span></div>
             </section>
@@ -3859,7 +3887,7 @@ function GeographicApp() {
               <a href="https://drainunit.com/" target="_blank" rel="noopener noreferrer" aria-label="Visit Drain Unit Inc.">
                 <img src={drainUnitOriginal} alt="Drain Unit Inc. — Plumbing done right, guaranteed!" />
               </a>
-              <div className="tg-howto-inquiries">INQUIRIES: <a href="mailto:elppa.engineering@gmail.com">elppa.engineering@gmail.com</a></div>
+              <div className="tg-howto-inquiries"><span className="tg-howto-inquiries-label">INQUIRIES:</span>{' '}<a href="mailto:elppa.engineering@gmail.com">elppa.engineering@gmail.com</a></div>
             </section>
 
             <div className="howto-actions">
