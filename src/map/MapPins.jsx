@@ -42,28 +42,12 @@ const PUBLISHED_NEWS_REFRESH_MS =
   15 * 1000
 
 
-const LEGACY_PUBLISHED_NEW_ENDPOINT =
-  '/api/geographic/toronto/new/published?status=all'
-
-
 const PUBLISHED_NEW_BUSINESS_ENDPOINT =
   '/api/geographic/toronto/new/business/published?status=all'
 
 
-const PUBLISHED_NEW_DEVELOPMENT_ENDPOINT =
-  '/api/geographic/toronto/new/development/published?status=all'
-
-
 const PUBLISHED_NEW_EVENTS_ENDPOINT =
   '/api/geographic/toronto/new/events/published?status=all'
-
-
-const PUBLISHED_NEW_SPORTS_ENDPOINT =
-  '/api/geographic/toronto/new/sports/published?status=all'
-
-
-const PUBLISHED_NEW_REAL_ESTATE_ENDPOINT =
-  '/api/geographic/toronto/new/real-estate/published?status=all'
 
 
 const PUBLISHED_NEW_REFRESH_MS =
@@ -12624,194 +12608,83 @@ function MapPins({
   )
 
 
+  // TO-DO is opt-in. No NEW/Community fetches run at startup, in NEWS,
+  // or merely by opening the TO-DO dropdown. A selected category only
+  // requests its relevant published feeds; previously loaded records are
+  // cleared when switching categories or leaving TO-DO.
   useEffect(
     () => {
+      setServerNewItems([])
+
       if (
-        cityKey !==
-          'toronto'
+        cityKey !== 'toronto' ||
+        activePinFilter !== 'new' ||
+        !['businesses', 'top-eats', 'community', 'sports-rec']
+          .includes(newSubtypeFilter)
       ) {
+        return undefined
+      }
+
+      let cancelled = false
+      let loading = false
+      const controller = new AbortController()
+
+      // Only the business and events published feeds are mounted by the
+      // production server. Both can contain Community/Sports records,
+      // so filter the results to the requested category before mapping.
+      const endpoints = [
+        PUBLISHED_NEW_BUSINESS_ENDPOINT,
+        PUBLISHED_NEW_EVENTS_ENDPOINT,
+      ]
+
+      async function loadSelectedTodo() {
+        if (loading || cancelled) return
+        loading = true
+        try {
+        const results = await Promise.allSettled(
+          endpoints.map(async (endpoint) => {
+            const response = await fetch(endpoint, {
+              headers: { Accept: 'application/json' },
+              cache: 'no-store',
+              signal: controller.signal,
+            })
+            if (!response.ok) {
+              throw new Error(`TO-DO feed HTTP ${response.status}`)
+            }
+            const payload = await response.json()
+            return Array.isArray(payload?.records) ? payload.records : []
+          })
+        )
+
+        if (cancelled) return
+
+        const records = []
+        for (const result of results) {
+          if (result.status === 'fulfilled') {
+            records.push(...result.value)
+          } else if (result.reason?.name !== 'AbortError') {
+            console.warn('PUBLIC MAP · SELECTED TO-DO LOAD FAILED:', result.reason)
+          }
+        }
         setServerNewItems(
-          []
+          records.filter((pin) => newPinMatchesSubtype(pin, newSubtypeFilter))
         )
-
-
-        return
-      }
-
-
-      let cancelled =
-        false
-
-
-      async function loadPublishedNewEndpoint(
-        endpoint,
-        label,
-        {
-          optional =
-            false,
-        } = {}
-      ) {
-        const response =
-          await fetch(
-            endpoint,
-            {
-              headers: {
-                Accept:
-                  'application/json',
-              },
-
-              cache:
-                'no-store',
-            }
-          )
-
-
-        if (
-          !response.ok
-        ) {
-          if (
-            optional
-          ) {
-            return []
-          }
-
-
-          throw new Error(
-            `${label} request failed with HTTP ` +
-            response.status
-          )
-        }
-
-
-        const payload =
-          await response.json()
-
-
-        return (
-          Array.isArray(
-            payload?.records
-          )
-            ? payload.records
-            : []
-        )
-      }
-
-
-      async function loadPublishedNew() {
-        const results =
-          await Promise.allSettled([
-            loadPublishedNewEndpoint(
-              LEGACY_PUBLISHED_NEW_ENDPOINT,
-              'Legacy published NEW',
-              {
-                optional:
-                  true,
-              }
-            ),
-
-            loadPublishedNewEndpoint(
-              PUBLISHED_NEW_BUSINESS_ENDPOINT,
-              'Published NEW business'
-            ),
-
-            loadPublishedNewEndpoint(
-              PUBLISHED_NEW_DEVELOPMENT_ENDPOINT,
-              'Published NEW development'
-            ),
-
-            loadPublishedNewEndpoint(
-              PUBLISHED_NEW_EVENTS_ENDPOINT,
-              'Published NEW events'
-            ),
-
-            loadPublishedNewEndpoint(
-              PUBLISHED_NEW_SPORTS_ENDPOINT,
-              'Published NEW sports'
-            ),
-
-            loadPublishedNewEndpoint(
-              PUBLISHED_NEW_REAL_ESTATE_ENDPOINT,
-              'Published NEW real estate'
-            ),
-          ])
-
-
-        if (
-          cancelled
-        ) {
-          return
-        }
-
-
-        const records =
-          []
-
-
-        results.forEach(
-          (
-            result
-          ) => {
-            if (
-              result.status ===
-                'fulfilled'
-            ) {
-              records.push(
-                ...result.value
-              )
-            }
-            else {
-              console.warn(
-                'PUBLIC MAP · TORONTO NEW LOAD FAILED:',
-                result.reason
-              )
-            }
-          }
-        )
-
-
-        if (
-          records.length >
-            0 ||
-          results.every(
-            (
-              result
-            ) =>
-              result.status ===
-                'fulfilled'
-          )
-        ) {
-          setServerNewItems(
-            records
-          )
+        } finally {
+          loading = false
         }
       }
 
-
-      loadPublishedNew()
-
-
-      const interval =
-        window.setInterval(
-          loadPublishedNew,
-          PUBLISHED_NEW_REFRESH_MS
-        )
-
+      loadSelectedTodo()
+      const interval = window.setInterval(loadSelectedTodo, PUBLISHED_NEW_REFRESH_MS)
 
       return () => {
-        cancelled =
-          true
-
-
-        window.clearInterval(
-          interval
-        )
+        cancelled = true
+        controller.abort()
+        window.clearInterval(interval)
       }
     },
-    [
-      cityKey,
-    ]
+    [cityKey, activePinFilter, newSubtypeFilter]
   )
-
 
   useEffect(
     () => {
@@ -13475,6 +13348,8 @@ function MapPins({
     if (
       activePinFilter ===
         'new' &&
+      newSubtypeFilter !== 'none' &&
+      newSubtypeFilter !== 'all' &&
       currentPinIsVisible({
         city,
         selectedLayer,

@@ -1216,8 +1216,10 @@ function GeographicApp() {
       mode ===
         'new'
     ) {
+      // Opening TO-DO never displays every category at once.
+      // A category must be explicitly selected first.
       setNewSubtypeFilter(
-        'all'
+        'none'
       )
     }
 
@@ -3437,8 +3439,10 @@ function GeographicApp() {
                 cursor:
                   'pointer',
               }}
+              aria-expanded={activePinFilter === 'new'}
+              aria-controls="todo-category-dropdown"
             >
-              TO-DO
+              TO-DO {activePinFilter === 'new' ? '▴' : '▾'}
             </button>
 
 
@@ -3678,72 +3682,33 @@ function GeographicApp() {
 
         {activePinFilter ===
           'new' && (
-          <div className="content-subfilters">
-            <button
-              type="button"
-              className={
-                newSubtypeFilter ===
-                  'businesses'
-                  ? 'content-subfilter content-subfilter-active'
-                  : 'content-subfilter'
-              }
-              onClick={() => {
-                setNewSubtypeFilter(
-                  'businesses'
-                )
-                setNewBusinessRangeFilter(
-                  '180'
-                )
+          <div
+            id="todo-category-dropdown"
+            className="content-subfilters"
+            role="group"
+            aria-label="Select one TO-DO category"
+          >
+            <label htmlFor="todo-category-select" style={{ fontSize: '10px', fontWeight: 700 }}>
+              SHOW
+            </label>
+            <select
+              id="todo-category-select"
+              aria-label="TO-DO category"
+              className="content-subfilter"
+              value={newSubtypeFilter}
+              onChange={(event) => {
+                const category = event.target.value
+                setNewSubtypeFilter(category)
+                if (category === 'businesses') setNewBusinessRangeFilter('180')
               }}
+              style={{ cursor: 'pointer', maxWidth: '100%' }}
             >
-              NEW BUSINESSES
-            </button>
-
-            <button
-              type="button"
-              className={
-                newSubtypeFilter === 'top-eats'
-                  ? 'content-subfilter content-subfilter-active'
-                  : 'content-subfilter'
-              }
-              onClick={() => setNewSubtypeFilter('top-eats')}
-            >
-              TOP EATS
-            </button>
-
-            <button
-              type="button"
-              className={
-                newSubtypeFilter ===
-                  'community'
-                  ? 'content-subfilter content-subfilter-active'
-                  : 'content-subfilter'
-              }
-              onClick={() =>
-                setNewSubtypeFilter(
-                  'community'
-                )
-              }
-            >
-              COMMUNITY
-            </button>
-
-            <button
-              type="button"
-              className={
-                newSubtypeFilter ===
-                  'sports-rec'
-                  ? 'content-subfilter content-subfilter-active'
-                  : 'content-subfilter'
-              }
-              onClick={() =>
-                setNewSubtypeFilter(
-                  'sports-rec'
-                )
-              }
-            >
-              SPORTS + REC
-            </button>
+              <option value="none">CHOOSE A CATEGORY</option>
+              <option value="businesses">NEW BUSINESSES</option>
+              <option value="top-eats">TOP EATS</option>
+              <option value="community">COMMUNITY</option>
+              <option value="sports-rec">SPORTS + REC</option>
+            </select>
 
             {newSubtypeFilter ===
               'businesses' && (
