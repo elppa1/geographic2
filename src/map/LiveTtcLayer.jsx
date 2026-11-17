@@ -953,7 +953,7 @@ function fillStopArrivals({
     addTextLine({
       parent: shell,
       className: 'ttc-live-stop-delay-note',
-      text: 'Live estimates may lag by approximately 1 minute.',
+      text: 'Live estimates may lag by ~30 seconds.',
       style: { fontSize: '10px', opacity: '0.7', marginTop: '7px' },
     })
     return
@@ -1069,7 +1069,7 @@ function fillStopArrivals({
   addTextLine({
     parent: list,
     className: 'ttc-live-stop-delay-note',
-    text: 'Live estimates may lag by approximately 1 minute.',
+    text: 'Live estimates may lag by ~30 seconds.',
     style: {
       fontSize: '10px',
       opacity: '0.7',
@@ -4515,7 +4515,7 @@ function LiveTtcLayer({
             source:
               STOPS_SOURCE_ID,
             minzoom:
-              13.5,
+              13.0,
             layout: {
               'icon-image':
                 STOP_MARKER_IMAGE_ID,
@@ -4557,7 +4557,7 @@ function LiveTtcLayer({
             source:
               STOPS_SOURCE_ID,
             minzoom:
-              13.5,
+              13.0,
             paint: {
               'circle-radius': [
                 'interpolate',
