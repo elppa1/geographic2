@@ -137,6 +137,8 @@ function GeographicApp() {
   const historicMenuRootRef =
     useRef(null)
 
+  const [todoMenuOpen, setTodoMenuOpen] = useState(false)
+
 
   const timelineLayers =
     useMemo(
@@ -1212,6 +1214,7 @@ function GeographicApp() {
   function chooseContentMode(
     mode
   ) {
+    setTodoMenuOpen(false)
     if (
       mode ===
         'new'
@@ -2146,6 +2149,62 @@ function GeographicApp() {
 
           .brand-primary-filters {
             position: relative;
+          }
+
+          /* Match the HISTORIC dropdown panel without changing historic styles. */
+          .todo-menu-anchor {
+            position: relative;
+            display: flex;
+            align-items: stretch;
+          }
+          .todo-category-menu {
+            position: absolute !important;
+            top: calc(100% + 4px) !important;
+            left: 0 !important;
+            z-index: 180 !important;
+            width: min(360px, calc(100vw - 28px)) !important;
+            max-height: min(60vh, 420px) !important;
+            overflow-y: auto !important;
+            overscroll-behavior: contain;
+            border: 1px solid rgba(0,0,0,0.18) !important;
+            background: rgba(255,255,255,0.99) !important;
+            color: #111 !important;
+            box-shadow: 0 10px 26px rgba(0,0,0,0.22) !important;
+          }
+          .todo-category-menu .historic-mobile-picker-heading {
+            background: rgba(0,0,0,0.04) !important;
+            color: #111 !important;
+          }
+          .todo-category-menu .historic-mobile-picker-option {
+            background: #fff !important;
+            color: #111 !important;
+          }
+          .todo-category-menu .historic-mobile-picker-option-active {
+            background: #111 !important;
+            color: #fff !important;
+          }
+          @media (max-width: 700px) {
+            .todo-category-menu {
+              width: min(340px, calc(100vw - 20px)) !important;
+              max-height: min(48vh, 340px) !important;
+              border-color: rgba(255,255,255,0.24) !important;
+              background: rgba(10,10,10,0.98) !important;
+              color: #fff !important;
+            }
+            .todo-category-menu .historic-mobile-picker-heading {
+              border-top-color: rgba(255,255,255,0.10) !important;
+              background: rgba(255,255,255,0.07) !important;
+              color: rgba(255,255,255,0.72) !important;
+            }
+            .todo-category-menu .historic-mobile-picker-option {
+              border-top-color: rgba(255,255,255,0.08) !important;
+              background: transparent !important;
+              color: #fff !important;
+            }
+            .todo-category-menu .historic-mobile-picker-option-active {
+              background: #fff !important;
+              color: #111 !important;
+            }
           }
 
           .historic-menu-anchor {
@@ -3392,58 +3451,76 @@ function GeographicApp() {
             </button>
 
 
-            <button
-              type="button"
-              className={
-                activePinFilter ===
-                  'new'
-                  ? 'brand-mode-button brand-mode-button-active'
-                  : 'brand-mode-button'
-              }
-              onClick={() =>
-                chooseContentMode(
-                  'new'
-                )
-              }
-              style={{
-                border:
-                  '1px solid rgba(0,0,0,0.18)',
-
-                padding:
-                  '5px 8px',
-
-                background:
-                  activePinFilter ===
-                  'new'
-                    ? '#111'
-                    : '#fff',
-
-                color:
-                  activePinFilter ===
-                  'new'
-                    ? '#fff'
-                    : '#111',
-
-                font:
-                  'inherit',
-
-                fontSize:
-                  '8px',
-
-                fontWeight:
-                  '700',
-
-                letterSpacing:
-                  '0.08em',
-
-                cursor:
-                  'pointer',
-              }}
-              aria-expanded={activePinFilter === 'new'}
-              aria-controls="todo-category-dropdown"
-            >
-              TO-DO {activePinFilter === 'new' ? '▴' : '▾'}
-            </button>
+            <div className="todo-menu-anchor">
+              <button
+                type="button"
+                className={
+                  activePinFilter === 'new'
+                    ? 'brand-mode-button brand-mode-button-active'
+                    : 'brand-mode-button'
+                }
+                onClick={() => {
+                  if (activePinFilter === 'new') {
+                    setTodoMenuOpen(open => !open)
+                  } else {
+                    chooseContentMode('new')
+                    setTodoMenuOpen(true)
+                  }
+                }}
+                style={{
+                  border: '1px solid rgba(0,0,0,0.18)',
+                  padding: '5px 8px',
+                  background: activePinFilter === 'new' ? '#111' : '#fff',
+                  color: activePinFilter === 'new' ? '#fff' : '#111',
+                  font: 'inherit',
+                  fontSize: '8px',
+                  fontWeight: '700',
+                  letterSpacing: '0.08em',
+                  cursor: 'pointer',
+                }}
+                aria-expanded={activePinFilter === 'new' && todoMenuOpen}
+                aria-controls="todo-category-dropdown"
+              >
+                TO-DO {activePinFilter === 'new' && todoMenuOpen ? '▴' : '▾'}
+              </button>
+              {activePinFilter === 'new' && todoMenuOpen && (
+                <div
+                  id="todo-category-dropdown"
+                  className="todo-category-menu historic-mobile-picker-menu"
+                  role="group"
+                  aria-label="TO-DO categories"
+                >
+                  <button
+                    type="button"
+                    className={`historic-mobile-picker-option${newSubtypeFilter === 'none' ? ' historic-mobile-picker-option-active' : ''}`}
+                    onClick={() => { setNewSubtypeFilter('none'); setTodoMenuOpen(false) }}
+                  >
+                    TO-DO · CHOOSE A CATEGORY
+                  </button>
+                  {[
+                    ['NEW BUSINESS', 'businesses', 'ALL NEW BUSINESSES'],
+                    ['TOP EATS', 'top-eats', 'ALL TOP EATS'],
+                    ['COMMUNITY', 'community', 'ALL COMMUNITY'],
+                    ['SPORTS + REC', 'sports-rec', 'ALL SPORTS + REC'],
+                  ].map(([heading, value, label]) => (
+                    <div key={value}>
+                      <div className="historic-mobile-picker-heading">{heading}</div>
+                      <button
+                        type="button"
+                        className={`historic-mobile-picker-option${newSubtypeFilter === value ? ' historic-mobile-picker-option-active' : ''}`}
+                        onClick={() => {
+                          setNewSubtypeFilter(value)
+                          if (value === 'businesses') setNewBusinessRangeFilter('180')
+                          setTodoMenuOpen(false)
+                        }}
+                      >
+                        {label}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
 
             <button
@@ -3680,39 +3757,9 @@ function GeographicApp() {
         )}
 
 
-        {activePinFilter ===
-          'new' && (
-          <div
-            id="todo-category-dropdown"
-            className="content-subfilters"
-            role="group"
-            aria-label="Select one TO-DO category"
-          >
-            <label htmlFor="todo-category-select" style={{ fontSize: '10px', fontWeight: 700 }}>
-              SHOW
-            </label>
-            <select
-              id="todo-category-select"
-              aria-label="TO-DO category"
-              className="content-subfilter"
-              value={newSubtypeFilter}
-              onChange={(event) => {
-                const category = event.target.value
-                setNewSubtypeFilter(category)
-                if (category === 'businesses') setNewBusinessRangeFilter('180')
-              }}
-              style={{ cursor: 'pointer', maxWidth: '100%' }}
-            >
-              <option value="none">CHOOSE A CATEGORY</option>
-              <option value="businesses">NEW BUSINESSES</option>
-              <option value="top-eats">TOP EATS</option>
-              <option value="community">COMMUNITY</option>
-              <option value="sports-rec">SPORTS + REC</option>
-            </select>
-
-            {newSubtypeFilter ===
-              'businesses' && (
-              <div className="news-history-slider-shell">
+        {activePinFilter === 'new' && newSubtypeFilter === 'businesses' && (
+          <div className="content-subfilters" aria-label="New business age range">
+            <div className="news-history-slider-shell">
                 <div className="news-history-slider-labels">
                   <span>1 MONTH</span>
                   <span>
@@ -3747,8 +3794,7 @@ function GeographicApp() {
                   }
                   aria-label="New business age range"
                 />
-              </div>
-            )}
+            </div>
           </div>
         )}
 
