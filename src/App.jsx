@@ -2281,7 +2281,8 @@ function GeographicApp() {
               font-size: 7.5px !important;
             }
 
-            .historic-menu-anchor .historic-mobile-picker-option {
+            .historic-menu-anchor .historic-mobile-picker-option,
+            .todo-category-menu .historic-mobile-picker-option {
               font-size: 8.5px !important;
             }
           }
