@@ -2887,54 +2887,82 @@ function GeographicApp() {
             .tg-howto-section .tg-howto-note { font-size: 9px; }
             .tg-howto-update { font-size: 9px !important; }
             .tg-howto-inquiries { font-size: 9px; }
-            /* Mobile How-To only: lock the dialog inside the visual viewport.
-               Its content scrolls within the box; Real Estate and desktop are unaffected. */
+            /* Mobile How-To only: one complete viewport, no internal scrolling. */
             .about-panel.tg-howto-panel {
-              top: max(6px, env(safe-area-inset-top)) !important;
-              bottom: max(6px, env(safe-area-inset-bottom)) !important;
+              top: max(4px, env(safe-area-inset-top)) !important;
+              bottom: max(4px, env(safe-area-inset-bottom)) !important;
               left: 50% !important;
               transform: translateX(-50%) !important;
-              width: calc(100vw - 12px) !important;
+              width: calc(100vw - 8px) !important;
               max-width: 430px !important;
               height: auto !important;
               max-height: none !important;
               min-height: 0 !important;
-              padding: 10px 12px !important;
+              padding: 7px 11px !important;
               box-sizing: border-box !important;
-              overflow-x: hidden !important;
-              overflow-y: auto !important;
-              -webkit-overflow-scrolling: touch;
-              overscroll-behavior: contain;
+              overflow: hidden !important;
+              display: flex;
+              flex-direction: column;
+              justify-content: space-between;
             }
-            .tg-howto-panel .about-panel-header { gap: 10px !important; padding-bottom: 7px !important; }
-            .tg-howto-panel .about-panel-title { font-size: 16px !important; margin-top: 2px !important; }
-            .tg-howto-panel .about-close { width: 28px !important; height: 28px !important; }
-            .tg-howto-panel .about-section { padding: 7px 0 !important; }
-            .tg-howto-panel .about-section h2 { margin-bottom: 4px !important; font-size: 9px !important; }
-            .tg-howto-panel .about-section p { font-size: 11px !important; line-height: 1.35 !important; }
-            .tg-howto-panel .tg-howto-section .tg-howto-note { margin-top: 5px; padding: 5px 7px; font-size: 9px !important; }
+            .tg-howto-panel .about-panel-header { flex-shrink: 0; gap: 8px !important; padding-bottom: 4px !important; }
+            .tg-howto-panel .about-panel-title { font-size: 14px !important; margin-top: 1px !important; }
+            .tg-howto-panel .about-close { width: 25px !important; height: 25px !important; }
+            .tg-howto-panel .about-section { flex: 0 1 auto; min-height: 0; padding: 4px 0 !important; }
+            .tg-howto-panel .about-section h2 { margin-bottom: 2px !important; font-size: 8px !important; }
+            .tg-howto-panel .about-section p { font-size: 10px !important; line-height: 1.22 !important; }
+            .tg-howto-panel .tg-howto-section .tg-howto-note { margin-top: 3px; padding: 3px 5px; font-size: 8px !important; line-height: 1.2 !important; }
+            .tg-howto-panel .tg-howto-row { gap: 6px; }
             .tg-howto-panel .tg-howto-controls,
             .tg-howto-panel .tg-howto-years,
             .tg-howto-panel .tg-howto-tabs { flex-shrink: 0; }
-            .tg-howto-panel .tg-howto-sponsor { padding: 6px 0; }
-            .tg-howto-panel .tg-howto-sponsor-logos { gap: 4px 8px; margin-top: 3px; }
-            .tg-howto-panel .tg-howto-sponsor-logos > a { width: min(38vw, 120px); height: 52px; }
-            .tg-howto-panel .tg-howto-sponsor-logos a[href="https://drainunit.com/"] img { max-height: min(12.65vw, 40px); }
-            .tg-howto-panel .tg-howto-inquiries { margin-top: 4px; }
+            .tg-howto-panel .tg-howto-gps,
+            .tg-howto-panel .tg-howto-search { padding: 5px 5px; }
+            .tg-howto-panel .tg-howto-map-icon { width: 22px; height: 24px; }
+            .tg-howto-panel .tg-howto-years { padding: 5px 5px 4px; }
+            .tg-howto-panel .tg-howto-track { margin: 6px 3px 5px; }
+            .tg-howto-panel .tg-howto-tabs > span { padding: 6px 2px; }
+            .tg-howto-panel .tg-howto-news-icons img { width: 25px; height: 27px; }
+            .tg-howto-panel .tg-howto-update { margin-top: 3px !important; font-size: 8px !important; }
+            .tg-howto-panel .tg-howto-sponsor { flex: 0 1 auto; min-height: 0; padding: 3px 0 !important; }
+            .tg-howto-panel .tg-howto-sponsor-label { font-size: 8px; }
+            .tg-howto-panel .tg-howto-sponsor-logos { gap: 3px 8px; margin-top: 2px; flex-wrap: nowrap; }
+            .tg-howto-panel .tg-howto-sponsor-logos > a { width: min(38vw, 120px); height: 42px; }
+            .tg-howto-panel .tg-howto-sponsor-logos a[href="https://drainunit.com/"] img { max-height: 35px; }
+            .tg-howto-panel .tg-howto-inquiries { margin-top: 2px; font-size: 8px; }
             .tg-howto-panel .howto-actions {
-              gap: 5px !important;
-              margin-top: 8px !important;
-              position: sticky;
-              bottom: -10px;
-              z-index: 1;
-              padding: 6px 0 4px;
-              background: rgba(255,255,255,0.98);
+              flex-shrink: 0;
+              gap: 4px !important;
+              margin-top: 4px !important;
+              position: static;
+              padding: 0;
+              background: transparent;
             }
             .tg-howto-panel .howto-primary,
             .tg-howto-panel .howto-secondary {
-              min-height: 35px !important;
-              padding: 7px 8px !important;
-              font-size: 9px !important;
+              min-height: 29px !important;
+              padding: 5px 7px !important;
+              font-size: 8px !important;
+            }
+            @media (max-height: 650px) {
+              .about-panel.tg-howto-panel { padding: 4px 9px !important; }
+              .tg-howto-panel .about-panel-header { padding-bottom: 2px !important; }
+              .tg-howto-panel .about-panel-title { font-size: 12px !important; }
+              .tg-howto-panel .about-close { width: 22px !important; height: 22px !important; }
+              .tg-howto-panel .about-section { padding: 2px 0 !important; }
+              .tg-howto-panel .about-section h2 { font-size: 7px !important; margin-bottom: 1px !important; }
+              .tg-howto-panel .about-section p { font-size: 9px !important; line-height: 1.13 !important; }
+              .tg-howto-panel .tg-howto-section .tg-howto-note { font-size: 7px !important; padding: 2px 4px; }
+              .tg-howto-panel .tg-howto-map-icon { width: 19px; height: 20px; }
+              .tg-howto-panel .tg-howto-years { padding: 3px 4px; }
+              .tg-howto-panel .tg-howto-tabs > span { padding: 4px 1px; }
+              .tg-howto-panel .tg-howto-news-icons img { width: 21px; height: 23px; }
+              .tg-howto-panel .tg-howto-sponsor-logos > a { height: 32px; }
+              .tg-howto-panel .tg-howto-sponsor-logos a[href="https://drainunit.com/"] img { max-height: 28px; }
+              .tg-howto-panel .tg-howto-inquiries { font-size: 7px; }
+              .tg-howto-panel .howto-actions { gap: 2px !important; margin-top: 2px !important; }
+              .tg-howto-panel .howto-primary,
+              .tg-howto-panel .howto-secondary { min-height: 25px !important; padding: 3px 5px !important; font-size: 7px !important; }
             }
           }
         `}
@@ -3952,11 +3980,10 @@ function GeographicApp() {
               <h2>FEATURE PINS</h2>
               <div className="tg-howto-row">
                 <div className="tg-howto-controls tg-howto-tabs" aria-label="Historic News and TO-DO controls">
-                  <span>HISTORIC</span><span className="tg-howto-selected">NEWS</span><span>TO-DO</span>
+                  <span className="tg-howto-selected">HISTORIC</span><span>NEWS</span><span>TO-DO</span>
                 </div>
                 <p>Explore News, Historic and Community pins to see what's happening nearby, including community program start times, new restaurants, recreation and more.</p>
               </div>
-              <div className="tg-howto-icons" aria-label="Examples of Geographic community pin symbols"><span>🏀</span><span>📚</span><span>💧</span><span>⛸️</span><span>🎾</span></div>
             </section>
 
             <section className="about-section tg-howto-section">
