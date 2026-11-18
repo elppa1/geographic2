@@ -4515,7 +4515,7 @@ function LiveTtcLayer({
             source:
               STOPS_SOURCE_ID,
             minzoom:
-              13.0,
+              12.5,
             layout: {
               'icon-image':
                 STOP_MARKER_IMAGE_ID,
@@ -4527,6 +4527,8 @@ function LiveTtcLayer({
                 [
                   'zoom',
                 ],
+                12.5,
+                0.44,
                 13.5,
                 0.62,
                 14,
@@ -4537,9 +4539,9 @@ function LiveTtcLayer({
                 0.92,
               ],
               'icon-allow-overlap':
-                false,
+                true,
               'icon-ignore-placement':
-                false,
+                true,
             },
           })
         }
@@ -4557,7 +4559,7 @@ function LiveTtcLayer({
             source:
               STOPS_SOURCE_ID,
             minzoom:
-              13.0,
+              12.5,
             paint: {
               'circle-radius': [
                 'interpolate',
