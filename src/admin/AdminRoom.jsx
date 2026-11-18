@@ -11244,8 +11244,38 @@ function AdminRoom() {
       )
 
 
+      // Local browser reviews can predate the persistent queue. Match the
+      // official TPS bulletin, NOT just the case or the attachment URL.
+      // Keep the server-backed card and the best available photograph.
+      const mergedTpsReviews = []
+      for (const review of nextTorontoReview) {
+        if (!isTpsNewsroomRecord(review) ||
+            getNewsroomAction(review) === 'resolve') {
+          mergedTpsReviews.push(review)
+          continue
+        }
+        const duplicateAt = mergedTpsReviews.findIndex((candidate) =>
+          isTpsNewsroomRecord(candidate) &&
+          getNewsroomAction(candidate) !== 'resolve' &&
+          sameTpsRelease(candidate, review)
+        )
+        if (duplicateAt < 0) {
+          mergedTpsReviews.push(review)
+          continue
+        }
+        const previous = mergedTpsReviews[duplicateAt]
+        const previousIsServer = Boolean(previous.serverQueueId)
+        const reviewIsServer = Boolean(review.serverQueueId)
+        const preferred = reviewIsServer && !previousIsServer ? review : previous
+        const photo = previous.imageUrl || review.imageUrl || ''
+        mergedTpsReviews[duplicateAt] = {
+          ...preferred,
+          imageUrl: preferred.imageUrl || photo,
+        }
+      }
+
       const nextAllReview = [
-        ...nextTorontoReview,
+        ...mergedTpsReviews,
         ...otherReview,
       ]
 

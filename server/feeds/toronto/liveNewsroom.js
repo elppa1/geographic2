@@ -993,6 +993,8 @@ async function ensureLoaded() {
   // are never touched.
   await removeErroneousStandalonePoliceArrestCompanionStories()
 
+  await reconcileDuplicateTpsPendingReleases()
+
   await recoverFalsePositiveTpsAlreadyPublishedAcknowledgements()
 
 
@@ -1347,6 +1349,17 @@ async function addEvent({
       ? tpsFingerprint(incoming)
       : fingerprint(incoming)
 
+
+  if (sourceKey === 'police' && action !== 'resolve' &&
+      incoming?.resolved !== true) {
+    const matchingBulletin = store.events.find((event) =>
+      event.sourceKey === 'police' &&
+      event.status === 'pending' &&
+      event.newsroomAction !== 'resolve' &&
+      sameTpsOfficialRelease(event, incoming)
+    )
+    if (matchingBulletin) return matchingBulletin
+  }
 
   const duplicate =
     findPendingEvent({
@@ -1823,6 +1836,37 @@ function sameTpsOfficialRelease(a, b) {
   return Boolean(aTitle && aTitle === bTitle)
 }
 
+// Keep only one PENDING editorial card for an identical official TPS bulletin.
+// Preserve every historical decision and public pin. Prefer the queued card
+// with an attached photograph; never treat case number alone as identity.
+async function reconcileDuplicateTpsPendingReleases() {
+  const canonical = []
+  let hidden = 0
+  for (const event of store.events) {
+    if (event?.sourceKey !== 'police' || event?.status !== 'pending' ||
+        event?.newsroomAction === 'resolve' || !tpsCaseKey(event) ||
+        tpsReleaseDateMs(event) === null) continue
+    const match = canonical.find((other) => sameTpsOfficialRelease(other, event))
+    if (!match) {
+      canonical.push(event)
+      continue
+    }
+    // Keep the existing queue identity; populate an absent image only.
+    if (!cleanText(match.imageUrl) && cleanText(event.imageUrl)) {
+      match.imageUrl = event.imageUrl
+    }
+    event.status = 'acked'
+    event.reviewStatus = 'acked'
+    event.outcome = 'duplicate-official-release'
+    event.ackedAt = new Date().toISOString()
+    hidden++
+  }
+  if (hidden) {
+    await persistStore()
+    console.warn('LIVE NEWSROOM · SUPPRESSED DUPLICATE TPS PENDING CARDS:', hidden)
+  }
+}
+
 function publishedTpsOfficialRelease(record) {
   return Object.values(store.publishedNews || {}).find((published) =>
     published?.active !== false &&
@@ -1931,6 +1975,25 @@ async function observeRecord({
     sourceExisting.lastEditorialActionAt = ''
   }
 
+
+  // One official bulletin is one editorial decision. A replay may have an
+  // altered attachment, summary or email ID; none of those creates a new
+  // official release. Later distinct TPS bulletins are unaffected.
+  if (sourceKey === 'police' && forceAction !== 'resolve' &&
+      record?.resolved !== true &&
+      (publishedTpsOfficialRelease(record) ||
+        store.events.some((event) =>
+          event?.sourceKey === 'police' &&
+          event?.newsroomAction !== 'resolve' &&
+          sameTpsOfficialRelease(event, record) &&
+          (event.status === 'pending' ||
+            (event.status === 'acked' &&
+              /approved|rejected|duplicate-official-release/.test(
+                cleanText(event.outcome).toLowerCase()
+              )))
+        ))) {
+    return { action: 'seen', record: sourceExisting || record }
+  }
 
   // A genuine newer case update is still queued. Replayed OLDER releases
   // cannot compete with a newer published or already-pending TPS release.
