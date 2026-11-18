@@ -2869,6 +2869,7 @@ function GeographicApp() {
           .tg-howto-sponsor-logos { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 6px; }
           .tg-howto-sponsor-logos > a { display: flex; width: 185px; height: 80px; align-items: center; justify-content: center; flex: 0 0 auto; }
           .tg-howto-sponsor-logos img { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }
+          .tg-howto-sponsor-logos a[href="https://drainunit.com/"] img { max-height: 61px; }
           .tg-howto-inquiries { margin-top: 7px; font-size: 10px; font-weight: 700; letter-spacing: 0; overflow-wrap: anywhere; }
           .tg-howto-inquiries a { color: inherit; }
           .tg-howto-inquiries-label { display: inline-block; white-space: nowrap; }
@@ -2918,6 +2919,7 @@ function GeographicApp() {
             .tg-howto-panel .tg-howto-sponsor { padding: 6px 0; }
             .tg-howto-panel .tg-howto-sponsor-logos { gap: 4px 8px; margin-top: 3px; }
             .tg-howto-panel .tg-howto-sponsor-logos > a { width: min(38vw, 120px); height: 52px; }
+            .tg-howto-panel .tg-howto-sponsor-logos a[href="https://drainunit.com/"] img { max-height: min(12.65vw, 40px); }
             .tg-howto-panel .tg-howto-inquiries { margin-top: 4px; }
             .tg-howto-panel .howto-actions {
               gap: 5px !important;
