@@ -7,6 +7,7 @@ import {
 
 import GeographicMap from './map/GeographicMap.jsx'
 import drainUnitOriginal from './assets/drain-unit-original.png'
+import progainsOriginal from './assets/progains-original.jpg'
 import policeMapIcon from './assets/police-map-icon.png'
 import fireMapIcon from './assets/fire-map-icon.png'
 import ttcMapIcon from './assets/ttc-map-icon.png'
@@ -2865,8 +2866,9 @@ function GeographicApp() {
           .tg-howto-update { margin-top: 8px !important; font-size: 10px !important; font-weight: 800; }
           .tg-howto-sponsor { text-align: center; border-bottom: 1px solid rgba(0,0,0,.12); padding: 10px 0; }
           .tg-howto-sponsor-label { font-size: 9px; font-weight: 800; letter-spacing: .13em; }
-          .tg-howto-sponsor > a { display: block; width: min(100%, 185px); margin: 6px auto 0; }
-          .tg-howto-sponsor img { width: 100%; height: auto; display: block; }
+          .tg-howto-sponsor-logos { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 6px; }
+          .tg-howto-sponsor-logos > a { display: flex; width: 185px; height: 80px; align-items: center; justify-content: center; flex: 0 0 auto; }
+          .tg-howto-sponsor-logos img { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }
           .tg-howto-inquiries { margin-top: 7px; font-size: 10px; font-weight: 700; letter-spacing: 0; overflow-wrap: anywhere; }
           .tg-howto-inquiries a { color: inherit; }
           .tg-howto-inquiries-label { display: inline-block; white-space: nowrap; }
@@ -2914,7 +2916,8 @@ function GeographicApp() {
             .tg-howto-panel .tg-howto-years,
             .tg-howto-panel .tg-howto-tabs { flex-shrink: 0; }
             .tg-howto-panel .tg-howto-sponsor { padding: 6px 0; }
-            .tg-howto-panel .tg-howto-sponsor > a { width: min(100%, 120px); margin-top: 3px; }
+            .tg-howto-panel .tg-howto-sponsor-logos { gap: 4px 8px; margin-top: 3px; }
+            .tg-howto-panel .tg-howto-sponsor-logos > a { width: min(38vw, 120px); height: 52px; }
             .tg-howto-panel .tg-howto-inquiries { margin-top: 4px; }
             .tg-howto-panel .howto-actions {
               gap: 5px !important;
@@ -3965,9 +3968,14 @@ function GeographicApp() {
 
             <section className="tg-howto-sponsor" aria-label="Sponsor and inquiries">
               <div className="tg-howto-sponsor-label">SPONSORED BY</div>
-              <a href="https://drainunit.com/" target="_blank" rel="noopener noreferrer" aria-label="Visit Drain Unit Inc.">
-                <img src={drainUnitOriginal} alt="Drain Unit Inc. — Plumbing done right, guaranteed!" />
-              </a>
+              <div className="tg-howto-sponsor-logos">
+                <a href="https://drainunit.com/" target="_blank" rel="noopener noreferrer" aria-label="Visit Drain Unit Inc.">
+                  <img src={drainUnitOriginal} alt="Drain Unit Inc. — Plumbing done right, guaranteed!" />
+                </a>
+                <a href="https://progains.ca/" target="_blank" rel="noopener noreferrer" aria-label="Visit ProGains">
+                  <img src={progainsOriginal} alt="ProGains — High Protein Ice Cream" />
+                </a>
+              </div>
               <div className="tg-howto-inquiries"><span className="tg-howto-inquiries-label">INQUIRIES:</span>{' '}<a href="mailto:elppa.engineering@gmail.com">elppa.engineering@gmail.com</a></div>
             </section>
 
