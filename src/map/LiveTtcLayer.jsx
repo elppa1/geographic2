@@ -3366,7 +3366,7 @@ function LiveTtcLayer({
           !selectedRouteRef.current && !gpsChosen
 
         accuracyHint.textContent =
-          'TO IMPROVE TTC ACCURACY, CLICK A ROUTE OR PRESS GPS.'
+          'TO IMPROVE TTC ACCURACY, TURN ON GPS OR SEARCH YOUR ADDRESS.'
 
         if (
           accuracyHintVisible ===
@@ -4515,7 +4515,7 @@ function LiveTtcLayer({
             source:
               STOPS_SOURCE_ID,
             minzoom:
-              12.5,
+              13.5,
             layout: {
               'icon-image':
                 STOP_MARKER_IMAGE_ID,
@@ -4559,7 +4559,7 @@ function LiveTtcLayer({
             source:
               STOPS_SOURCE_ID,
             minzoom:
-              12.5,
+              13.5,
             paint: {
               'circle-radius': [
                 'interpolate',
