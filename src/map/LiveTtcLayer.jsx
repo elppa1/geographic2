@@ -847,6 +847,14 @@ function createStopPopupLoading(
     })
   }
 
+  // The 30-second TTC notice is unconditional, even while loading or on error.
+  addTextLine({
+    parent: shell,
+    className: 'ttc-live-stop-delay-note',
+    text: 'Live estimates may lag by ~30 seconds.',
+    style: { fontSize: '10px', opacity: '0.7', marginTop: '5px', marginBottom: '6px' },
+  })
+
   addTextLine({
     parent:
       shell,
@@ -912,191 +920,163 @@ function liveArrivalMinutes(
 }
 
 
-function fillStopArrivals({
-  shell,
-  payload,
-}) {
-  shell
-    .querySelectorAll(
-      '.ttc-live-stop-loading, .ttc-live-stop-arrivals, .ttc-live-stop-empty, .ttc-live-stop-error, .ttc-live-stop-delay-note, .ttc-live-nearby-buses'
-    )
-    .forEach(
-      (
-        child
-      ) =>
-        child.remove()
-    )
+// A warning belongs beside a specific ETA only when the TTC trip or vehicle
+// identity matches. Route number or physical proximity alone is not enough.
+function sameStopArrivalVehicle(arrival, candidate) {
+  const vehicleA = String(arrival?.vehicleId || arrival?.linkedVehicleId || '').trim()
+  const vehicleB = String(candidate?.vehicleId || candidate?.linkedVehicleId || '').trim()
+  const tripA = String(arrival?.tripId || arrival?.linkedGtfsTripId || '').trim()
+  const tripB = String(candidate?.tripId || candidate?.linkedGtfsTripId || '').trim()
+  const routeA = String(arrival?.routeShortName || arrival?.routeId || '').trim().toUpperCase()
+  const routeB = String(candidate?.routeShortName || candidate?.routeId || '').trim().toUpperCase()
+  if (routeA && routeB && routeA !== routeB) return false
+  if (vehicleA && vehicleB && vehicleA !== vehicleB) return false
+  if (tripA && tripB && tripA !== tripB) return false
+  return Boolean((vehicleA && vehicleB && vehicleA === vehicleB) ||
+    (tripA && tripB && tripA === tripB))
+}
 
-  const arrivals =
-    Array.isArray(
-      payload?.arrivals
-    )
-      ? payload.arrivals
-      : []
+function fillStopArrivals({ shell, payload, nearbyVehicles = [] }) {
+  shell.querySelectorAll(
+    '.ttc-live-stop-loading, .ttc-live-stop-arrivals, .ttc-live-stop-empty, .ttc-live-stop-error, .ttc-live-stop-status-notes'
+  ).forEach(child => child.remove())
+
+  const arrivals = Array.isArray(payload?.arrivals) ? payload.arrivals : []
+  const unverified = Array.isArray(payload?.unverifiedArrivals) ? payload.unverifiedArrivals : []
+
+  // A withdrawn or expired estimate is not presented as a current arrival.
+  // An independently observed vehicle that cannot be linked by exact ID also
+  // gets its own warning, above the arrival board, not an invented ETA.
+  const notices = [
+    ...unverified.map(arrival => ({
+      ...arrival,
+      status: 'unverified',
+      routeLabel: stopArrivalRouteLabel(arrival),
+    })),
+    ...nearbyVehicles.map(vehicle => ({
+      ...vehicle,
+      status: vehicle.verifiedUpcoming ? 'approaching' : 'possibly_passed',
+      routeLabel: String(vehicle.routeShortName || vehicle.routeId || 'TTC'),
+    })),
+  ]
+  const arrivalWarnings = new Set()
+  const unmatched = []
+  notices.forEach(notice => {
+    const index = arrivals.findIndex(arrival => sameStopArrivalVehicle(arrival, notice))
+    if (index >= 0 && index < 8) {
+      if (notice.status !== 'approaching') arrivalWarnings.add(index)
+      return
+    }
+    if (unmatched.some(existing => sameStopArrivalVehicle(existing, notice))) return
+    unmatched.push(notice)
+  })
+
+  if (unmatched.length) {
+    const statusBlock = document.createElement('div')
+    statusBlock.className = 'ttc-live-stop-status-notes'
+    Object.assign(statusBlock.style, {
+      paddingBottom: '5px',
+      borderBottom: '1px solid rgba(0,0,0,0.12)',
+    })
+    unmatched.slice(0, 3).forEach(notice => {
+      const route = notice.routeLabel || 'TTC'
+      const note = notice.status === 'approaching'
+        ? `${route} · Nearby vehicle approaching; no matched arrival time.`
+        : notice.status === 'unverified'
+          ? `${route} · Earlier arrival unconfirmed; may have already passed.`
+          : `${route} · Nearby vehicle may have already passed (unconfirmed).`
+      addTextLine({
+        parent: statusBlock,
+        text: note,
+        style: { fontSize: '9px', lineHeight: '1.3', marginTop: '4px' },
+      })
+    })
+    shell.appendChild(statusBlock)
+  }
+
   if (arrivals.length === 0) {
     addTextLine({
-      parent:
-        shell,
-      className:
-        'ttc-live-stop-empty',
-      text:
-        'No current TTC arrival estimates.',
-      style: {
-        fontSize:
-          '10px',
-        opacity:
-          '0.65',
-        marginTop:
-          '6px',
-      },
-    })
-    addTextLine({
       parent: shell,
-      className: 'ttc-live-stop-delay-note',
-      text: 'Live estimates may lag by ~30 seconds.',
-      style: { fontSize: '10px', opacity: '0.7', marginTop: '7px' },
+      className: 'ttc-live-stop-empty',
+      text: 'No current TTC arrival estimates.',
+      style: { fontSize: '10px', opacity: '0.65', marginTop: '6px' },
     })
     return
   }
 
-  const list =
-    document.createElement(
-      'div'
-    )
-
-  list.className =
-    'ttc-live-stop-arrivals'
-
-  Object.assign(
-    list.style,
-    {
-      marginTop:
-        '7px',
-      borderTop:
-        '1px solid rgba(0,0,0,0.12)',
-    }
-  )
-
-  arrivals
-    .slice(
-      0,
-      8
-    )
-    .forEach(
-      (
-        arrival
-      ) => {
-        const row =
-          document.createElement(
-            'div'
-          )
-
-        Object.assign(
-          row.style,
-          {
-            display:
-              'grid',
-            gridTemplateColumns:
-              '42px 1fr auto',
-            alignItems:
-              'center',
-            gap:
-              '7px',
-            padding:
-              '7px 0',
-            borderBottom:
-              '1px solid rgba(0,0,0,0.08)',
-          }
-        )
-
-        addTextLine({
-          parent:
-            row,
-          text:
-            stopArrivalRouteLabel(arrival),
-          style: {
-            fontSize:
-              '12px',
-            fontWeight:
-              '900',
-          },
-        })
-
-        addTextLine({
-          parent: row,
-          text: arrival.headsign || arrival.routeLongName || '',
-          style: {
-            fontSize: '9px',
-            lineHeight: '1.25',
-          },
-        })
-
-        const minutes =
-          liveArrivalMinutes(
-            arrival
-          )
-
-        const secondsLate = Date.now() / 1000 - Number(arrival?.arrivalTime)
-        const timeLabel = arrival?.etaState === 'at_stop'
-          ? 'At stop'
-          : Number.isFinite(secondsLate) && secondsLate > 20
-            ? 'Updating...'
-            : minutes <= 0
-              ? '<1 min'
-              : `${minutes} min`
-        addTextLine({
-          parent: row,
-          text: timeLabel,
-          style: {
-            fontSize:
-              '11px',
-            fontWeight:
-              '900',
-            whiteSpace:
-              'nowrap',
-          },
-        })
-
-        list.appendChild(
-          row
-        )
-      }
-    )
-
-  shell.appendChild(
-    list
-  )
-  addTextLine({
-    parent: list,
-    className: 'ttc-live-stop-delay-note',
-    text: 'Live estimates may lag by ~30 seconds.',
-    style: {
-      fontSize: '10px',
-      opacity: '0.7',
-      marginTop: '7px',
-      paddingBottom: '3px',
-    },
+  const list = document.createElement('div')
+  list.className = 'ttc-live-stop-arrivals'
+  Object.assign(list.style, {
+    marginTop: '7px',
+    borderTop: '1px solid rgba(0,0,0,0.12)',
   })
+
+  arrivals.slice(0, 8).forEach((arrival, index) => {
+    const row = document.createElement('div')
+    Object.assign(row.style, {
+      display: 'grid',
+      gridTemplateColumns: '42px 1fr auto',
+      alignItems: 'center',
+      gap: '7px',
+      padding: '7px 0',
+      borderBottom: '1px solid rgba(0,0,0,0.08)',
+    })
+    addTextLine({
+      parent: row,
+      text: stopArrivalRouteLabel(arrival),
+      style: { fontSize: '12px', fontWeight: '900' },
+    })
+    addTextLine({
+      parent: row,
+      text: arrival.headsign || arrival.routeLongName || '',
+      style: { fontSize: '9px', lineHeight: '1.25' },
+    })
+
+    const minutes = liveArrivalMinutes(arrival)
+    const secondsLate = Date.now() / 1000 - Number(arrival?.arrivalTime)
+    const timeLabel = arrival?.etaState === 'at_stop'
+      ? 'At stop'
+      : Number.isFinite(secondsLate) && secondsLate > 20
+        ? 'Updating...'
+        : minutes <= 0
+          ? '<1 min'
+          : `${minutes} min`
+
+    const timeCell = document.createElement('div')
+    Object.assign(timeCell.style, { textAlign: 'right' })
+    addTextLine({
+      parent: timeCell,
+      text: timeLabel,
+      style: { fontSize: '11px', fontWeight: '900', whiteSpace: 'nowrap' },
+    })
+    if (arrivalWarnings.has(index)) {
+      addTextLine({
+        parent: timeCell,
+        text: 'May have already passed',
+        style: {
+          fontSize: '8px', lineHeight: '1.2',
+          maxWidth: '88px', marginTop: '2px',
+        },
+      })
+    }
+    row.appendChild(timeCell)
+    list.appendChild(row)
+  })
+  shell.appendChild(list)
 }
 
-
-
-// Display-only TTC fallback. A vehicle is eligible only when its realtime
-// trip identifies this exact stop as its next or following stop. Never infer
-// a scheduled arrival from spatial proximity alone.
-function addVerifiedNearbyVehiclesToStop({ shell, payload, stopId, stopCoordinates, stopProperties, vehicleStates }) {
-  shell.querySelectorAll('.ttc-live-nearby-buses').forEach(node => node.remove())
+// Display-only TTC observation. This does not change ETA calculations or
+// vehicle rendering. A specific arrival can be flagged only by exact ID.
+function getStopNearbyVehicleNotices({ payload, stopId, stopCoordinates, stopProperties, vehicleStates }) {
   const arrivals = Array.isArray(payload?.arrivals) ? payload.arrivals : []
-  if (!Array.isArray(stopCoordinates) || !vehicleStates || typeof vehicleStates.forEach !== 'function') return
+  if (!Array.isArray(stopCoordinates) || !vehicleStates || typeof vehicleStates.forEach !== 'function') return []
 
-  // Network stops can carry both canonical GTFS IDs and surface IDs.
-  // Match either ID, never just the spelling of the stop name.
   const stopIds = new Set([
     stopId,
     stopProperties?.stopId,
     stopProperties?.surfaceStopId,
   ].map(value => String(value || '').trim()).filter(Boolean))
-  if (!stopIds.size) return
+  if (!stopIds.size) return []
 
   const listedRoutes = new Set(arrivals.map(arrival =>
     String(arrival?.routeShortName || arrival?.routeId || '').trim().toUpperCase()
@@ -1123,34 +1103,22 @@ function addVerifiedNearbyVehiclesToStop({ shell, payload, stopId, stopCoordinat
     const targetSequence = targetRaw == null ? NaN : Number(targetRaw)
     const sequenceValid = Number.isFinite(currentSequence) && Number.isFinite(targetSequence) && targetSequence >= currentSequence
 
-    // An exact upcoming-stop match is strong evidence. When the feed's
-    // stop-ID/sequence link is missing, only show a very close vehicle if
-    // the official board independently confirms this route serves the stop.
-    // Such entries are uncertain, not claimed approaching or assigned an ETA.
     const verifiedUpcoming = (isNext || isFollowing) && sequenceValid
     const uncertainNearby = !verifiedUpcoming && routeOnBoard && distance <= 220
     if (!verifiedUpcoming && !uncertainNearby) return
-    if (arrivals.some(arrival =>
-      (arrival.tripId && String(arrival.tripId) === String(props.tripId)) ||
-      (arrival.vehicleId && String(arrival.vehicleId) === String(props.vehicleId))
-    )) return
-    matches.push({ props, distance, verifiedUpcoming })
+    matches.push({
+      vehicleId: props.vehicleId,
+      tripId: props.tripId,
+      routeId: props.routeId,
+      routeShortName: props.routeShortName,
+      distance,
+      verifiedUpcoming,
+    })
   })
   matches.sort((a, b) => Number(b.verifiedUpcoming) - Number(a.verifiedUpcoming) || a.distance - b.distance)
-  if (!matches.length) return
-  const list = document.createElement('div')
-  list.className = 'ttc-live-nearby-buses'
-  Object.assign(list.style, { marginTop: '6px', borderTop: '1px solid rgba(0,0,0,0.12)', paddingTop: '5px' })
-  addTextLine({ parent: list, text: 'LIVE VEHICLES NEAR THIS STOP', style: { fontSize: '9px', fontWeight: '800', opacity: '0.65' } })
-  matches.slice(0, 2).forEach(({ props, verifiedUpcoming }) => {
-    const row = document.createElement('div')
-    Object.assign(row.style, { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', padding: '5px 0', fontSize: '10px' })
-    addTextLine({ parent: row, text: String(props.routeShortName || props.routeId), style: { fontWeight: '900', fontSize: '11px' } })
-    addTextLine({ parent: row, text: verifiedUpcoming ? 'Nearby · approaching' : 'Nearby · possibly passed', style: { fontSize: '10px', textAlign: 'right' } })
-    list.appendChild(row)
-  })
-  shell.appendChild(list)
+  return matches.slice(0, 2)
 }
+
 
 function featureCollection(
   features
@@ -8130,17 +8098,17 @@ function LiveTtcLayer({
               return
             }
 
-            fillStopArrivals({
-              shell,
-              payload,
-            })
-            addVerifiedNearbyVehiclesToStop({
-              shell,
+            const nearbyVehicles = getStopNearbyVehicleNotices({
               payload,
               stopId: payload?.resolvedStopId || stopId,
               stopCoordinates,
               stopProperties: properties,
               vehicleStates: vehicleAnimationsRef.current,
+            })
+            fillStopArrivals({
+              shell,
+              payload,
+              nearbyVehicles,
             })
 
             if (
