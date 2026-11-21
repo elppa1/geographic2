@@ -8085,6 +8085,7 @@ function LiveTtcLayer({
               new URLSearchParams({
                 stopId,
                 stopCode,
+                surfaceStopId: String(properties.surfaceStopId || ''),
                 stopName:
                   String(
                     properties.stopName ||
@@ -8136,7 +8137,7 @@ function LiveTtcLayer({
             addVerifiedNearbyVehiclesToStop({
               shell,
               payload,
-              stopId,
+              stopId: payload?.resolvedStopId || stopId,
               stopCoordinates,
               stopProperties: properties,
               vehicleStates: vehicleAnimationsRef.current,

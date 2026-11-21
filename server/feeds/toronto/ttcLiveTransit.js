@@ -68,6 +68,10 @@ const TRIP_UPDATE_SERVE_CACHE_MS =
 const TRIP_UPDATE_WARM_INTERVAL_MS =
   1800
 
+// Reject aged upstream evidence; a freshly fetched HTTP response can still
+// contain old GTFS data. Leave genuine predictions available without GPS.
+const LIVE_PREDICTION_MAX_AGE_SECONDS = 120
+
 const UMO_PREDICTION_CACHE_MS =
   10 * 1000
 
@@ -2213,48 +2217,71 @@ function canonicalStopFromIndex(
 async function resolveCanonicalStop({
   stopId,
   stopCode,
-  stopName =
-    '',
-  latitude =
-    null,
-  longitude =
-    null,
+  surfaceStopId = '',
+  stopName = '',
+  latitude = null,
+  longitude = null,
 }) {
-  const index =
-    await getStationIndex()
+  // BusTime TripUpdates use the SurfaceGTFS stop namespace. The map also
+  // carries a canonical full-GTFS stop ID for search and other features.
+  // Never query BusTime with the full-GTFS ID when we have its surface ID.
+  const surface = surfaceCache
+  const requestedSurfaceId = cleanText(surfaceStopId)
+  const requestedCode = cleanText(stopCode)
+  const lat = numberOrNull(latitude)
+  const lon = numberOrNull(longitude)
+  const supplied = requestedSurfaceId && surface?.stopsById?.get(requestedSurfaceId)
+  const nearbyCandidates = requestedCode && surface?.stops
+    ? surface.stops.filter((stop) => cleanText(stop.code) === requestedCode)
+    : []
+  const codeCandidate = chooseCanonicalStop(nearbyCandidates, {
+    name: stopName, latitude: lat, longitude: lon,
+  })
+  // Exact code and near coordinates are mandatory when matching a mapped
+  // surface stop. Opposite-side and duplicate-code stops must not crossfeed.
+  const acceptable = (candidate) => candidate &&
+    (!requestedCode || cleanText(candidate.code) === requestedCode) &&
+    (lat === null || lon === null ||
+      distanceMeters(lat, lon, candidate.latitude, candidate.longitude) <= 85)
+  const liveStop = acceptable(supplied) ? supplied :
+    acceptable(codeCandidate) ? codeCandidate : null
 
-  const canonical =
-    canonicalStopFromIndex(
-      index,
-      {
-        stopId,
-        stopCode,
-        stopName,
-        latitude,
-        longitude,
-      }
-    )
-
-  if (
-    canonical
-  ) {
+  // A surfaced map stop already supplies the exact BusTime identity; don't
+  // delay its arrivals by downloading the (large) separate full GTFS archive.
+  const directlyMappedId = cleanText(liveStop?.id) ||
+    (!surface && requestedSurfaceId ? requestedSurfaceId : '')
+  if (directlyMappedId) {
     return {
-      stop:
-        canonical,
-      stopId:
-        canonical.id,
-      resolution:
-        cleanText(
-          stopCode
-        )
-          ? 'TTC_FULL_GTFS_STOP_CODE'
-          : 'TTC_FULL_GTFS_STOP_ID',
+      stop: { ...(liveStop || {
+        name: cleanText(stopName), latitude: lat, longitude: lon,
+      }), id: directlyMappedId, code: requestedCode || cleanText(liveStop?.code) },
+      stopId: directlyMappedId,
+      canonicalStopId: cleanText(stopId),
+      resolution: liveStop ? 'BUSTIME_SURFACE_GTFS_STOP' : 'MAP_SURFACE_GTFS_STOP',
     }
   }
-
-  throw new Error(
-    `Unable to resolve TTC stop identity for code ${cleanText(stopCode) || '(none)'}`
-  )
+  // Stations and non-map searches still use the complete-GTFS index.
+  const index = await getStationIndex()
+  const canonical = canonicalStopFromIndex(index, {
+    stopId, stopCode, stopName, latitude, longitude,
+  })
+  const realtimeStopId = cleanText(canonical?.id) || cleanText(stopId)
+  if (!realtimeStopId) {
+    throw new Error(`Unable to resolve TTC stop identity for code ${requestedCode || '(none)'}`)
+  }
+  const metadata = liveStop || canonical || {
+    id: realtimeStopId, code: requestedCode, name: cleanText(stopName),
+    latitude: lat, longitude: lon,
+  }
+  return {
+    stop: { ...metadata, id: realtimeStopId,
+      code: cleanText(metadata.code) || requestedCode },
+    stopId: realtimeStopId,
+    canonicalStopId: cleanText(canonical?.id),
+    resolution: liveStop ? 'BUSTIME_SURFACE_GTFS_STOP' :
+      (!surface && requestedSurfaceId ? 'MAP_SURFACE_GTFS_STOP' :
+        canonical ? 'TTC_FULL_GTFS_FALLBACK' : 'REQUEST_STOP_FALLBACK'),
+  }
 }
 
 
@@ -4952,6 +4979,8 @@ async function getGtfsArrivalsPayload(
       vehicleCache ? Math.max(0, Math.round((Date.now() - vehicleCache.cachedAt) / 1000)) : null,
     passageRequiresRecentGpsSeconds:
       ARRIVAL_PASSAGE_MAX_VEHICLE_AGE_SECONDS,
+    maxRealtimePredictionAgeSeconds: LIVE_PREDICTION_MAX_AGE_SECONDS,
+    rejectedStaleTripEntities: 0,
   }
 
   // Count matching raw updates BEFORE route, time and vehicle filters.
@@ -4973,9 +5002,16 @@ async function getGtfsArrivalsPayload(
         const tripUpdate =
           entity?.tripUpdate
 
-        if (
-          !tripUpdate
-        ) {
+        if (!tripUpdate) return
+        const sampleTime = numberOrNull(tripUpdate.timestamp)
+        const headerTime = numberOrNull(feed?.header?.timestamp)
+        const current = (timestamp) => timestamp !== null &&
+          timestamp <= nowSeconds + 30 &&
+          nowSeconds - timestamp <= LIVE_PREDICTION_MAX_AGE_SECONDS
+        // A recent network fetch cannot resuscitate an old TTC snapshot.
+        if ((sampleTime !== null && !current(sampleTime)) ||
+            (sampleTime === null && !current(headerTime))) {
+          primaryDiagnostics.rejectedStaleTripEntities++
           return
         }
 
@@ -5428,72 +5464,58 @@ function buildUmoStopPayload({
 async function getArrivalsPayloadUnreconciled({
   stopId,
   stopCode,
-  stopName =
-    '',
-  latitude =
-    null,
-  longitude =
-    null,
+  surfaceStopId = '',
+  stopName = '',
+  latitude = null,
+  longitude = null,
 }) {
-  const arrivalRequestStart =
-    Date.now()
+  const arrivalRequestStart = Date.now()
+  const resolved = await resolveCanonicalStop({
+    stopId, stopCode, surfaceStopId, stopName, latitude, longitude,
+  })
+  let gtfsPayload = null
+  let gtfsError = null
+  try {
+    gtfsPayload = await getGtfsArrivalsPayload(resolved.stopId, resolved.stop)
+  } catch (error) {
+    gtfsError = error
+    console.warn('TTC exact-stop GTFS arrivals unavailable:', error?.message || error)
+  }
 
-  const resolved =
-    await resolveCanonicalStop({
-      stopId,
-      stopCode,
-      stopName,
-      latitude,
-      longitude,
-    })
+  const gtfsArrivals = Array.isArray(gtfsPayload?.arrivals) ? gtfsPayload.arrivals : []
+  // A secondary feed MUST NOT replace the official BusTime board merely
+  // because it promises an earlier bus or an extra route.
+  if (gtfsArrivals.length) {
+    return {
+      ...gtfsPayload,
+      predictionAuthority: 'GTFS-RT',
+      requestedStopId: cleanText(stopId),
+      requestedStopCode: cleanText(stopCode),
+      resolvedStopId: resolved.stopId,
+      canonicalStopId: resolved.canonicalStopId,
+      stopIdentityResolution: resolved.resolution,
+      requestElapsedMs: Date.now() - arrivalRequestStart,
+    }
+  }
 
-  const gtfsPayload =
-    await getGtfsArrivalsPayload(
-      resolved.stopId,
-      resolved.stop
-    )
-
-  // TTC stop accuracy: an exact-stop GTFS TripUpdate can omit an approaching
-  // vehicle even when TTC's stop-specific UMO prediction still includes it.
-  // Compare actual predictions for THIS stop only; never project a nearby
-  // GPS vehicle onto a stop or invent an ETA.
+  // Keep a board useful when the primary feed returns no usable predictions:
+  // ask the legacy exact stop code ONLY as a separately identified fallback.
+  // Never blend UMO IDs with BusTime IDs or silently call it a GTFS ETA.
   const canonicalCode = cleanText(resolved.stop?.code)
   let alternative = null
   if (canonicalCode) {
     try {
-      // Bound the additional wait; slow/unavailable UMO must not block boards.
       alternative = await Promise.race([
         getUmoArrivalsForStopCode(canonicalCode, surfaceCache),
         new Promise((resolve) => setTimeout(() => resolve(null), 1600)),
       ])
-    } catch (_) {
-      alternative = null
-    }
+    } catch (_) { alternative = null }
   }
   const nowSeconds = Math.floor(Date.now() / 1000)
   const viableUmo = (Array.isArray(alternative) ? alternative : [])
-    .filter((a) => Number.isFinite(Number(a?.arrivalTime)) &&
-      Number(a.arrivalTime) >= nowSeconds - 8)
-  const gtfsArrivals = Array.isArray(gtfsPayload.arrivals)
-    ? gtfsPayload.arrivals : []
-  const firstByRoute = (items) => {
-    const result = new Map()
-    for (const item of items) {
-      const route = cleanText(item?.routeId)
-      const eta = Number(item?.arrivalTime)
-      if (!route || !Number.isFinite(eta)) continue
-      if (!result.has(route) || eta < result.get(route)) result.set(route, eta)
-    }
-    return result
-  }
-  const gtfsFirst = firstByRoute(gtfsArrivals)
-  const umoFirst = firstByRoute(viableUmo)
-  const omittedRoute = [...umoFirst.keys()].some((r) => !gtfsFirst.has(r))
-  // Use alternative authority only when it provides a substantially earlier
-  // independent stop prediction. Do not mix GTFS and UMO trip namespaces.
-  const missedApproachingBus = [...umoFirst].some(([r, eta]) =>
-    gtfsFirst.has(r) && eta + 90 < gtfsFirst.get(r))
-  if (viableUmo.length && (omittedRoute || missedApproachingBus)) {
+    .filter((arrival) => Number.isFinite(Number(arrival?.arrivalTime)) &&
+      Number(arrival.arrivalTime) >= nowSeconds - 8)
+  if (viableUmo.length) {
     return {
       ...buildUmoStopPayload({
         arrivals: viableUmo,
@@ -5501,36 +5523,36 @@ async function getArrivalsPayloadUnreconciled({
         normalizedStopCode: canonicalCode,
         staticStop: resolved.stop,
         gtfsPayload,
+        gtfsError,
         arrivalRequestStart,
-        fallbackReason: omittedRoute
-          ? 'GTFS_MISSING_STOP_ROUTE' : 'GTFS_MISSING_EARLIER_ARRIVAL',
+        fallbackReason: 'NO_USABLE_BUSTIME_ARRIVALS',
       }),
       requestedStopId: cleanText(stopId),
       requestedStopCode: cleanText(stopCode),
       resolvedStopId: resolved.stopId,
+      canonicalStopId: resolved.canonicalStopId,
       stopIdentityResolution: resolved.resolution,
     }
   }
 
   return {
-    ...gtfsPayload,
-    predictionAuthority:
-      'GTFS-RT',
-    requestedStopId:
-      cleanText(
-        stopId
-      ),
-    requestedStopCode:
-      cleanText(
-        stopCode
-      ),
-    resolvedStopId:
-      resolved.stopId,
-    stopIdentityResolution:
-      resolved.resolution,
-    requestElapsedMs:
-      Date.now() -
-      arrivalRequestStart,
+    ...(gtfsPayload || {
+      ok: true,
+      source: 'TTC BusTime GTFS-Realtime',
+      attribution: TORONTO_ATTRIBUTION,
+      stop: resolved.stop,
+      arrivals: [],
+      count: 0,
+      primaryDiagnostics: { status: 'GTFS_UNAVAILABLE',
+        error: String(gtfsError?.message || gtfsError || 'No upstream arrivals').slice(0, 220) },
+    }),
+    predictionAuthority: 'GTFS-RT',
+    requestedStopId: cleanText(stopId),
+    requestedStopCode: cleanText(stopCode),
+    resolvedStopId: resolved.stopId,
+    canonicalStopId: resolved.canonicalStopId,
+    stopIdentityResolution: resolved.resolution,
+    requestElapsedMs: Date.now() - arrivalRequestStart,
   }
 }
 
@@ -6171,6 +6193,7 @@ function applyArrivalTruth(payload, stopId, stopCode) {
 async function getArrivalsPayload({
   stopId,
   stopCode,
+  surfaceStopId = '',
   stopName =
     '',
   latitude =
@@ -6182,6 +6205,7 @@ async function getArrivalsPayload({
     await getArrivalsPayloadUnreconciled({
       stopId,
       stopCode,
+      surfaceStopId,
       stopName,
       latitude,
       longitude,
@@ -6610,6 +6634,7 @@ export function ttcLiveTransitFeed() {
                 url.searchParams.get(
                   'stopCode'
                 )
+              const surfaceStopId = url.searchParams.get('surfaceStopId')
               const stopName =
                 url.searchParams.get(
                   'stopName'
@@ -6629,6 +6654,7 @@ export function ttcLiveTransitFeed() {
                 await getArrivalsPayload({
                   stopId,
                   stopCode,
+                  surfaceStopId,
                   stopName,
                   latitude,
                   longitude,
