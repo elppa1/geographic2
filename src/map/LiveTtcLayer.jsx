@@ -944,55 +944,19 @@ function fillStopArrivals({ shell, payload, nearbyVehicles = [] }) {
   const arrivals = Array.isArray(payload?.arrivals) ? payload.arrivals : []
   const unverified = Array.isArray(payload?.unverifiedArrivals) ? payload.unverifiedArrivals : []
 
-  // A withdrawn or expired estimate is not presented as a current arrival.
-  // An independently observed vehicle that cannot be linked by exact ID also
-  // gets its own warning, above the arrival board, not an invented ETA.
-  const notices = [
-    ...unverified.map(arrival => ({
-      ...arrival,
-      status: 'unverified',
-      routeLabel: stopArrivalRouteLabel(arrival),
-    })),
-    ...nearbyVehicles.map(vehicle => ({
-      ...vehicle,
-      status: vehicle.verifiedUpcoming ? 'approaching' : 'possibly_passed',
-      routeLabel: String(vehicle.routeShortName || vehicle.routeId || 'TTC'),
-    })),
+  // Only identify an uncertain arrival when the same trip or vehicle is
+  // actually listed on the live board. Do not create a second, unmatched
+  // notice list: that was confusing and appeared to repeat route 47.
+  const uncertainNotices = [
+    ...unverified,
+    ...nearbyVehicles.filter(vehicle => !vehicle.verifiedUpcoming),
   ]
   const arrivalWarnings = new Set()
-  const unmatched = []
-  notices.forEach(notice => {
-    const index = arrivals.findIndex(arrival => sameStopArrivalVehicle(arrival, notice))
-    if (index >= 0 && index < 8) {
-      if (notice.status !== 'approaching') arrivalWarnings.add(index)
-      return
+  arrivals.slice(0, 8).forEach((arrival, index) => {
+    if (uncertainNotices.some(notice => sameStopArrivalVehicle(arrival, notice))) {
+      arrivalWarnings.add(index)
     }
-    if (unmatched.some(existing => sameStopArrivalVehicle(existing, notice))) return
-    unmatched.push(notice)
   })
-
-  if (unmatched.length) {
-    const statusBlock = document.createElement('div')
-    statusBlock.className = 'ttc-live-stop-status-notes'
-    Object.assign(statusBlock.style, {
-      paddingBottom: '5px',
-      borderBottom: '1px solid rgba(0,0,0,0.12)',
-    })
-    unmatched.slice(0, 3).forEach(notice => {
-      const route = notice.routeLabel || 'TTC'
-      const note = notice.status === 'approaching'
-        ? `${route} · Nearby vehicle approaching; no matched arrival time.`
-        : notice.status === 'unverified'
-          ? `${route} · Earlier arrival unconfirmed; may have already passed.`
-          : `${route} · Nearby vehicle may have already passed (unconfirmed).`
-      addTextLine({
-        parent: statusBlock,
-        text: note,
-        style: { fontSize: '9px', lineHeight: '1.3', marginTop: '4px' },
-      })
-    })
-    shell.appendChild(statusBlock)
-  }
 
   if (arrivals.length === 0) {
     addTextLine({
@@ -1015,7 +979,7 @@ function fillStopArrivals({ shell, payload, nearbyVehicles = [] }) {
     const row = document.createElement('div')
     Object.assign(row.style, {
       display: 'grid',
-      gridTemplateColumns: '42px 1fr auto',
+      gridTemplateColumns: '36px minmax(0, 1fr) max-content',
       alignItems: 'center',
       gap: '7px',
       padding: '7px 0',
@@ -1043,7 +1007,13 @@ function fillStopArrivals({ shell, payload, nearbyVehicles = [] }) {
           : `${minutes} min`
 
     const timeCell = document.createElement('div')
-    Object.assign(timeCell.style, { textAlign: 'right' })
+    Object.assign(timeCell.style, {
+      display: 'inline-flex',
+      justifyContent: 'flex-end',
+      alignItems: 'baseline',
+      gap: '3px',
+      whiteSpace: 'nowrap',
+    })
     addTextLine({
       parent: timeCell,
       text: timeLabel,
@@ -1052,10 +1022,10 @@ function fillStopArrivals({ shell, payload, nearbyVehicles = [] }) {
     if (arrivalWarnings.has(index)) {
       addTextLine({
         parent: timeCell,
-        text: 'May have already passed',
+        text: '· might have passed',
         style: {
-          fontSize: '8px', lineHeight: '1.2',
-          maxWidth: '88px', marginTop: '2px',
+          fontSize: '7.5px', fontStyle: 'italic',
+          opacity: '0.72', whiteSpace: 'nowrap',
         },
       })
     }
@@ -3330,11 +3300,14 @@ function LiveTtcLayer({
           return
         }
 
+        // Keep the ~30-second warning visible whenever GPS is enabled;
+        // otherwise preserve the original guidance before GPS selection.
         const showHint =
-          !selectedRouteRef.current && !gpsChosen
+          gpsChosen || !selectedRouteRef.current
 
-        accuracyHint.textContent =
-          'TO IMPROVE TTC ACCURACY, TURN ON GPS OR SEARCH YOUR ADDRESS.'
+        accuracyHint.textContent = gpsChosen
+          ? 'LIVE BUSES MAY LAG BY ~30 SECONDS. TO GET MORE ACCURATE ESTIMATES, CLICK THE BUS STOP MARKER.'
+          : 'TO IMPROVE TTC ACCURACY, TURN ON GPS OR SEARCH YOUR ADDRESS.'
 
         if (
           accuracyHintVisible ===

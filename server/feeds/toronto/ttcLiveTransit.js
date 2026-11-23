@@ -4386,87 +4386,53 @@ async function fetchJson(
 }
 
 
-function dedupeArrivalsByVehicleOrTrip(
-  arrivals
-) {
-  const seen =
-    new Set()
-  const deduped =
-    []
-
-  ;(
-    Array.isArray(
-      arrivals
-    )
-      ? arrivals
-      : []
+function dedupeArrivalsByVehicleOrTrip(arrivals) {
+  // One physical vehicle can occasionally be reported under different trip
+  // records for the SAME stop and nearly the SAME arrival. Repeated trip IDs
+  // remain duplicates as before. Never collapse different vehicles merely
+  // because their route and rounded minute happen to be the same.
+  const seenTrips = new Set()
+  const seenTriplessVehicles = new Set()
+  const seenVehicleStops = new Map()
+  const deduped = []
+  const ordered = (Array.isArray(arrivals) ? [...arrivals] : []).sort(
+    (a, b) => Number(a?.arrivalTime ?? a?.minutes ?? 0) -
+      Number(b?.arrivalTime ?? b?.minutes ?? 0)
   )
-    .sort(
-      (
-        a,
-        b
-      ) =>
-        Number(
-          a?.arrivalTime ??
-          a?.minutes ??
-          0
-        ) -
-        Number(
-          b?.arrivalTime ??
-          b?.minutes ??
-          0
-        )
-    )
-    .forEach(
-      (
-        arrival
-      ) => {
-        const vehicleId =
-          cleanText(
-            arrival?.vehicleId
-          )
-        const tripId =
-          cleanText(
-            arrival?.tripId
-          )
-        const routeId =
-          cleanText(
-            arrival?.routeId
-          )
 
-        const key =
-          tripId
-            ? `trip:${routeId}:${tripId}:${numberOrNull(arrival?.stopSequence) ?? ''}`
-            : vehicleId
-              ? `vehicle:${routeId}:${vehicleId}`
-              : ''
+  for (const arrival of ordered) {
+    const routeId = cleanText(arrival?.routeId)
+    const tripId = cleanText(arrival?.tripId)
+    const vehicleId = cleanText(arrival?.vehicleId)
+    const stopSequence = numberOrNull(arrival?.stopSequence)
+    const stopIdentity = cleanText(arrival?.stopId) || cleanText(arrival?.stopCode)
+    const tripKey = tripId
+      ? `trip:${routeId}:${tripId}:${stopSequence ?? ''}` : ''
+    const vehicleFallbackKey = vehicleId && !tripId
+      ? `vehicle:${routeId}:${vehicleId}` : ''
+    const vehicleStopKey = vehicleId
+      ? `vehicle:${routeId}:${vehicleId}:${stopIdentity}` : ''
+    const timestamp = numberOrNull(arrival?.arrivalTime)
 
-        if (
-          key &&
-          seen.has(
-            key
-          )
-        ) {
-          return
-        }
-
-        if (
-          key
-        ) {
-          seen.add(
-            key
-          )
-        }
-
-        deduped.push(
-          arrival
-        )
+    // Preserve the previous trip and tripless-vehicle checks, including the
+    // intended one-vehicle-per-route behaviour in nearby-station summaries.
+    if (tripKey && seenTrips.has(tripKey)) continue
+    if (vehicleFallbackKey && seenTriplessVehicles.has(vehicleFallbackKey)) continue
+    // Add one narrow check for duplicate trip records for a single bus/stop.
+    // Keep separate physical buses even if their ETA rounds to the same minute.
+    if (vehicleStopKey && timestamp !== null) {
+      const previous = seenVehicleStops.get(vehicleStopKey)
+      if (previous !== undefined && Math.abs(timestamp - previous) <= 90) {
+        continue
       }
-    )
-
+      seenVehicleStops.set(vehicleStopKey, timestamp)
+    }
+    if (tripKey) seenTrips.add(tripKey)
+    if (vehicleFallbackKey) seenTriplessVehicles.add(vehicleFallbackKey)
+    deduped.push(arrival)
+  }
   return deduped
 }
-
 
 async function getUmoArrivalsForStopCode(
   stopCode,

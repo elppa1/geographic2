@@ -560,6 +560,10 @@ function GeographicApp() {
       true
     )
 
+  // Only the initial welcome screen requires an explicit choice.
+  // The How-To panel can still be closed normally when reopened later.
+  const [startupChoiceMade, setStartupChoiceMade] = useState(false)
+
   const [realEstateOpen, setRealEstateOpen] = useState(false)
 
 
@@ -1066,94 +1070,43 @@ function GeographicApp() {
   }
 
 
-  async function startTimeMachine() {
-    const timeMachineLayer =
-      timelineLayers.find(
-        (layer) =>
-          layer.year >=
-            1960 &&
-          layer.year <=
-            1969 &&
-          layer.layerType ===
-            'aerial'
-      ) ||
-      timelineLayers.find(
-        (layer) =>
-          layer.year >=
-            1960 &&
-          layer.year <=
-            1969
-      ) ||
-      defaultLayer
+  function startTimeMachine() {
+    // Selecting Time Machine does not require location permission.
+    const historicalLayer = timelineLayers.find(layer =>
+      layer.year === 1954 && layer.layerType === 'aerial'
+    ) || timelineLayers.find(layer => layer.year === 1954) || defaultLayer
+    if (historicalLayer) setSelectedLayer(historicalLayer)
+    setTimeMachineError('')
+    setStartupChoiceMade(true)
+    setAboutOpen(false)
+  }
 
-
-    if (
-      timeMachineLayer
-    ) {
-      setSelectedLayer(
-        timeMachineLayer
-      )
-    }
-
-
-    setTimeMachineError(
-      ''
-    )
-
-    setTimeMachineStarting(
-      true
-    )
-
-
+  async function startLiveTtcFromWelcome() {
+    const mapApi = geographicMapRef.current
+    setTimeMachineError('')
+    setTimeMachineStarting(true)
     try {
-      const mapApi =
-        geographicMapRef.current
-
-
-      if (
-        !mapApi?.startLocationTracking
-      ) {
-        throw new Error(
-          'GPS is not ready yet'
-        )
+      if (!mapApi?.startLocationTracking) {
+        throw new Error('GPS is not ready yet')
       }
-
-
-      await mapApi
-        .startLocationTracking()
-
-
-      setLocationTrackingActive(
-        true
-      )
-
-
-      setAboutOpen(
-        false
-      )
-    } catch (
-      error
-    ) {
-      console.error(
-        'TIME MACHINE GPS ERROR:',
-        error
-      )
-
-      setTimeMachineError(
-        'GPS could not be turned on. Allow location access and try again.'
-      )
-
-
-      setLocationTrackingActive(
-        false
-      )
+      await mapApi.startLocationTracking()
+      setLocationTrackingActive(true)
+      setStartupChoiceMade(true)
+      setAboutOpen(false)
+    } catch (error) {
+      console.error('WELCOME GPS ERROR:', error)
+      setTimeMachineError('GPS could not be turned on. Allow location access or choose another option.')
+      setLocationTrackingActive(false)
     } finally {
-      setTimeMachineStarting(
-        false
-      )
+      setTimeMachineStarting(false)
     }
   }
 
+  function browseMapManually() {
+    setTimeMachineError('')
+    setStartupChoiceMade(true)
+    setAboutOpen(false)
+  }
 
   async function handleMainMenuLocate() {
     const mapApi =
@@ -3920,18 +3873,16 @@ function GeographicApp() {
             type="button"
             className="about-backdrop"
             aria-label="Close How-To"
-            onClick={() =>
-              setAboutOpen(
-                false
-              )
-            }
+            onClick={() => {
+              if (startupChoiceMade) setAboutOpen(false)
+            }}
           />
 
           <aside
             className="about-panel tg-howto-panel"
             role="dialog"
             aria-modal="true"
-            aria-label="How to use Toronto Geographic"
+            aria-label={startupChoiceMade ? 'How to use Toronto Geographic' : 'Choose how to explore Toronto Geographic'}
           >
             <div className="about-panel-header">
               <div>
@@ -3941,18 +3892,16 @@ function GeographicApp() {
 
               </div>
 
-              <button
-                type="button"
-                className="about-close"
-                onClick={() =>
-                  setAboutOpen(
-                    false
-                  )
-                }
-                aria-label="Close How-To"
-              >
-                ×
-              </button>
+              {startupChoiceMade && (
+                <button
+                  type="button"
+                  className="about-close"
+                  onClick={() => setAboutOpen(false)}
+                  aria-label="Close How-To"
+                >
+                  ×
+                </button>
+              )}
             </div>
 
             <section className="about-section tg-howto-section">
@@ -4016,28 +3965,26 @@ function GeographicApp() {
               <button
                 type="button"
                 className="howto-primary"
-                disabled={
-                  timeMachineStarting
-                }
-                onClick={
-                  startTimeMachine
-                }
+                disabled={timeMachineStarting}
+                onClick={startLiveTtcFromWelcome}
               >
-                {timeMachineStarting
-                  ? 'TURNING ON GPS…'
-                  : 'TURN ON TIME MACHINE'}
+                {timeMachineStarting ? 'TURNING ON GPS…' : 'TURN ON GPS FOR LIVE TTC'}
               </button>
-
               <button
                 type="button"
                 className="howto-secondary"
-                onClick={() =>
-                  setAboutOpen(
-                    false
-                  )
-                }
+                disabled={timeMachineStarting}
+                onClick={startTimeMachine}
               >
-                BROWSE THE MAP MYSELF
+                TURN ON TIME MACHINE
+              </button>
+              <button
+                type="button"
+                className="howto-secondary"
+                disabled={timeMachineStarting}
+                onClick={browseMapManually}
+              >
+                BROWSE MAP MANUALLY
               </button>
             </div>
 
