@@ -8832,8 +8832,10 @@ function getDensityScaledPinSizes(map, items, activePinFilter) {
 function scalePinEmojiArtwork(element, visualScale) {
   const glyph = element?.firstElementChild
   if (!glyph) return
-  const baseFontPx = parseFloat(glyph.style.fontSize)
+  // Remember the native size. Zoom events must not compound reductions.
+  const baseFontPx = Number(glyph.dataset.tgBaseFontPx) || parseFloat(glyph.style.fontSize)
   if (!Number.isFinite(baseFontPx)) return
+  if (!glyph.dataset.tgBaseFontPx) glyph.dataset.tgBaseFontPx = String(baseFontPx)
   const scale = Number.isFinite(visualScale) ? Math.max(0.6, Math.min(1, visualScale)) : 1
   glyph.style.fontSize = `${(baseFontPx * scale).toFixed(2)}px`
 }
@@ -13672,6 +13674,10 @@ function MapPins({
       activePinFilter
     )
 
+    // Track historical DOM markers so their artwork can resize in-place
+    // during a GPS camera zoom without recreating markers or popups.
+    const historicMarkerEntries = []
+
     visiblePins.forEach(
       ({
         pin,
@@ -13816,6 +13822,13 @@ function MapPins({
           marker
         )
 
+        if (pinType === 'historic') {
+          historicMarkerEntries.push({
+            marker,
+            item: { pin, pinType, markerOffset },
+          })
+        }
+
         markerByIdRef.current.set(
           pin.id,
           marker
@@ -13823,7 +13836,40 @@ function MapPins({
       }
     )
 
+    // HISTORIC pins intentionally skip viewportRevision to preserve open
+    // popups. Recalculate only DOM glyph sizes during zoom; no rerender or
+    // marker teardown, and retain the original 32px click targets.
+    let lastHistoricScaleUpdate = 0
+    const updateHistoricSizes = () => {
+      if (activePinFilter !== 'historic' || historicMarkerEntries.length === 0) return
+      const scales = getDensityScaledPinSizes(
+        map,
+        historicMarkerEntries.map((entry) => entry.item),
+        'historic'
+      )
+      const minimumScale = map.getZoom() >= 15 ? 0.88 : 0.62
+      historicMarkerEntries.forEach((entry, index) => {
+        scalePinEmojiArtwork(
+          entry.marker.getElement(),
+          Math.max(minimumScale, scales[index] ?? 1)
+        )
+      })
+    }
+    const handleHistoricZoom = () => {
+      const now = Date.now()
+      if (now - lastHistoricScaleUpdate < 120) return
+      lastHistoricScaleUpdate = now
+      updateHistoricSizes()
+    }
+    if (activePinFilter === 'historic') {
+      map.on('zoom', handleHistoricZoom)
+      map.on('zoomend', updateHistoricSizes)
+      updateHistoricSizes()
+    }
+
     return () => {
+      map.off('zoom', handleHistoricZoom)
+      map.off('zoomend', updateHistoricSizes)
       markersRef.current.forEach(
         (marker) => {
           marker.remove()

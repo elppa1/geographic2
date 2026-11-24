@@ -1943,6 +1943,23 @@ async function observeRecord({
     null
 
 
+  // Replayed old MISSING/ELOPEE alerts must not reopen a case after an
+  // authoritative FOUND/LOCATED bulletin closed the original record.
+  if (sourceKey === 'police' &&
+      policeRecordIsMissingOrElopeePerson(record) &&
+      !policeRecordIsMissingPersonResolution({ record, rawAction: '' })) {
+    const caseId = tpsCaseKey(record)
+    const resolvedSource = caseId && Object.values(store.sources.police || {}).find((candidate) =>
+      candidate?.resolved === true &&
+      cleanText(candidate?.lastEditorialAction) === 'auto-located-no-new-story' &&
+      tpsCaseKey(candidate) === caseId &&
+      (tpsReleaseDateMs(candidate) === null ||
+       tpsReleaseDateMs(record) === null ||
+       tpsReleaseDateMs(candidate) >= tpsReleaseDateMs(record))
+    )
+    if (resolvedSource) return { action: 'seen', record: resolvedSource }
+  }
+
   // If an official Fire call was initially excluded but TTC Fire CAD later
   // reclassifies it as an actual fire, let the normal NEW approval path run.
   // This does NOT modify the published-Fire alarm escalation/update path.
@@ -2219,10 +2236,13 @@ async function observeRecord({
         .toLowerCase()
         .includes(
           'rejected'
-        )
+        ) &&
+      // Rejection belongs to the particular official bulletin, NOT to
+      // every later release sharing the same TPS case/externalId. Preserve
+      // the rejection for an exact replay, while allowing new developments.
+      (sameTpsOfficialRelease(existing, record) ||
+        previousFingerprint === currentFingerprint)
     ) {
-      // A rejected unpublished TPS story stays rejected. Updates to a TPS
-      // story that was already published remain eligible for later review.
       action =
         'seen'
     }
@@ -4060,46 +4080,68 @@ export async function queueLiveNewsroomRecord({
           }
 
 
-    // TPS LOCATED / FOUND is authoritative. Remove the existing MISSING /
-    // ELOPEE pin immediately. The LOCATED notice remains pending in NEWSROOM
-    // as a RESOLVE acknowledgement only. It must never auto-publish as a
-    // replacement story; the editor can add a separate LOCATED story manually.
-    await archivePublishedPoliceMissingPersonPin(
-      resolutionRecord
-    )
+    // TPS LOCATED / FOUND is authoritative: update and archive the ORIGINAL
+    // missing-person/elopee record, without creating a NEW or RESOLVE
+    // approval card. Preserve the existing editorial history and public
+    // archive so this decision is replay-safe and auditable.
+    await archivePublishedPoliceMissingPersonPin(resolutionRecord)
 
+    const externalId = cleanText(resolutionRecord.externalId)
+    if (!externalId) return { action: 'skip', record: resolutionRecord }
 
-    const previousResolutionState =
-      store.sources?.[
-        sourceKey
-      ]?.[
-        resolutionRecord.externalId
-      ] ||
-      null
+    const now = new Date().toISOString()
+    const sourceState = store.sources[sourceKey] || {}
+    const previous = sourceState[externalId] || null
+    const stableResolvedAt = previous?.resolved === true && previous?.resolvedAt
+      ? previous.resolvedAt
+      : resolvedAt
+    const resolvedSource = {
+      ...previous,
+      ...resolutionRecord,
+      externalId,
+      published: false,
+      resolved: true,
+      resolvedAt: stableResolvedAt,
+      sourceFingerprint: fingerprint({
+        ...resolutionRecord,
+        resolvedAt: stableResolvedAt,
+      }),
+      lastSeenAt: now,
+      lastCheckedAt: now,
+      lastEditorialAction: 'auto-located-no-new-story',
+      lastEditorialActionAt: previous?.lastEditorialAction === 'auto-located-no-new-story'
+        ? previous.lastEditorialActionAt || now
+        : now,
+    }
+    sourceState[externalId] = resolvedSource
+    store.sources[sourceKey] = sourceState
 
-
-    const sameHandledResolutionVersion =
-      previousResolutionState &&
-      previousResolutionState.sourceFingerprint ===
-        fingerprint(
-          resolutionRecord
-        ) &&
-      Boolean(
-        cleanText(
-          previousResolutionState.lastEditorialAction
-        )
-      )
-
-
-    return observeRecord({
-      sourceKey,
-      record:
-        resolutionRecord,
-      forceAction:
-        sameHandledResolutionVersion
-          ? ''
-          : 'resolve',
+    // Close only pending MISSING/ELOPEE cards (or old RESOLVE notices)
+    // for this same case. An already-found person must not remain a NEW
+    // approval candidate, but every prior editorial decision is retained.
+    const resolvedCase = tpsCaseKey(resolutionRecord)
+    store.events = store.events.map((event) => {
+      const sameCase = cleanText(event.externalId) === externalId ||
+        (resolvedCase && tpsCaseKey(event) === resolvedCase)
+      const staleMissing = ['new', 'update'].includes(event.newsroomAction) &&
+        policeRecordIsMissingOrElopeePerson(event)
+      const oldResolution = event.newsroomAction === 'resolve' &&
+        policeRecordIsMissingPersonResolution({ record: event, rawAction: 'resolve' })
+      return event.sourceKey === 'police' && event.status === 'pending' &&
+        sameCase && (staleMissing || oldResolution)
+        ? {
+            ...event,
+            status: 'acked',
+            reviewStatus: 'acked',
+            outcome: 'auto-located-no-new-story',
+            ackedAt: now,
+          }
+        : event
     })
+
+    await persistStore()
+    return { action: 'resolve', record: resolvedSource }
+
   }
 
 
@@ -8058,8 +8100,20 @@ async function acknowledgeEvents({
           )
 
 
+        // An older TPS bulletin may be acknowledged while a newer
+        // release with the same externalId is already in the source store.
+        // Do not copy the older editorial decision onto the newer release.
+        const currentIsAcknowledgedRelease =
+          event.sourceKey !== 'police' ||
+          event.newsroomAction === 'resolve' ||
+          (current && (
+            sameTpsOfficialRelease(current, event) ||
+            (cleanText(current.sourceFingerprint) &&
+             current.sourceFingerprint === event.sourceFingerprint)
+          ))
+
         if (
-          current
+          current && currentIsAcknowledgedRelease
         ) {
           if (
             approved

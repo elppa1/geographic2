@@ -239,12 +239,25 @@ function GeographicApp() {
     ]
 
 
+  // Year-specific storefront QR codes use one link per YEAR, not per
+  // shop: the browser's GPS selects the actual spot after map initialization.
+  // An invalid/ordinary URL keeps the usual mandatory welcome screen.
+  const qrHistoricLayer = useMemo(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('gps') !== '1') return null
+    const year = Number(params.get('year'))
+    if (!Number.isInteger(year) || !params.has('year')) return null
+    return timelineLayers.find((layer) =>
+      layer.year === year && layer.layerType === 'aerial'
+    ) || timelineLayers.find((layer) => layer.year === year) || null
+  }, [timelineLayers])
+
   const [
     selectedLayer,
     setSelectedLayer,
   ] =
     useState(
-      defaultLayer
+      qrHistoricLayer || defaultLayer
     )
 
 
@@ -253,7 +266,7 @@ function GeographicApp() {
     setActivePinFilter,
   ] =
     useState(
-      'historic'
+      qrHistoricLayer ? 'historic' : 'news'
     )
 
 
@@ -557,12 +570,13 @@ function GeographicApp() {
     setAboutOpen,
   ] =
     useState(
-      true
+      !qrHistoricLayer
     )
 
   // Only the initial welcome screen requires an explicit choice.
   // The How-To panel can still be closed normally when reopened later.
-  const [startupChoiceMade, setStartupChoiceMade] = useState(false)
+  // A valid QR link IS a choice of historical year and GPS request.
+  const [startupChoiceMade, setStartupChoiceMade] = useState(Boolean(qrHistoricLayer))
 
   const [realEstateOpen, setRealEstateOpen] = useState(false)
 
@@ -584,6 +598,59 @@ function GeographicApp() {
       ''
     )
 
+
+  // The map is created by a child effect, so let MapLibre finish loading
+  // before requesting GPS from a historical storefront QR link.
+  useEffect(() => {
+    if (!qrHistoricLayer) return undefined
+    let cancelled = false
+    let map = null
+    let loadHandler = null
+
+    const startQrLocation = async () => {
+      if (cancelled) return
+      try {
+        if (!geographicMapRef.current?.startLocationTracking) {
+          throw new Error('Map GPS is not ready')
+        }
+        await geographicMapRef.current.startLocationTracking()
+        if (!cancelled) setLocationTrackingActive(true)
+      } catch (error) {
+        if (cancelled) return
+        console.warn('TIME MACHINE QR GPS:', error)
+        setLocationTrackingActive(false)
+        // If GPS permission is denied, offer a manual browsing choice.
+        // Do not attempt to bypass the browser's location permission.
+        setTimeMachineError('GPS unavailable. Allow location access, or choose Time Machine to browse manually.')
+        setStartupChoiceMade(false)
+        setAboutOpen(true)
+      }
+    }
+
+    const startWhenMapReady = () => {
+      if (cancelled) return
+      map = geographicMapRef.current?.getMap?.()
+      if (!map) {
+        setTimeMachineError('Map is not ready. Choose a browsing option.')
+        setStartupChoiceMade(false)
+        setAboutOpen(true)
+        return
+      }
+      if (map.loaded?.() || map.isStyleLoaded?.()) {
+        void startQrLocation()
+      } else {
+        loadHandler = () => void startQrLocation()
+        map.once('load', loadHandler)
+      }
+    }
+
+    const timer = window.setTimeout(startWhenMapReady, 0)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+      if (map && loadHandler) map.off('load', loadHandler)
+    }
+  }, [qrHistoricLayer])
 
   useEffect(
     () => {
@@ -1075,7 +1142,8 @@ function GeographicApp() {
     const historicalLayer = timelineLayers.find(layer =>
       layer.year === 1954 && layer.layerType === 'aerial'
     ) || timelineLayers.find(layer => layer.year === 1954) || defaultLayer
-    if (historicalLayer) setSelectedLayer(historicalLayer)
+    if (historicalLayer) setSelectedLayer(qrHistoricLayer || historicalLayer)
+    setActivePinFilter('historic')
     setTimeMachineError('')
     setStartupChoiceMade(true)
     setAboutOpen(false)
@@ -3583,19 +3651,6 @@ function GeographicApp() {
             </button>
 
 
-            <button
-              type="button"
-              className={
-                activePinFilter === 'real-estate'
-                  ? 'about-button brand-mode-button brand-mode-button-active'
-                  : 'about-button brand-mode-button'
-              }
-              onClick={() => chooseContentMode('real-estate')}
-              aria-pressed={activePinFilter === 'real-estate'}
-            >
-              REAL ESTATE
-            </button>
-
 
             <MapControls
               onLocate={
@@ -3933,7 +3988,7 @@ function GeographicApp() {
               <h2>FEATURE PINS</h2>
               <div className="tg-howto-row">
                 <div className="tg-howto-controls tg-howto-tabs" aria-label="Historic News and TO-DO controls">
-                  <span className="tg-howto-selected">HISTORIC</span><span>NEWS</span><span>TO-DO</span>
+                  <span>HISTORIC</span><span className="tg-howto-selected">NEWS</span><span>TO-DO</span>
                 </div>
                 <p>Explore News, Historic and Community pins to see what's happening nearby, including community program start times, new restaurants, recreation and more.</p>
               </div>

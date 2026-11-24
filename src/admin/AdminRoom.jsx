@@ -11120,7 +11120,8 @@ function AdminRoom() {
             latestPublished.some((published) =>
               published.active !== false &&
               isTpsNewsroomRecord(published) &&
-              sameTpsRelease(published, serverRecord)
+              sameTpsRelease(published, serverRecord) &&
+              getTpsRecordVersion(published) === getTpsRecordVersion(serverRecord)
             )
           ) {
             autoAck.push(queueId)
