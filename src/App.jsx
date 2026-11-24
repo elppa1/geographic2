@@ -614,7 +614,7 @@ function GeographicApp() {
           throw new Error('Map GPS is not ready')
         }
         await geographicMapRef.current.startLocationTracking({
-          snapZoom: window.matchMedia('(min-width: 701px)').matches ? 16.8 : 15.0,
+          snapZoom: window.matchMedia('(min-width: 701px)').matches ? 17.3 : 15.5,
         })
         if (!cancelled) setLocationTrackingActive(true)
       } catch (error) {
@@ -1152,7 +1152,7 @@ function GeographicApp() {
         throw new Error('GPS is not ready yet')
       }
       await mapApi.startLocationTracking({
-        snapZoom: window.matchMedia('(min-width: 701px)').matches ? 16.8 : 15.0,
+        snapZoom: window.matchMedia('(min-width: 701px)').matches ? 17.3 : 15.5,
       })
       setLocationTrackingActive(true)
       if (historicalLayer) setSelectedLayer(historicalLayer)
