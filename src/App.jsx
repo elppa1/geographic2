@@ -275,7 +275,7 @@ function GeographicApp() {
     setLiveBusesEnabled,
   ] =
     useState(
-      true
+      !qrHistoricLayer
     )
 
 
@@ -613,7 +613,9 @@ function GeographicApp() {
         if (!geographicMapRef.current?.startLocationTracking) {
           throw new Error('Map GPS is not ready')
         }
-        await geographicMapRef.current.startLocationTracking()
+        await geographicMapRef.current.startLocationTracking({
+          snapZoom: window.matchMedia('(min-width: 701px)').matches ? 16.8 : 15.0,
+        })
         if (!cancelled) setLocationTrackingActive(true)
       } catch (error) {
         if (cancelled) return
@@ -621,7 +623,7 @@ function GeographicApp() {
         setLocationTrackingActive(false)
         // If GPS permission is denied, offer a manual browsing choice.
         // Do not attempt to bypass the browser's location permission.
-        setTimeMachineError('GPS unavailable. Allow location access, or choose Time Machine to browse manually.')
+        setTimeMachineError('GPS unavailable. Allow location access, or choose Browse Map Manually to continue.')
         setStartupChoiceMade(false)
         setAboutOpen(true)
       }
@@ -1137,16 +1139,34 @@ function GeographicApp() {
   }
 
 
-  function startTimeMachine() {
-    // Selecting Time Machine does not require location permission.
-    const historicalLayer = timelineLayers.find(layer =>
-      layer.year === 1954 && layer.layerType === 'aerial'
-    ) || timelineLayers.find(layer => layer.year === 1954) || defaultLayer
-    if (historicalLayer) setSelectedLayer(qrHistoricLayer || historicalLayer)
-    setActivePinFilter('historic')
+  async function startTimeMachine() {
+    const historicalLayer = qrHistoricLayer || timelineLayers.find(layer =>
+      layer.year === 1965 && layer.layerType === 'aerial'
+    ) || timelineLayers.find(layer => layer.year === 1965) || defaultLayer
+
     setTimeMachineError('')
-    setStartupChoiceMade(true)
-    setAboutOpen(false)
+    setTimeMachineStarting(true)
+    try {
+      const mapApi = geographicMapRef.current
+      if (!mapApi?.startLocationTracking) {
+        throw new Error('GPS is not ready yet')
+      }
+      await mapApi.startLocationTracking({
+        snapZoom: window.matchMedia('(min-width: 701px)').matches ? 16.8 : 15.0,
+      })
+      setLocationTrackingActive(true)
+      if (historicalLayer) setSelectedLayer(historicalLayer)
+      setActivePinFilter('historic')
+      setLiveBusesEnabled(false)
+      setStartupChoiceMade(true)
+      setAboutOpen(false)
+    } catch (error) {
+      console.error('TIME MACHINE GPS ERROR:', error)
+      setTimeMachineError('GPS could not be turned on. Allow location access or choose another option.')
+      setLocationTrackingActive(false)
+    } finally {
+      setTimeMachineStarting(false)
+    }
   }
 
   async function startLiveTtcFromWelcome() {
@@ -1159,6 +1179,8 @@ function GeographicApp() {
       }
       await mapApi.startLocationTracking()
       setLocationTrackingActive(true)
+      setLiveBusesEnabled(true)
+      setActivePinFilter('news')
       setStartupChoiceMade(true)
       setAboutOpen(false)
     } catch (error) {
@@ -3976,7 +3998,7 @@ function GeographicApp() {
               <h2>TIME MACHINE</h2>
               <div className="tg-howto-row">
                 <div className="tg-howto-years" aria-label="Time Machine year selection example">
-                  <div className="tg-howto-year-list"><span>1947</span><strong>1954</strong><span>1965</span><span>1978</span><span>NOW</span></div>
+                  <div className="tg-howto-year-list"><span>1947</span><span>1954</span><strong>1965</strong><span>1978</span><span>NOW</span></div>
                   <div className="tg-howto-track"><span /></div>
                   <div className="tg-howto-track-labels"><span>MODERN</span><span>HISTORICAL</span></div>
                 </div>

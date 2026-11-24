@@ -663,8 +663,8 @@ const GeographicMap =
               null
             )
           },
-          startLocationTracking() {
-            return startLocationTracking()
+          startLocationTracking(options) {
+            return startLocationTracking(options)
           },
           stopLocationTracking() {
             stopLocationTracking()
@@ -1823,7 +1823,9 @@ const GeographicMap =
         recenter =
           false,
         walkingZoom =
-          false
+          false,
+        snapZoom =
+          null
       ) {
         const map =
           mapRef.current
@@ -1951,9 +1953,11 @@ const GeographicMap =
             zoom:
               walkingZoom
                 ? (
-                    desktopSnap
-                      ? 15.8
-                      : 14.0
+                    Number.isFinite(snapZoom)
+                      ? snapZoom
+                      : desktopSnap
+                        ? 15.8
+                        : 14.0
                   )
                 : Math.max(
                     map.getZoom(),
@@ -1987,7 +1991,9 @@ const GeographicMap =
             recenter =
               false,
             walkingZoom =
-              false
+              false,
+            snapZoom =
+              null
           ) => {
             return new Promise(
               (
@@ -2021,7 +2027,8 @@ const GeographicMap =
                         applyUserPosition(
                           position,
                           recenter,
-                          walkingZoom
+                          walkingZoom,
+                          snapZoom
                         )
                       )
                     } catch (
@@ -2095,7 +2102,7 @@ const GeographicMap =
       }
 
 
-      async function startLocationTracking() {
+      async function startLocationTracking(options = {}) {
         if (
           !navigator.geolocation
         ) {
@@ -2120,7 +2127,8 @@ const GeographicMap =
           const location =
             await getUserLocation(
               true,
-              true
+              true,
+              options.snapZoom ?? null
             )
 
 
