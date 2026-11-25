@@ -1776,9 +1776,11 @@ function refreshPendingFireNewEvent({
 // These comparisons never modify published NEWS records. Without comparable
 // source dates, do not guess which release is newer.
 function tpsReleaseDateMs(record) {
-  const sourceDate = cleanText(
-    record?.tpsBroadcastAt || record?.publishedAt || ''
-  )
+  // Only the official TPS bulletin timestamp may decide release order.
+  // publishedAt falls back to Gmail receipt time when TPS supplies no
+  // parseable publication date; receipt order is NOT release order.
+  // Without an official date, prefer editorial review to silent suppression.
+  const sourceDate = cleanText(record?.tpsBroadcastAt || '')
   const parsed = Date.parse(sourceDate)
   return Number.isFinite(parsed) ? parsed : null
 }

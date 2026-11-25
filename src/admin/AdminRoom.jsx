@@ -521,11 +521,20 @@ function sameTpsCase(
 // RELEASE. A later arrest bulletin uses the same case identity as WANTED.
 // Require both an official broadcast timestamp and a matching headline.
 // If either is missing, do not automatically acknowledge the release.
+// A TPS email's publishedAt may be the Gmail receipt timestamp, not the
+// official release date. Never automatically discard, acknowledge, or
+// supersede a distinct bulletin based on inferred email chronology.
+function tpsOfficialReleaseDateMs(record) {
+  const value = String(record?.tpsBroadcastAt || '').trim()
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : NaN
+}
+
 function sameTpsRelease(a, b) {
   if (!sameTpsCase(a, b)) return false
 
-  const aTime = Date.parse(a?.tpsBroadcastAt || a?.publishedAt || '')
-  const bTime = Date.parse(b?.tpsBroadcastAt || b?.publishedAt || '')
+  const aTime = tpsOfficialReleaseDateMs(a)
+  const bTime = tpsOfficialReleaseDateMs(b)
   if (!Number.isFinite(aTime) || !Number.isFinite(bTime) || aTime !== bTime) {
     return false
   }
@@ -8836,18 +8845,13 @@ function AdminRoom() {
           // Historical TPS emails can be replayed on refresh. Ignore an
           // older release when the map already holds a newer one for its case.
           // LOCATED/FOUND handling remains separate and untouched.
-          const incomingDate = Date.parse(
-            rawIncomingRecord.tpsBroadcastAt ||
-            rawIncomingRecord.publishedAt || ''
-          )
+          const incomingDate = tpsOfficialReleaseDateMs(rawIncomingRecord)
           if (!isLocatedResolution && Number.isFinite(incomingDate) &&
               nextPublished.some((published) => {
                 if (!isTpsNewsroomRecord(published) ||
                     !sameTpsCase(published, rawIncomingRecord) ||
                     published.active === false) return false
-                const date = Date.parse(
-                  published.tpsBroadcastAt || published.publishedAt || ''
-                )
+                const date = tpsOfficialReleaseDateMs(published)
                 return Number.isFinite(date) && date > incomingDate
               })) {
             skipped++
@@ -8864,9 +8868,7 @@ function AdminRoom() {
               if (!isTpsNewsroomRecord(review) ||
                   getNewsroomAction(review) === 'resolve' ||
                   !sameTpsCase(review, rawIncomingRecord)) return false
-              const reviewDate = Date.parse(
-                review.tpsBroadcastAt || review.publishedAt || ''
-              )
+              const reviewDate = tpsOfficialReleaseDateMs(review)
               return Number.isFinite(reviewDate) && reviewDate > incomingDate
             })
           ) {
@@ -9054,12 +9056,8 @@ function AdminRoom() {
             sameTpsCase(matchingPublished, rawIncomingRecord) &&
             !sameTpsRelease(matchingPublished, rawIncomingRecord) &&
             Number.isFinite(incomingDate) &&
-            Number.isFinite(Date.parse(
-              matchingPublished.tpsBroadcastAt || matchingPublished.publishedAt || ''
-            )) &&
-            incomingDate > Date.parse(
-              matchingPublished.tpsBroadcastAt || matchingPublished.publishedAt || ''
-            )
+            Number.isFinite(tpsOfficialReleaseDateMs(matchingPublished)) &&
+            incomingDate > tpsOfficialReleaseDateMs(matchingPublished)
           )
           if (officialNewerCaseRelease && meaningfulChanges.length === 0) {
             meaningfulChanges = ['officialTpsRelease']
@@ -10964,17 +10962,13 @@ function AdminRoom() {
       nextTorontoReview = nextTorontoReview.filter((review) => {
         if (!isTpsNewsroomRecord(review) ||
             getNewsroomAction(review) === 'resolve') return true
-        const reviewDate = Date.parse(
-          review.tpsBroadcastAt || review.publishedAt || ''
-        )
+        const reviewDate = tpsOfficialReleaseDateMs(review)
         if (!Number.isFinite(reviewDate)) return true
         const newerServerPending = incoming.some((newer) => {
           if (!isTpsNewsroomRecord(newer) ||
               getNewsroomAction(newer) === 'resolve' ||
               !sameTpsCase(review, newer)) return false
-          const date = Date.parse(
-            newer.tpsBroadcastAt || newer.publishedAt || ''
-          )
+          const date = tpsOfficialReleaseDateMs(newer)
           return Number.isFinite(date) && date > reviewDate
         })
         if (newerServerPending) return false
@@ -10982,9 +10976,7 @@ function AdminRoom() {
           if (!isTpsNewsroomRecord(published) ||
               !sameTpsCase(review, published) ||
               published.active === false) return false
-          const date = Date.parse(
-            published.tpsBroadcastAt || published.publishedAt || ''
-          )
+          const date = tpsOfficialReleaseDateMs(published)
           return Number.isFinite(date) && date > reviewDate
         })
       })
@@ -11049,17 +11041,13 @@ function AdminRoom() {
           // A newer APPROVED TPS case already supersedes this release.
           // Ignore only the old queue card; do not archive or alter its pin.
           if (isTpsNewsroomRecord(serverRecord) && action !== 'resolve') {
-            const incomingTime = Date.parse(
-              serverRecord.tpsBroadcastAt || serverRecord.publishedAt || ''
-            )
+            const incomingTime = tpsOfficialReleaseDateMs(serverRecord)
             if (Number.isFinite(incomingTime) &&
                 latestPublished.some((published) => {
                   if (!isTpsNewsroomRecord(published) ||
                       published.active === false ||
                       !sameTpsCase(published, serverRecord)) return false
-                  const publishedTime = Date.parse(
-                    published.tpsBroadcastAt || published.publishedAt || ''
-                  )
+                  const publishedTime = tpsOfficialReleaseDateMs(published)
                   return Number.isFinite(publishedTime) &&
                     publishedTime > incomingTime
                 })) {
@@ -17981,13 +17969,8 @@ function AdminRoom() {
 
     // Never let an older TPS email replace the newer approved case.
     // Compare official release dates, not attachments or approval times.
-    const candidateReleaseTime = Date.parse(
-      candidate.tpsBroadcastAt || candidate.publishedAt || ''
-    )
-    const publishedReleaseTime = Date.parse(
-      existingPublished?.tpsBroadcastAt ||
-      existingPublished?.publishedAt || ''
-    )
+    const candidateReleaseTime = tpsOfficialReleaseDateMs(candidate)
+    const publishedReleaseTime = tpsOfficialReleaseDateMs(existingPublished)
     if (
       existingPublished &&
       String(candidate.category || '').toLowerCase() !== 'located' &&
