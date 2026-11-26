@@ -326,6 +326,78 @@ function writeHistoricLastBatchIds(
 }
 
 
+
+// TPS-only gallery: show every official image and never silently hide failures.
+function TpsNewsroomPhotoGallery({ record, fallbackUrls = [] }) {
+  const [discovered, setDiscovered] = useState([])
+  const [loading, setLoading] = useState(false)
+  useEffect(() => {
+    const sourceUrl = normalizeSourceUrl(record?.sourceUrl || record?.tpsReleaseUrl || '')
+    if (!sourceUrl || !/^https:\/\/(www\.)?tps\.ca\/media-centre\/news-releases\/\d{4,8}/i.test(sourceUrl)) return
+    let cancelled = false
+    setLoading(true)
+    fetch('/api/geographic/toronto/police/photos?sourceUrl=' + encodeURIComponent(sourceUrl))
+      .then((response) => { if (!response.ok) throw new Error('TPS photo lookup failed'); return response.json() })
+      .then((data) => { if (!cancelled) setDiscovered(Array.isArray(data.photos) ? data.photos : []) })
+      .catch(() => { if (!cancelled) setDiscovered([]) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [record?.sourceUrl, record?.tpsReleaseUrl])
+  const urls = [...new Set([
+    ...(Array.isArray(record?.imageUrls) ? record.imageUrls : []),
+    record?.imageUrl,
+    ...fallbackUrls,
+    ...discovered,
+  ].map(normalizeSourceUrl).filter((url) => /^https:\/\//i.test(url)))].slice(0, 12)
+  const [current, setCurrent] = useState(0)
+  const [failed, setFailed] = useState({})
+  if (!urls.length) return (
+    <div className="admin-record-meta" style={{ margin: '12px 0' }}>
+      {loading ? 'TPS PHOTOS · Loading official photographs…' : 'TPS PHOTOS · No photo available from this release. Open the official source to review.'}
+    </div>
+  )
+  const index = Math.min(current, urls.length - 1)
+  const url = urls[index]
+  const proxy = (src) => {
+    try {
+      const parsed = new URL(src)
+      return ['www.tps.ca', 'tps.ca'].includes(parsed.hostname)
+        ? '/api/geographic/toronto/police/photo?url=' + encodeURIComponent(src)
+        : src
+    } catch { return src }
+  }
+  return (
+    <div style={{ margin: '12px 0', maxWidth: 520 }}>
+      <div className="admin-record-meta">TPS PHOTOS · {index + 1} OF {urls.length}</div>
+      {failed[url] ? (
+        <div role="alert" style={{ border: '1px solid #a55', padding: 12 }}>
+          Photo could not be loaded. <a href={url} target="_blank" rel="noopener noreferrer">Open original image</a>
+          <button type="button" onClick={() => setFailed((prev) => { const next = { ...prev }; delete next[url]; return next })}>Retry</button>
+        </div>
+      ) : (
+        <a href={url} target="_blank" rel="noopener noreferrer" title="View full-size Toronto Police photo">
+          <img key={url} src={proxy(url)} alt={'Toronto Police release image ' + (index + 1)}
+            loading="lazy" referrerPolicy="no-referrer"
+            onError={() => setFailed((prev) => ({ ...prev, [url]: true }))}
+            style={{ width: '100%', maxHeight: 350, objectFit: 'contain', display: 'block', borderRadius: 4 }} />
+        </a>
+      )}
+      {urls.length > 1 && (
+        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 8 }}>
+          {urls.map((src, i) => (
+            <button key={src} type="button" onClick={() => setCurrent(i)}
+              aria-label={'Show police photo ' + (i + 1)}
+              style={{ padding: 4, border: i === index ? '2px solid currentColor' : '1px solid #aaa', background: 'transparent', cursor: 'pointer' }}>
+              <img src={proxy(src)} alt={'Photo ' + (i + 1)} loading="lazy" referrerPolicy="no-referrer"
+                style={{ width: 64, height: 58, objectFit: 'contain' }} />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function isTpsNewsroomRecord(
   record
 ) {
@@ -25481,47 +25553,21 @@ function AdminRoom() {
                             )}
 
 
-                            {(policePreviewImageUrl || displayRecord.imageUrl) && (
-                              <img
-                                src={
-                                  policePreviewImageUrl || normalizeSourceUrl(
-                                    displayRecord.imageUrl
-                                  )
-                                }
-                                alt=""
-                                loading="lazy"
-                                onError={
-                                  (
-                                    event
-                                  ) => {
-                                    event.currentTarget.style.display =
-                                      'none'
-                                  }
-                                }
-                                style={{
-                                  display:
-                                    'block',
-
-                                  width:
-                                    '100%',
-
-                                  maxWidth:
-                                    '420px',
-
-                                  maxHeight:
-                                    '260px',
-
-                                  objectFit:
-                                    'cover',
-
-                                  margin:
-                                    '12px 0',
-
-                                  borderRadius:
-                                    '4px',
-                                }}
+                            {isTpsNewsroomRecord(record) ? (
+                              <TpsNewsroomPhotoGallery
+                                key={record.id}
+                                record={{ ...displayRecord, sourceUrl: policeSourceLink || displayRecord.sourceUrl }}
+                                fallbackUrls={[
+                                  ...(Array.isArray(incomingRecord?.imageUrls) ? incomingRecord.imageUrls : []),
+                                  ...(Array.isArray(record?.imageUrls) ? record.imageUrls : []),
+                                  policePreviewImageUrl,
+                                ]}
                               />
-                            )}
+                            ) : (displayRecord.imageUrl ? (
+                              <img src={normalizeSourceUrl(displayRecord.imageUrl)} alt="News preview"
+                                loading="lazy" style={{ display: 'block', width: '100%', maxWidth: 420,
+                                  maxHeight: 260, objectFit: 'contain', margin: '12px 0', borderRadius: 4 }} />
+                            ) : null)}
 
 
                             {tab ===

@@ -518,6 +518,7 @@ function normalizeIncomingEmail(
     subject,
     from,
     body,
+    htmlBody: String(htmlBody || ''),
     receivedAt,
   }
 }
@@ -1993,6 +1994,93 @@ async function resolveTpsReleaseUrl({
   return TPS_NEWS_RELEASES_URL
 }
 
+
+
+// TPS-only media extraction. Ignore navigation artwork and unrelated release cards.
+function validTpsImageUrl(value, base = TPS_NEWS_RELEASES_URL) {
+  try {
+    const url = new URL(String(value || '').replace(/&amp;/g, '&'), base)
+    if (url.protocol !== 'https:' || !['tps.ca', 'www.tps.ca'].includes(url.hostname)) return ''
+    if (/\.(?:svg|gif)(?:$|\?)/i.test(url.pathname)) return ''
+    if (/logo|icon|sprite|avatar|placeholder|banner|brand/i.test(url.pathname)) return ''
+    return url.href
+  } catch { return '' }
+}
+
+function extractTpsPhotos(html, base) {
+  const source = String(html || '')
+  // A release's main article is the only safe place to associate suspect photos.
+  const article = source.match(/<article\b[^>]*>[\s\S]*?<\/article>/i)
+  const main = source.match(/<main\b[^>]*>[\s\S]*?<\/main>/i)
+  const section = article?.[0] || main?.[0] || ''
+  if (!section) return []
+  const photos = []
+  const seen = new Set()
+  for (const img of section.matchAll(/<img\b[^>]*>/gi)) {
+    const tag = img[0]
+    const sourceAttribute = tag.match(/\b(?:data-src|src)\s*=\s*["']([^"']+)["']/i)
+    if (!sourceAttribute) continue
+    const alt = (tag.match(/\balt\s*=\s*["']([^"']*)["']/i)?.[1] || '').toLowerCase()
+    if (/logo|icon|navigation|social|share|brand|profile/i.test(alt)) continue
+    const url = validTpsImageUrl(sourceAttribute[1], base)
+    if (!url || seen.has(url)) continue
+    seen.add(url)
+    photos.push(url)
+    if (photos.length >= 12) break
+  }
+  return photos
+}
+
+async function fetchOfficialTpsPhotos(sourceUrl, emailHtml = '') {
+  const release = String(sourceUrl || '')
+  const url = validTpsImageUrl(release)
+  const inline = extractTpsPhotos(emailHtml, url || TPS_NEWS_RELEASES_URL)
+  // Never fetch the generic news listing: its images belong to unrelated cases.
+  if (!url || !/\/media-centre\/news-releases\/\d{4,8}\/?(?:[?#].*)?$/i.test(url)) return inline
+  try {
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(9000),
+      headers: { Accept: 'text/html', 'User-Agent': 'Mozilla/5.0 TorontoGeographic/1.0' },
+      redirect: 'error',
+    })
+    if (!response.ok) return inline
+    const html = await response.text()
+    return [...new Set([...extractTpsPhotos(html, url), ...inline])].slice(0, 12)
+  } catch (error) {
+    console.warn('TPS PHOTO LOOKUP FAILED:', String(error?.message || error))
+    return inline
+  }
+}
+
+// Safe same-origin image proxy for TPS photographs; blocks non-TPS hosts.
+async function handleTpsPhotoRequest(req, res) {
+  const base = new URL(req.url || '/', 'http://localhost')
+  const url = validTpsImageUrl(base.searchParams.get('url'))
+  if (!url) {
+    res.statusCode = 400; res.end('Invalid Toronto Police image URL'); return
+  }
+  try {
+    const response = await fetch(url, {
+      redirect: 'error',
+      signal: AbortSignal.timeout(10000),
+      headers: { Accept: 'image/*', Referer: 'https://www.tps.ca/' },
+    })
+    const type = String(response.headers.get('content-type') || '').split(';')[0].trim()
+    if (!response.ok || !/^image\/(jpeg|png|webp|avif)$/i.test(type)) {
+      res.statusCode = 502; res.end('TPS image unavailable'); return
+    }
+    const length = Number(response.headers.get('content-length') || 0)
+    if (length > 8 * 1024 * 1024) { res.statusCode = 413; res.end('TPS image too large'); return }
+    const bytes = Buffer.from(await response.arrayBuffer())
+    if (bytes.length > 8 * 1024 * 1024) { res.statusCode = 413; res.end('TPS image too large'); return }
+    res.setHeader('Content-Type', type)
+    res.setHeader('Cache-Control', 'public, max-age=1800')
+    res.end(bytes)
+  } catch (error) {
+    console.warn('TPS PHOTO PROXY FAILED:', String(error?.message || error))
+    res.statusCode = 502; res.end('TPS image unavailable')
+  }
+}
 
 // ============================================================
 // GEOGRAPHIC HEADLINE
@@ -4125,6 +4213,8 @@ async function buildPoliceRecord(
         cleanedSubject,
     })
 
+  const tpsPhotos = await fetchOfficialTpsPhotos(releaseSourceUrl, email.htmlBody)
+
 
   const effectiveSender =
     getEffectiveTpsSender(
@@ -4289,6 +4379,9 @@ async function buildPoliceRecord(
 
     tpsReleaseUrl:
       releaseSourceUrl,
+
+    imageUrl: tpsPhotos[0] || '',
+    imageUrls: tpsPhotos,
 
     attribution:
       'Source: Toronto Police Service News Releases',
@@ -4770,6 +4863,24 @@ export function tpsWebhookFeed() {
     configureServer(
       server
     ) {
+      server.middlewares.use('/api/geographic/toronto/police/photos', async (req, res, next) => {
+        const path = new URL(req.url || '/', 'http://localhost').pathname
+        if (path !== '/' && path !== '') { next(); return }
+        if (req.method !== 'GET') { res.statusCode = 405; res.end(); return }
+        const query = new URL(req.url || '/', 'http://localhost')
+        const url = validTpsImageUrl(query.searchParams.get('sourceUrl'))
+        if (!url || !/\/media-centre\/news-releases\/\d{4,8}\/?(?:[?#].*)?$/i.test(url)) {
+          sendJson({ res, status: 400, data: { ok: false, photos: [], error: 'Exact TPS release link required' } }); return
+        }
+        const photos = await fetchOfficialTpsPhotos(url)
+        sendJson({ res, status: 200, data: { ok: true, photos } })
+      })
+      server.middlewares.use('/api/geographic/toronto/police/photo', async (req, res, next) => {
+        const path = new URL(req.url || '/', 'http://localhost').pathname
+        if (path !== '/' && path !== '') { next(); return }
+        if (req.method !== 'GET') { res.statusCode = 405; res.end(); return }
+        await handleTpsPhotoRequest(req, res)
+      })
       server.middlewares.use(
         '/api/geographic/toronto/police/incoming',
 
