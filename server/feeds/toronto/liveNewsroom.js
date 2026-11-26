@@ -5,6 +5,8 @@ import {
   writeFile,
 } from 'node:fs/promises'
 
+import { createHash } from 'node:crypto'
+
 import {
   dirname,
   join,
@@ -1906,6 +1908,7 @@ async function observeRecord({
   record,
   forceAction =
     '',
+  suppressPoliceAutoArchive = false,
 }) {
   await ensureLoaded()
 
@@ -1953,7 +1956,7 @@ async function observeRecord({
     const caseId = tpsCaseKey(record)
     const resolvedSource = caseId && Object.values(store.sources.police || {}).find((candidate) =>
       candidate?.resolved === true &&
-      cleanText(candidate?.lastEditorialAction) === 'auto-located-no-new-story' &&
+      ['auto-located-no-new-story', 'auto-located-new-story-pending'].includes(cleanText(candidate?.lastEditorialAction)) &&
       tpsCaseKey(candidate) === caseId &&
       (tpsReleaseDateMs(candidate) === null ||
        tpsReleaseDateMs(record) === null ||
@@ -2534,7 +2537,8 @@ async function observeRecord({
   // Only archive an older TPS public pin AFTER the replacement is durably
   // queued. Replays are idempotent. A failed queue write keeps the old pin.
   // The existing LOCATED and wanted/arrest resolution paths are unchanged.
-  if (ordinaryPoliceRelease && previousPublicCaseReleases.length > 0 &&
+  if (ordinaryPoliceRelease && !suppressPoliceAutoArchive &&
+      previousPublicCaseReleases.length > 0 &&
       !publishedTpsOfficialRelease(record)) {
     const queued = store.events.some((event) =>
       event.sourceKey === 'police' &&
@@ -2544,11 +2548,17 @@ async function observeRecord({
     )
     if (queued) {
       for (const prior of previousPublicCaseReleases) {
-        await archivePublishedNewsRecord({
+        const archived = await archivePublishedNewsRecord({
           id: prior.id || '',
           externalId: prior.externalId || '',
           reason: 'superseded-by-pending-tps-release',
         })
+        if (archived?.active === false) {
+          await queuePoliceReplacedPinAcknowledgement({
+            prior, incoming: observed,
+            reason: 'superseded-by-pending-tps-release',
+          })
+        }
       }
     }
   }
@@ -2560,6 +2570,52 @@ async function observeRecord({
   }
 }
 
+
+// TPS ONLY: record a visible, durable acknowledgement after an older
+// published release has been archived for a newer official bulletin.
+// This card never publishes a pin and never approves its companion story.
+async function queuePoliceReplacedPinAcknowledgement({ prior, incoming, reason }) {
+  if (!prior || !incoming || !cleanText(prior.externalId || prior.id)) return null
+  const priorExternalId = cleanText(prior.externalId || prior.id)
+  const newTitle = cleanText(incoming.tpsReleaseTitle || incoming.title)
+  const oldTitle = cleanText(prior.title)
+  const isLocated = reason === 'police-missing-person-located'
+  const announcement = {
+    ...prior,
+    externalId: priorExternalId,
+    title: isLocated
+      ? 'Previous MISSING / ELOPEE pin removed — FOUND / LOCATED update'
+      : 'Previous Toronto Police story removed — updated release',
+    description: (isLocated
+      ? 'The previous missing-person or elopee pin was removed after Toronto Police issued a FOUND / LOCATED update.'
+      : 'The previous published police pin was removed because Toronto Police issued an updated release.') +
+      ' Previous: ' + oldTitle + '. Updated bulletin awaiting separate approval: ' + newTitle + '.',
+    active: false,
+    resolved: true,
+    policeRemovalAcknowledgement: true,
+    resolutionReason: reason,
+    updatedBulletinExternalId: cleanText(incoming.externalId),
+    // Keep the official source date stable so re-polls cannot create
+    // a different acknowledgement for the same official release.
+    tpsBroadcastAt: cleanText(incoming.tpsBroadcastAt),
+    tpsReleaseTitle: newTitle,
+    sourceUrl: cleanText(incoming.sourceUrl || prior.sourceUrl),
+    imageUrl: '',
+  }
+  const version = fingerprint(announcement)
+  const id = eventId({
+    sourceKey: 'police', action: 'resolve', externalId: priorExternalId,
+    version,
+  })
+  // Check all statuses, not only pending, so editor acknowledgement is final.
+  if (store.events.some(event => (event.serverQueueId || event.id) === id)) {
+    return null
+  }
+  return addEvent({
+    sourceKey: 'police', action: 'resolve', record: announcement,
+    incomingRecord: announcement, resolutionReason: reason,
+  })
+}
 
 // ============================================================
 // TPS MISSING-PERSON RESOLUTION MATCHING
@@ -3990,7 +4046,13 @@ export async function queueLiveNewsroomRecord({
     const target =
       findPoliceMissingPersonResolutionTarget(
         record
-      )
+      ) || Object.values(store.publishedNews || {}).find(published =>
+        published.active !== false &&
+        policeRecordIsMissingOrElopeePerson(published) &&
+        (cleanText(published.externalId) === cleanText(record?.externalId) ||
+         (tpsCaseKey(published) && tpsCaseKey(published) === tpsCaseKey(record))) &&
+        !sameTpsOfficialRelease(published, record)
+      ) || null
 
 
     const incomingExternalId =
@@ -4082,67 +4144,104 @@ export async function queueLiveNewsroomRecord({
           }
 
 
-    // TPS LOCATED / FOUND is authoritative: update and archive the ORIGINAL
-    // missing-person/elopee record, without creating a NEW or RESOLVE
-    // approval card. Preserve the existing editorial history and public
-    // archive so this decision is replay-safe and auditable.
-    await archivePublishedPoliceMissingPersonPin(resolutionRecord)
+    // TPS FOUND / LOCATED: queue the new official bulletin as a separate
+    // editorial card BEFORE archiving the public missing-person pin.
+    // A resolution email sometimes shares the original externalId; never
+    // let that identity overwrite the original public story.
+    const distinctFoundId = incomingExternalId &&
+      incomingExternalId !== cleanText(target?.externalId)
+      ? incomingExternalId
+      : (cleanText(target?.externalId || incomingExternalId) +
+        ':found-update:' +
+        createHash('sha256').update(JSON.stringify([
+          cleanText(record?.tpsBroadcastAt),
+          cleanText(record?.tpsReleaseTitle || record?.title),
+          cleanText(record?.sourceUrl),
+        ])).digest('hex').slice(0, 16))
+    const foundBulletin = {
+      ...record,
+      externalId: distinctFoundId,
+      active: false,
+      resolved: false,
+      resolutionReason: '',
+      // A FOUND release is an editorial update, never a fresh MISSING pin.
+      category: 'found',
+    }
+    const foundQueueResult = await observeRecord({
+      sourceKey: 'police', record: foundBulletin,
+      suppressPoliceAutoArchive: true,
+    })
+    const replacementReady = store.events.some(event =>
+      event.sourceKey === 'police' &&
+      event.status === 'pending' &&
+      event.newsroomAction !== 'resolve' &&
+      cleanText(event.externalId) === distinctFoundId
+    ) || Boolean(publishedTpsOfficialRelease(foundBulletin))
+    if (!replacementReady) {
+      console.warn('TPS FOUND: replacement not queued; original retained:',
+        policeCaseNumberFromRecord(record))
+      return { action: 'seen', record: resolutionRecord,
+        warning: 'found-story-not-queued-original-preserved',
+        companionStory: foundQueueResult }
+    }
+
+    const previousPublic = Object.values(store.publishedNews || {}).find(published =>
+      published.active !== false &&
+      policeRecordIsMissingOrElopeePerson(published) &&
+      (cleanText(published.externalId) === cleanText(target?.externalId) ||
+       (tpsCaseKey(published) && tpsCaseKey(published) === tpsCaseKey(record)))
+    ) || null
+    if (previousPublic) {
+      await archivePublishedPoliceMissingPersonPin(resolutionRecord)
+      await queuePoliceReplacedPinAcknowledgement({
+        prior: previousPublic,
+        incoming: foundBulletin,
+        reason: 'police-missing-person-located',
+      })
+    }
 
     const externalId = cleanText(resolutionRecord.externalId)
-    if (!externalId) return { action: 'skip', record: resolutionRecord }
+    if (!externalId) return { action: 'resolve', record: resolutionRecord,
+      companionStory: foundQueueResult }
 
     const now = new Date().toISOString()
     const sourceState = store.sources[sourceKey] || {}
     const previous = sourceState[externalId] || null
-    const stableResolvedAt = previous?.resolved === true && previous?.resolvedAt
-      ? previous.resolvedAt
-      : resolvedAt
-    const resolvedSource = {
+    sourceState[externalId] = {
       ...previous,
       ...resolutionRecord,
       externalId,
       published: false,
       resolved: true,
-      resolvedAt: stableResolvedAt,
-      sourceFingerprint: fingerprint({
-        ...resolutionRecord,
-        resolvedAt: stableResolvedAt,
-      }),
+      resolvedAt: previous?.resolvedAt || resolvedAt,
       lastSeenAt: now,
       lastCheckedAt: now,
-      lastEditorialAction: 'auto-located-no-new-story',
-      lastEditorialActionAt: previous?.lastEditorialAction === 'auto-located-no-new-story'
-        ? previous.lastEditorialActionAt || now
-        : now,
+      lastEditorialAction: 'auto-located-new-story-pending',
+      lastEditorialActionAt: previous?.lastEditorialActionAt || now,
     }
-    sourceState[externalId] = resolvedSource
     store.sources[sourceKey] = sourceState
 
-    // Close only pending MISSING/ELOPEE cards (or old RESOLVE notices)
-    // for this same case. An already-found person must not remain a NEW
-    // approval candidate, but every prior editorial decision is retained.
+    // Close stale pending MISSING cards only. Do not close the new FOUND
+    // bulletin or the new removal acknowledgement.
     const resolvedCase = tpsCaseKey(resolutionRecord)
-    store.events = store.events.map((event) => {
+    store.events = store.events.map(event => {
       const sameCase = cleanText(event.externalId) === externalId ||
         (resolvedCase && tpsCaseKey(event) === resolvedCase)
       const staleMissing = ['new', 'update'].includes(event.newsroomAction) &&
+        cleanText(event.externalId) !== distinctFoundId &&
         policeRecordIsMissingOrElopeePerson(event)
       const oldResolution = event.newsroomAction === 'resolve' &&
+        !event.policeRemovalAcknowledgement &&
         policeRecordIsMissingPersonResolution({ record: event, rawAction: 'resolve' })
       return event.sourceKey === 'police' && event.status === 'pending' &&
         sameCase && (staleMissing || oldResolution)
-        ? {
-            ...event,
-            status: 'acked',
-            reviewStatus: 'acked',
-            outcome: 'auto-located-no-new-story',
-            ackedAt: now,
-          }
+        ? { ...event, status: 'acked', reviewStatus: 'acked',
+            outcome: 'superseded-by-found-release', ackedAt: now }
         : event
     })
-
     await persistStore()
-    return { action: 'resolve', record: resolvedSource }
+    return { action: 'resolve', record: sourceState[externalId],
+      companionStory: foundQueueResult }
 
   }
 

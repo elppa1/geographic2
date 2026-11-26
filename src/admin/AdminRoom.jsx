@@ -11122,7 +11122,10 @@ function AdminRoom() {
           if (
             action ===
               'resolve' &&
-            !matchingPublished
+            !matchingPublished &&
+            !(isTpsNewsroomRecord(serverRecord) &&
+              (serverRecord.policeRemovalAcknowledgement === true ||
+                serverRecord.resolutionReason === 'police-wanted-suspect-arrested'))
           ) {
             autoAck.push(
               queueId
@@ -25697,7 +25700,8 @@ function AdminRoom() {
                                             'update' ||
                                           newsroomAction ===
                                             'resolve'
-                                        ) && (
+                                        ) &&
+                                        record.policeRemovalAcknowledgement !== true && (
                                         <button
                                           type="button"
                                           onClick={() =>
