@@ -138,6 +138,10 @@ function GeographicApp() {
   const historicMenuRootRef =
     useRef(null)
 
+  // Desktop How-To fit only: preserve the existing mobile presentation.
+  const howToPanelRef = useRef(null)
+  const [howToDesktopScale, setHowToDesktopScale] = useState(1)
+
   const [todoMenuOpen, setTodoMenuOpen] = useState(false)
 
 
@@ -577,6 +581,39 @@ function GeographicApp() {
   // The How-To panel can still be closed normally when reopened later.
   // A valid QR link IS a choice of historical year and GPS request.
   const [startupChoiceMade, setStartupChoiceMade] = useState(Boolean(qrHistoricLayer))
+
+  useEffect(() => {
+    if (!aboutOpen) return undefined
+    const panel = howToPanelRef.current
+    if (!panel) return undefined
+    let frame = 0
+    const fitDesktopHowTo = () => {
+      if (window.innerWidth <= 700) {
+        setHowToDesktopScale(1)
+        return
+      }
+      // offsetHeight is untransformed: measuring never compounds the scale.
+      const naturalHeight = panel.scrollHeight
+      const availableHeight = Math.max(1, window.innerHeight - 24)
+      const nextScale = Math.min(1, availableHeight / Math.max(1, naturalHeight))
+      setHowToDesktopScale((previous) => Math.abs(previous - nextScale) < 0.002 ? previous : nextScale)
+    }
+    const scheduleFit = () => {
+      if (frame) cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(fitDesktopHowTo)
+    }
+    scheduleFit()
+    window.addEventListener('resize', scheduleFit)
+    const observer = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(scheduleFit)
+      : null
+    if (observer) observer.observe(panel)
+    return () => {
+      window.removeEventListener('resize', scheduleFit)
+      if (observer) observer.disconnect()
+      if (frame) cancelAnimationFrame(frame)
+    }
+  }, [aboutOpen])
 
   const [realEstateOpen, setRealEstateOpen] = useState(false)
 
@@ -2886,6 +2923,18 @@ function GeographicApp() {
             }
           }
 
+          /* Desktop only: keep the entire welcome panel within the viewport.
+             Natural content height is measured in React, then uniformly scaled.
+             This does not hide or cut off any section, sponsor or action. */
+          @media (min-width: 701px) {
+            .about-panel.tg-howto-panel {
+              max-height: none !important;
+              overflow: visible !important;
+              transform: translate(-50%, -50%) scale(var(--tg-howto-desktop-scale, 1)) !important;
+              transform-origin: center center !important;
+            }
+          }
+
           /* How-To only: concise illustrated help; existing actions stay intact. */
           .tg-howto-section .tg-howto-row { display: flex; gap: 15px; align-items: center; }
           .tg-howto-section .tg-howto-row > p { flex: 1; min-width: 0; }
@@ -3957,6 +4006,8 @@ function GeographicApp() {
 
           <aside
             className="about-panel tg-howto-panel"
+            ref={howToPanelRef}
+            style={{ '--tg-howto-desktop-scale': howToDesktopScale }}
             role="dialog"
             aria-modal="true"
             aria-label={startupChoiceMade ? 'How to use Toronto Geographic' : 'Choose how to explore Toronto Geographic'}
