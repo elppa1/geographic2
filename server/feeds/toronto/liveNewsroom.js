@@ -2600,7 +2600,9 @@ async function queuePoliceReplacedPinAcknowledgement({ prior, incoming, reason }
     tpsBroadcastAt: cleanText(incoming.tpsBroadcastAt),
     tpsReleaseTitle: newTitle,
     sourceUrl: cleanText(incoming.sourceUrl || prior.sourceUrl),
-    imageUrl: '',
+    // Preserve the existing image for the removal acknowledgement preview.
+    // The separate incoming bulletin retains its own official photograph.
+    imageUrl: cleanText(prior.imageUrl || incoming.imageUrl),
   }
   const version = fingerprint(announcement)
   const id = eventId({

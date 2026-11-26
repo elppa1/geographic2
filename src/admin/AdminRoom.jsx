@@ -24747,6 +24747,30 @@ function AdminRoom() {
                             record
                           )
 
+                        // TPS-only: keep the official image and source accessible
+                        // on both replacement reviews and removal acknowledgements.
+                        const policePreviewImageUrl =
+                          isTpsNewsroomRecord(record)
+                            ? normalizeSourceUrl(
+                                displayRecord?.imageUrl ||
+                                incomingRecord?.imageUrl ||
+                                record.imageUrl ||
+                                previousRecord?.imageUrl ||
+                                ''
+                              )
+                            : ''
+
+                        const policeSourceLink =
+                          isTpsNewsroomRecord(record)
+                            ? normalizeSourceUrl(
+                                displayRecord?.sourceUrl ||
+                                incomingRecord?.sourceUrl ||
+                                record.sourceUrl ||
+                                previousRecord?.sourceUrl ||
+                                ''
+                              )
+                            : ''
+
 
                         const changedFields =
                           Array.isArray(
@@ -25457,10 +25481,10 @@ function AdminRoom() {
                             )}
 
 
-                            {displayRecord.imageUrl && (
+                            {(policePreviewImageUrl || displayRecord.imageUrl) && (
                               <img
                                 src={
-                                  normalizeSourceUrl(
+                                  policePreviewImageUrl || normalizeSourceUrl(
                                     displayRecord.imageUrl
                                   )
                                 }
@@ -25551,22 +25575,24 @@ function AdminRoom() {
 
 
                             {(displayRecord.source ||
-                              record.source) && (
+                              record.source || policeSourceLink) && (
                               <div className="admin-record-meta">
-                                SOURCE · {(displayRecord.sourceUrl ||
+                                SOURCE · {(policeSourceLink || displayRecord.sourceUrl ||
                                   record.sourceUrl)
                                   ? (
                                       <a
                                         href={
-                                          displayRecord.sourceUrl ||
-                                          record.sourceUrl
+                                          policeSourceLink || normalizeSourceUrl(
+                                            displayRecord.sourceUrl || record.sourceUrl
+                                          )
                                         }
                                         target="_blank"
-                                        rel="noreferrer"
+                                        rel="noreferrer noopener"
                                       >
                                         {
                                           displayRecord.source ||
-                                          record.source
+                                          record.source ||
+                                          'Toronto Police Service'
                                         }
                                       </a>
                                     )
