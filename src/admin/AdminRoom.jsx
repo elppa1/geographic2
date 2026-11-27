@@ -9135,11 +9135,32 @@ function AdminRoom() {
             meaningfulChanges = ['officialTpsRelease']
           }
 
-          // Image-only changes to an already published TPS release do not
-          // create another pending story. A reused photo is not new news.
+          // A reused thumbnail alone is not proof of a new official release.
+          // But a distinct TPS bulletin, or an explicitly expanded official
+          // image list, is a fresh editorial event and MUST be reviewed.
+          const incomingPhotos = [
+            ...(Array.isArray(rawIncomingRecord.imageUrls) ? rawIncomingRecord.imageUrls : []),
+            rawIncomingRecord.imageUrl,
+          ].filter(Boolean)
+          const publishedPhotos = new Set([
+            ...(Array.isArray(matchingPublished?.imageUrls) ? matchingPublished.imageUrls : []),
+            matchingPublished?.imageUrl,
+          ].filter(Boolean))
+          const newOfficialPhoto = Boolean(matchingPublished &&
+            incomingPhotos.some(url => !publishedPhotos.has(url)))
+          const differentOfficialUrl = Boolean(matchingPublished &&
+            rawIncomingRecord.tpsReleaseUrl && matchingPublished.tpsReleaseUrl &&
+            rawIncomingRecord.tpsReleaseUrl !== matchingPublished.tpsReleaseUrl)
+          if (newOfficialPhoto && !meaningfulChanges.includes('officialTpsPhotos')) {
+            meaningfulChanges.push('officialTpsPhotos')
+          }
+          if (differentOfficialUrl && !meaningfulChanges.includes('officialTpsRelease')) {
+            meaningfulChanges.push('officialTpsRelease')
+          }
           if (matchingPublished && !isResolve &&
               meaningfulChanges.length > 0 &&
-              meaningfulChanges.every((field) => field === 'imageUrl')) {
+              meaningfulChanges.every((field) => field === 'imageUrl') &&
+              !newOfficialPhoto && !differentOfficialUrl) {
             skipped++
             return
           }
@@ -9323,7 +9344,7 @@ function AdminRoom() {
             ] =
               normalized
 
-            if (officialNewerCaseRelease) {
+            if ((officialNewerCaseRelease || differentOfficialUrl || newOfficialPhoto) && matchingPublished) {
               tpsSupersededPins.set(matchingPublished.id, matchingPublished)
             }
 
@@ -9355,7 +9376,7 @@ function AdminRoom() {
           }
 
 
-          if (officialNewerCaseRelease) {
+          if ((officialNewerCaseRelease || differentOfficialUrl || newOfficialPhoto) && matchingPublished) {
             tpsSupersededPins.set(matchingPublished.id, matchingPublished)
           }
 
@@ -11170,23 +11191,9 @@ function AdminRoom() {
             return
           }
 
-          // For TPS, externalId may identify the whole case, not the
-          // individual bulletin. Only acknowledge a release when the
-          // actual same release is already approved and active on the map.
-          // WANTED -> PHOTOGRAPHS -> ARRESTED must reach approval separately.
-          if (
-            isTpsNewsroomRecord(serverRecord) &&
-            action !== 'resolve' &&
-            latestPublished.some((published) =>
-              published.active !== false &&
-              isTpsNewsroomRecord(published) &&
-              sameTpsRelease(published, serverRecord) &&
-              getTpsRecordVersion(published) === getTpsRecordVersion(serverRecord)
-            )
-          ) {
-            autoAck.push(queueId)
-            return
-          }
+          // NEVER auto-acknowledge a TPS story based on case ID, title,
+          // attachment or browser publication state. Server owns TPS
+          // deduplication; approval of distinct bulletins is manual.
 
 
           // A server RESOLVE for something that is not public is stale
